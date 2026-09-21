@@ -4,7 +4,7 @@ using Godot;
 public partial class CameraController : Camera2D
 {
     private const float PanSpeed = 700f;
-    private const float MinZoom = 0.5f;
+    private const float MinZoom = 1.25f;
     private const float MaxZoom = 2f;
     private const float ClickDistance = 8f;
 
