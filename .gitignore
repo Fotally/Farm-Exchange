@@ -1,0 +1,6 @@
+.godot/
+.omx/
+.nuget/
+bin/
+obj/
+build/
