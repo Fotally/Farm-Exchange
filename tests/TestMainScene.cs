@@ -26,6 +26,16 @@ public partial class TestMainScene : Node
         var sell = main.GetNode<Button>(actions + "SellButton");
         var timer = main.GetNode<Timer>("TickTimer");
 
+        if (!camera.Zoom.IsEqualApprox(new Vector2(1.25f, 1.25f)))
+            return Fail("主场景未使用较近的默认镜头");
+        camera._UnhandledInput(new InputEventMouseButton
+        {
+            ButtonIndex = MouseButton.WheelDown,
+            Pressed = true,
+        });
+        if (!camera.Zoom.IsEqualApprox(new Vector2(1.25f, 1.25f)))
+            return Fail("镜头可以拉远超过已确认的地块大小");
+
         Vector2 firstWorld = new(0f, 2048f);
         Vector2 firstScreen = map.GetGlobalTransformWithCanvas() * firstWorld;
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = firstScreen });

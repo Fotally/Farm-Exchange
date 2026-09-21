@@ -12,16 +12,15 @@ public partial class WorldMap : Node2D
     private const float HalfWidth = TileWidth / 2f;
     private const float HalfHeight = TileHeight / 2f;
 
-    private static readonly Color LockedLight = new(0.35f, 0.38f, 0.34f);
-    private static readonly Color LockedDark = new(0.32f, 0.35f, 0.31f);
-    private static readonly Color TileLight = new(0.55f, 0.66f, 0.40f);
-    private static readonly Color TileDark = new(0.51f, 0.62f, 0.36f);
+    private const float SeamOverlap = 0.75f;
+
+    private static readonly Color LockedColor = new(0.34f, 0.37f, 0.33f);
+    private static readonly Color TileColor = new(0.53f, 0.64f, 0.38f);
     private static readonly Color FarmColor = new(0.53f, 0.36f, 0.22f);
     private static readonly Color MillColor = new(0.36f, 0.47f, 0.61f);
     private static readonly Color MillMarkerColor = new(0.86f, 0.90f, 0.93f);
     private static readonly Color SeedColor = new(0.98f, 0.84f, 0.46f);
     private static readonly Color GrowingColor = new(0.39f, 0.84f, 0.39f);
-    private static readonly Color GridColor = new(0.32f, 0.42f, 0.26f);
     private static readonly Color SelectedColor = new(0.95f, 0.76f, 0.31f);
     private static readonly Color EdgeColor = new(0.91f, 0.86f, 0.66f);
 
@@ -84,24 +83,25 @@ public partial class WorldMap : Node2D
                 Vector2 center = new((col - row) * HalfWidth, (col + row) * HalfHeight);
                 Vector2[] outline =
                 {
-                    center + new Vector2(0f, -HalfHeight),
-                    center + new Vector2(HalfWidth, 0f),
-                    center + new Vector2(0f, HalfHeight),
-                    center + new Vector2(-HalfWidth, 0f),
+                    center + new Vector2(0f, -HalfHeight - SeamOverlap),
+                    center + new Vector2(HalfWidth + SeamOverlap, 0f),
+                    center + new Vector2(0f, HalfHeight + SeamOverlap),
+                    center + new Vector2(-HalfWidth - SeamOverlap, 0f),
                 };
                 PlotSnapshot plot = _game.GetPlot(new Vector2I(col, row));
                 Color tileColor = !plot.IsUnlocked
-                    ? ((col + row) % 2 == 0 ? LockedLight : LockedDark)
+                    ? LockedColor
                     : plot.Building switch
                     {
                         BuildingKind.Farm => FarmColor,
                         BuildingKind.Mill => MillColor,
-                        _ => (col + row) % 2 == 0 ? TileLight : TileDark,
+                        _ => TileColor,
                     };
                 DrawColoredPolygon(outline, tileColor);
                 bool selected = _selectedCell == new Vector2I(col, row);
-                DrawPolyline(new[] { outline[0], outline[1], outline[2], outline[3], outline[0] },
-                    selected ? SelectedColor : GridColor, selected ? 3f : 1f);
+                if (selected)
+                    DrawPolyline(new[] { outline[0], outline[1], outline[2], outline[3], outline[0] },
+                        SelectedColor, 3f);
                 if (plot.Crop == CropStage.Seeded)
                     DrawCircle(center, 3f, SeedColor);
                 else if (plot.Crop == CropStage.Growing)
