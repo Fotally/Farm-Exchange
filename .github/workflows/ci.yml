@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2-stable
+  DOTNET_VERSION: 8.0.x
+
+jobs:
+  test-and-export:
+    name: 测试与导出
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      - name: 安装 .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: 安装 Godot Mono
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'godot-mono.zip'
+          $installRoot = Join-Path $env:RUNNER_TEMP 'godot-mono'
+          $url = "https://github.com/godotengine/godot-builds/releases/download/${env:GODOT_VERSION}/Godot_v${env:GODOT_VERSION}_mono_win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $installRoot
+          $console = Get-ChildItem -LiteralPath $installRoot -Recurse -Filter '*_console.exe' | Select-Object -First 1
+          if ($null -eq $console) {
+            throw 'Godot Mono 控制台程序不存在'
+          }
+          $sdkPackage = Get-ChildItem -LiteralPath $installRoot -Recurse -Filter 'Godot.NET.Sdk*.nupkg' | Select-Object -First 1
+          if ($null -eq $sdkPackage) {
+            throw 'Godot 本地 NuGet 包不存在'
+          }
+          [xml]$nugetConfig = Get-Content -LiteralPath NuGet.Config -Raw
+          $localSource = $nugetConfig.configuration.packageSources.add | Where-Object { $_.key -eq 'Godot 本地包' }
+          $localSource.value = $sdkPackage.Directory.FullName
+          $nugetConfig.Save((Resolve-Path -LiteralPath NuGet.Config))
+          "GODOT_CONSOLE=$($console.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: 运行场景测试并检查行覆盖率
+        shell: pwsh
+        run: ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE
+
+      - name: 上传覆盖率报告
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ github.sha }}
+          path: coverage/coverage.cobertura.xml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 编译 Release
+        if: github.ref == 'refs/heads/main'
+        run: dotnet build FarmExchange.csproj --configuration Release
+
+      - name: 安装 Windows 导出模板
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'godot-templates.tpz'
+          $zip = Join-Path $env:RUNNER_TEMP 'godot-templates.zip'
+          $templateRoot = Join-Path $env:RUNNER_TEMP 'godot-templates'
+          $url = "https://github.com/godotengine/godot-builds/releases/download/${env:GODOT_VERSION}/Godot_v${env:GODOT_VERSION}_mono_export_templates.tpz"
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          Copy-Item -LiteralPath $archive -Destination $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath $templateRoot
+          $debugTemplate = Get-ChildItem -LiteralPath $templateRoot -Recurse -Filter 'windows_debug_x86_64.exe' | Select-Object -First 1
+          $releaseTemplate = Get-ChildItem -LiteralPath $templateRoot -Recurse -Filter 'windows_release_x86_64.exe' | Select-Object -First 1
+          if ($null -eq $debugTemplate -or $null -eq $releaseTemplate) {
+            throw 'Windows x86_64 导出模板不存在'
+          }
+          $debugPath = $debugTemplate.FullName.Replace('\', '/')
+          $releasePath = $releaseTemplate.FullName.Replace('\', '/')
+          $preset = Get-Content -LiteralPath export_presets.cfg -Raw
+          $preset = $preset -replace 'custom_template/debug="[^"]*"', "custom_template/debug=`"$debugPath`""
+          $preset = $preset -replace 'custom_template/release="[^"]*"', "custom_template/release=`"$releasePath`""
+          Set-Content -LiteralPath export_presets.cfg -Value $preset -Encoding utf8
+
+      - name: 导出 Windows x86_64
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path build/windows -Force | Out-Null
+          & $env:GODOT_CONSOLE --headless --path . --export-release Windows build/windows/FarmExchange.exe --quit
+          $managedAssembly = 'build/windows/data_FarmExchange_windows_x86_64/FarmExchange.dll'
+          if ($LASTEXITCODE -ne 0 -or
+              -not (Test-Path -LiteralPath build/windows/FarmExchange.exe) -or
+              -not (Test-Path -LiteralPath $managedAssembly)) {
+            throw "Godot 导出未生成完整的 C# 可执行构建，退出码：$LASTEXITCODE"
+          }
+
+      - name: 启动导出程序验收
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          & build/windows/FarmExchange.exe --headless --quit-after 5
+          if ($LASTEXITCODE -ne 0) {
+            throw "导出程序启动失败，退出码：$LASTEXITCODE"
+          }
+
+      - name: 上传 Windows 构建
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: FarmExchange-windows-x86_64-${{ github.sha }}
+          path: build/windows/
+          if-no-files-found: error
+          retention-days: 14

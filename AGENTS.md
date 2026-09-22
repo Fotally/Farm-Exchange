@@ -13,7 +13,10 @@
 - `scripts/WorldMap.cs`：地图表现模块。绘制等距网格和边缘，换算与选择格坐标，提供菱形地图内的镜头限制；不维护经营规则。
 - `scripts/CameraController.cs`：输入与镜头模块。区分左键点击、左键拖动，处理缩放和键盘移动；通过 `WorldMap` 的接口选择格子及限制镜头。
 - `scripts/Main.cs` 与 `scenes/main.tscn`：场景协调及界面。把按钮命令和一秒计时器交给 `FarmGame`，再刷新地图与状态栏。
-- `tests/`：通过对应场景检查地图、经营规则和主场景交互；`export_presets.cfg` 定义 Windows 验收构建。
+- `tests/`：通过对应场景检查地图、经营规则和主场景交互；`tests/test_suite.tscn` 在同一进程汇总运行全部测试，以便采集真实行覆盖率。
+- `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、运行测试套件、生成 Cobertura 报告，并要求业务脚本行覆盖率不低于 80%。
+- `.github/workflows/ci.yml`：`dev` 推送时自动测试；`main` 推送时在测试通过后额外完成 Windows Release 导出、启动验收并上传构建产物。
+- `export_presets.cfg`：定义 Windows x86_64 验收构建。
 
 # 工作约定
 

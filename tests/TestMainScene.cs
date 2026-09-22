@@ -4,13 +4,19 @@ public partial class TestMainScene : Node
 {
     public override void _Ready()
     {
-        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
-        AddChild(main);
-        bool passed = Check(main);
-        main.QueueFree();
+        bool passed = RunChecks(this);
         if (passed)
             GD.Print("主场景操作检查通过");
         GetTree().Quit(passed ? 0 : 1);
+    }
+
+    public static bool RunChecks(Node parent)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        parent.AddChild(main);
+        bool passed = Check(main);
+        main.QueueFree();
+        return passed;
     }
 
     private static bool Check(Main main)

@@ -4,12 +4,18 @@ public partial class TestWorldMap : Node
 {
     public override void _Ready()
     {
-        var map = new WorldMap();
-        bool passed = Check(map);
-        map.Free();
+        bool passed = RunChecks();
         if (passed)
             GD.Print("地图坐标检查通过");
         GetTree().Quit(passed ? 0 : 1);
+    }
+
+    public static bool RunChecks()
+    {
+        var map = new WorldMap();
+        bool passed = Check(map);
+        map.Free();
+        return passed;
     }
 
     private static bool Check(WorldMap map)

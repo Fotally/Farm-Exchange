@@ -4,11 +4,16 @@ public partial class TestFarmGame : Node
 {
     public override void _Ready()
     {
-        bool passed = CheckProductionLoop() && CheckWorkerRotation() &&
-            CheckMarketCurve() && CheckDayTiming();
+        bool passed = RunChecks();
         if (passed)
             GD.Print("工人、生产、市场与交易检查通过");
         GetTree().Quit(passed ? 0 : 1);
+    }
+
+    public static bool RunChecks()
+    {
+        return CheckProductionLoop() && CheckWorkerRotation() &&
+            CheckMarketCurve() && CheckDayTiming();
     }
 
     private static bool CheckProductionLoop()
