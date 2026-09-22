@@ -16,23 +16,35 @@ public enum BuildingKind
 }
 
 public readonly record struct PlotSnapshot(bool IsUnlocked, BuildingKind Building, CropStage Crop, int RemainingTicks);
-public readonly record struct TickResult(int WheatHarvested, int FlourProduced, bool WorkerActed);
+public readonly record struct TickResult(int WheatHarvested, int FlourProduced, bool WorkerActed, bool DayAdvanced);
+public readonly record struct SaleResult(int Quantity, int RevenueCents);
 
 public sealed class FarmGame
 {
     public const int MapSize = 128;
     public const int GrowthTicks = 5;
     public const int MillingTicks = 10;
-    public const int FlourSalePrice = 5;
-    public const int LandCost = 10;
+    public const int TicksPerDay = 10;
+    public const int LandCostCents = 1000;
 
     private readonly PlotState[] _plots = new PlotState[MapSize * MapSize];
+    private readonly MarketPriceCurve _marketPriceCurve;
     private int _nextWorkerPlotIndex;
+    private int _ticksIntoDay;
 
-    public int Money { get; private set; }
+    public int MoneyCents { get; private set; }
     public int WheatStock { get; private set; }
     public int FlourStock { get; private set; }
     public int FreeLandGrants { get; private set; } = 2;
+    public int CurrentDay { get; private set; } = 1;
+    public int CurrentFlourPriceCents { get; private set; }
+    public double DailyPriceChangePercent { get; private set; }
+
+    public FarmGame(int? marketSeed = null)
+    {
+        _marketPriceCurve = new MarketPriceCurve(marketSeed ?? Random.Shared.Next());
+        CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
+    }
 
     public PlotSnapshot GetPlot(Vector2I cell)
     {
@@ -45,13 +57,13 @@ public sealed class FarmGame
         ref PlotState plot = ref _plots[IndexOf(cell)];
         if (plot.IsUnlocked)
             return "该土地已解锁";
-        if (FreeLandGrants == 0 && Money < LandCost)
+        if (FreeLandGrants == 0 && MoneyCents < LandCostCents)
             return "金币不足，无法解锁土地";
 
         if (FreeLandGrants > 0)
             FreeLandGrants--;
         else
-            Money -= LandCost;
+            MoneyCents -= LandCostCents;
         plot.IsUnlocked = true;
         return null;
     }
@@ -109,15 +121,32 @@ public sealed class FarmGame
         }
         StartIdleMills();
         bool workerActed = WorkOneFarm();
-        return new TickResult(harvested, produced, workerActed);
+        bool dayAdvanced = AdvanceDay();
+        return new TickResult(harvested, produced, workerActed, dayAdvanced);
     }
 
-    public int SellAll()
+    public SaleResult SellAll()
     {
         int sold = FlourStock;
-        Money += sold * FlourSalePrice;
+        int revenue = sold * CurrentFlourPriceCents;
+        MoneyCents += revenue;
         FlourStock = 0;
-        return sold;
+        return new SaleResult(sold, revenue);
+    }
+
+    private bool AdvanceDay()
+    {
+        _ticksIntoDay++;
+        if (_ticksIntoDay < TicksPerDay)
+            return false;
+
+        _ticksIntoDay = 0;
+        int previousPrice = CurrentFlourPriceCents;
+        CurrentDay++;
+        CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
+        DailyPriceChangePercent =
+            (CurrentFlourPriceCents - previousPrice) * 100.0 / previousPrice;
+        return true;
     }
 
     private string? Build(Vector2I cell, BuildingKind building)

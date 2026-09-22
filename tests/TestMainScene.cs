@@ -26,6 +26,10 @@ public partial class TestMainScene : Node
         var sell = main.GetNode<Button>(actions + "SellButton");
         var timer = main.GetNode<Timer>("TickTimer");
 
+        if (!economy.Text.Contains("第 1 天") || !economy.Text.Contains("面粉售价：5.00 金币") ||
+            !economy.Text.Contains("金币：0.00") || !economy.Text.Contains("今日涨跌：基准价"))
+            return Fail("初始天数、面粉价格或金币未显示");
+
         if (!camera.Zoom.IsEqualApprox(new Vector2(1.25f, 1.25f)))
             return Fail("主场景未使用较近的默认镜头");
         camera._UnhandledInput(new InputEventMouseButton
@@ -83,10 +87,12 @@ public partial class TestMainScene : Node
             return Fail("小麦未自动进入磨坊，或原料可以直接出售");
         for (int i = 0; i < FarmGame.MillingTicks; i++)
             timer.EmitSignal(Timer.SignalName.Timeout);
-        if (!economy.Text.Contains("面粉：1") || sell.Disabled)
+        if (!economy.Text.Contains("第 2 天") || !economy.Text.Contains("今日涨跌：") ||
+            !(economy.Text.Contains("（小幅）") || economy.Text.Contains("（中幅）") || economy.Text.Contains("（大幅）")) ||
+            !economy.Text.Contains("面粉：1") || sell.Disabled)
             return Fail("磨坊未产出可出售面粉");
         sell.EmitSignal(Button.SignalName.Pressed);
-        if (!economy.Text.Contains("金币：5") || !economy.Text.Contains("面粉：0"))
+        if (economy.Text.Contains("金币：0.00") || !economy.Text.Contains("面粉：0"))
             return Fail("商店出售未更新界面");
         return true;
     }
