@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Godot;
 
 public partial class Main : Node2D
@@ -59,15 +60,21 @@ public partial class Main : Node2D
 
     private void SellAll()
     {
-        int sold = _game.SellAll();
-        _messageLabel.Text = sold == 0 ? "面粉库存为空" : $"卖出 {sold} 份面粉，获得 {sold * FarmGame.FlourSalePrice} 金币";
+        SaleResult sale = _game.SellAll();
+        _messageLabel.Text = sale.Quantity == 0
+            ? "面粉库存为空"
+            : $"卖出 {sale.Quantity} 份面粉，获得 {FormatCoins(sale.RevenueCents)} 金币";
         Refresh();
     }
 
     private void OnTick()
     {
         TickResult result = _game.AdvanceTick();
-        if (result.WheatHarvested > 0 || result.FlourProduced > 0)
+        if (result.DayAdvanced)
+        {
+            _messageLabel.Text = $"进入第 {_game.CurrentDay} 天，面粉售价 {FormatCoins(_game.CurrentFlourPriceCents)} 金币";
+        }
+        else if (result.WheatHarvested > 0 || result.FlourProduced > 0)
         {
             _messageLabel.Text = $"本 tick：收获小麦 {result.WheatHarvested}，产出面粉 {result.FlourProduced}";
         }
@@ -78,10 +85,15 @@ public partial class Main : Node2D
 
     private void Refresh()
     {
-        _economyLabel.Text = $"金币：{_game.Money}\n小麦：{_game.WheatStock}    面粉：{_game.FlourStock}\n免费土地：{_game.FreeLandGrants}\n工人：1（自动播种、浇水）";
+        string priceChange = _game.CurrentDay == 1
+            ? "基准价"
+            : $"{FormatPercent(_game.DailyPriceChangePercent)}%（{DescribePriceChange(_game.DailyPriceChangePercent)}）";
+        _economyLabel.Text = $"第 {_game.CurrentDay} 天    面粉售价：{FormatCoins(_game.CurrentFlourPriceCents)} 金币\n" +
+            $"今日涨跌：{priceChange}\n金币：{FormatCoins(_game.MoneyCents)}\n" +
+            $"小麦：{_game.WheatStock}    面粉：{_game.FlourStock}\n免费土地：{_game.FreeLandGrants}\n工人：1（自动播种、浇水）";
         _unlockButton.Text = _game.FreeLandGrants > 0
             ? "解锁土地（免费）"
-            : $"解锁土地（{FarmGame.LandCost} 金币）";
+            : $"解锁土地（{FormatCoins(FarmGame.LandCostCents)} 金币）";
         _sellButton.Disabled = _game.FlourStock == 0;
 
         if (_selectedCell is not Vector2I cell)
@@ -109,9 +121,29 @@ public partial class Main : Node2D
             },
         };
         _plotLabel.Text = $"土地 {cell.X}, {cell.Y}\n{state}";
-        _unlockButton.Disabled = plot.IsUnlocked || (_game.FreeLandGrants == 0 && _game.Money < FarmGame.LandCost);
+        _unlockButton.Disabled = plot.IsUnlocked || (_game.FreeLandGrants == 0 && _game.MoneyCents < FarmGame.LandCostCents);
         _buildButton.Disabled = !plot.IsUnlocked || plot.Building != BuildingKind.None;
         _buildMillButton.Disabled = !plot.IsUnlocked || plot.Building != BuildingKind.None;
         _removeButton.Disabled = plot.Building == BuildingKind.None;
+    }
+
+    private static string FormatCoins(int cents)
+    {
+        return (cents / 100m).ToString("0.00", CultureInfo.InvariantCulture);
+    }
+
+    private static string DescribePriceChange(double percentage)
+    {
+        double absolute = Math.Abs(percentage);
+        if (absolute < 5.0)
+            return "小幅";
+        if (absolute < 15.0)
+            return "中幅";
+        return "大幅";
+    }
+
+    private static string FormatPercent(double percentage)
+    {
+        return percentage.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture);
     }
 }
