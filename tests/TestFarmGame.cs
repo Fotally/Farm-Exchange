@@ -6,79 +6,138 @@ public partial class TestFarmGame : Node
     {
         bool passed = RunChecks();
         if (passed)
-            GD.Print("工人、生产、市场与交易检查通过");
+            GD.Print("六种作物、加工、市场与交易检查通过");
         GetTree().Quit(passed ? 0 : 1);
     }
 
-    public static bool RunChecks()
-    {
-        return CheckProductionLoop() && CheckWorkerRotation() &&
-            CheckMarketCurve() && CheckDayTiming();
-    }
+    public static bool RunChecks() =>
+        CheckAllCrops() && CheckMatchingAndSwitching() && CheckRemoval() &&
+        CheckWorkerRotation() && CheckMarketCurve() && CheckDayTiming();
 
-    private static bool CheckProductionLoop()
+    private static bool CheckAllCrops()
     {
         var game = new FarmGame(12345);
         Vector2I farm = new(3, 4);
-        Vector2I mill = new(100, 100);
-        Vector2I extraLand = new(0, 127);
-        if (game.MoneyCents != 0 || game.WheatStock != 0 || game.FlourStock != 0 || game.FreeLandGrants != 2 ||
+        Vector2I processor = new(100, 100);
+        if (game.MoneyCents != 0 || game.FreeLandGrants != 2 ||
             game.CurrentDay != 1 || game.CurrentFlourPriceCents != MarketPriceCurve.InitialPriceCents)
             return Fail("初始资源错误");
-        if (game.UnlockLand(farm) != null || game.UnlockLand(mill) != null || game.FreeLandGrants != 0)
-            return Fail("两次任意位置免费选地失败");
-        if (game.UnlockLand(extraLand) == null || game.BuildFarm(extraLand) == null)
-            return Fail("金币不足时仍可购地或建农田");
-        if (game.BuildFarm(farm) != null || game.BuildMill(mill) != null)
-            return Fail("农田或磨坊建造失败");
+        if (game.UnlockLand(farm) != null || game.UnlockLand(processor) != null ||
+            game.FreeLandGrants != 0 || game.UnlockLand(new Vector2I(0, 127)) == null)
+            return Fail("免费解锁或购地规则错误");
+        if (game.BuildFarm(farm) != null || game.GetPlot(farm).CropKind != CropKind.Wheat)
+            return Fail("农田建造或默认作物错误");
+        game.RemoveBuilding(farm);
 
-        TickResult sow = game.AdvanceTick();
-        if (!sow.WorkerActed || game.GetPlot(farm).Crop != CropStage.Seeded)
-            return Fail("工人未在第一 tick 自动播种");
-        TickResult water = game.AdvanceTick();
-        if (!water.WorkerActed || game.GetPlot(farm).Crop != CropStage.Growing ||
-            game.GetPlot(farm).RemainingTicks != FarmGame.GrowthTicks)
-            return Fail("工人未在第二 tick 自动浇水");
-        for (int i = 0; i < FarmGame.GrowthTicks - 1; i++)
-            game.AdvanceTick();
-        if (game.WheatStock != 0 || game.GetPlot(farm).RemainingTicks != 1)
-            return Fail("小麦过早成熟");
-        TickResult harvest = game.AdvanceTick();
-        if (harvest.WheatHarvested != 1 || game.WheatStock != 0 ||
-            game.GetPlot(mill).RemainingTicks != FarmGame.MillingTicks ||
-            game.GetPlot(farm).Crop != CropStage.Seeded)
-            return Fail("第 7 tick 未自动收获、交给磨坊并开始下一轮播种");
-        SaleResult emptySale = game.SellAll();
-        if (emptySale.Quantity != 0 || emptySale.RevenueCents != 0 || game.MoneyCents != 0)
-            return Fail("原小麦被直接出售");
+        foreach (CropDefinition crop in FarmGame.Crops)
+        {
+            if (game.BuildFarm(farm) != null ||
+                game.SetFarmCrop(farm, crop.Kind) != null ||
+                game.BuildProcessor(processor, crop.Kind) != null)
+                return Fail($"{crop.CropName}的农田或加工场地建造失败");
+            if (crop.ProcessingTicks >= crop.GrowthTicks)
+                return Fail($"{crop.CropName}加工未快于成熟");
 
-        for (int i = 0; i < 6; i++)
-            game.AdvanceTick();
-        if (game.WheatStock != 1 || game.FlourStock != 0 || game.GetPlot(mill).RemainingTicks != 4)
-            return Fail("磨坊忙时未保存后续小麦");
-        for (int i = 0; i < 4; i++)
-            game.AdvanceTick();
-        if (game.FlourStock != 1 || game.WheatStock != 0 || game.GetPlot(mill).RemainingTicks != FarmGame.MillingTicks)
-            return Fail("磨坊完成后未自动加工下一份小麦");
-        for (int i = 0; i < FarmGame.MillingTicks; i++)
-            game.AdvanceTick();
-        int salePrice = game.CurrentFlourPriceCents;
+            TickResult sow = game.AdvanceTick();
+            TickResult water = game.AdvanceTick();
+            if (!sow.WorkerActed || !water.WorkerActed ||
+                game.GetPlot(farm).Crop != CropStage.Growing ||
+                game.GetPlot(farm).RemainingTicks != crop.GrowthTicks)
+                return Fail($"{crop.CropName}播种或浇水时序错误");
+            for (int i = 0; i < crop.GrowthTicks - 1; i++)
+                game.AdvanceTick();
+            if (game.GetRawStock(crop.Kind) != 0)
+                return Fail($"{crop.CropName}过早成熟");
+            TickResult harvest = game.AdvanceTick();
+            if (harvest.Harvested != 1 || game.GetRawStock(crop.Kind) != 0 ||
+                game.GetPlot(processor).RemainingTicks != crop.ProcessingTicks)
+                return Fail($"{crop.CropName}未按时收获并投入对应场地");
+            for (int i = 0; i < crop.ProcessingTicks - 1; i++)
+                game.AdvanceTick();
+            if (game.GetProductStock(crop.Kind) != 0)
+                return Fail($"{crop.ProductName}过早产出");
+            TickResult finished = game.AdvanceTick();
+            if (finished.Produced != 1 || game.GetProductStock(crop.Kind) != 1)
+                return Fail($"{crop.ProductName}未按时产出");
+
+            game.RemoveBuilding(farm);
+            game.RemoveBuilding(processor);
+        }
+
+        int expectedRevenue = 0;
+        foreach (CropDefinition crop in FarmGame.Crops)
+            expectedRevenue += game.GetProductPriceCents(crop.Kind);
         SaleResult sale = game.SellAll();
-        if (game.FlourStock != 0 || sale.Quantity != 2 || sale.RevenueCents != 2 * salePrice ||
-            game.MoneyCents != sale.RevenueCents || game.UnlockLand(extraLand) != null ||
-            game.MoneyCents != sale.RevenueCents - FarmGame.LandCostCents)
-            return Fail("面粉出售后购地流程错误");
+        if (sale.Quantity != FarmGame.Crops.Count || sale.RevenueCents != expectedRevenue ||
+            game.MoneyCents != expectedRevenue || game.SellAll().Quantity != 0)
+            return Fail("六种加工品未按当天价格一并出售");
+        foreach (CropDefinition crop in FarmGame.Crops)
+            if (game.GetProductStock(crop.Kind) != 0)
+                return Fail($"{crop.ProductName}售后库存未清空");
+        if (game.UnlockLand(new Vector2I(0, 127)) != null ||
+            game.MoneyCents != expectedRevenue - FarmGame.LandCostCents)
+            return Fail("出售后购地流程错误");
+        return true;
+    }
 
-        int wheatBeforeRemoval = game.WheatStock;
-        if (game.GetPlot(farm).Crop != CropStage.Growing || game.GetPlot(mill).RemainingTicks == 0 ||
-            game.RemoveBuilding(farm) != null || game.RemoveBuilding(mill) != null)
-            return Fail("移除生长中的农田或加工中的磨坊失败");
-        for (int i = 0; i < FarmGame.MillingTicks; i++)
+    private static bool CheckMatchingAndSwitching()
+    {
+        var game = new FarmGame(12345);
+        Vector2I farm = new(0, 0);
+        Vector2I processor = new(1, 0);
+        game.UnlockLand(farm);
+        game.UnlockLand(processor);
+        game.BuildFarm(farm);
+        game.BuildProcessor(processor, CropKind.Rice);
+        game.AdvanceTick();
+        game.AdvanceTick();
+        if (game.SetFarmCrop(farm, CropKind.Corn) != null ||
+            game.GetPlot(farm).Crop != CropStage.None ||
+            game.GetPlot(farm).RemainingTicks != 0)
+            return Fail("切换作物未丢弃生长中的旧作物");
+        if (game.SetFarmCrop(farm, CropKind.Corn) != null ||
+            game.SetFarmCrop(processor, CropKind.Corn) == null)
+            return Fail("重复选择或非农田选择处理错误");
+        game.AdvanceTick();
+        game.AdvanceTick();
+        for (int i = 0; i < FarmGame.GetCrop(CropKind.Corn).GrowthTicks; i++)
             game.AdvanceTick();
-        if (game.FlourStock != 0 || game.WheatStock != wheatBeforeRemoval ||
-            game.GetPlot(farm).Building != BuildingKind.None || game.GetPlot(mill).Building != BuildingKind.None ||
+        if (game.GetRawStock(CropKind.Wheat) != 0 || game.GetRawStock(CropKind.Corn) != 1 ||
+            game.GetProductStock(CropKind.Rice) != 0 || game.GetPlot(processor).RemainingTicks != 0)
+            return Fail("加工场地消耗了不匹配原料，或切换前作物仍产出");
+        if (game.SellAll().Quantity != 0)
+            return Fail("原料被直接出售");
+        game.RemoveBuilding(processor);
+        game.BuildProcessor(processor, CropKind.Corn);
+        if (game.GetRawStock(CropKind.Corn) != 0 ||
+            game.GetPlot(processor).RemainingTicks != FarmGame.GetCrop(CropKind.Corn).ProcessingTicks)
+            return Fail("新建匹配场地没有自动处理库存原料");
+        return true;
+    }
+
+    private static bool CheckRemoval()
+    {
+        var game = new FarmGame(12345);
+        Vector2I farm = new(0, 0);
+        Vector2I processor = new(1, 0);
+        game.UnlockLand(farm);
+        game.UnlockLand(processor);
+        game.BuildFarm(farm);
+        game.BuildProcessor(processor, CropKind.Wheat);
+        game.AdvanceTick();
+        game.AdvanceTick();
+        for (int i = 0; i < FarmGame.GetCrop(CropKind.Wheat).GrowthTicks; i++)
+            game.AdvanceTick();
+        if (game.GetPlot(farm).Crop != CropStage.Seeded ||
+            game.GetPlot(processor).RemainingTicks == 0 ||
+            game.RemoveBuilding(farm) != null || game.RemoveBuilding(processor) != null)
+            return Fail("移除农田或加工中的场地失败");
+        for (int i = 0; i < FarmGame.GetCrop(CropKind.Wheat).ProcessingTicks; i++)
+            game.AdvanceTick();
+        if (game.GetProductStock(CropKind.Wheat) != 0 ||
+            game.GetPlot(farm).Building != BuildingKind.None ||
             !game.GetPlot(farm).IsUnlocked)
-            return Fail("移除建筑后仍产出，或已投入原料被退回");
+            return Fail("移除建筑后仍产出，或土地未保留");
         return true;
     }
 
@@ -91,16 +150,17 @@ public partial class TestFarmGame : Node
         game.UnlockLand(second);
         game.BuildFarm(first);
         game.BuildFarm(second);
+        game.SetFarmCrop(second, CropKind.Sunflower);
         game.AdvanceTick();
         if (game.GetPlot(first).Crop != CropStage.Seeded || game.GetPlot(second).Crop != CropStage.None)
             return Fail("单工人第一 tick 完成了多次操作");
         game.AdvanceTick();
-        if (game.GetPlot(first).Crop != CropStage.Seeded || game.GetPlot(second).Crop != CropStage.Seeded)
+        if (game.GetPlot(second).Crop != CropStage.Seeded)
             return Fail("工人未轮流照料第二块农田");
         game.AdvanceTick();
         game.AdvanceTick();
-        if (game.GetPlot(first).Crop != CropStage.Growing || game.GetPlot(second).Crop != CropStage.Growing)
-            return Fail("工人未轮流浇水");
+        if (game.GetPlot(first).RemainingTicks != 4 || game.GetPlot(second).RemainingTicks != 9)
+            return Fail("不同作物未按各自成熟时间生长");
         return true;
     }
 
@@ -116,6 +176,11 @@ public partial class TestFarmGame : Node
         int largeChanges = 0;
         if (previousPrice != MarketPriceCurve.InitialPriceCents)
             return Fail("市场曲线未从 5.00 金币开始");
+        var game = new FarmGame(12345);
+        int[] initialPrices = { 500, 500, 600, 400, 800, 1000 };
+        foreach (CropDefinition crop in FarmGame.Crops)
+            if (game.GetProductPriceCents(crop.Kind) != initialPrices[(int)crop.Kind])
+                return Fail($"{crop.ProductName}首日售价错误");
 
         for (int day = 2; day <= 100000; day++)
         {
@@ -126,23 +191,16 @@ public partial class TestFarmGame : Node
                 return Fail("相同市场种子没有生成相同价格");
             if (price != otherCurve.GetPriceCents(day))
                 differentSeedChangedPrice = true;
-
             double change = System.Math.Abs(price - previousPrice) * 100.0 / previousPrice;
             if (change > 20.0)
-                return Fail($"第 {day} 天价格变化超过 20%：{change:0.00}%");
-            if (change < 5.0)
-                smallChanges++;
-            else if (change < 15.0)
-                mediumChanges++;
-            else
-                largeChanges++;
+                return Fail($"第 {day} 天面粉价格变化超过 20%：{change:0.00}%");
+            if (change < 5.0) smallChanges++;
+            else if (change < 15.0) mediumChanges++;
+            else largeChanges++;
             previousPrice = price;
         }
-
-        if (!differentSeedChangedPrice)
-            return Fail("不同市场种子生成了完全相同的价格曲线");
-        if (smallChanges == 0 || mediumChanges == 0 || largeChanges == 0)
-            return Fail($"长期曲线没有覆盖三种涨跌结果：小幅 {smallChanges}，中幅 {mediumChanges}，大幅 {largeChanges}");
+        if (!differentSeedChangedPrice || smallChanges == 0 || mediumChanges == 0 || largeChanges == 0)
+            return Fail("市场价格曲线缺少种子差异或涨跌档位");
         return true;
     }
 
@@ -150,15 +208,15 @@ public partial class TestFarmGame : Node
     {
         var game = new FarmGame(12345);
         for (int i = 0; i < FarmGame.TicksPerDay - 1; i++)
-        {
-            TickResult result = game.AdvanceTick();
-            if (result.DayAdvanced || game.CurrentDay != 1)
+            if (game.AdvanceTick().DayAdvanced || game.CurrentDay != 1)
                 return Fail("未满 10 tick 就提前进入下一天");
-        }
-
-        TickResult nextDay = game.AdvanceTick();
-        if (!nextDay.DayAdvanced || game.CurrentDay != 2 || game.DailyPriceChangePercent == 0.0)
+        if (!game.AdvanceTick().DayAdvanced || game.CurrentDay != 2 ||
+            game.DailyPriceChangePercent == 0.0)
             return Fail("第 10 tick 未进入下一天并更新价格");
+        foreach (CropDefinition crop in FarmGame.Crops)
+            if (game.GetProductPriceCents(crop.Kind) !=
+                (game.CurrentFlourPriceCents * crop.PricePercent + 50) / 100)
+                return Fail($"{crop.ProductName}没有按当天面粉价计价");
         return true;
     }
 

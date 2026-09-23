@@ -39,10 +39,11 @@ text = "点击选地，左键拖动；工人自动播种与浇水\n地图 128×1
 [node name="ActionsPanel" type="PanelContainer" parent="CanvasLayer"]
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -302.0
+anchor_bottom = 1.0
+offset_left = -372.0
 offset_top = 16.0
 offset_right = -16.0
-offset_bottom = 520.0
+offset_bottom = -16.0
 
 [node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/ActionsPanel"]
 theme_override_constants/margin_left = 12
@@ -50,29 +51,43 @@ theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 12
 
-[node name="Actions" type="VBoxContainer" parent="CanvasLayer/ActionsPanel/MarginContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="CanvasLayer/ActionsPanel/MarginContainer"]
+size_flags_vertical = 3
+
+[node name="Actions" type="VBoxContainer" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer"]
+size_flags_horizontal = 3
 theme_override_constants/separation = 7
 
-[node name="TitleLabel" type="Label" parent="CanvasLayer/ActionsPanel/MarginContainer/Actions"]
-text = "小麦 → 面粉 → 出售"
+[node name="TitleLabel" type="Label" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
+text = "种植 → 加工 → 出售"
 
-[node name="EconomyLabel" type="Label" parent="CanvasLayer/ActionsPanel/MarginContainer/Actions"]
-text = "第 1 天    面粉售价：5.00 金币\n今日涨跌：基准价\n金币：0.00\n小麦：0    面粉：0\n免费土地：2\n工人：1（自动播种、浇水）"
+[node name="EconomyLabel" type="Label" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
+text = "第 1 天"
 
-[node name="PlotLabel" type="Label" parent="CanvasLayer/ActionsPanel/MarginContainer/Actions"]
+[node name="PlotLabel" type="Label" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
 text = "请选择一块土地"
 
-[node name="UnlockButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/Actions"]
+[node name="UnlockButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
 text = "解锁土地（免费）"
 
-[node name="BuildButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/Actions"]
+[node name="BuildButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
 text = "建造农田"
 
-[node name="BuildMillButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/Actions"]
-text = "建造磨坊"
+[node name="CropOptionLabel" type="Label" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
+text = "农田作物（选中农田后可改种）"
 
-[node name="RemoveButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/Actions"]
+[node name="CropOption" type="OptionButton" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
+
+[node name="ProcessorOptionLabel" type="Label" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
+text = "加工场地（先选择，再建造）"
+
+[node name="ProcessorOption" type="OptionButton" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
+
+[node name="BuildProcessorButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
+text = "建造所选加工场地"
+
+[node name="RemoveButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
 text = "移除建筑"
 
-[node name="SellButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/Actions"]
-text = "在商店卖出全部面粉"
+[node name="SellButton" type="Button" parent="CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions"]
+text = "在商店卖出全部加工品"

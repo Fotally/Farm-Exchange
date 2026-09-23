@@ -21,14 +21,16 @@ public partial class TestMainScene : Node
 
     private static bool Check(Main main)
     {
-        const string actions = "CanvasLayer/ActionsPanel/MarginContainer/Actions/";
+        const string actions = "CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions/";
         var map = main.GetNode<WorldMap>("WorldMap");
         var camera = main.GetNode<CameraController>("Camera2D");
         var economy = main.GetNode<Label>(actions + "EconomyLabel");
         var plot = main.GetNode<Label>(actions + "PlotLabel");
         var unlock = main.GetNode<Button>(actions + "UnlockButton");
         var build = main.GetNode<Button>(actions + "BuildButton");
-        var buildMill = main.GetNode<Button>(actions + "BuildMillButton");
+        var buildProcessor = main.GetNode<Button>(actions + "BuildProcessorButton");
+        var cropOption = main.GetNode<OptionButton>(actions + "CropOption");
+        var processorOption = main.GetNode<OptionButton>(actions + "ProcessorOption");
         var sell = main.GetNode<Button>(actions + "SellButton");
         var timer = main.GetNode<Timer>("TickTimer");
 
@@ -68,16 +70,24 @@ public partial class TestMainScene : Node
         build.EmitSignal(Button.SignalName.Pressed);
         if (!plot.Text.Contains("农田"))
             return Fail("建造农田未更新界面");
+        if (cropOption.Disabled || cropOption.ItemCount != FarmGame.Crops.Count)
+            return Fail("农田未提供六种作物选择");
+        cropOption.Select((int)CropKind.Corn);
+        cropOption.EmitSignal(OptionButton.SignalName.ItemSelected, (long)CropKind.Corn);
+        if (!plot.Text.Contains("玉米"))
+            return Fail("农田作物切换未更新界面");
 
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(65, 64));
         if (unlock.Disabled)
             return Fail("第二格土地不可解锁");
         unlock.EmitSignal(Button.SignalName.Pressed);
-        if (buildMill.Disabled)
-            return Fail("磨坊建造按钮不可用");
-        buildMill.EmitSignal(Button.SignalName.Pressed);
-        if (!plot.Text.Contains("磨坊"))
-            return Fail("磨坊状态未显示");
+        if (buildProcessor.Disabled || processorOption.Disabled ||
+            processorOption.ItemCount != FarmGame.Crops.Count)
+            return Fail("六种加工场地不可选");
+        processorOption.Select((int)CropKind.Corn);
+        buildProcessor.EmitSignal(Button.SignalName.Pressed);
+        if (!plot.Text.Contains("玉米加工坊"))
+            return Fail("玉米加工坊状态未显示");
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(64, 64));
         timer.EmitSignal(Timer.SignalName.Timeout);
         if (!plot.Text.Contains("待浇水"))
@@ -86,19 +96,19 @@ public partial class TestMainScene : Node
         if (!plot.Text.Contains("生长中"))
             return Fail("工人未自动浇水或界面未更新");
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(65, 64));
-        for (int i = 0; i < FarmGame.GrowthTicks; i++)
+        for (int i = 0; i < FarmGame.GetCrop(CropKind.Corn).GrowthTicks; i++)
             timer.EmitSignal(Timer.SignalName.Timeout);
-        if (!economy.Text.Contains("小麦：0") || !economy.Text.Contains("面粉：0") || !sell.Disabled ||
+        if (!economy.Text.Contains("玉米：0 → 玉米粉：0") || !sell.Disabled ||
             !plot.Text.Contains("加工中"))
-            return Fail("小麦未自动进入磨坊，或原料可以直接出售");
-        for (int i = 0; i < FarmGame.MillingTicks; i++)
+            return Fail("玉米未自动进入对应场地，或原料可以直接出售");
+        for (int i = 0; i < FarmGame.GetCrop(CropKind.Corn).ProcessingTicks; i++)
             timer.EmitSignal(Timer.SignalName.Timeout);
         if (!economy.Text.Contains("第 2 天") || !economy.Text.Contains("今日涨跌：") ||
             !(economy.Text.Contains("（小幅）") || economy.Text.Contains("（中幅）") || economy.Text.Contains("（大幅）")) ||
-            !economy.Text.Contains("面粉：1") || sell.Disabled)
-            return Fail("磨坊未产出可出售面粉");
+            !economy.Text.Contains("玉米粉：1") || sell.Disabled)
+            return Fail("玉米加工坊未产出可出售玉米粉");
         sell.EmitSignal(Button.SignalName.Pressed);
-        if (economy.Text.Contains("金币：0.00") || !economy.Text.Contains("面粉：0"))
+        if (economy.Text.Contains("金币：0.00") || !economy.Text.Contains("玉米粉：0"))
             return Fail("商店出售未更新界面");
         return true;
     }
