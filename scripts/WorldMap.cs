@@ -110,7 +110,9 @@ public partial class WorldMap : Node2D
                 if (selected)
                     DrawPolyline(new[] { outline[0], outline[1], outline[2], outline[3], outline[0] },
                         SelectedColor, 3f);
-                if (plot.Crop == CropStage.Seeded)
+                if (plot.Building == BuildingKind.Farm && plot.Crop == CropStage.None)
+                    DrawCircle(center, 4f, GrowingColors[(int)plot.CropKind]);
+                else if (plot.Crop == CropStage.Seeded)
                     DrawCircle(center, 3f, SeedColor);
                 else if (plot.Crop == CropStage.Growing)
                     DrawCircle(center, 6f, GrowingColors[(int)plot.CropKind]);

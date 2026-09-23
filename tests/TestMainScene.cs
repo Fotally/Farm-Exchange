@@ -31,11 +31,12 @@ public partial class TestMainScene : Node
         var buildProcessor = main.GetNode<Button>(actions + "BuildProcessorButton");
         var cropOption = main.GetNode<OptionButton>(actions + "CropOption");
         var processorOption = main.GetNode<OptionButton>(actions + "ProcessorOption");
+        var remove = main.GetNode<Button>(actions + "RemoveButton");
         var sell = main.GetNode<Button>(actions + "SellButton");
         var timer = main.GetNode<Timer>("TickTimer");
 
         if (!economy.Text.Contains("第 1 天") || !economy.Text.Contains("面粉售价：5.00 金币") ||
-            !economy.Text.Contains("金币：0.00") || !economy.Text.Contains("今日涨跌：基准价"))
+            !economy.Text.Contains("金币：50.00") || !economy.Text.Contains("今日涨跌：基准价"))
             return Fail("初始天数、面粉价格或金币未显示");
 
         if (!camera.Zoom.IsEqualApprox(new Vector2(1.25f, 1.25f)))
@@ -47,8 +48,23 @@ public partial class TestMainScene : Node
         });
         if (!camera.Zoom.IsEqualApprox(new Vector2(1.25f, 1.25f)))
             return Fail("镜头可以拉远超过已确认的地块大小");
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(63, 63));
+        if (!plot.Text.Contains("农田") || !unlock.Disabled)
+            return Fail("主场景未显示中心预置农田");
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(63, 64));
+        if (!plot.Text.Contains("等待") || !unlock.Disabled)
+            return Fail("主场景未显示中心预置加工场地");
+        Vector2I[] initialBuildings =
+        {
+            new(63, 63), new(64, 63), new(65, 63), new(63, 64), new(64, 64),
+        };
+        foreach (Vector2I cell in initialBuildings)
+        {
+            map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+            remove.EmitSignal(Button.SignalName.Pressed);
+        }
 
-        Vector2 firstWorld = new(0f, 2048f);
+        Vector2 firstWorld = new(-64f, 2016f);
         Vector2 firstScreen = map.GetGlobalTransformWithCanvas() * firstWorld;
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = firstScreen });
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = firstScreen });
@@ -58,11 +74,11 @@ public partial class TestMainScene : Node
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = firstScreen });
         camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(100f, 0f), Relative = new Vector2(100f, 0f) });
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = firstScreen + new Vector2(100f, 0f) });
-        if (camera.Position == cameraBeforeDrag || !plot.Text.Contains("64, 64"))
+        if (camera.Position == cameraBeforeDrag || !plot.Text.Contains("62, 64"))
             return Fail("左键拖动未移动镜头，或误选其他土地");
         Vector2 outsideScreen = map.GetGlobalTransformWithCanvas() * new Vector2(9000f, 9000f);
         map.SelectAtScreenPosition(outsideScreen);
-        if (!plot.Text.Contains("64, 64"))
+        if (!plot.Text.Contains("62, 64"))
             return Fail("地图外的位置仍可被选中");
         unlock.EmitSignal(Button.SignalName.Pressed);
         if (!economy.Text.Contains("免费土地：1") || build.Disabled)
@@ -88,7 +104,7 @@ public partial class TestMainScene : Node
         buildProcessor.EmitSignal(Button.SignalName.Pressed);
         if (!plot.Text.Contains("玉米加工坊"))
             return Fail("玉米加工坊状态未显示");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(64, 64));
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(62, 64));
         timer.EmitSignal(Timer.SignalName.Timeout);
         if (!plot.Text.Contains("待浇水"))
             return Fail("工人未自动播种或界面未更新");
@@ -108,7 +124,7 @@ public partial class TestMainScene : Node
             !economy.Text.Contains("玉米粉：1") || sell.Disabled)
             return Fail("玉米加工坊未产出可出售玉米粉");
         sell.EmitSignal(Button.SignalName.Pressed);
-        if (economy.Text.Contains("金币：0.00") || !economy.Text.Contains("玉米粉：0"))
+        if (economy.Text.Contains("金币：50.00") || !economy.Text.Contains("玉米粉：0"))
             return Fail("商店出售未更新界面");
         return true;
     }

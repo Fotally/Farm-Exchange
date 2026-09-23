@@ -30,6 +30,14 @@ public sealed class FarmGame
         new(CropKind.Sugarcane, "甘蔗", "制糖坊", "蔗糖", 10, 6, 200),
     };
     public static IReadOnlyList<CropDefinition> Crops { get; } = Array.AsReadOnly(CropDefinitions);
+    private static readonly Vector2I[] InitialFarmCells =
+    {
+        new(63, 63), new(64, 63), new(65, 63),
+    };
+    private static readonly Vector2I[] InitialProcessorCells =
+    {
+        new(63, 64), new(64, 64),
+    };
 
     private readonly PlotState[] _plots = new PlotState[MapSize * MapSize];
     private readonly int[] _rawStock = new int[CropDefinitions.Length];
@@ -38,7 +46,7 @@ public sealed class FarmGame
     private int _nextWorkerPlotIndex;
     private int _ticksIntoDay;
 
-    public int MoneyCents { get; private set; }
+    public int MoneyCents { get; private set; } = 5000;
     public int FreeLandGrants { get; private set; } = 2;
     public int CurrentDay { get; private set; } = 1;
     public int CurrentFlourPriceCents { get; private set; }
@@ -46,8 +54,39 @@ public sealed class FarmGame
 
     public FarmGame(int? marketSeed = null)
     {
-        _marketPriceCurve = new MarketPriceCurve(marketSeed ?? Random.Shared.Next());
+        int seed = marketSeed ?? Random.Shared.Next();
+        _marketPriceCurve = new MarketPriceCurve(seed);
         CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
+        InitializeCenter(new Random(seed));
+    }
+
+    private void InitializeCenter(Random random)
+    {
+        CropKind primary = (CropKind)random.Next(CropDefinitions.Length);
+        bool split = random.Next(2) == 1;
+        CropKind secondary = primary;
+        if (split)
+        {
+            int secondaryIndex = random.Next(CropDefinitions.Length - 1);
+            if (secondaryIndex >= (int)primary)
+                secondaryIndex++;
+            secondary = (CropKind)secondaryIndex;
+        }
+
+        for (int i = 0; i < InitialFarmCells.Length; i++)
+        {
+            ref PlotState plot = ref _plots[IndexOf(InitialFarmCells[i])];
+            plot.IsUnlocked = true;
+            plot.Building = BuildingKind.Farm;
+            plot.CropKind = i == 2 ? secondary : primary;
+        }
+        for (int i = 0; i < InitialProcessorCells.Length; i++)
+        {
+            ref PlotState plot = ref _plots[IndexOf(InitialProcessorCells[i])];
+            plot.IsUnlocked = true;
+            plot.Building = BuildingKind.Processor;
+            plot.CropKind = i == 1 ? secondary : primary;
+        }
     }
 
     public static CropDefinition GetCrop(CropKind crop) => CropDefinitions[(int)crop];
