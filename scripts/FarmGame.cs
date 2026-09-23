@@ -1,40 +1,44 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 
-public enum CropStage
-{
-    None,
-    Seeded,
-    Growing,
-}
+public enum CropStage { None, Seeded, Growing }
+public enum BuildingKind { None, Farm, Processor }
+public enum CropKind { Wheat, Corn, Rice, Potato, Sunflower, Sugarcane }
 
-public enum BuildingKind
-{
-    None,
-    Farm,
-    Mill,
-}
-
-public readonly record struct PlotSnapshot(bool IsUnlocked, BuildingKind Building, CropStage Crop, int RemainingTicks);
-public readonly record struct TickResult(int WheatHarvested, int FlourProduced, bool WorkerActed, bool DayAdvanced);
+public readonly record struct CropDefinition(
+    CropKind Kind, string CropName, string BuildingName, string ProductName,
+    int GrowthTicks, int ProcessingTicks, int PricePercent);
+public readonly record struct PlotSnapshot(
+    bool IsUnlocked, BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingTicks);
+public readonly record struct TickResult(int Harvested, int Produced, bool WorkerActed, bool DayAdvanced);
 public readonly record struct SaleResult(int Quantity, int RevenueCents);
 
 public sealed class FarmGame
 {
     public const int MapSize = 128;
-    public const int GrowthTicks = 5;
-    public const int MillingTicks = 10;
     public const int TicksPerDay = 10;
     public const int LandCostCents = 1000;
 
+    private static readonly CropDefinition[] CropDefinitions =
+    {
+        new(CropKind.Wheat, "小麦", "磨坊", "面粉", 5, 3, 100),
+        new(CropKind.Corn, "玉米", "玉米加工坊", "玉米粉", 6, 4, 100),
+        new(CropKind.Rice, "水稻", "碾米坊", "大米", 7, 4, 120),
+        new(CropKind.Potato, "马铃薯", "淀粉坊", "淀粉", 6, 4, 80),
+        new(CropKind.Sunflower, "向日葵", "榨油坊", "葵花籽油", 9, 5, 160),
+        new(CropKind.Sugarcane, "甘蔗", "制糖坊", "蔗糖", 10, 6, 200),
+    };
+    public static IReadOnlyList<CropDefinition> Crops { get; } = Array.AsReadOnly(CropDefinitions);
+
     private readonly PlotState[] _plots = new PlotState[MapSize * MapSize];
+    private readonly int[] _rawStock = new int[CropDefinitions.Length];
+    private readonly int[] _productStock = new int[CropDefinitions.Length];
     private readonly MarketPriceCurve _marketPriceCurve;
     private int _nextWorkerPlotIndex;
     private int _ticksIntoDay;
 
     public int MoneyCents { get; private set; }
-    public int WheatStock { get; private set; }
-    public int FlourStock { get; private set; }
     public int FreeLandGrants { get; private set; } = 2;
     public int CurrentDay { get; private set; } = 1;
     public int CurrentFlourPriceCents { get; private set; }
@@ -46,10 +50,16 @@ public sealed class FarmGame
         CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
     }
 
+    public static CropDefinition GetCrop(CropKind crop) => CropDefinitions[(int)crop];
+    public int GetRawStock(CropKind crop) => _rawStock[(int)crop];
+    public int GetProductStock(CropKind crop) => _productStock[(int)crop];
+    public int GetProductPriceCents(CropKind crop) =>
+        (CurrentFlourPriceCents * GetCrop(crop).PricePercent + 50) / 100;
+
     public PlotSnapshot GetPlot(Vector2I cell)
     {
         PlotState plot = _plots[IndexOf(cell)];
-        return new PlotSnapshot(plot.IsUnlocked, plot.Building, plot.Crop, plot.RemainingTicks);
+        return new PlotSnapshot(plot.IsUnlocked, plot.Building, plot.CropKind, plot.Crop, plot.RemainingTicks);
     }
 
     public string? UnlockLand(Vector2I cell)
@@ -59,7 +69,6 @@ public sealed class FarmGame
             return "该土地已解锁";
         if (FreeLandGrants == 0 && MoneyCents < LandCostCents)
             return "金币不足，无法解锁土地";
-
         if (FreeLandGrants > 0)
             FreeLandGrants--;
         else
@@ -68,17 +77,27 @@ public sealed class FarmGame
         return null;
     }
 
-    public string? BuildFarm(Vector2I cell)
+    public string? BuildFarm(Vector2I cell) => Build(cell, BuildingKind.Farm, CropKind.Wheat);
+
+    public string? BuildProcessor(Vector2I cell, CropKind crop)
     {
-        return Build(cell, BuildingKind.Farm);
+        string? error = Build(cell, BuildingKind.Processor, crop);
+        if (error == null)
+            StartIdleProcessors();
+        return error;
     }
 
-    public string? BuildMill(Vector2I cell)
+    public string? SetFarmCrop(Vector2I cell, CropKind crop)
     {
-        string? error = Build(cell, BuildingKind.Mill);
-        if (error == null)
-            StartIdleMills();
-        return error;
+        ref PlotState plot = ref _plots[IndexOf(cell)];
+        if (plot.Building != BuildingKind.Farm)
+            return "该土地没有农田";
+        if (plot.CropKind == crop)
+            return null;
+        plot.CropKind = crop;
+        plot.Crop = CropStage.None;
+        plot.RemainingTicks = 0;
+        return null;
     }
 
     public string? RemoveBuilding(Vector2I cell)
@@ -105,21 +124,21 @@ public sealed class FarmGame
                 if (plot.RemainingTicks == 0)
                 {
                     plot.Crop = CropStage.None;
-                    WheatStock++;
+                    _rawStock[(int)plot.CropKind]++;
                     harvested++;
                 }
             }
-            else if (plot.Building == BuildingKind.Mill && plot.RemainingTicks > 0)
+            else if (plot.Building == BuildingKind.Processor && plot.RemainingTicks > 0)
             {
                 plot.RemainingTicks--;
                 if (plot.RemainingTicks == 0)
                 {
-                    FlourStock++;
+                    _productStock[(int)plot.CropKind]++;
                     produced++;
                 }
             }
         }
-        StartIdleMills();
+        StartIdleProcessors();
         bool workerActed = WorkOneFarm();
         bool dayAdvanced = AdvanceDay();
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
@@ -127,10 +146,16 @@ public sealed class FarmGame
 
     public SaleResult SellAll()
     {
-        int sold = FlourStock;
-        int revenue = sold * CurrentFlourPriceCents;
+        int sold = 0;
+        int revenue = 0;
+        foreach (CropDefinition crop in Crops)
+        {
+            int index = (int)crop.Kind;
+            sold += _productStock[index];
+            revenue += _productStock[index] * GetProductPriceCents(crop.Kind);
+            _productStock[index] = 0;
+        }
         MoneyCents += revenue;
-        FlourStock = 0;
         return new SaleResult(sold, revenue);
     }
 
@@ -139,7 +164,6 @@ public sealed class FarmGame
         _ticksIntoDay++;
         if (_ticksIntoDay < TicksPerDay)
             return false;
-
         _ticksIntoDay = 0;
         int previousPrice = CurrentFlourPriceCents;
         CurrentDay++;
@@ -149,7 +173,7 @@ public sealed class FarmGame
         return true;
     }
 
-    private string? Build(Vector2I cell, BuildingKind building)
+    private string? Build(Vector2I cell, BuildingKind building, CropKind crop)
     {
         ref PlotState plot = ref _plots[IndexOf(cell)];
         if (!plot.IsUnlocked)
@@ -157,18 +181,22 @@ public sealed class FarmGame
         if (plot.Building != BuildingKind.None)
             return "该土地已有建筑";
         plot.Building = building;
+        plot.CropKind = crop;
         return null;
     }
 
-    private void StartIdleMills()
+    private void StartIdleProcessors()
     {
-        for (int i = 0; i < _plots.Length && WheatStock > 0; i++)
+        for (int i = 0; i < _plots.Length; i++)
         {
             ref PlotState plot = ref _plots[i];
-            if (plot.Building != BuildingKind.Mill || plot.RemainingTicks != 0)
+            if (plot.Building != BuildingKind.Processor || plot.RemainingTicks != 0)
                 continue;
-            WheatStock--;
-            plot.RemainingTicks = MillingTicks;
+            int index = (int)plot.CropKind;
+            if (_rawStock[index] == 0)
+                continue;
+            _rawStock[index]--;
+            plot.RemainingTicks = GetCrop(plot.CropKind).ProcessingTicks;
         }
     }
 
@@ -185,7 +213,7 @@ public sealed class FarmGame
             else
             {
                 plot.Crop = CropStage.Growing;
-                plot.RemainingTicks = GrowthTicks;
+                plot.RemainingTicks = GetCrop(plot.CropKind).GrowthTicks;
             }
             _nextWorkerPlotIndex = (index + 1) % _plots.Length;
             return true;
@@ -204,6 +232,7 @@ public sealed class FarmGame
     {
         public bool IsUnlocked;
         public BuildingKind Building;
+        public CropKind CropKind;
         public CropStage Crop;
         public int RemainingTicks;
     }

@@ -17,10 +17,18 @@ public partial class WorldMap : Node2D
     private static readonly Color LockedColor = new(0.34f, 0.37f, 0.33f);
     private static readonly Color TileColor = new(0.53f, 0.64f, 0.38f);
     private static readonly Color FarmColor = new(0.53f, 0.36f, 0.22f);
-    private static readonly Color MillColor = new(0.36f, 0.47f, 0.61f);
-    private static readonly Color MillMarkerColor = new(0.86f, 0.90f, 0.93f);
+    private static readonly Color ProcessorColor = new(0.36f, 0.47f, 0.61f);
+    private static readonly Color ProcessorMarkerColor = new(0.86f, 0.90f, 0.93f);
     private static readonly Color SeedColor = new(0.98f, 0.84f, 0.46f);
-    private static readonly Color GrowingColor = new(0.39f, 0.84f, 0.39f);
+    private static readonly Color[] GrowingColors =
+    {
+        new(0.39f, 0.84f, 0.39f),
+        new(0.93f, 0.76f, 0.24f),
+        new(0.48f, 0.82f, 0.43f),
+        new(0.70f, 0.57f, 0.40f),
+        new(0.95f, 0.78f, 0.28f),
+        new(0.54f, 0.88f, 0.57f),
+    };
     private static readonly Color SelectedColor = new(0.95f, 0.76f, 0.31f);
     private static readonly Color EdgeColor = new(0.91f, 0.86f, 0.66f);
 
@@ -94,7 +102,7 @@ public partial class WorldMap : Node2D
                     : plot.Building switch
                     {
                         BuildingKind.Farm => FarmColor,
-                        BuildingKind.Mill => MillColor,
+                        BuildingKind.Processor => ProcessorColor,
                         _ => TileColor,
                     };
                 DrawColoredPolygon(outline, tileColor);
@@ -105,9 +113,9 @@ public partial class WorldMap : Node2D
                 if (plot.Crop == CropStage.Seeded)
                     DrawCircle(center, 3f, SeedColor);
                 else if (plot.Crop == CropStage.Growing)
-                    DrawCircle(center, 6f, GrowingColor);
-                if (plot.Building == BuildingKind.Mill)
-                    DrawRect(new Rect2(center - new Vector2(5f, 5f), new Vector2(10f, 10f)), MillMarkerColor);
+                    DrawCircle(center, 6f, GrowingColors[(int)plot.CropKind]);
+                if (plot.Building == BuildingKind.Processor)
+                    DrawRect(new Rect2(center - new Vector2(5f, 5f), new Vector2(10f, 10f)), ProcessorMarkerColor);
             }
         }
         DrawPolyline(new[]
