@@ -16,7 +16,7 @@
 - `scripts/Main.cs` 与 `scenes/main.tscn`：场景协调及界面。提供农田作物和加工场地选择，把按钮命令和一秒计时器交给 `FarmGame`，再刷新地图、六类库存和售价。
 - `tests/`：通过对应场景检查地图、经营规则和主场景交互；`tests/test_suite.tscn` 在同一进程汇总运行全部测试，以便采集真实行覆盖率。
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、运行测试套件、生成 Cobertura 报告，并要求业务脚本行覆盖率不低于 80%。
-- `.github/workflows/ci.yml`：`dev` 推送时自动测试；`main` 推送时在测试通过后额外完成 Windows Release 导出、启动验收并上传构建产物。
+- `.github/workflows/ci.yml`：`dev` 推送时自动测试；`main` 推送时在测试通过后额外完成 Windows Release 导出，通过进程退出码验收导出程序启动并上传构建产物。
 - `export_presets.cfg`：定义 Windows x86_64 验收构建。
 
 # 工作约定

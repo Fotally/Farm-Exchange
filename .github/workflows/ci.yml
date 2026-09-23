@@ -114,9 +114,10 @@ jobs:
         if: github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
-          & build/windows/FarmExchange.exe --headless --quit-after 5
-          if ($LASTEXITCODE -ne 0) {
-            throw "导出程序启动失败，退出码：$LASTEXITCODE"
+          $executable = (Resolve-Path -LiteralPath build/windows/FarmExchange.exe).Path
+          $process = Start-Process -FilePath $executable -ArgumentList @('--headless', '--quit-after', '5') -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "导出程序启动失败，退出码：$($process.ExitCode)"
           }
 
       - name: 上传 Windows 构建
