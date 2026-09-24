@@ -70,7 +70,7 @@ public partial class Main : Node2D
         string? error = action(cell);
         _messageLabel.Text = error ?? success;
         Refresh();
-        _worldMap.QueueRedraw();
+        _worldMap.SyncFromGame();
     }
 
     private void SellAll()
@@ -93,8 +93,7 @@ public partial class Main : Node2D
         {
             _messageLabel.Text = $"本 tick：收获作物 {result.Harvested}，产出加工品 {result.Produced}";
         }
-        if (result.WorkerActed || result.Harvested > 0 || result.Produced > 0)
-            _worldMap.QueueRedraw();
+        _worldMap.SyncFromGame();
         Refresh();
     }
 

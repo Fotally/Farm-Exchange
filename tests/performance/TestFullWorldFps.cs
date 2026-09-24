@@ -18,7 +18,8 @@ public partial class TestFullWorldFps : Node
     private ulong _previousFrameUsec;
     private int _startFrames;
     private int _ticks;
-    private int _maxDrawnPlots;
+    private int _maxVisiblePlotCandidates;
+    private int _startChunkRedraws;
 
     public override void _Ready()
     {
@@ -32,11 +33,12 @@ public partial class TestFullWorldFps : Node
         Main main = GetNode<Main>("Main");
         main.Game.FillWorldForBenchmark();
         _map = main.GetNode<WorldMap>("WorldMap");
+        _map.SyncFromGame();
         _camera = main.GetNode<Camera2D>("Camera2D");
         main.GetNode<Timer>("TickTimer").Timeout += () => _ticks++;
-        _map.QueueRedraw();
         Engine.MaxFps = 0;
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
+        Directory.CreateDirectory(Path.GetDirectoryName(ProjectSettings.GlobalizePath("res://coverage/performance.json"))!);
         _readyAtUsec = Time.GetTicksUsec();
         GD.Print("满地图渲染性能测试：16,384 格实体，预热 2 秒，采样 8 秒");
     }
@@ -50,15 +52,18 @@ public partial class TestFullWorldFps : Node
         double seconds = (now - _readyAtUsec) / 1_000_000.0;
         _camera.Position = _map.ClampCameraCenter(new Vector2(
             (float)(Math.Sin(seconds * 0.8) * 500.0), 2032f));
-        _maxDrawnPlots = Math.Max(_maxDrawnPlots, _map.LastDrawnPlotCount);
+        _maxVisiblePlotCandidates = Math.Max(_maxVisiblePlotCandidates, _map.LastVisiblePlotCount);
 
         if (now - _readyAtUsec < WarmupUsec)
             return;
         if (_sampleStartUsec == 0)
         {
+            string screenshotPath = ProjectSettings.GlobalizePath("res://coverage/performance.png");
+            GetViewport().GetTexture().GetImage().SavePng(screenshotPath);
             _sampleStartUsec = now;
             _previousFrameUsec = now;
             _startFrames = Engine.GetFramesDrawn();
+            _startChunkRedraws = _map.ChunkRedrawCount;
             return;
         }
 
@@ -68,7 +73,7 @@ public partial class TestFullWorldFps : Node
             return;
 
         int renderedFrames = Engine.GetFramesDrawn() - _startFrames;
-        if (renderedFrames == 0 || _frameTimesMs.Count < 2 || _maxDrawnPlots == 0 || _ticks == 0)
+        if (renderedFrames == 0 || _frameTimesMs.Count < 2 || _maxVisiblePlotCandidates == 0 || _ticks == 0)
         {
             GD.PushError("帧率性能测试没有取得有效的渲染帧、可见地块或经营 tick");
             GetTree().Quit(1);
@@ -87,7 +92,8 @@ public partial class TestFullWorldFps : Node
             FarmCount = 8192,
             ProcessorCount = 8192,
             TickCount = _ticks,
-            MaxDrawnPlots = _maxDrawnPlots,
+            MaxVisiblePlotCandidates = _maxVisiblePlotCandidates,
+            ChunkRedraws = _map.ChunkRedrawCount - _startChunkRedraws,
             WarmupSeconds = WarmupUsec / 1_000_000,
             SampleSeconds = duration,
             RenderedFrames = renderedFrames,
@@ -107,9 +113,16 @@ public partial class TestFullWorldFps : Node
         };
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
         File.WriteAllText(reportPath, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+        GetViewport().GetTexture().GetImage().SavePng(ProjectSettings.GlobalizePath("res://coverage/performance-end.png"));
         GD.Print(string.Format(CultureInfo.InvariantCulture,
-            "满地图性能：平均 {0:F1} FPS，P95 帧耗时 {1:F2} ms，每帧绘制地块最多 {2}，报告 {3}",
-            fps, p95, _maxDrawnPlots, reportPath));
+            "满地图性能：平均 {0:F1} FPS，P95 帧间隔 {1:F2} ms，最多可见候选格 {2}，报告 {3}",
+            fps, p95, _maxVisiblePlotCandidates, reportPath));
+        if (fps < 60.0 || p95 > 1000.0 / 60.0)
+        {
+            GD.PushError("满地图渲染未达到稳定 60 FPS：平均 FPS 需至少 60，P95 帧间隔需不超过 16.67 ms");
+            GetTree().Quit(1);
+            return;
+        }
         GetTree().Quit(0);
     }
 

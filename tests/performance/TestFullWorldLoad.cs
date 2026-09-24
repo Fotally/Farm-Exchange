@@ -42,7 +42,13 @@ public partial class TestFullWorldLoad : Node
             if (farmCropCounts[crop] == 0 || processorCropCounts[crop] == 0)
                 return Fail("满地图负载测试没有同时覆盖六种农田和加工场地");
         var watch = Stopwatch.StartNew();
-        for (int tick = 0; tick < 50; tick++)
+        int distantFarmTicks = game.GetPlot(new Vector2I(0, 0)).RemainingTicks;
+        int distantProcessorTicks = game.GetPlot(new Vector2I(127, 127)).RemainingTicks;
+        game.AdvanceTick();
+        if (game.GetPlot(new Vector2I(0, 0)).RemainingTicks != distantFarmTicks - 1 ||
+            game.GetPlot(new Vector2I(127, 127)).RemainingTicks != distantProcessorTicks - 1)
+            return Fail("地图角落的实体没有在 tick 中继续生产或加工");
+        for (int tick = 1; tick < 50; tick++)
             game.AdvanceTick();
         watch.Stop();
         if (game.CurrentDay != 6 || game.GetProductStock(CropKind.Wheat) == 0)
