@@ -101,6 +101,26 @@ public sealed class FarmGame
         return new PlotSnapshot(plot.IsUnlocked, plot.Building, plot.CropKind, plot.Crop, plot.RemainingTicks);
     }
 
+    internal void FillWorldForBenchmark()
+    {
+        for (int row = 0; row < MapSize; row++)
+        {
+            for (int col = 0; col < MapSize; col++)
+            {
+                ref PlotState plot = ref _plots[row * MapSize + col];
+                CropKind crop = (CropKind)((row * (MapSize / 2) + col / 2) % CropDefinitions.Length);
+                bool farm = col % 2 == 0;
+                plot.IsUnlocked = true;
+                plot.Building = farm ? BuildingKind.Farm : BuildingKind.Processor;
+                plot.CropKind = crop;
+                plot.Crop = farm ? CropStage.Growing : CropStage.None;
+                plot.RemainingTicks = farm
+                    ? GetCrop(crop).GrowthTicks
+                    : GetCrop(crop).ProcessingTicks;
+            }
+        }
+    }
+
     public string? UnlockLand(Vector2I cell)
     {
         ref PlotState plot = ref _plots[IndexOf(cell)];

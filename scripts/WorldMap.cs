@@ -37,6 +37,8 @@ public partial class WorldMap : Node2D
     private Transform2D _lastCanvasTransform;
     private Vector2 _lastViewportSize;
 
+    internal int LastDrawnPlotCount { get; private set; }
+
     public void SetGame(FarmGame game)
     {
         _game = game;
@@ -84,6 +86,7 @@ public partial class WorldMap : Node2D
         lastCol = Math.Clamp(lastCol, 0, MapSize - 1);
         firstRow = Math.Clamp(firstRow, 0, MapSize - 1);
         lastRow = Math.Clamp(lastRow, 0, MapSize - 1);
+        LastDrawnPlotCount = 0;
         for (int row = firstRow; row <= lastRow; row++)
         {
             for (int col = firstCol; col <= lastCol; col++)
@@ -97,6 +100,7 @@ public partial class WorldMap : Node2D
                     center + new Vector2(-HalfWidth - SeamOverlap, 0f),
                 };
                 PlotSnapshot plot = _game.GetPlot(new Vector2I(col, row));
+                LastDrawnPlotCount++;
                 Color tileColor = !plot.IsUnlocked
                     ? LockedColor
                     : plot.Building switch

@@ -19,6 +19,8 @@ public partial class Main : Node2D
     private Button _sellButton = null!;
     private Vector2I? _selectedCell;
 
+    internal FarmGame Game => _game;
+
     public override void _Ready()
     {
         _worldMap = GetNode<WorldMap>("WorldMap");

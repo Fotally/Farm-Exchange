@@ -6,6 +6,11 @@ on:
       - dev
       - main
   workflow_dispatch:
+    inputs:
+      performance:
+        description: '运行有窗口的满地图 FPS 压测'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -58,7 +63,12 @@ jobs:
 
       - name: 运行场景测试并检查行覆盖率
         shell: pwsh
-        run: ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE
+        run: |
+          if ('${{ inputs.performance }}' -eq 'true') {
+            ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE -Performance
+          } else {
+            ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE
+          }
 
       - name: 上传覆盖率报告
         if: always()
@@ -66,6 +76,15 @@ jobs:
         with:
           name: coverage-${{ github.sha }}
           path: coverage/coverage.cobertura.xml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 上传满地图 FPS 报告
+        if: ${{ inputs.performance == true }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-${{ github.sha }}
+          path: coverage/performance.json
           if-no-files-found: error
           retention-days: 14
 
