@@ -12,7 +12,7 @@
 - `scripts/FarmGame.cs`：游戏状态模块。初始化中心随机农田与配套加工场地，持有固定 128×128 土地、每块农田所选作物、工人轮流工作、tick 与天数、分类库存、交易和购地规则；界面通过格子快照、作物定义与经营命令使用它。
 - `scripts/MarketPriceCurve.cs`：市场曲线模块。按市场种子与天数直接计算 1.00～20.00 金币之间的面粉价格，以多周期正弦和小权重平滑噪声形成走势。
 - `scripts/WorldMap.cs`：地图表现模块。绘制等距网格、作物状态和边缘，换算与选择格坐标，提供菱形地图内的镜头限制；不维护经营规则。
-- `scripts/CameraController.cs`：输入与镜头模块。区分左键点击、左键拖动，处理缩放和键盘移动；通过 `WorldMap` 的接口选择格子及限制镜头。
+- `scripts/CameraController.cs`：输入与镜头模块。区分左键点击、左键拖动，左键释放时结束拖动，并在释放事件被界面拦截时逐帧校正状态；处理缩放和键盘移动，通过 `WorldMap` 的接口选择格子及限制镜头。
 - `scripts/Main.cs` 与 `scenes/main.tscn`：场景协调及界面。提供农田作物和加工场地选择，把按钮命令和一秒计时器交给 `FarmGame`，再刷新地图、六类库存和售价。
 - `tests/`：通过对应场景检查地图、经营规则和主场景交互；`tests/test_suite.tscn` 在同一进程汇总运行全部测试，以便采集真实行覆盖率。
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、运行测试套件、生成 Cobertura 报告，并要求业务脚本行覆盖率不低于 80%。

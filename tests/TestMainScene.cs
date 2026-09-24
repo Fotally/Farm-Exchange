@@ -76,6 +76,23 @@ public partial class TestMainScene : Node
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = firstScreen + new Vector2(100f, 0f) });
         if (camera.Position == cameraBeforeDrag || !plot.Text.Contains("62, 64"))
             return Fail("左键拖动未移动镜头，或误选其他土地");
+        Vector2 cameraAfterRelease = camera.Position;
+        camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(120f, 0f), Relative = new Vector2(20f, 0f) });
+        if (camera.Position != cameraAfterRelease)
+            return Fail("松开左键后移动鼠标仍会拖动镜头");
+        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = firstScreen });
+        camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(100f, 0f), Relative = new Vector2(100f, 0f) });
+        camera._Process(0);
+        Vector2 cameraAfterMissedRelease = camera.Position;
+        camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(120f, 0f), Relative = new Vector2(20f, 0f) });
+        if (camera.Position != cameraAfterMissedRelease)
+            return Fail("左键释放事件未传入镜头时仍会拖动镜头");
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(63, 63));
+        Vector2 nextClickScreen = map.GetGlobalTransformWithCanvas() * firstWorld;
+        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = nextClickScreen });
+        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = nextClickScreen });
+        if (!plot.Text.Contains("62, 64"))
+            return Fail("左键拖动松开后无法再次短按选格");
         Vector2 outsideScreen = map.GetGlobalTransformWithCanvas() * new Vector2(9000f, 9000f);
         map.SelectAtScreenPosition(outsideScreen);
         if (!plot.Text.Contains("62, 64"))
