@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Godot;
 
-public partial class TestWorldStress : Node
+public partial class TestFullWorldLoad : Node
 {
     public override void _Ready()
     {
@@ -23,7 +23,7 @@ public partial class TestWorldStress : Node
             {
                 PlotSnapshot plot = game.GetPlot(new Vector2I(col, row));
                 if (!plot.IsUnlocked || plot.Building == BuildingKind.None || plot.RemainingTicks <= 0)
-                    return Fail("压测场景存在空地、锁定土地或非活动实体");
+                    return Fail("满地图负载场景存在空地、锁定土地或非活动实体");
                 if (plot.Building == BuildingKind.Farm)
                 {
                     farms++;
@@ -37,17 +37,17 @@ public partial class TestWorldStress : Node
             }
         }
         if (farms != 8192 || processors != 8192)
-            return Fail("满地图压测的农田与加工场地数量错误");
+            return Fail("满地图负载测试的农田与加工场地数量错误");
         for (int crop = 0; crop < FarmGame.Crops.Count; crop++)
             if (farmCropCounts[crop] == 0 || processorCropCounts[crop] == 0)
-                return Fail("满地图压测没有同时覆盖六种农田和加工场地");
+                return Fail("满地图负载测试没有同时覆盖六种农田和加工场地");
         var watch = Stopwatch.StartNew();
         for (int tick = 0; tick < 50; tick++)
             game.AdvanceTick();
         watch.Stop();
         if (game.CurrentDay != 6 || game.GetProductStock(CropKind.Wheat) == 0)
-            return Fail("满地图压测没有持续推进生产和日期");
-        GD.Print($"满地图逻辑压力：50 tick 耗时 {watch.Elapsed.TotalMilliseconds:F2} ms，平均 {watch.Elapsed.TotalMilliseconds / 50:F3} ms/tick");
+            return Fail("满地图负载测试没有持续推进生产和日期");
+        GD.Print($"满地图负载测试：50 tick 耗时 {watch.Elapsed.TotalMilliseconds:F2} ms，平均 {watch.Elapsed.TotalMilliseconds / 50:F3} ms/tick");
         return true;
     }
 

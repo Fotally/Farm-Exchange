@@ -11,12 +11,12 @@
 
 - `scripts/FarmGame.cs`：游戏状态模块。初始化中心随机农田与配套加工场地，持有固定 128×128 土地、每块农田所选作物、工人轮流工作、tick 与天数、分类库存、交易和购地规则；界面通过格子快照、作物定义与经营命令使用它。测试专用的满地图填充方法生成 16,384 个现有实体。
 - `scripts/MarketPriceCurve.cs`：市场曲线模块。按市场种子与天数直接计算 1.00～20.00 金币之间的面粉价格，以多周期正弦和小权重平滑噪声形成走势。
-- `scripts/WorldMap.cs`：地图表现模块。绘制等距网格、作物状态和边缘，换算与选择格坐标，提供菱形地图内的镜头限制，并记录每次绘制处理的地块数供压测读取；不维护经营规则。
+- `scripts/WorldMap.cs`：地图表现模块。绘制等距网格、作物状态和边缘，换算与选择格坐标，提供菱形地图内的镜头限制，并记录每次绘制处理的地块数供性能测试读取；不维护经营规则。
 - `scripts/CameraController.cs`：输入与镜头模块。区分左键点击、左键拖动，左键释放时结束拖动，并在释放事件被界面拦截时逐帧校正状态；处理缩放和键盘移动，通过 `WorldMap` 的接口选择格子及限制镜头。
 - `scripts/Main.cs` 与 `scenes/main.tscn`：场景协调及界面。提供农田作物和加工场地选择，把按钮命令和一秒计时器交给 `FarmGame`，再刷新地图、六类库存和售价。
-- `tests/rules/`：农田、加工、交易与市场规则；`tests/integration/`：地图坐标与镜头输入；`tests/smoke/`：主场景完整经营流程；`tests/stress/`：必跑的满地图 50 tick 逻辑压力与按需的有窗口 FPS 压测。根目录 `TestSuite` 只汇总各类测试结果。
-- `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、运行必需的 headless 测试套件、生成 Cobertura 报告，并要求业务脚本行覆盖率不低于 80%；`-Performance` 追加图形压测和 JSON 报告。
-- `.github/workflows/ci.yml`：`dev` 推送时自动运行 headless 测试；手动触发可选图形 FPS 压测；`main` 推送时在测试通过后额外完成 Windows Release 导出，通过进程退出码验收导出程序启动并上传构建产物。
+- `tests/unit/`：农田、加工、交易、市场及地图坐标的单元测试；`tests/integration/`：镜头输入与地图选择的集成测试；`tests/e2e/`：主场景经营流程的端到端测试；`tests/performance/`：必跑的满地图 50 tick 负载测试与按需的有窗口 FPS 性能测试。根目录 `TestSuite` 汇总 headless 检查；导出程序启动是构建冒烟测试。
+- `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、运行必需的 headless 测试套件、生成 Cobertura 报告，并要求业务脚本行覆盖率不低于 80%；`-Performance` 追加图形性能测试和 JSON 报告。
+- `.github/workflows/ci.yml`：`dev` 推送时自动运行 headless 测试；手动触发可选图形 FPS 性能测试；`main` 推送时在测试通过后额外完成 Windows Release 导出，通过进程退出码验收导出程序启动并上传构建产物。
 - `export_presets.cfg`：定义 Windows x86_64 验收构建。
 
 # 工作约定
@@ -42,5 +42,5 @@
 - `docs/生产与交易.md`：中心开局布局、六种作物数值、加工对应关系、选种、出售、购地规则与代码对应。
 - `docs/市场价格曲线调研.md`：有界价格曲线的候选模型、公式依据、已采用参数与测试约束。
 - `docs/构建与验收.md`：Windows 导出配置、引擎模板位置与可运行版本的验收步骤。
-- `docs/游戏测试分类调研.md`：依据官方资料组织规则、场景、流程、性能、兼容性及可用性测试，并说明满地图压测口径和触发时机。
+- `docs/游戏测试分类调研.md`：依据 ISTQB 与游戏引擎官方术语组织单元、集成、端到端、性能与冒烟测试，并说明满地图负载口径和触发时机。
 - `docs/GitHub协作流程.md`：issue、`dev` 开发分支、`main` 保护分支及人工合并流程。

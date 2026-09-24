@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       performance:
-        description: '运行有窗口的满地图 FPS 压测'
+        description: '运行有窗口的满地图 FPS 性能测试'
         type: boolean
         default: false
 

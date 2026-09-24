@@ -45,7 +45,7 @@ if ($lineCoverage -lt 80) {
 if ($Performance) {
     $report = 'coverage/performance.json'
     Remove-Item -LiteralPath $report -ErrorAction SilentlyContinue
-    & $GodotConsole --path . tests/stress/test_performance.tscn
+    & $GodotConsole --path . tests/performance/test_full_world_fps.tscn
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $report)) {
         throw "Graphics performance test failed with exit code $LASTEXITCODE"
     }

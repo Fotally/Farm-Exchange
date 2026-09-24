@@ -5,7 +5,7 @@ using System.IO;
 using System.Text.Json;
 using Godot;
 
-public partial class TestPerformance : Node
+public partial class TestFullWorldFps : Node
 {
     private const ulong WarmupUsec = 2_000_000;
     private const ulong SampleUsec = 8_000_000;
@@ -24,7 +24,7 @@ public partial class TestPerformance : Node
     {
         if (DisplayServer.GetName() == "headless")
         {
-            GD.PushError("帧率压测需要图形窗口，不能使用 --headless");
+            GD.PushError("帧率性能测试需要图形窗口，不能使用 --headless");
             GetTree().Quit(1);
             return;
         }
@@ -38,7 +38,7 @@ public partial class TestPerformance : Node
         Engine.MaxFps = 0;
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         _readyAtUsec = Time.GetTicksUsec();
-        GD.Print("性能压力测试：16,384 格实体，预热 2 秒，采样 8 秒");
+        GD.Print("满地图渲染性能测试：16,384 格实体，预热 2 秒，采样 8 秒");
     }
 
     public override void _Process(double delta)
@@ -70,7 +70,7 @@ public partial class TestPerformance : Node
         int renderedFrames = Engine.GetFramesDrawn() - _startFrames;
         if (renderedFrames == 0 || _frameTimesMs.Count < 2 || _maxDrawnPlots == 0 || _ticks == 0)
         {
-            GD.PushError("帧率压测没有取得有效的渲染帧、可见地块或经营 tick");
+            GD.PushError("帧率性能测试没有取得有效的渲染帧、可见地块或经营 tick");
             GetTree().Quit(1);
             return;
         }

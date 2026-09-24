@@ -1,6 +1,6 @@
 using Godot;
 
-public partial class TestMainScene : Node
+public partial class TestCoreLoop : Node
 {
     public override void _Ready()
     {
