@@ -22,7 +22,10 @@ public partial class CameraController : Camera2D
     public override void _Process(double delta)
     {
         if (_leftPressed && !Input.IsMouseButtonPressed(MouseButton.Left))
+        {
             _leftPressed = false;
+            _leftDragging = false;
+        }
         Vector2 direction = Vector2.Zero;
         if (Input.IsKeyPressed(Key.A) || Input.IsKeyPressed(Key.Left))
             direction.X -= 1f;
@@ -51,11 +54,12 @@ public partial class CameraController : Camera2D
                     _leftDragging = false;
                     _leftPressPosition = mouse.Position;
                 }
-                else if (_leftPressed)
+                else
                 {
-                    if (!_leftDragging && mouse.Position.DistanceTo(_leftPressPosition) < ClickDistance)
+                    if (_leftPressed && !_leftDragging && mouse.Position.DistanceTo(_leftPressPosition) < ClickDistance)
                         _worldMap.SelectAtScreenPosition(mouse.Position);
                     _leftPressed = false;
+                    _leftDragging = false;
                 }
                 GetViewport().SetInputAsHandled();
             }
