@@ -14,7 +14,7 @@
 - `scripts/WorldMap.cs`：地图表现模块。绘制等距网格、作物状态和边缘，换算与选择格坐标，提供菱形地图内的镜头限制，并记录每次绘制处理的地块数供压测读取；不维护经营规则。
 - `scripts/CameraController.cs`：输入与镜头模块。区分左键点击、左键拖动，左键释放时结束拖动，并在释放事件被界面拦截时逐帧校正状态；处理缩放和键盘移动，通过 `WorldMap` 的接口选择格子及限制镜头。
 - `scripts/Main.cs` 与 `scenes/main.tscn`：场景协调及界面。提供农田作物和加工场地选择，把按钮命令和一秒计时器交给 `FarmGame`，再刷新地图、六类库存和售价。
-- `tests/`：headless 场景套件按规则、地图组件、主场景集成检查，并在满地图状态推进 50 tick；按需的有窗口压测场景测量真实 FPS。
+- `tests/rules/`：农田、加工、交易与市场规则；`tests/integration/`：地图坐标与镜头输入；`tests/smoke/`：主场景完整经营流程；`tests/stress/`：必跑的满地图 50 tick 逻辑压力与按需的有窗口 FPS 压测。根目录 `TestSuite` 只汇总各类测试结果。
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、运行必需的 headless 测试套件、生成 Cobertura 报告，并要求业务脚本行覆盖率不低于 80%；`-Performance` 追加图形压测和 JSON 报告。
 - `.github/workflows/ci.yml`：`dev` 推送时自动运行 headless 测试；手动触发可选图形 FPS 压测；`main` 推送时在测试通过后额外完成 Windows Release 导出，通过进程退出码验收导出程序启动并上传构建产物。
 - `export_presets.cfg`：定义 Windows x86_64 验收构建。

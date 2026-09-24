@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Godot;
 
 public partial class TestFarmGame : Node
@@ -7,55 +6,13 @@ public partial class TestFarmGame : Node
     {
         bool passed = RunChecks();
         if (passed)
-            GD.Print("六种作物、加工、市场与交易检查通过");
+            GD.Print("农田、加工与交易规则检查通过");
         GetTree().Quit(passed ? 0 : 1);
     }
 
     public static bool RunChecks() =>
         CheckInitialCenter() && CheckAllCrops() && CheckMatchingAndSwitching() && CheckRemoval() &&
-        CheckWorkerRotation() && CheckMarketCurve() && CheckDayTiming() && CheckFullWorldFixture();
-
-    private static bool CheckFullWorldFixture()
-    {
-        var game = new FarmGame(12345);
-        game.FillWorldForBenchmark();
-        int farms = 0;
-        int processors = 0;
-        int[] farmCropCounts = new int[FarmGame.Crops.Count];
-        int[] processorCropCounts = new int[FarmGame.Crops.Count];
-        for (int row = 0; row < FarmGame.MapSize; row++)
-        {
-            for (int col = 0; col < FarmGame.MapSize; col++)
-            {
-                PlotSnapshot plot = game.GetPlot(new Vector2I(col, row));
-                if (!plot.IsUnlocked || plot.Building == BuildingKind.None || plot.RemainingTicks <= 0)
-                    return Fail("压测场景存在空地、锁定土地或非活动实体");
-                if (plot.Building == BuildingKind.Farm)
-                {
-                    farms++;
-                    farmCropCounts[(int)plot.CropKind]++;
-                }
-                else
-                {
-                    processors++;
-                    processorCropCounts[(int)plot.CropKind]++;
-                }
-            }
-        }
-        if (farms != 8192 || processors != 8192)
-            return Fail("满地图压测的农田与加工场地数量错误");
-        for (int crop = 0; crop < FarmGame.Crops.Count; crop++)
-            if (farmCropCounts[crop] == 0 || processorCropCounts[crop] == 0)
-                return Fail("满地图压测没有同时覆盖六种农田和加工场地");
-        var watch = Stopwatch.StartNew();
-        for (int tick = 0; tick < 50; tick++)
-            game.AdvanceTick();
-        watch.Stop();
-        if (game.CurrentDay != 6 || game.GetProductStock(CropKind.Wheat) == 0)
-            return Fail("满地图压测没有持续推进生产和日期");
-        GD.Print($"满地图逻辑压力：50 tick 耗时 {watch.Elapsed.TotalMilliseconds:F2} ms，平均 {watch.Elapsed.TotalMilliseconds / 50:F3} ms/tick");
-        return true;
-    }
+        CheckWorkerRotation();
 
     private static bool CheckInitialCenter()
     {
@@ -264,62 +221,6 @@ public partial class TestFarmGame : Node
         game.AdvanceTick();
         if (game.GetPlot(first).RemainingTicks != 4 || game.GetPlot(second).RemainingTicks != 9)
             return Fail("不同作物未按各自成熟时间生长");
-        return true;
-    }
-
-    private static bool CheckMarketCurve()
-    {
-        var curve = new MarketPriceCurve(24680);
-        var sameCurve = new MarketPriceCurve(24680);
-        var otherCurve = new MarketPriceCurve(13579);
-        int previousPrice = curve.GetPriceCents(1);
-        bool differentSeedChangedPrice = false;
-        int smallChanges = 0;
-        int mediumChanges = 0;
-        int largeChanges = 0;
-        if (previousPrice != MarketPriceCurve.InitialPriceCents)
-            return Fail("市场曲线未从 5.00 金币开始");
-        var game = new FarmGame(12345);
-        int[] initialPrices = { 500, 500, 600, 400, 800, 1000 };
-        foreach (CropDefinition crop in FarmGame.Crops)
-            if (game.GetProductPriceCents(crop.Kind) != initialPrices[(int)crop.Kind])
-                return Fail($"{crop.ProductName}首日售价错误");
-
-        for (int day = 2; day <= 100000; day++)
-        {
-            int price = curve.GetPriceCents(day);
-            if (price < MarketPriceCurve.MinimumPriceCents || price > MarketPriceCurve.MaximumPriceCents)
-                return Fail($"第 {day} 天价格超出 1.00～20.00 金币范围");
-            if (price != sameCurve.GetPriceCents(day))
-                return Fail("相同市场种子没有生成相同价格");
-            if (price != otherCurve.GetPriceCents(day))
-                differentSeedChangedPrice = true;
-            double change = System.Math.Abs(price - previousPrice) * 100.0 / previousPrice;
-            if (change > 20.0)
-                return Fail($"第 {day} 天面粉价格变化超过 20%：{change:0.00}%");
-            if (change < 5.0) smallChanges++;
-            else if (change < 15.0) mediumChanges++;
-            else largeChanges++;
-            previousPrice = price;
-        }
-        if (!differentSeedChangedPrice || smallChanges == 0 || mediumChanges == 0 || largeChanges == 0)
-            return Fail("市场价格曲线缺少种子差异或涨跌档位");
-        return true;
-    }
-
-    private static bool CheckDayTiming()
-    {
-        var game = new FarmGame(12345);
-        for (int i = 0; i < FarmGame.TicksPerDay - 1; i++)
-            if (game.AdvanceTick().DayAdvanced || game.CurrentDay != 1)
-                return Fail("未满 10 tick 就提前进入下一天");
-        if (!game.AdvanceTick().DayAdvanced || game.CurrentDay != 2 ||
-            game.DailyPriceChangePercent == 0.0)
-            return Fail("第 10 tick 未进入下一天并更新价格");
-        foreach (CropDefinition crop in FarmGame.Crops)
-            if (game.GetProductPriceCents(crop.Kind) !=
-                (game.CurrentFlourPriceCents * crop.PricePercent + 50) / 100)
-                return Fail($"{crop.ProductName}没有按当天面粉价计价");
         return true;
     }
 

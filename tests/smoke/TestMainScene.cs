@@ -23,7 +23,6 @@ public partial class TestMainScene : Node
     {
         const string actions = "CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions/";
         var map = main.GetNode<WorldMap>("WorldMap");
-        var camera = main.GetNode<CameraController>("Camera2D");
         var economy = main.GetNode<Label>(actions + "EconomyLabel");
         var plot = main.GetNode<Label>(actions + "PlotLabel");
         var unlock = main.GetNode<Button>(actions + "UnlockButton");
@@ -39,15 +38,6 @@ public partial class TestMainScene : Node
             !economy.Text.Contains("金币：50.00") || !economy.Text.Contains("今日涨跌：基准价"))
             return Fail("初始天数、面粉价格或金币未显示");
 
-        if (!camera.Zoom.IsEqualApprox(new Vector2(1.25f, 1.25f)))
-            return Fail("主场景未使用较近的默认镜头");
-        camera._UnhandledInput(new InputEventMouseButton
-        {
-            ButtonIndex = MouseButton.WheelDown,
-            Pressed = true,
-        });
-        if (!camera.Zoom.IsEqualApprox(new Vector2(1.25f, 1.25f)))
-            return Fail("镜头可以拉远超过已确认的地块大小");
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(63, 63));
         if (!plot.Text.Contains("农田") || !unlock.Disabled)
             return Fail("主场景未显示中心预置农田");
@@ -64,39 +54,9 @@ public partial class TestMainScene : Node
             remove.EmitSignal(Button.SignalName.Pressed);
         }
 
-        Vector2 firstWorld = new(-64f, 2016f);
-        Vector2 firstScreen = map.GetGlobalTransformWithCanvas() * firstWorld;
-        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = firstScreen });
-        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = firstScreen });
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(62, 64));
         if (!plot.Text.Contains("未解锁") || unlock.Disabled)
-            return Fail("左键点击未选中地图土地");
-        Vector2 cameraBeforeDrag = camera.Position;
-        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = firstScreen });
-        camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(100f, 0f), Relative = new Vector2(100f, 0f) });
-        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = firstScreen + new Vector2(100f, 0f) });
-        if (camera.Position == cameraBeforeDrag || !plot.Text.Contains("62, 64"))
-            return Fail("左键拖动未移动镜头，或误选其他土地");
-        Vector2 cameraAfterRelease = camera.Position;
-        camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(120f, 0f), Relative = new Vector2(20f, 0f) });
-        if (camera.Position != cameraAfterRelease)
-            return Fail("松开左键后移动鼠标仍会拖动镜头");
-        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = firstScreen });
-        camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(100f, 0f), Relative = new Vector2(100f, 0f) });
-        camera._Process(0);
-        Vector2 cameraAfterMissedRelease = camera.Position;
-        camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(120f, 0f), Relative = new Vector2(20f, 0f) });
-        if (camera.Position != cameraAfterMissedRelease)
-            return Fail("左键释放事件未传入镜头时仍会拖动镜头");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(63, 63));
-        Vector2 nextClickScreen = map.GetGlobalTransformWithCanvas() * firstWorld;
-        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = nextClickScreen });
-        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = nextClickScreen });
-        if (!plot.Text.Contains("62, 64"))
-            return Fail("左键拖动松开后无法再次短按选格");
-        Vector2 outsideScreen = map.GetGlobalTransformWithCanvas() * new Vector2(9000f, 9000f);
-        map.SelectAtScreenPosition(outsideScreen);
-        if (!plot.Text.Contains("62, 64"))
-            return Fail("地图外的位置仍可被选中");
+            return Fail("未解锁土地没有正确显示或无法解锁");
         unlock.EmitSignal(Button.SignalName.Pressed);
         if (!economy.Text.Contains("免费土地：1") || build.Disabled)
             return Fail("免费解锁未更新界面");
