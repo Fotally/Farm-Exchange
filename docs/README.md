@@ -7,7 +7,7 @@
 - [作物与选种](gameplay/production/crop-growth.md)：六种作物、成熟时间和切换规则。
 - [加工](gameplay/production/processing.md)：对应场地、加工时间与投入损失。
 - [出售与价格](gameplay/trading/sales.md)：当日定价、库存与结算。
-- [开局与购地](gameplay/land/opening-and-unlock.md)：预置地块、建造与扩张。
+- [开局与建造](gameplay/land/opening-and-building.md)：预置建筑、建造收费与扩张。
 - [地图与操作](gameplay/world/map-and-camera.md)：坐标、选择、镜头与画面含义。
 
 ## 代码架构
@@ -16,6 +16,7 @@
 - [市场价格接口](architecture/market/market-price-curve/interface-market-price-curve.md)及[曲线实现](architecture/market/market-price-curve/implementation-bounded-curve.md)。
 - [WorldMap 接口](architecture/world/world-map/interface-world-map.md)及[分块缓存实现](architecture/world/world-map/implementation-chunk-cache.md)。
 - [镜头输入接口](architecture/world/camera-controller/interface-camera-controller.md)。
+- [主界面接口](architecture/ui/main/interface-main.md)与[可点击 HTML 原型](architecture/ui/main/prototype-main.html)：顶部状态、建造摆放、选中详情与二级窗口拖动、位置记忆。
 
 列出全部接口文档：`rg --files docs/architecture -g 'interface-*.md'`。新增模块时按模块路径添加具名接口文档；实现细节另写 `implementation-` 前缀文件。
 

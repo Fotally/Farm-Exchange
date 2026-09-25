@@ -13,7 +13,7 @@ public readonly record struct CropDefinition(
     CropKind Kind, string CropName, string BuildingName, string ProductName,
     int GrowthTicks, int ProcessingTicks, int PricePercent);
 public readonly record struct PlotSnapshot(
-    bool IsUnlocked, BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingTicks);
+    BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingTicks);
 public readonly record struct TickResult(int Harvested, int Produced, bool WorkerActed, bool DayAdvanced);
 public readonly record struct SaleResult(int Quantity, int RevenueCents);
 
@@ -21,7 +21,7 @@ public sealed class FarmGame
 {
     public const int MapSize = 128;
     public const int TicksPerDay = 10;
-    public const int LandCostCents = 1000;
+    public const int BuildingCostCents = 1000;
 
     private static readonly CropDefinition[] CropDefinitions =
     {
@@ -50,7 +50,6 @@ public sealed class FarmGame
     private int _ticksIntoDay;
 
     public int MoneyCents { get; private set; } = 5000;
-    public int FreeLandGrants { get; private set; } = 2;
     public int CurrentDay { get; private set; } = 1;
     public int CurrentFlourPriceCents { get; private set; }
     public double DailyPriceChangePercent { get; private set; }
@@ -79,14 +78,12 @@ public sealed class FarmGame
         for (int i = 0; i < InitialFarmCells.Length; i++)
         {
             ref PlotState plot = ref _plots[IndexOf(InitialFarmCells[i])];
-            plot.IsUnlocked = true;
             plot.Building = BuildingKind.Farm;
             plot.CropKind = i == 2 ? secondary : primary;
         }
         for (int i = 0; i < InitialProcessorCells.Length; i++)
         {
             ref PlotState plot = ref _plots[IndexOf(InitialProcessorCells[i])];
-            plot.IsUnlocked = true;
             plot.Building = BuildingKind.Processor;
             plot.CropKind = i == 1 ? secondary : primary;
         }
@@ -101,7 +98,7 @@ public sealed class FarmGame
     public PlotSnapshot GetPlot(Vector2I cell)
     {
         PlotState plot = _plots[IndexOf(cell)];
-        return new PlotSnapshot(plot.IsUnlocked, plot.Building, plot.CropKind, plot.Crop, plot.RemainingTicks);
+        return new PlotSnapshot(plot.Building, plot.CropKind, plot.Crop, plot.RemainingTicks);
     }
 
     internal void FillWorldForBenchmark()
@@ -113,7 +110,6 @@ public sealed class FarmGame
                 ref PlotState plot = ref _plots[row * MapSize + col];
                 CropKind crop = (CropKind)((row * (MapSize / 2) + col / 2) % CropDefinitions.Length);
                 bool farm = col % 2 == 0;
-                plot.IsUnlocked = true;
                 plot.Building = farm ? BuildingKind.Farm : BuildingKind.Processor;
                 plot.CropKind = crop;
                 plot.Crop = farm ? CropStage.Growing : CropStage.None;
@@ -122,21 +118,6 @@ public sealed class FarmGame
                     : GetCrop(crop).ProcessingTicks;
             }
         }
-    }
-
-    public string? UnlockLand(Vector2I cell)
-    {
-        ref PlotState plot = ref _plots[IndexOf(cell)];
-        if (plot.IsUnlocked)
-            return "该土地已解锁";
-        if (FreeLandGrants == 0 && MoneyCents < LandCostCents)
-            return "金币不足，无法解锁土地";
-        if (FreeLandGrants > 0)
-            FreeLandGrants--;
-        else
-            MoneyCents -= LandCostCents;
-        plot.IsUnlocked = true;
-        return null;
     }
 
     public string? BuildFarm(Vector2I cell) => Build(cell, BuildingKind.Farm, CropKind.Wheat);
@@ -238,10 +219,11 @@ public sealed class FarmGame
     private string? Build(Vector2I cell, BuildingKind building, CropKind crop)
     {
         ref PlotState plot = ref _plots[IndexOf(cell)];
-        if (!plot.IsUnlocked)
-            return "请先解锁土地";
         if (plot.Building != BuildingKind.None)
             return "该土地已有建筑";
+        if (MoneyCents < BuildingCostCents)
+            return "金币不足，无法建造建筑";
+        MoneyCents -= BuildingCostCents;
         plot.Building = building;
         plot.CropKind = crop;
         return null;
@@ -292,7 +274,6 @@ public sealed class FarmGame
 
     private struct PlotState
     {
-        public bool IsUnlocked;
         public BuildingKind Building;
         public CropKind CropKind;
         public CropStage Crop;

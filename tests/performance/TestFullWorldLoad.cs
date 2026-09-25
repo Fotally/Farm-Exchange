@@ -23,8 +23,8 @@ public partial class TestFullWorldLoad : Node
             for (int col = 0; col < FarmGame.MapSize; col++)
             {
                 PlotSnapshot plot = game.GetPlot(new Vector2I(col, row));
-                if (!plot.IsUnlocked || plot.Building == BuildingKind.None || plot.RemainingTicks <= 0)
-                    return Fail("满地图负载场景存在空地、锁定土地或非活动实体");
+                if (plot.Building == BuildingKind.None || plot.RemainingTicks <= 0)
+                    return Fail("满地图负载场景存在空地或非活动实体");
                 if (plot.Building == BuildingKind.Farm)
                 {
                     farms++;

@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Farm Exchange · 主界面交互原型</title>
+  <style>
+    :root { color-scheme: light; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; --ink:#24453f; --deep:#203d39; --deep-2:#31594f; --cream:#fff9e9; --line:#d7dfc9; --gold:#d89b55; --green:#719a70; }
+    * { box-sizing:border-box; }
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; }
+    button, input { font:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:not-allowed; }
+    button:focus-visible, input:focus-visible { outline:3px solid #f7c16b; outline-offset:3px; }
+    [hidden] { display:none !important; }
+    .app { width:100%; height:100%; min-height:540px; position:relative; overflow:hidden; background:#92b88d; color:var(--ink); }
+    .prototype-tag { position:absolute; z-index:30; top:70px; left:14px; padding:6px 10px; border-radius:0 0 8px 8px; background:#fff2cb; color:#6b5835; font-size:11px; box-shadow:0 2px 7px #27463833; }
+    .topbar { height:70px; display:flex; align-items:center; gap:10px; padding:9px 16px; background:var(--deep); color:#fff5dc; position:relative; z-index:20; box-shadow:0 5px 20px #17332b4d; }
+    .brand { width:174px; flex:none; display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.3px; line-height:1.1; }
+    .brand-mark { width:37px; height:37px; border-radius:11px; display:grid; place-items:center; background:#b48c55; color:#fff6dd; font-size:24px; }
+    .brand small { display:block; margin-top:5px; font-weight:400; color:#a5c7ac; font-size:10px; letter-spacing:.4px; }
+    .top-stats { display:flex; gap:8px; align-items:center; min-width:0; flex:1; }
+    .stat { min-width:103px; height:49px; padding:7px 12px; border-radius:10px; background:#36594f; display:flex; flex-direction:column; justify-content:center; white-space:nowrap; }
+    .stat span { color:#bcd2bf; font-size:11px; }
+    .stat strong { color:#fff8e3; font-size:16px; margin-top:1px; }
+    .stat.worker-stat { min-width:144px; }
+    .stat.worker-stat strong { font-size:14px; }
+    .top-actions { display:flex; gap:7px; align-items:center; flex:none; }
+    .top-actions button { border:1px solid #658478; height:43px; border-radius:10px; background:#456e60; color:#fff7df; padding:0 12px; font-size:14px; white-space:nowrap; }
+    .top-actions button:hover:not(:disabled) { background:#598675; }
+    .top-actions .planned { border-style:dashed; color:#c1cbc1; background:#344c47; position:relative; }
+    .top-actions .planned::after { content:"规划"; font-size:9px; position:absolute; top:-7px; right:4px; background:#d3c7a9; color:#4b584c; border-radius:4px; padding:0 3px; }
+    .map { position:absolute; top:70px; bottom:109px; width:100%; overflow:hidden; background:linear-gradient(180deg,#b2d29e 0%,#8eb386 52%,#6e9d73 100%); }
+    .map::before { content:""; position:absolute; inset:0; opacity:.29; background:repeating-linear-gradient(27deg,transparent 0 69px,#5a906e 70px 71px,transparent 72px 140px),repeating-linear-gradient(-27deg,transparent 0 69px,#5a906e 70px 71px,transparent 72px 140px); }
+    .map::after { content:""; position:absolute; width:980px; height:440px; left:5%; top:4%; border-radius:50%; background:radial-gradient(ellipse,#e7deb04f,transparent 67%); pointer-events:none; }
+    .map-grid { position:absolute; inset:0; z-index:1; }
+    .tile { position:absolute; width:119px; height:66px; border:0; clip-path:polygon(50% 0, 100% 50%, 50% 100%, 0 50%); display:grid; place-items:center; color:#2f4f40; transition:filter .15s, transform .15s; }
+    .tile:hover { filter:brightness(1.17); transform:translateY(-3px); }
+    .tile.empty { background:#b6d18f; }
+    .tile.empty.alt { background:#a8ca8d; }
+    .tile.farm { background:#bd9460; color:#fff4cf; }
+    .tile.processor { background:#8a9f8e; color:#fff9dd; }
+    .tile.selected { background:#f1ca69; color:#3c563e; filter:drop-shadow(0 3px 1px #fff5ce); }
+    .tile.placeable { background:#d7df8b; color:#3d6442; }
+    .tile.placeable:hover { background:#f4d678; }
+    .tile .symbol { font-size:24px; line-height:1; transform:translateY(-1px); pointer-events:none; }
+    .map-tip { position:absolute; left:22px; top:46px; z-index:3; border-radius:12px; background:#23473ddc; color:#fff8dc; max-width:300px; padding:13px 16px; font-size:13px; line-height:1.55; box-shadow:0 8px 18px #22433436; }
+    .map-tip strong { display:block; font-size:15px; margin-bottom:3px; }
+    .map-tip small { color:#bfd4bd; }
+    .map-note { position:absolute; left:22px; bottom:20px; z-index:3; padding:9px 14px; border-radius:10px; color:#fff6dc; background:#24483cda; font-size:12px; }
+    .details { position:absolute; z-index:5; top:86px; right:16px; bottom:123px; width:350px; min-height:320px; border-radius:17px; background:var(--cream); box-shadow:0 13px 35px #25413152; overflow:auto; }
+    .details-head { padding:20px 22px 18px; background:#2b4b44; color:#fff5df; position:relative; }
+    .details-head small { display:block; color:#bed7bd; font-size:11px; }
+    .details-head h2 { margin:5px 30px 0 0; font-size:23px; }
+    .icon-close { position:absolute; top:15px; right:15px; width:29px; height:29px; border:0; border-radius:50%; background:#50756b; color:#fff7df; font-size:20px; line-height:1; }
+    .details-body { padding:16px 20px; }
+    .status-card { background:#e5ebd6; border-radius:12px; padding:11px 14px; margin-bottom:12px; }
+    .eyebrow { font-size:11px; color:#718273; display:block; margin-bottom:6px; }
+    .status-card strong { font-size:16px; display:block; }
+    .field-label { display:block; font-size:13px; color:#637669; font-weight:700; margin:0 0 9px; }
+    .price-card { background:#f6eedb; border:1px solid #e6d7b7; border-radius:11px; padding:10px 14px; margin-bottom:10px; }
+    .price-card strong { display:block; font-size:21px; color:#885e36; margin:5px 0; }
+    .price-card small { color:#826f57; font-size:11px; }
+    .stock-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:11px; }
+    .stock-grid div { border-radius:9px; padding:8px 10px; background:#e7eddd; }
+    .stock-grid span { display:block; color:#667a6c; font-size:11px; }
+    .stock-grid strong { display:block; margin-top:4px; font-size:18px; }
+    .crop-open { width:100%; min-height:44px; border:1px solid #b9cdb5; border-radius:9px; background:#fffdf6; color:#375d48; font-weight:700; text-align:left; padding:0 14px; }
+    .crop-list { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .crop-list button { min-height:38px; border:1px solid #ccdbbc; border-radius:8px; color:#365b47; background:#fffdf5; font-size:12px; }
+    .crop-list button.active { background:#4e7564; border-color:#4e7564; color:#fff7de; }
+    .fine-print { color:#7a8073; font-size:11px; line-height:1.5; margin:8px 0 12px; }
+    .danger { width:100%; min-height:45px; border:1px solid #e3bab0; border-radius:9px; color:#9a5c52; background:#fff0e9; font-weight:700; }
+    .danger:hover { background:#fce4dc; }
+    .build-bar { position:absolute; z-index:10; left:16px; right:16px; bottom:15px; height:94px; border-radius:16px; background:var(--deep); box-shadow:0 8px 27px #21413570; color:#f8eed4; display:flex; align-items:center; gap:16px; padding:12px 16px; }
+    .build-open { min-width:142px; height:61px; border:1px solid #e9c992; border-radius:11px; background:#bb8b56; color:#fff8e5; font-size:20px; font-weight:800; }
+    .build-open:hover { background:#ca9a65; }
+    .build-description { min-width:0; flex:1; border-left:1px solid #597469; padding-left:18px; }
+    .build-description strong { display:block; font-size:15px; }
+    .build-description span { display:block; margin-top:5px; font-size:11px; color:#bfd1bc; }
+    .cancel-placement { border:1px solid #718d7c; border-radius:9px; height:43px; padding:0 16px; background:#426358; color:#f7efd9; }
+    .catalog { position:absolute; z-index:14; left:30px; bottom:119px; width:min(680px,calc(100vw - 60px)); max-height:min(390px,calc(100vh - 225px)); background:#fff9e9; border:1px solid #dfdfc2; border-radius:15px; box-shadow:0 14px 34px #203c36a8; display:flex; flex-direction:column; overflow:hidden; }
+    .catalog-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px; border-bottom:1px solid #e5e6d4; }
+    .catalog-head strong { font-size:17px; }
+    .catalog-head button { border:0; background:transparent; color:#48675c; font-size:21px; }
+    .drag-handle { cursor:grab; touch-action:none; user-select:none; }
+    .drag-handle:active { cursor:grabbing; }
+    .drag-hint { color:#89988c; font-size:11px; font-weight:400; margin-left:9px; }
+    .catalog-tabs { display:flex; gap:7px; padding:11px 16px 2px; }
+    .catalog-tabs button { border:1px solid #cad5c2; border-radius:8px; padding:8px 15px; background:#f1f3e8; color:#4b6c58; }
+    .catalog-tabs button.active { background:#4c7662; color:#fff8e4; }
+    .catalog-tools { display:flex; align-items:center; gap:12px; padding:11px 16px; }
+    .catalog-tools input[type=search] { width:225px; min-width:130px; border:1px solid #bfcdbb; border-radius:8px; background:#fff; padding:8px 10px; color:#2b4f42; }
+    .catalog-tools label { font-size:11px; color:#708073; display:flex; align-items:center; gap:4px; }
+    .catalog-list { overflow-y:auto; padding:0 16px 16px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+    .catalog-card { min-height:65px; text-align:left; border:1px solid #cbd6bd; border-radius:9px; background:#f1f5e8; padding:9px 10px; color:#305445; }
+    .catalog-card:hover:not(:disabled) { border-color:#ad8357; background:#fff3d8; }
+    .catalog-card.selected { border:2px solid #b8854d; background:#fff0d1; }
+    .catalog-card:disabled { opacity:.53; }
+    .catalog-card strong, .catalog-card small { display:block; }
+    .catalog-card strong { font-size:13px; }
+    .catalog-card small { color:#708675; font-size:10px; margin-top:5px; }
+    .catalog-empty { grid-column:1/-1; padding:16px; color:#697e6f; }
+    .crop-picker { position:absolute; z-index:16; right:386px; top:140px; width:440px; max-height:min(460px,calc(100vh - 170px)); border-radius:15px; background:#fff9e9; box-shadow:0 14px 35px #1d3c32a0; display:flex; flex-direction:column; overflow:hidden; }
+    .crop-picker .catalog-list { grid-template-columns:1fr; }
+    .crop-card { display:flex; justify-content:space-between; align-items:center; min-height:61px; border:1px solid #ced9c5; border-radius:9px; padding:8px 12px; background:#f5f7eb; text-align:left; color:#315747; }
+    .crop-card:hover { background:#fff0d4; border-color:#bc9562; }
+    .crop-card.active { border:2px solid #b8874d; background:#fff0d8; }
+    .crop-card small { display:block; margin-top:4px; color:#728574; }
+    .crop-card em { color:#835f3f; font-size:13px; font-style:normal; font-weight:700; }
+    .toast { position:absolute; z-index:35; left:50%; bottom:130px; transform:translateX(-50%); max-width:min(600px,90vw); background:#244c42; color:#fff6dc; padding:10px 17px; border-radius:10px; box-shadow:0 8px 24px #2542385e; font-size:13px; text-align:center; }
+    .toast.in-modal { bottom:14px; }
+    .overlay { position:absolute; z-index:25; inset:70px 0 0; background:#132c29a8; display:grid; place-items:center; padding:20px; }
+    .modal { width:min(660px,94vw); max-height:min(560px,calc(100vh - 120px)); overflow:auto; border-radius:17px; background:#fff9e9; box-shadow:0 20px 50px #112e2877; }
+    .modal-head { background:#2b4b44; color:#fff6db; display:flex; justify-content:space-between; align-items:center; padding:17px 21px; }
+    .modal-head h2 { margin:0; font-size:21px; }
+    .modal-head button { border:0; width:32px; height:32px; border-radius:50%; color:#fff4dc; background:#4c7166; font-size:19px; }
+    .modal-body { padding:18px 21px 22px; }
+    .modal-info { margin:0 0 14px; font-size:12px; color:#6a7c6c; }
+    .data-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .data-table th { text-align:left; background:#e4ecd9; color:#526d5b; }
+    .data-table th, .data-table td { padding:10px 12px; border-bottom:1px solid #dce4d4; }
+    .modal-footer { display:flex; justify-content:flex-end; padding:0 21px 20px; }
+    .modal-footer button { border:0; border-radius:9px; background:#b98755; color:#fff7e2; padding:11px 20px; font-weight:700; }
+    .modal-footer button:disabled { background:#abb8a8; }
+    @media(max-width:1050px) { .brand { width:135px; } .stat { min-width:80px; padding:5px 8px; } .stat strong { font-size:13px; } .top-actions button { padding:0 8px; font-size:12px; } .details { width:310px; } }
+    @media(max-width:760px) { .app { min-width:720px; } .catalog { width:calc(100vw - 60px); } .catalog-list { grid-template-columns:repeat(2,minmax(0,1fr)); } .crop-picker { right:15px; width:400px; } }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">✿</span><div>农场交易<small>FARM EXCHANGE</small></div></div>
+    <div class="top-stats" aria-label="经营状态">
+      <div class="stat"><span>游戏时间</span><strong>第 1 年 · 1 月</strong></div>
+      <div class="stat"><span>金币</span><strong>50.00</strong></div>
+      <div class="stat worker-stat"><span>工人</span><strong>1 · 自动照料</strong></div>
+    </div>
+    <nav class="top-actions" aria-label="全局功能">
+      <button type="button" data-modal="inventory">▣ 库存</button>
+      <button type="button" data-modal="market">▤ 市场</button>
+      <button type="button" class="planned" disabled title="存档规则待讨论">▥ 存档</button>
+      <button type="button" class="planned" disabled title="人物状态规则待讨论">♟ 人物</button>
+    </nav>
+  </header>
+  <div class="prototype-tag">可点击原型 · 静态示例数据 · 不保存进度</div>
+  <main class="map" id="map" aria-label="地图演示区">
+    <div class="map-grid" id="map-grid"></div>
+    <div class="map-tip"><strong>建造后直接在地图摆放</strong><small>底部“建造”选择农田或加工场地；<br>平时点击地块，右侧显示详情。</small></div>
+    <div class="map-note" id="map-note">点击地块查看详情 · 点击空白处取消选择</div>
+  </main>
+  <aside class="details" id="details" aria-label="选中地块详情" hidden></aside>
+  <section class="catalog" id="catalog" aria-label="建造目录" hidden>
+    <div class="catalog-head drag-handle"><strong>建造目录 <span class="drag-hint">拖动标题可移动</span></strong><button type="button" id="close-catalog" aria-label="关闭目录">×</button></div>
+    <div class="catalog-tabs"><button type="button" data-build-tab="farm">♧ 农田</button><button type="button" data-build-tab="processor">⚙ 加工场地</button></div>
+    <div class="catalog-tools" id="catalog-tools"><input id="catalog-search" type="search" placeholder="按名称搜索场地" aria-label="搜索加工场地"><label><input id="show-extra" type="checkbox">显示扩容占位条目</label></div>
+    <div class="catalog-list" id="catalog-list"></div>
+  </section>
+  <section class="crop-picker" id="crop-picker" aria-label="选择作物" hidden>
+    <div class="catalog-head drag-handle"><strong>选择作物 <span class="drag-hint">拖动标题可移动</span></strong><button type="button" id="close-crop-picker" aria-label="关闭作物选择">×</button></div>
+    <div class="catalog-list" id="crop-options"></div>
+  </section>
+  <footer class="build-bar">
+    <button type="button" class="build-open" id="open-build">⚒ 建造</button>
+    <div class="build-description"><strong id="build-title">选择建筑，再点击地图空位摆放</strong><span id="build-help">农田和加工场地都在“建造”目录中；建造费 10.00 金币为暂定玩法。</span></div>
+    <button type="button" class="cancel-placement" id="cancel-placement" hidden>取消摆放 Esc</button>
+  </footer>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <div class="overlay" id="overlay" hidden><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
+</div>
+<script>
+// UI 原型：只演示界面状态。数值与经营规则由独立玩法 issue 确定。
+const crops = [
+  { crop: "小麦", factory: "磨坊", product: "面粉", icon: "✿" },
+  { crop: "玉米", factory: "玉米加工坊", product: "玉米粉", icon: "▤" },
+  { crop: "水稻", factory: "碾米坊", product: "大米", icon: "▥" },
+  { crop: "马铃薯", factory: "淀粉坊", product: "淀粉", icon: "▦" },
+  { crop: "向日葵", factory: "榨油坊", product: "葵花籽油", icon: "✽" },
+  { crop: "甘蔗", factory: "制糖坊", product: "蔗糖", icon: "♨" }
+];
+const quantities = [
+  { raw: 3, product: 2 }, { raw: 1, product: 0 },
+  { raw: 0, product: 1 }, { raw: 2, product: 0 },
+  { raw: 0, product: 0 }, { raw: 0, product: 0 }
+];
+const tiles = [];
+for (let row = 0; row < 6; row++) {
+  for (let col = 0; col < 8; col++) tiles.push({ row, col, kind: "empty", crop: "小麦", factory: "磨坊" });
+}
+const at = (col, row) => tiles.find(tile => tile.col === col && tile.row === row);
+at(3, 2).kind = "farm";
+at(4, 2).kind = "farm"; at(4, 2).crop = "玉米";
+at(3, 3).kind = "farm";
+at(2, 3).kind = "processor";
+at(5, 2).kind = "processor"; at(5, 2).factory = "玉米加工坊";
+let selected = null;
+let placement = null;
+let catalogOpen = false;
+let buildTab = "farm";
+let cropPickerOpen = false;
+let modalOpen = null;
+let toastTimer;
+const $ = id => document.getElementById(id);
+const key = tile => `${tile.col}-${tile.row}`;
+const cropInfo = name => crops.find(item => item.crop === name);
+const itemName = tile => tile.kind === "farm" ? `${tile.crop}农田` : tile.kind === "processor" ? tile.factory : "空地";
+
+function say(message) {
+  const toast = $("toast");
+  toast.textContent = message;
+  toast.classList.toggle("in-modal", Boolean(modalOpen));
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.hidden = true, 3700);
+}
+
+function makeDraggable(panel, handle) {
+  handle.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || event.target.closest("button, input")) return;
+    const rect = panel.getBoundingClientRect();
+    const startX = event.clientX, startY = event.clientY;
+    const left = rect.left, top = rect.top;
+    panel.style.position = "fixed";
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+    panel.style.margin = "0";
+    handle.setPointerCapture(event.pointerId);
+    const move = point => {
+      const maxX = Math.max(8, innerWidth - panel.offsetWidth - 8);
+      const bottomLimit = panel.id === "catalog" || panel.id === "crop-picker" ? innerHeight - 119 : innerHeight;
+      const maxY = Math.max(78, bottomLimit - panel.offsetHeight - 8);
+      panel.style.left = `${Math.min(maxX, Math.max(8, left + point.clientX - startX))}px`;
+      panel.style.top = `${Math.min(maxY, Math.max(78, top + point.clientY - startY))}px`;
+    };
+    const stop = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", stop);
+      handle.removeEventListener("pointercancel", stop);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+  });
+}
+
+function keepPopupVisible(panel) {
+  if (panel.style.position !== "fixed") return;
+  const rect = panel.getBoundingClientRect();
+  const bottomLimit = panel.id === "catalog" || panel.id === "crop-picker" ? innerHeight - 119 : innerHeight;
+  const maxY = Math.max(78, bottomLimit - rect.height - 8);
+  panel.style.top = `${Math.min(maxY, Math.max(78, rect.top))}px`;
+  panel.style.left = `${Math.min(Math.max(8, innerWidth - rect.width - 8), Math.max(8, rect.left))}px`;
+}
+
+function renderMap() {
+  $("map-grid").innerHTML = tiles.map(tile => {
+    const x = 380 + (tile.col - tile.row) * 61;
+    const y = 53 + (tile.col + tile.row) * 31;
+    const icon = tile.kind === "farm" ? "♧" : tile.kind === "processor" ? "⚙" : "·";
+    const alternating = (tile.col + tile.row) % 2 ? " alt" : "";
+    const chosen = selected === tile ? " selected" : "";
+    const placeable = placement && tile.kind === "empty" ? " placeable" : "";
+    return `<button type="button" class="tile ${tile.kind}${alternating}${chosen}${placeable}" style="left:${x}px;top:${y}px;z-index:${tile.col + tile.row + 1}" data-tile="${key(tile)}" aria-label="${itemName(tile)}，地块 ${tile.col + 63}, ${tile.row + 63}"><span class="symbol">${icon}</span></button>`;
+  }).join("");
+}
+
+function renderDetails() {
+  const panel = $("details");
+  if (!selected || placement) { panel.hidden = true; panel.innerHTML = ""; return; }
+  panel.hidden = false;
+  let body;
+  if (selected.kind === "empty") {
+    body = `<div class="status-card"><span class="eyebrow">地块状态</span><strong>可以摆放建筑</strong></div><p class="fine-print">点击底部“建造”，选择农田或加工场地，再点击地图空位即可摆放。</p>`;
+  } else if (selected.kind === "farm") {
+    const info = cropInfo(selected.crop);
+    const stock = quantities[crops.indexOf(info)];
+    body = `<div class="status-card"><span class="eyebrow">当前作物</span><strong>${selected.crop} · 工人自动照料中</strong></div><div class="price-card"><span class="eyebrow">${selected.crop}原材料售价</span><strong>— 金币/份</strong><small>原材料售价尚未确定（原型占位）</small></div><div class="stock-grid"><div><span>${selected.crop}原料库存</span><strong>${stock.raw}</strong></div><div><span>${info.product}加工品库存</span><strong>${stock.product}</strong></div></div><label class="field-label">农田作物</label><button type="button" class="crop-open" id="open-crop-picker">${selected.crop} · 更换作物并查看价格/库存　⌄</button><p class="fine-print">改种仅演示界面变化；正式游戏改种会清除未收获作物。</p><button type="button" class="danger" id="remove-building">移除农田</button>`;
+  } else {
+    const info = crops.find(item => item.factory === selected.factory);
+    body = `<div class="status-card"><span class="eyebrow">当前状态</span><strong>等待原料</strong></div><label class="field-label">加工关系</label><p>${info.crop} → ${info.product}</p><p class="fine-print">此处仅展示场地类型与信息层级；原型不推进加工。</p><button type="button" class="danger" id="remove-building">移除加工场地</button>`;
+  }
+  panel.innerHTML = `<div class="details-head"><small>选中地块 · (${selected.col + 63}, ${selected.row + 63})</small><h2>${itemName(selected)}</h2><button type="button" class="icon-close" id="close-details" aria-label="关闭地块详情">×</button></div><div class="details-body">${body}</div>`;
+}
+
+function renderFooter() {
+  $("build-title").textContent = placement ? `摆放中 · ${placement.name}` : "选择建筑，再点击地图空位摆放";
+  $("build-help").textContent = placement ? "浅绿色空位可摆放；建造费 10.00 金币暂定，原型不扣款。" : "农田和加工场地都在“建造”目录中；建造费 10.00 金币为暂定玩法。";
+  $("cancel-placement").hidden = !placement;
+  $("map-note").textContent = placement ? `正在摆放${placement.name} · 点击空位完成 · Esc 取消` : "点击地块查看详情 · 点击空白处取消选择";
+}
+
+function renderCatalog() {
+  const panel = $("catalog");
+  panel.hidden = !catalogOpen;
+  if (!catalogOpen) return;
+  document.querySelectorAll("[data-build-tab]").forEach(button => button.classList.toggle("active", button.dataset.buildTab === buildTab));
+  $("catalog-tools").hidden = buildTab !== "processor";
+  if (buildTab === "farm") {
+    $("catalog-list").innerHTML = `<button type="button" class="catalog-card" data-place-kind="farm"><strong>♧ 农田</strong><small>点击后进入地图摆放 · 建造费 10.00 金币（暂定）</small></button>`;
+    keepPopupVisible(panel);
+    return;
+  }
+  const search = $("catalog-search").value.trim();
+  const entries = crops.map(item => ({ name: item.factory, caption: `${item.crop} → ${item.product}`, icon: item.icon, real: true }));
+  if ($("show-extra").checked) {
+    for (let index = 1; index <= 18; index++) entries.push({ name: `扩展示意 ${String(index).padStart(2, "0")}`, caption: "仅测试目录容量", icon: "□", real: false });
+  }
+  const filtered = entries.filter(item => item.name.includes(search));
+  $("catalog-list").innerHTML = filtered.length ? filtered.map(item => `<button type="button" class="catalog-card" data-place-kind="processor" data-factory="${item.name}" ${item.real ? "" : "disabled"}><strong>${item.icon} ${item.name}</strong><small>${item.caption} · 建造费 10.00 金币（暂定）</small></button>`).join("") : `<div class="catalog-empty">没有匹配的场地</div>`;
+  keepPopupVisible(panel);
+}
+
+function renderCropPicker() {
+  const panel = $("crop-picker");
+  panel.hidden = !cropPickerOpen || !selected || selected.kind !== "farm" || Boolean(placement);
+  if (panel.hidden) return;
+  $("crop-options").innerHTML = crops.map((item, index) => `<button type="button" class="crop-card ${item.crop === selected.crop ? "active" : ""}" data-crop="${item.crop}"><span><strong>${item.crop}</strong><small>原料库存 ${quantities[index].raw} · ${item.product}库存 ${quantities[index].product}</small></span><em>原料售价：—</em></button>`).join("");
+  keepPopupVisible(panel);
+}
+
+function refresh() { renderMap(); renderDetails(); renderFooter(); renderCatalog(); renderCropPicker(); }
+
+function enterPlacement(kind, factory) {
+  placement = { kind, factory, name: kind === "farm" ? "农田" : factory };
+  selected = null;
+  catalogOpen = false;
+  cropPickerOpen = false;
+  refresh();
+  say(`已选择${placement.name}，请点击地图上的空位摆放`);
+}
+
+$("map-grid").addEventListener("click", event => {
+  const button = event.target.closest("[data-tile]");
+  if (!button) return;
+  const tile = tiles.find(item => key(item) === button.dataset.tile);
+  if (placement) {
+    if (tile.kind !== "empty") { say("此处已有建筑，请选择空位"); return; }
+    tile.kind = placement.kind;
+    if (placement.kind === "farm") tile.crop = "小麦";
+    else tile.factory = placement.factory;
+    const name = placement.name;
+    placement = null;
+    selected = tile;
+    refresh();
+    say(`界面演示：${name}已摆放；不计算建造费或生产`);
+  } else {
+    selected = tile;
+    cropPickerOpen = false;
+    refresh();
+  }
+});
+
+$("map").addEventListener("click", event => {
+  if (event.target === $("map") || event.target === $("map-grid")) {
+    if (!placement) { selected = null; cropPickerOpen = false; refresh(); }
+  }
+});
+
+$("details").addEventListener("click", event => {
+  if (event.target.closest("#close-details")) { selected = null; cropPickerOpen = false; refresh(); return; }
+  if (event.target.closest("#open-crop-picker")) { cropPickerOpen = true; catalogOpen = false; refresh(); return; }
+  if (event.target.closest("#remove-building") && selected) {
+    selected.kind = "empty";
+    cropPickerOpen = false;
+    refresh();
+    say("界面演示：建筑已移除，地块保持选中");
+  }
+});
+
+$("open-build").addEventListener("click", () => {
+  placement = null;
+  cropPickerOpen = false;
+  catalogOpen = !catalogOpen;
+  refresh();
+});
+$("cancel-placement").addEventListener("click", () => { placement = null; refresh(); say("已取消摆放"); });
+$("close-catalog").addEventListener("click", () => { catalogOpen = false; renderCatalog(); });
+$("catalog").addEventListener("click", event => {
+  const tab = event.target.closest("[data-build-tab]");
+  if (tab) { buildTab = tab.dataset.buildTab; renderCatalog(); return; }
+  const card = event.target.closest("[data-place-kind]");
+  if (card && !card.disabled) enterPlacement(card.dataset.placeKind, card.dataset.factory || "");
+});
+$("catalog-search").addEventListener("input", renderCatalog);
+$("show-extra").addEventListener("change", renderCatalog);
+
+$("close-crop-picker").addEventListener("click", () => { cropPickerOpen = false; renderCropPicker(); });
+$("crop-options").addEventListener("click", event => {
+  const choice = event.target.closest("[data-crop]");
+  if (!choice || !selected || selected.kind !== "farm") return;
+  selected.crop = choice.dataset.crop;
+  cropPickerOpen = false;
+  refresh();
+  say(`界面演示：农田已改种${selected.crop}`);
+});
+
+function openModal(type) {
+  modalOpen = type;
+  catalogOpen = false;
+  cropPickerOpen = false;
+  placement = null;
+  refresh();
+  const panel = $("modal");
+  panel.removeAttribute("style");
+  $("overlay").hidden = false;
+  const market = type === "market";
+  const rows = crops.map((item, index) => market ? `<tr><td>${item.crop}</td><td>${quantities[index].raw}</td><td>待定</td><td>${item.product}</td><td>${quantities[index].product}</td></tr>` : `<tr><td>${item.crop}</td><td>${quantities[index].raw}</td><td>${item.product}</td><td>${quantities[index].product}</td></tr>`).join("");
+  const headers = market ? "<th>原料</th><th>库存</th><th>原料售价</th><th>加工品</th><th>库存</th>" : "<th>原料</th><th>数量</th><th>加工品</th><th>数量</th>";
+  panel.innerHTML = `<div class="modal-head drag-handle"><h2>${market ? "市场" : "库存"}<span class="drag-hint">拖动标题可移动</span></h2><button type="button" id="close-modal" aria-label="关闭窗口">×</button></div><div class="modal-body"><p class="modal-info">${market ? "原料售价规则待讨论；这里仅展示未来数据位置，不执行买卖。" : "数量为界面演示数据，不代表真实游戏进度。"}</p><table class="data-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>${market ? '<div class="modal-footer"><button type="button" id="sell-demo">出售操作（界面演示）</button></div>' : ""}`;
+  makeDraggable(panel, panel.querySelector(".modal-head"));
+}
+
+function closeModal() { modalOpen = null; $("overlay").hidden = true; $("modal").innerHTML = ""; }
+document.querySelector(".top-actions").addEventListener("click", event => {
+  const button = event.target.closest("[data-modal]");
+  if (button) openModal(button.dataset.modal);
+});
+$("overlay").addEventListener("click", event => {
+  if (event.target === $("overlay") || event.target.closest("#close-modal")) closeModal();
+  else if (event.target.closest("#sell-demo")) say("界面演示：此按钮不执行真实交易");
+});
+document.addEventListener("keydown", event => {
+  if (event.key !== "Escape") return;
+  if (modalOpen) closeModal();
+  else if (cropPickerOpen) { cropPickerOpen = false; renderCropPicker(); }
+  else if (catalogOpen) { catalogOpen = false; renderCatalog(); }
+  else if (placement) { placement = null; refresh(); }
+  else if (selected) { selected = null; refresh(); }
+});
+
+makeDraggable($("catalog"), $("catalog").querySelector(".catalog-head"));
+makeDraggable($("crop-picker"), $("crop-picker").querySelector(".catalog-head"));
+refresh();
+</script>
+</body>
+</html>
