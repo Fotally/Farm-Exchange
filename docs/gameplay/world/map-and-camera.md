@@ -6,4 +6,4 @@
 
 绿色为空地，棕色为农田，蓝灰色与白色方块为加工场地。空闲农田中央彩色点表示所选作物，黄色小点表示已播种，较大彩色点表示生长中；黄色边框表示当前选中格。地图边缘与选中框独立绘制。
 
-顶部状态栏提供库存与市场入口；底部建造按钮进入目录，选建筑后点击空地摆放。点击已有实体时，右侧可拖动详情窗口提供改种或移除；详情位置在本次运行内保留。市场窗口出售加工品，原料售价显示待定。完整层级见[主界面接口](../../architecture/ui/main/interface-main.md)。地图绘制接口见[WorldMap](../../architecture/world/world-map/interface-world-map.md)，镜头输入接口见[CameraController](../../architecture/world/camera-controller/interface-camera-controller.md)。tests/unit/TestWorldMap.cs 与 tests/integration/TestCameraInteraction.cs 检查坐标和输入行为。
+顶部状态栏提供库存与市场入口；底部建造按钮进入目录，选建筑后点击空地摆放。点击已有实体时，右侧可拖动详情窗口提供改种或移除；详情位置在本次运行内保留。市场窗口显示两类当日售价，可按品种出售原料或出售全部加工品。完整层级见[主界面接口](../../architecture/ui/main/interface-main.md)。地图绘制接口见[WorldMap](../../architecture/world/world-map/interface-world-map.md)，镜头输入接口见[CameraController](../../architecture/world/camera-controller/interface-camera-controller.md)。tests/unit/TestWorldMap.cs 与 tests/integration/TestCameraInteraction.cs 检查坐标和输入行为。

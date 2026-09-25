@@ -1,3 +1,4 @@
+using System.Globalization;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.UI;
@@ -40,6 +41,11 @@ public partial class TestCoreLoop : Node
             HasVisibleInternalTime(ui))
             return Fail("初始界面显示错误或暴露内部时间");
 
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(90, 90));
+        if (!detail.Visible || ContainsVisibleText(detail, "生长周期") ||
+            ContainsVisibleText(detail, "加工周期") || ContainsVisibleText(detail, "库存"))
+            return Fail("空地详情显示了生产或库存信息");
+
         build.EmitSignal(Button.SignalName.Pressed);
         if (!buildWindow.Visible || detail.Visible)
             return Fail("建造入口未打开目录");
@@ -51,8 +57,10 @@ public partial class TestCoreLoop : Node
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
         if (main.Game.GetPlot(farm).Building != BuildingKind.Farm ||
             main.Game.MoneyCents != 4000 || !detail.Visible || cancel.Visible ||
-            !ContainsVisibleText(detail, "原材料售价：待定") ||
-            !ContainsVisibleText(detail, "原料库存："))
+            !ContainsVisibleText(detail, "原材料售价：2.50 金币") ||
+            !ContainsVisibleText(detail, "生长周期：浇水后 5 秒成熟") ||
+            !ContainsVisibleText(detail, "原料库存：") ||
+            ContainsVisibleText(detail, "加工品库存"))
             return Fail("农田摆放、收费或详情显示错误");
 
         detail.Position = new Vector2(760, 90);
@@ -73,8 +81,9 @@ public partial class TestCoreLoop : Node
             return Fail("详情窗口关闭后未记住位置");
 
         Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
-        if (!cropWindow.Visible || !Find<Button>(cropWindow, "CropCardCorn").Text.Contains("待定"))
-            return Fail("作物菜单未提供原料价格待定信息");
+        if (!cropWindow.Visible || !Find<Button>(cropWindow, "CropCardCorn").Text.Contains("2.50 金币") ||
+            Find<Button>(cropWindow, "CropCardCorn").Text.Contains("玉米粉库存"))
+            return Fail("作物菜单没有只显示玉米原料价格与库存");
         cropWindow.Position = new Vector2(400, 120);
         Find<Button>(cropWindow, "CropCardCorn").EmitSignal(Button.SignalName.Pressed);
         if (main.Game.GetPlot(farm).CropKind != CropKind.Corn || cropWindow.Visible)
@@ -83,6 +92,17 @@ public partial class TestCoreLoop : Node
         if (cropWindow.Position != new Vector2(400, 120))
             return Fail("作物菜单重新打开后未记住位置");
         Find<Button>(cropWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);
+
+        int[] growthSeconds = { 5, 6, 7, 6, 9, 10 };
+        foreach (CropDefinition crop in FarmGame.Crops)
+        {
+            Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
+            Find<Button>(cropWindow, $"CropCard{crop.Kind}").EmitSignal(Button.SignalName.Pressed);
+            if (!ContainsVisibleText(detail, $"生长周期：浇水后 {growthSeconds[(int)crop.Kind]} 秒成熟"))
+                return Fail($"{crop.CropName}农田详情未显示正确生长周期");
+        }
+        Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
+        Find<Button>(cropWindow, "CropCardCorn").EmitSignal(Button.SignalName.Pressed);
 
         build.EmitSignal(Button.SignalName.Pressed);
         Find<Button>(buildWindow, "ProcessorTab").EmitSignal(Button.SignalName.Pressed);
@@ -95,7 +115,14 @@ public partial class TestCoreLoop : Node
         Vector2I processor = new(66, 64);
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
         if (main.Game.GetPlot(processor).Building != BuildingKind.Processor ||
-            main.Game.MoneyCents != 3000 || cancel.Visible)
+            main.Game.MoneyCents != 3000 || cancel.Visible ||
+            !ContainsVisibleText(detail, "等待玉米") ||
+            !ContainsVisibleText(detail, "加工周期：投入原料后 4 秒完成") ||
+            !ContainsVisibleText(detail, "玉米粉加工品售价：5.00 金币") ||
+            !ContainsVisibleText(detail, "玉米粉加工品库存：0") ||
+            ContainsVisibleText(detail, "生长周期") ||
+            ContainsVisibleText(detail, "原料库存") ||
+            ContainsVisibleText(detail, "原材料售价"))
             return Fail("加工场地摆放与收费错误");
 
         Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
@@ -111,18 +138,60 @@ public partial class TestCoreLoop : Node
             return Fail("建造目录打开后库存窗口仍遮挡操作");
         Find<Button>(buildWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);
 
+        bool sawProcessing = false;
         for (int i = 0; i < 60; i++)
+        {
             timer.EmitSignal(Timer.SignalName.Timeout);
-        if (main.Game.GetProductStock(CropKind.Corn) == 0)
-            return Fail("新建玉米加工场地没有自动产出");
+            sawProcessing |= ContainsVisibleText(detail, "加工中");
+        }
+        int cornProducts = main.Game.GetProductStock(CropKind.Corn);
+        string cornProductPrice = (main.Game.GetProductPriceCents(CropKind.Corn) / 100m)
+            .ToString("0.00", CultureInfo.InvariantCulture);
+        if (!sawProcessing || cornProducts == 0 ||
+            !ContainsVisibleText(detail, $"玉米粉加工品库存：{cornProducts}") ||
+            !ContainsVisibleText(detail, $"玉米粉加工品售价：{cornProductPrice} 金币"))
+            return Fail("玉米加工场地没有显示随经营更新的售价与库存");
         Find<Button>(ui, "MarketButton").EmitSignal(Button.SignalName.Pressed);
         Button sell = Find<Button>(marketWindow, "SellButton");
-        if (!marketWindow.Visible || sell.Disabled || !ContainsVisibleText(marketWindow, "售价待定"))
+        if (!marketWindow.Visible || sell.Disabled || ContainsVisibleText(marketWindow, "待定") ||
+            !ContainsVisibleText(marketWindow, "玉米原料"))
             return Fail("市场窗口未区分原料和可售加工品");
         int beforeSale = main.Game.MoneyCents;
         sell.EmitSignal(Button.SignalName.Pressed);
-        if (main.Game.MoneyCents <= beforeSale || main.Game.GetProductStock(CropKind.Corn) != 0)
+        if (main.Game.MoneyCents <= beforeSale || main.Game.GetProductStock(CropKind.Corn) != 0 ||
+            !ContainsVisibleText(detail, "玉米粉加工品库存：0"))
             return Fail("市场出售没有更新金币与库存");
+
+        CropKind rawKind = CropKind.Wheat;
+        foreach (CropDefinition crop in FarmGame.Crops)
+        {
+            if (crop.Kind == CropKind.Corn ||
+                crop.Kind == main.Game.GetPlot(new Vector2I(63, 64)).CropKind ||
+                crop.Kind == main.Game.GetPlot(new Vector2I(64, 64)).CropKind)
+                continue;
+            rawKind = crop.Kind;
+            break;
+        }
+        Find<Button>(marketWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
+        Find<Button>(cropWindow, $"CropCard{rawKind}").EmitSignal(Button.SignalName.Pressed);
+        for (int i = 0; i < 30; i++)
+            timer.EmitSignal(Timer.SignalName.Timeout);
+        int rawStock = main.Game.GetRawStock(rawKind);
+        if (rawStock == 0)
+            return Fail("未加工的原料没有进入市场可售库存");
+        Find<Button>(ui, "MarketButton").EmitSignal(Button.SignalName.Pressed);
+        Button sellRaw = Find<Button>(marketWindow, $"SellRaw{rawKind}Button");
+        if (sellRaw.Disabled || !ContainsVisibleText(marketWindow, $"{FarmGame.GetCrop(rawKind).CropName}原料"))
+            return Fail("市场未提供按品种出售原料的入口");
+        int rawPrice = main.Game.GetRawPriceCents(rawKind);
+        beforeSale = main.Game.MoneyCents;
+        sellRaw.EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.MoneyCents != beforeSale + rawStock * rawPrice ||
+            main.Game.GetRawStock(rawKind) != 0 ||
+            !Find<Button>(marketWindow, $"SellRaw{rawKind}Button").Disabled)
+            return Fail("市场原料出售没有按当日价格更新金币与按钮状态");
         return true;
     }
 

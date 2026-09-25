@@ -26,9 +26,12 @@ public partial class TestMarketRules : Node
             return Fail("市场曲线未从 5.00 金币开始");
         var game = new FarmGame(12345);
         int[] initialPrices = { 500, 500, 600, 400, 800, 1000 };
+        int[] initialRawPrices = { 250, 250, 300, 200, 400, 500 };
         foreach (CropDefinition crop in FarmGame.Crops)
-            if (game.GetProductPriceCents(crop.Kind) != initialPrices[(int)crop.Kind])
-                return Fail($"{crop.ProductName}首日售价错误");
+            if (game.GetProductPriceCents(crop.Kind) != initialPrices[(int)crop.Kind] ||
+                game.GetRawPriceCents(crop.Kind) != initialRawPrices[(int)crop.Kind] ||
+                crop.RawPricePercent != 50)
+                return Fail($"{crop.CropName}首日原料或加工品售价错误");
 
         for (int day = 2; day <= 100000; day++)
         {
@@ -62,9 +65,12 @@ public partial class TestMarketRules : Node
             game.DailyPriceChangePercent == 0.0)
             return Fail("第 10 tick 未进入下一天并更新价格");
         foreach (CropDefinition crop in FarmGame.Crops)
-            if (game.GetProductPriceCents(crop.Kind) !=
-                (game.CurrentFlourPriceCents * crop.PricePercent + 50) / 100)
-                return Fail($"{crop.ProductName}没有按当天面粉价计价");
+        {
+            int productPrice = (game.CurrentFlourPriceCents * crop.PricePercent + 50) / 100;
+            if (game.GetProductPriceCents(crop.Kind) != productPrice ||
+                game.GetRawPriceCents(crop.Kind) != (productPrice * crop.RawPricePercent + 50) / 100)
+                return Fail($"{crop.CropName}原料或加工品没有按当天价格计价");
+        }
         return true;
     }
 

@@ -4,9 +4,9 @@
 
 ## 游戏规则
 
-- [作物与选种](gameplay/production/crop-growth.md)：六种作物、成熟时间和切换规则。
-- [加工](gameplay/production/processing.md)：对应场地、加工时间与投入损失。
-- [出售与价格](gameplay/trading/sales.md)：当日定价、库存与结算。
+- [作物与选种](gameplay/production/crop-growth.md)：六种作物、详情显示的生长周期和切换规则。
+- [加工](gameplay/production/processing.md)：对应场地、加工时间、场地详情与投入损失。
+- [出售与价格](gameplay/trading/sales.md)：原料与加工品的当日定价、库存与结算。
 - [开局与建造](gameplay/land/opening-and-building.md)：预置建筑、建造收费与扩张。
 - [地图与操作](gameplay/world/map-and-camera.md)：坐标、选择、镜头与画面含义。
 
