@@ -1,1 +1,1 @@
-../.codex/rules/scenes.md
+../.claude/rules/scenes.md

@@ -1,1 +1,1 @@
-../.codex/rules/github.md
+../.claude/rules/github.md

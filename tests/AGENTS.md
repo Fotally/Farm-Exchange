@@ -1,1 +1,1 @@
-../.codex/rules/tests.md
+../.claude/rules/tests.md

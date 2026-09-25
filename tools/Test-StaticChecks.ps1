@@ -5,6 +5,9 @@ $errors = [Collections.Generic.List[string]]::new()
 
 foreach ($entry in $mapping) {
     $source = [IO.Path]::GetFullPath((Join-Path $repoRoot $entry.source))
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        $errors.Add("规则原文不存在：$($entry.source)")
+    }
     foreach ($link in $entry.links) {
         $tracked = git -C $repoRoot ls-files --stage -- $link
         if ($tracked -notmatch '^120000\s') {

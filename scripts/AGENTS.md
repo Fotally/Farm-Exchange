@@ -1,1 +1,1 @@
-../.codex/rules/scripts.md
+../.claude/rules/scripts.md

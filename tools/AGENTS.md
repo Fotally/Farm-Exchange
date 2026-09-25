@@ -1,1 +1,1 @@
-../.codex/rules/tools.md
+../.claude/rules/tools.md

@@ -1,18 +1,18 @@
 # 规则加载与链接对应表
 
-规范原文位于 .codex/rules/*.md。Codex 不把这些 Markdown 当作命令审批 .rules 文件；它按目录读取链接后的 AGENTS.md。Claude Code 通过 .claude/rules/ 中的链接读取同一原文，并使用原文开头的 paths 限定文件范围。根 CLAUDE.md 只导入根 AGENTS.md，以免 Claude Code 再从目录 AGENTS.md 重复注入同一规则。
+规范原文位于 `.claude/rules/*.md`，Claude Code 使用原文开头的 `paths` 限定加载范围。Codex 按目录读取指向同一原文的 `AGENTS.md` 符号链接。Codex 的 `.codex/rules/*.rules` 用于命令审批，不承载这些 Markdown 规范；本仓库无需该目录。根 `CLAUDE.md` 只导入根 `AGENTS.md`，避免 Claude Code 重复加载目录规则。
 
 实际映射以 [rule-links.json](rule-links.json) 为准：
 
-| 原文 | Codex 目录入口 | Claude Code 路径入口 |
-| --- | --- | --- |
-| rules/docs.md | docs/AGENTS.md | .claude/rules/docs.md |
-| rules/scripts.md | scripts/AGENTS.md | .claude/rules/scripts.md |
-| rules/tests.md | tests/AGENTS.md | .claude/rules/tests.md |
-| rules/scenes.md | scenes/AGENTS.md | .claude/rules/scenes.md |
-| rules/assets.md | assets/AGENTS.md | .claude/rules/assets.md |
-| rules/github.md | .github/AGENTS.md | .claude/rules/github.md |
-| rules/tools.md | tools/AGENTS.md | .claude/rules/tools.md |
+| Claude Code 规则原文 | Codex 目录入口 |
+| --- | --- |
+| .claude/rules/docs.md | docs/AGENTS.md |
+| .claude/rules/scripts.md | scripts/AGENTS.md |
+| .claude/rules/tests.md | tests/AGENTS.md |
+| .claude/rules/scenes.md | scenes/AGENTS.md |
+| .claude/rules/assets.md | assets/AGENTS.md |
+| .claude/rules/github.md | .github/AGENTS.md |
+| .claude/rules/tools.md | tools/AGENTS.md |
 
 Windows 克隆仓库时若 Git 的 core.symlinks=false，链接可能被检出为只包含目标相对路径的一行普通文本。进入仓库后先在 Windows 启用开发者模式或具备创建文件符号链接的权限，再运行：
 

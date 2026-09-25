@@ -1,1 +1,1 @@
-../.codex/rules/assets.md
+../.claude/rules/assets.md

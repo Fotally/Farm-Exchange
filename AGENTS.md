@@ -32,7 +32,7 @@
 
 # 目录规范加载
 
-文档、游戏代码、测试、场景、素材、工具和 GitHub 文件各有目录 AGENTS.md，原文及链接对应表见 `.codex/rule-loading.md`。从仓库根目录工作时，在修改目标目录前读取该目录的 AGENTS.md；链接失效时先按对应表修复。`.codex/rules/*.md` 是规范原文，不是 Codex 命令审批规则。
+文档、游戏代码、测试、场景、素材、工具和 GitHub 文件各有目录 AGENTS.md，原文位于 `.claude/rules/*.md`，链接对应表见 `.codex/rule-loading.md`。从仓库根目录工作时，在修改目标目录前读取该目录的 AGENTS.md；链接失效时先按对应表修复。Codex 的 `.codex/rules/*.rules` 只用于命令审批。
 
 # 版本发布
 
