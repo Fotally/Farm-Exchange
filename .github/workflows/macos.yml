@@ -1,0 +1,95 @@
+name: macOS 构建
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2-stable
+  DOTNET_VERSION: 8.0.x
+
+jobs:
+  build-macos:
+    name: macOS Universal 2 导出与启动
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+
+      - name: 安装 .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: 安装 Godot Mono 与导出模板
+        run: |
+          set -euo pipefail
+          release_url="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}"
+          editor_archive="$RUNNER_TEMP/godot-mono-macos.zip"
+          template_archive="$RUNNER_TEMP/godot-mono-templates.tpz"
+          curl --fail --location --retry 3 --output "$editor_archive" "$release_url/Godot_v${GODOT_VERSION}_mono_macos.universal.zip"
+          curl --fail --location --retry 3 --output "$template_archive" "$release_url/Godot_v${GODOT_VERSION}_mono_export_templates.tpz"
+
+          mkdir -p "$RUNNER_TEMP/godot-mono" "$RUNNER_TEMP/godot-templates"
+          unzip -q "$editor_archive" -d "$RUNNER_TEMP/godot-mono"
+          unzip -q "$template_archive" templates/macos.zip templates/icudt_godot.dat templates/version.txt -d "$RUNNER_TEMP/godot-templates"
+
+          template_dir="$HOME/Library/Application Support/Godot/export_templates/4.7.2.stable.mono"
+          mkdir -p "$template_dir"
+          cp "$RUNNER_TEMP/godot-templates/templates/"{macos.zip,icudt_godot.dat,version.txt} "$template_dir/"
+
+          godot_bin="$(find "$RUNNER_TEMP/godot-mono" -type f -path '*/Contents/MacOS/Godot*' -print -quit)"
+          sdk_package="$(find "$RUNNER_TEMP/godot-mono" -type f -name 'Godot.NET.Sdk*.nupkg' -print -quit)"
+          test -n "$godot_bin" && test -n "$sdk_package"
+          chmod +x "$godot_bin"
+          printf 'GODOT_BIN=%s\n' "$godot_bin" >> "$GITHUB_ENV"
+          dotnet nuget update source 'Godot 本地包' --source "$(dirname "$sdk_package")" --configfile NuGet.Config
+
+      - name: 编译并导入项目
+        run: |
+          dotnet build FarmExchange.csproj --configuration Release
+          "$GODOT_BIN" --headless --path . --import --quit
+
+      - name: 导出 macOS Universal 2 ZIP
+        run: |
+          mkdir -p build/macos
+          "$GODOT_BIN" --headless --path . --export-release macOS build/macos/FarmExchange.zip --quit
+          test -s build/macos/FarmExchange.zip
+
+      - name: 验收应用包与启动
+        run: |
+          set -euo pipefail
+          unpack_dir="$RUNNER_TEMP/farm-exchange-macos"
+          mkdir -p "$unpack_dir"
+          unzip -q build/macos/FarmExchange.zip -d "$unpack_dir"
+          apps=("$unpack_dir"/*.app)
+          test "${#apps[@]}" -eq 1 && test -d "${apps[0]}"
+          app="${apps[0]}"
+          app_name="$(basename "$app" .app)"
+          executable="$app/Contents/MacOS/$app_name"
+          test -x "$executable"
+          test -f "$app/Contents/Resources/data_FarmExchange_macos_x86_64/FarmExchange.dll"
+          test -f "$app/Contents/Resources/data_FarmExchange_macos_arm64/FarmExchange.dll"
+          architectures="$(lipo -archs "$executable")"
+          [[ "$architectures" == *x86_64* && "$architectures" == *arm64* ]]
+          "$executable" --headless --quit-after 5
+
+      - name: 上传 macOS 构建
+        uses: actions/upload-artifact@v7
+        with:
+          name: FarmExchange-macos-universal-${{ github.sha }}
+          path: build/macos/FarmExchange.zip
+          if-no-files-found: error
+          retention-days: 14
