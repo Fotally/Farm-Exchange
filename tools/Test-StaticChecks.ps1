@@ -48,7 +48,7 @@ foreach ($group in $namespaces.Keys) {
     $directory = Join-Path $repoRoot "scripts/$group"
     foreach ($script in Get-ChildItem -LiteralPath $directory -File -Filter '*.cs') {
         $content = Get-Content -LiteralPath $script.FullName -Raw
-        if ($content -notmatch "(?m)^namespace $([regex]::Escape($namespaces[$group]));$") {
+        if ($content -notmatch "(?m)^namespace $([regex]::Escape($namespaces[$group]));\r?$") {
             $errors.Add("脚本命名空间与路径不一致：scripts/$group/$($script.Name)")
         }
         if ($script.BaseName -cnotmatch '^[A-Z][A-Za-z0-9]*$') {
