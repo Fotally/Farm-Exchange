@@ -1,4 +1,6 @@
 using Godot;
+using FarmExchange.UI;
+using FarmExchange.World;
 
 public partial class TestCameraInteraction : Node
 {

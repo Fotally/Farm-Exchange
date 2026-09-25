@@ -4,6 +4,9 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using Godot;
+using FarmExchange.Gameplay;
+using FarmExchange.UI;
+using FarmExchange.World;
 
 public partial class TestFullWorldFps : Node
 {

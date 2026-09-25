@@ -1,0 +1,31 @@
+# 游戏测试分类调研
+
+本调研用于组织当前 Windows 版《Farm Exchange》的测试。现阶段覆盖已实现的 128×128 地图、六种作物及加工、交易和镜头交互；存档和离线收益尚未确定，待实现后再补测试。
+
+## 资料依据与分类
+
+测试层级采用单元、集成、端到端；性能测试按测量目标单独组织；冒烟是快速判断构建能否继续验收的检查。这里的分类依据是 [ISTQB 基础级测试大纲](https://istqb.org/wp-content/uploads/2024/11/ISTQB_CTFL_Syllabus_v4.0.1.pdf)和 [Unreal Engine 官方测试分类](https://dev.epicgames.com/documentation/unreal-engine/low-level-tests-in-unreal-engine)。`headless` 与有窗口运行是执行环境，不是测试层级；Unity 官方同样把 Edit Mode 与 Play Mode 作为运行方式区分。[Unity 测试框架](https://docs.unity3d.com/6000.0/Documentation/Manual/com.unity.test-framework.html)
+
+| 标准类别 | 判断依据 | 本项目实际检查 | 执行 |
+| --- | --- | --- | --- |
+| 单元测试（Unit） | 独立检查一个模块的规则或计算。 | `tests/unit/TestFarmGame.cs` 检查经营状态，`TestMarketRules.cs` 检查市场及换日，`TestWorldMap.cs` 独立检查坐标换算与地图范围。 | 每次自动化运行。 |
+| 集成测试（Integration） | 检查多个模块连接后的行为。 | `tests/integration/TestCameraInteraction.cs` 在主场景连接镜头、地图和界面，检查选格及拖动。 | 每次自动化运行。 |
+| 端到端测试（End-to-end） | 穿过一项功能的多个阶段。 | `tests/e2e/TestCoreLoop.cs` 通过主场景完成选地、种植、加工和出售。 | 每次自动化运行。 |
+| 性能测试（Performance） | 测量指定负载下的时间和帧率。 | `tests/performance/TestFullWorldLoad.cs` 在 16,384 格最大已定义负载下测 50 tick；`TestFullWorldFps.cs` 测移动镜头 FPS。 | 逻辑负载每次运行；图形 FPS 按需运行。 |
+| 冒烟测试（Smoke） | 快速确认构建可启动、可继续验收。 | Windows Release 导出后启动 `FarmExchange.exe`，核对进程退出码。 | 按项目构建验收流程运行。 |
+
+16,384 格是项目支持的地图上限，因此这里使用“负载测试”描述满地图测量；尚未实施超过预期容量、以寻找失效极限为目标的压力测试。性能、负载与压力的术语区别见 [ISTQB 性能测试大纲](https://istqb.org/wp-content/uploads/2024/11/ISTQB-CT-PT_Syllabus_v1.0_2018.pdf)。
+
+兼容性与可用性是另外两个质量目标：Windows x86_64 启动已有自动化检查；不同硬件、分辨率下的画面与输入，以及文字可读性和玩家操作体验，目前按[构建与验收](../project/build-and-validation.md)的玩法步骤人工检查。项目尚无其他平台承诺。[微软游戏无障碍测试](https://learn.microsoft.com/en-us/gaming/game-publishing/concepts/certification/certification-mgats)
+
+## 满地图性能测试口径
+
+**负载定义。**地图总计 `128 × 128 = 16,384` 格。「每格有实体」以本项目已经实现的农田和加工场地为准；测试配置包含 8,192 块农田与 8,192 处加工场地，六种作物在两类建筑中均出现，并保持游戏原本只有一名工人的规则。测试场景走正式游戏的状态更新及地图绘制路径。记录建筑数量、可见地图块覆盖的候选地块数、重建网格的块数与推进的 tick 数。候选地块可能包含视窗外的格子，因此不能把报告里的候选数当作“屏幕可见格数”；也不能把 16,384 个格子全在屏幕上同时可见等同于 16,384 个实体存在于世界状态。
+
+**两种测量分开。**必跑的无窗口场景测试核对每格状态及六种农田与加工场地，检查地图两个角落的实体在 tick 中继续生产或加工，然后推进满 50 tick 并报告耗时；它不能报告真实渲染 FPS。Godot 4.7 明确指出，headless 模式下 `Engine.get_frames_drawn()` 始终返回 `0`。[Godot `Engine` 类](https://docs.godotengine.org/en/4.7/classes/class_engine.html)
+
+**真实 FPS 的步骤。**当前测试使用项目指定的 Godot 编辑器 Debug 运行时和有窗口的主场景，生成满地图状态后预热 2 秒、采样 8 秒；窗口为 1280×720、镜头为 1.25 倍缩放并水平往返移动，同时按主场景计时器推进 tick。报告记录绘制帧数、平均 FPS、帧间隔中位数、P95 与 P99、地图块重建次数、硬件和渲染条件；采样前后保存截图供画面核对。平均 FPS 低于 60 或 P95 帧间隔超过 16.67 ms 时测试失败。它测的是当前开发构建的移动镜头负载，不能直接当作 Windows Release 成品或静止镜头帧率。Godot 的 `Performance.TIME_FPS` 每秒更新一次，`TIME_PROCESS` 提供单帧处理耗时；这些监视器和帧时间分析可辅助定位，但某些监视器在 Release 中返回 `0`，使用前要核对。[Godot `Performance` 类](https://docs.godotengine.org/en/4.7/classes/class_performance.html)、[Godot 分析器](https://docs.godotengine.org/en/4.7/tutorials/scripting/debug/the_profiler.html)
+
+**比较条件。**记录 CPU、GPU、内存、Windows 版本、Godot/游戏构建、分辨率、显示刷新率、VSync、FPS 上限、窗口或全屏模式。VSync 可以把 FPS 限制在显示器刷新率，`Engine.max_fps = 0` 才表示没有显式 FPS 上限；不记载这些条件时，单个 FPS 数字不能用于比较机器或提交。[Godot `Engine` 类](https://docs.godotengine.org/en/4.7/classes/class_engine.html)
+
+当前已确定本机满地图图形测试的最低目标为稳定 60 FPS；这不是对未测硬件的承诺。每次自动化运行满地图逻辑检查；修改地图绘制、镜头、实体数量或渲染设置，以及需要建立性能基线时，再运行图形性能测试并保存报告。Godot 官方分析器目前不支持对 C# 脚本逐函数分析；如果帧率异常，可用它查看整体帧时间，再用支持 Godot 的 C# 分析工具定位脚本耗时。[Godot 分析器](https://docs.godotengine.org/en/4.7/tutorials/scripting/debug/the_profiler.html)

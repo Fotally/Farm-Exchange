@@ -1,0 +1,1 @@
+../.codex/rules/assets.md

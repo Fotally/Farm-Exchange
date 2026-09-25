@@ -30,6 +30,10 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: 允许检出文件符号链接
+        shell: pwsh
+        run: git config --global core.symlinks true
+
       - name: 检出代码
         uses: actions/checkout@v7
 
@@ -60,6 +64,13 @@ jobs:
           $localSource.value = $sdkPackage.Directory.FullName
           $nugetConfig.Save((Resolve-Path -LiteralPath NuGet.Config))
           "GODOT_CONSOLE=$($console.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: 修复规则链接并运行静态检查
+        shell: pwsh
+        run: |
+          ./tools/Repair-RuleLinks.ps1
+          ./tools/Test-StaticChecks.ps1
+          dotnet format whitespace FarmExchange.sln --verify-no-changes
 
       - name: 运行场景测试并检查行覆盖率
         shell: pwsh
