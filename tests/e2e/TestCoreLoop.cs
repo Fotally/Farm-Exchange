@@ -52,6 +52,7 @@ public partial class TestCoreLoop : Node
         if (main.Game.GetPlot(farm).Building != BuildingKind.Farm ||
             main.Game.MoneyCents != 4000 || !detail.Visible || cancel.Visible ||
             !ContainsVisibleText(detail, "原材料售价：2.50 金币") ||
+            !ContainsVisibleText(detail, "生长周期：浇水后 5 秒成熟") ||
             !ContainsVisibleText(detail, "原料库存："))
             return Fail("农田摆放、收费或详情显示错误");
 
@@ -84,6 +85,17 @@ public partial class TestCoreLoop : Node
             return Fail("作物菜单重新打开后未记住位置");
         Find<Button>(cropWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);
 
+        int[] growthSeconds = { 5, 6, 7, 6, 9, 10 };
+        foreach (CropDefinition crop in FarmGame.Crops)
+        {
+            Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
+            Find<Button>(cropWindow, $"CropCard{crop.Kind}").EmitSignal(Button.SignalName.Pressed);
+            if (!ContainsVisibleText(detail, $"生长周期：浇水后 {growthSeconds[(int)crop.Kind]} 秒成熟"))
+                return Fail($"{crop.CropName}农田详情未显示正确生长周期");
+        }
+        Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
+        Find<Button>(cropWindow, "CropCardCorn").EmitSignal(Button.SignalName.Pressed);
+
         build.EmitSignal(Button.SignalName.Pressed);
         Find<Button>(buildWindow, "ProcessorTab").EmitSignal(Button.SignalName.Pressed);
         if (!Find<Button>(buildWindow, "ProcessorCardCorn").Text.Contains("10.00"))
@@ -95,7 +107,8 @@ public partial class TestCoreLoop : Node
         Vector2I processor = new(66, 64);
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
         if (main.Game.GetPlot(processor).Building != BuildingKind.Processor ||
-            main.Game.MoneyCents != 3000 || cancel.Visible)
+            main.Game.MoneyCents != 3000 || cancel.Visible ||
+            ContainsVisibleText(detail, "生长周期"))
             return Fail("加工场地摆放与收费错误");
 
         Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);

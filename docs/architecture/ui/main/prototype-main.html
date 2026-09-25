@@ -171,12 +171,12 @@
 <script>
 // UI 原型：只演示界面状态。下列价格是首日示意值，不推进市场或执行交易。
 const crops = [
-  { crop: "小麦", factory: "磨坊", product: "面粉", icon: "✿", rawPrice: "2.50" },
-  { crop: "玉米", factory: "玉米加工坊", product: "玉米粉", icon: "▤", rawPrice: "2.50" },
-  { crop: "水稻", factory: "碾米坊", product: "大米", icon: "▥", rawPrice: "3.00" },
-  { crop: "马铃薯", factory: "淀粉坊", product: "淀粉", icon: "▦", rawPrice: "2.00" },
-  { crop: "向日葵", factory: "榨油坊", product: "葵花籽油", icon: "✽", rawPrice: "4.00" },
-  { crop: "甘蔗", factory: "制糖坊", product: "蔗糖", icon: "♨", rawPrice: "5.00" }
+  { crop: "小麦", factory: "磨坊", product: "面粉", icon: "✿", rawPrice: "2.50", growthSeconds: 5 },
+  { crop: "玉米", factory: "玉米加工坊", product: "玉米粉", icon: "▤", rawPrice: "2.50", growthSeconds: 6 },
+  { crop: "水稻", factory: "碾米坊", product: "大米", icon: "▥", rawPrice: "3.00", growthSeconds: 7 },
+  { crop: "马铃薯", factory: "淀粉坊", product: "淀粉", icon: "▦", rawPrice: "2.00", growthSeconds: 6 },
+  { crop: "向日葵", factory: "榨油坊", product: "葵花籽油", icon: "✽", rawPrice: "4.00", growthSeconds: 9 },
+  { crop: "甘蔗", factory: "制糖坊", product: "蔗糖", icon: "♨", rawPrice: "5.00", growthSeconds: 10 }
 ];
 const quantities = [
   { raw: 3, product: 2 }, { raw: 1, product: 0 },
@@ -276,7 +276,7 @@ function renderDetails() {
   } else if (selected.kind === "farm") {
     const info = cropInfo(selected.crop);
     const stock = quantities[crops.indexOf(info)];
-    body = `<div class="status-card"><span class="eyebrow">当前作物</span><strong>${selected.crop} · 工人自动照料中</strong></div><div class="price-card"><span class="eyebrow">${selected.crop}原材料售价</span><strong>${info.rawPrice} 金币/份</strong><small>首日示意价格</small></div><div class="stock-grid"><div><span>${selected.crop}原料库存</span><strong>${stock.raw}</strong></div><div><span>${info.product}加工品库存</span><strong>${stock.product}</strong></div></div><label class="field-label">农田作物</label><button type="button" class="crop-open" id="open-crop-picker">${selected.crop} · 更换作物并查看价格/库存　⌄</button><p class="fine-print">改种仅演示界面变化；正式游戏改种会清除未收获作物。</p><button type="button" class="danger" id="remove-building">移除农田</button>`;
+    body = `<div class="status-card"><span class="eyebrow">当前作物</span><strong>${selected.crop} · 工人自动照料中</strong><small>生长周期：浇水后 ${info.growthSeconds} 秒成熟</small></div><div class="price-card"><span class="eyebrow">${selected.crop}原材料售价</span><strong>${info.rawPrice} 金币/份</strong><small>首日示意价格</small></div><div class="stock-grid"><div><span>${selected.crop}原料库存</span><strong>${stock.raw}</strong></div><div><span>${info.product}加工品库存</span><strong>${stock.product}</strong></div></div><label class="field-label">农田作物</label><button type="button" class="crop-open" id="open-crop-picker">${selected.crop} · 更换作物并查看价格/库存　⌄</button><p class="fine-print">改种仅演示界面变化；正式游戏改种会清除未收获作物。</p><button type="button" class="danger" id="remove-building">移除农田</button>`;
   } else {
     const info = crops.find(item => item.factory === selected.factory);
     body = `<div class="status-card"><span class="eyebrow">当前状态</span><strong>等待原料</strong></div><label class="field-label">加工关系</label><p>${info.crop} → ${info.product}</p><p class="fine-print">此处仅展示场地类型与信息层级；原型不推进加工。</p><button type="button" class="danger" id="remove-building">移除加工场地</button>`;

@@ -583,6 +583,7 @@ public partial class Main : Node2D
                 _ => "等待工人照料",
             };
             _detailContent.AddChild(MakeInfoCard($"{crop.CropName}农田 · {status}"));
+            _detailContent.AddChild(MakeInfoCard($"生长周期：浇水后 {crop.GrowthTicks} 秒成熟"));
             _detailContent.AddChild(MakeInfoCard(
                 $"{crop.CropName}原材料售价：{FormatCoins(_game.GetRawPriceCents(crop.Kind))} 金币"));
             _detailContent.AddChild(MakeInfoCard(

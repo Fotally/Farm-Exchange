@@ -13,7 +13,7 @@
 - `scripts/market/MarketPriceCurve.cs`：市场曲线模块。按市场种子与天数直接计算 1.00～20.00 金币之间的面粉价格，以多周期正弦和小权重平滑噪声形成走势。
 - `scripts/world/WorldMap.cs`：地图表现模块。按 8×8 格缓存带顶点颜色的地图块网格，镜头移动只更新块可见性，经营变化后同步完整世界快照并重建外观变化的块；独立绘制选中框和地图边缘，换算与选择格坐标，限制镜头。不维护经营规则。
 - `scripts/world/CameraController.cs`：输入与镜头模块。区分左键点击、左键拖动，左键释放时结束拖动，并在释放事件被界面拦截时逐帧校正状态；处理缩放和键盘移动，通过 `WorldMap` 的接口选择格子及限制镜头。
-- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调及界面。顶部显示金币、工人及库存/市场入口；底部单一建造入口打开农田或加工场地目录，地图点击执行摆放；右侧实体详情和其他二级窗口可拖动并在本次运行内保留位置。市场可按品种出售原料或出售全部加工品；按钮命令和计时器交给 `FarmGame`，再刷新地图、分类库存与当日售价。
+- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调及界面。顶部显示金币、工人及库存/市场入口；底部单一建造入口打开农田或加工场地目录，地图点击执行摆放；右侧农田详情从作物定义显示浇水后成熟所需秒数，实体详情和其他二级窗口可拖动并在本次运行内保留位置。市场可按品种出售原料或出售全部加工品；按钮命令和计时器交给 `FarmGame`，再刷新地图、分类库存与当日售价。
 - `tests/unit/`：农田、加工、交易、市场及地图坐标的单元测试；`tests/integration/`：镜头输入与地图选择的集成测试；`tests/e2e/`：主场景经营流程的端到端测试；`tests/performance/`：必跑的满地图 50 tick 负载测试（含角落实体推进检查）与按需的有窗口 FPS 性能测试。图形测试要求平均至少 60 FPS、P95 帧间隔不超过 16.67 ms，并保存前后截图。根目录 `TestSuite` 汇总 headless 检查；导出程序启动是构建冒烟测试。
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、运行必需的 headless 测试套件、生成 Cobertura 报告，并要求业务脚本行覆盖率不低于 80%；`-Performance` 追加图形性能测试和 JSON 报告。
 - `tools/Repair-RuleLinks.ps1` 与 `tools/Test-StaticChecks.ps1`：按 `.codex/rule-links.json` 修复及检查目录指令符号链接，并检查文档路径、内部链接和脚本命名空间。
