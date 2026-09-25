@@ -6,6 +6,11 @@ on:
       - dev
       - main
   workflow_dispatch:
+    inputs:
+      performance:
+        description: '运行有窗口的满地图 FPS 性能测试'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,6 +30,10 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: 允许检出文件符号链接
+        shell: pwsh
+        run: git config --global core.symlinks true
+
       - name: 检出代码
         uses: actions/checkout@v7
 
@@ -56,9 +65,21 @@ jobs:
           $nugetConfig.Save((Resolve-Path -LiteralPath NuGet.Config))
           "GODOT_CONSOLE=$($console.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: 修复规则链接并运行静态检查
+        shell: pwsh
+        run: |
+          ./tools/Repair-RuleLinks.ps1
+          ./tools/Test-StaticChecks.ps1
+          dotnet format whitespace FarmExchange.sln --verify-no-changes
+
       - name: 运行场景测试并检查行覆盖率
         shell: pwsh
-        run: ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE
+        run: |
+          if ('${{ inputs.performance }}' -eq 'true') {
+            ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE -Performance
+          } else {
+            ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE
+          }
 
       - name: 上传覆盖率报告
         if: always()
@@ -66,6 +87,15 @@ jobs:
         with:
           name: coverage-${{ github.sha }}
           path: coverage/coverage.cobertura.xml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 上传满地图 FPS 报告
+        if: ${{ inputs.performance == true }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-${{ github.sha }}
+          path: coverage/performance.json
           if-no-files-found: error
           retention-days: 14
 

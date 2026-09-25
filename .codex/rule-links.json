@@ -1,0 +1,9 @@
+[
+  { "source": ".claude/rules/docs.md", "links": ["docs/AGENTS.md"] },
+  { "source": ".claude/rules/scripts.md", "links": ["scripts/AGENTS.md"] },
+  { "source": ".claude/rules/tests.md", "links": ["tests/AGENTS.md"] },
+  { "source": ".claude/rules/scenes.md", "links": ["scenes/AGENTS.md"] },
+  { "source": ".claude/rules/assets.md", "links": ["assets/AGENTS.md"] },
+  { "source": ".claude/rules/github.md", "links": [".github/AGENTS.md"] },
+  { "source": ".claude/rules/tools.md", "links": ["tools/AGENTS.md"] }
+]

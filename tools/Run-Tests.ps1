@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$GodotConsole
+    [string]$GodotConsole,
+    [switch]$Performance
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,4 +40,15 @@ $roundedLineCoverage = [Math]::Round($lineCoverage, 2)
 Write-Host "Business script line coverage: $roundedLineCoverage%"
 if ($lineCoverage -lt 80) {
     throw "Business script line coverage $roundedLineCoverage% is below the 80% threshold"
+}
+
+if ($Performance) {
+    $report = 'coverage/performance.json'
+    Remove-Item -LiteralPath $report -ErrorAction SilentlyContinue
+    & $GodotConsole --path . tests/performance/test_full_world_fps.tscn
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $report)) {
+        throw "Graphics performance test failed with exit code $LASTEXITCODE"
+    }
+    $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+    Write-Host "Full-world average FPS: $([Math]::Round($result.AverageFps, 1)); P95 frame time: $([Math]::Round($result.P95FrameMs, 2)) ms"
 }
