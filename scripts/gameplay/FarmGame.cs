@@ -11,7 +11,7 @@ public enum CropKind { Wheat, Corn, Rice, Potato, Sunflower, Sugarcane }
 
 public readonly record struct CropDefinition(
     CropKind Kind, string CropName, string BuildingName, string ProductName,
-    int GrowthTicks, int ProcessingTicks, int PricePercent);
+    int GrowthTicks, int ProcessingTicks, int PricePercent, int RawPricePercent);
 public readonly record struct PlotSnapshot(
     BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingTicks);
 public readonly record struct TickResult(int Harvested, int Produced, bool WorkerActed, bool DayAdvanced);
@@ -25,12 +25,12 @@ public sealed class FarmGame
 
     private static readonly CropDefinition[] CropDefinitions =
     {
-        new(CropKind.Wheat, "小麦", "磨坊", "面粉", 5, 3, 100),
-        new(CropKind.Corn, "玉米", "玉米加工坊", "玉米粉", 6, 4, 100),
-        new(CropKind.Rice, "水稻", "碾米坊", "大米", 7, 4, 120),
-        new(CropKind.Potato, "马铃薯", "淀粉坊", "淀粉", 6, 4, 80),
-        new(CropKind.Sunflower, "向日葵", "榨油坊", "葵花籽油", 9, 5, 160),
-        new(CropKind.Sugarcane, "甘蔗", "制糖坊", "蔗糖", 10, 6, 200),
+        new(CropKind.Wheat, "小麦", "磨坊", "面粉", 5, 3, 100, 50),
+        new(CropKind.Corn, "玉米", "玉米加工坊", "玉米粉", 6, 4, 100, 50),
+        new(CropKind.Rice, "水稻", "碾米坊", "大米", 7, 4, 120, 50),
+        new(CropKind.Potato, "马铃薯", "淀粉坊", "淀粉", 6, 4, 80, 50),
+        new(CropKind.Sunflower, "向日葵", "榨油坊", "葵花籽油", 9, 5, 160, 50),
+        new(CropKind.Sugarcane, "甘蔗", "制糖坊", "蔗糖", 10, 6, 200, 50),
     };
     public static IReadOnlyList<CropDefinition> Crops { get; } = Array.AsReadOnly(CropDefinitions);
     private static readonly Vector2I[] InitialFarmCells =
@@ -94,6 +94,8 @@ public sealed class FarmGame
     public int GetProductStock(CropKind crop) => _productStock[(int)crop];
     public int GetProductPriceCents(CropKind crop) =>
         (CurrentFlourPriceCents * GetCrop(crop).PricePercent + 50) / 100;
+    public int GetRawPriceCents(CropKind crop) =>
+        (GetProductPriceCents(crop) * GetCrop(crop).RawPricePercent + 50) / 100;
 
     public PlotSnapshot GetPlot(Vector2I cell)
     {
@@ -198,6 +200,16 @@ public sealed class FarmGame
             revenue += _productStock[index] * GetProductPriceCents(crop.Kind);
             _productStock[index] = 0;
         }
+        MoneyCents += revenue;
+        return new SaleResult(sold, revenue);
+    }
+
+    public SaleResult SellRaw(CropKind crop)
+    {
+        int index = (int)crop;
+        int sold = _rawStock[index];
+        int revenue = sold * GetRawPriceCents(crop);
+        _rawStock[index] = 0;
         MoneyCents += revenue;
         return new SaleResult(sold, revenue);
     }

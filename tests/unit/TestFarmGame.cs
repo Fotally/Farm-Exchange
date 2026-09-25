@@ -14,7 +14,7 @@ public partial class TestFarmGame : Node
 
     public static bool RunChecks() =>
         CheckInitialCenter() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
-        CheckWorkerRotation();
+        CheckWorkerRotation() && CheckRawSales();
 
     private static bool CheckInitialCenter()
     {
@@ -106,6 +106,8 @@ public partial class TestFarmGame : Node
             if (harvest.Harvested != 1 || game.GetRawStock(crop.Kind) != 0 ||
                 game.GetPlot(processor).RemainingTicks != crop.ProcessingTicks)
                 return Fail($"{crop.CropName}未按时收获并投入对应场地");
+            if (game.SellRaw(crop.Kind).Quantity != 0)
+                return Fail($"{crop.CropName}加工中的原料仍可出售");
             for (int i = 0; i < crop.ProcessingTicks - 1; i++)
                 game.AdvanceTick();
             if (game.GetProductStock(crop.Kind) != 0)
@@ -223,6 +225,47 @@ public partial class TestFarmGame : Node
         game.AdvanceTick();
         if (game.GetPlot(first).RemainingTicks != 4 || game.GetPlot(second).RemainingTicks != 9)
             return Fail("不同作物未按各自成熟时间生长");
+        return true;
+    }
+
+    private static bool CheckRawSales()
+    {
+        foreach (CropDefinition crop in FarmGame.Crops)
+        {
+            var game = new FarmGame(12345);
+            RemoveInitialBuildings(game);
+            Vector2I farm = new(3, 4);
+            game.BuildFarm(farm);
+            game.SetFarmCrop(farm, crop.Kind);
+            for (int i = 0; i < 30; i++)
+                game.AdvanceTick();
+            int stock = game.GetRawStock(crop.Kind);
+            int money = game.MoneyCents;
+            int price = game.GetRawPriceCents(crop.Kind);
+            if (stock == 0 || game.GetProductStock(crop.Kind) != 0)
+                return Fail($"{crop.CropName}原料未进入可出售库存");
+            SaleResult sale = game.SellRaw(crop.Kind);
+            if (sale.Quantity != stock || sale.RevenueCents != stock * price ||
+                game.MoneyCents != money + sale.RevenueCents || game.GetRawStock(crop.Kind) != 0 ||
+                game.SellRaw(crop.Kind).Quantity != 0 || game.SellAll().Quantity != 0)
+                return Fail($"{crop.CropName}原料出售数量、当日收入或重复出售错误");
+        }
+
+        var mixed = new FarmGame(12345);
+        RemoveInitialBuildings(mixed);
+        Vector2I wheatFarm = new(3, 4);
+        Vector2I cornFarm = new(4, 4);
+        mixed.BuildFarm(wheatFarm);
+        mixed.BuildFarm(cornFarm);
+        mixed.SetFarmCrop(cornFarm, CropKind.Corn);
+        for (int i = 0; i < 30; i++)
+            mixed.AdvanceTick();
+        int cornStock = mixed.GetRawStock(CropKind.Corn);
+        if (mixed.GetRawStock(CropKind.Wheat) == 0 || cornStock == 0)
+            return Fail("两种原料没有分别进入库存");
+        mixed.SellRaw(CropKind.Wheat);
+        if (mixed.GetRawStock(CropKind.Corn) != cornStock)
+            return Fail("出售小麦原料改变了玉米原料库存");
         return true;
     }
 

@@ -437,7 +437,8 @@ public partial class Main : Node2D
         {
             CropKind kind = crop.Kind;
             Button option = MakeButton(
-                $"{crop.CropName} · 原料售价：待定\n原料库存 {_game.GetRawStock(kind)} · {crop.ProductName}库存 {_game.GetProductStock(kind)}",
+                $"{crop.CropName} · 原料售价：{FormatCoins(_game.GetRawPriceCents(kind))} 金币\n" +
+                $"原料库存 {_game.GetRawStock(kind)} · {crop.ProductName}库存 {_game.GetProductStock(kind)}",
                 Mid, 390, 57);
             option.Name = $"CropCard{kind}";
             option.Pressed += () => SetCrop(kind);
@@ -496,17 +497,30 @@ public partial class Main : Node2D
     private void RebuildMarket()
     {
         ClearChildren(_marketRows);
-        _marketRows.AddChild(MakeLabel("原材料售价待定；当前只能出售加工品。", 13, Ink));
         bool hasProducts = false;
         foreach (CropDefinition crop in FarmGame.Crops)
         {
-            int product = _game.GetProductStock(crop.Kind);
+            CropKind kind = crop.Kind;
+            int raw = _game.GetRawStock(kind);
+            int product = _game.GetProductStock(kind);
             hasProducts |= product > 0;
             _marketRows.AddChild(MakeInfoCard(
-                $"{crop.CropName}原料  {_game.GetRawStock(crop.Kind)} · 售价待定\n" +
-                $"{crop.ProductName}  {product} · 售价 {FormatCoins(_game.GetProductPriceCents(crop.Kind))} 金币"));
+                $"{crop.CropName}原料  {raw} · 售价 {FormatCoins(_game.GetRawPriceCents(kind))} 金币\n" +
+                $"{crop.ProductName}加工品  {product} · 售价 {FormatCoins(_game.GetProductPriceCents(kind))} 金币"));
+            Button sellRaw = MakeButton($"卖出全部{crop.CropName}原料", Mid, 0, 38);
+            sellRaw.Name = $"SellRaw{kind}Button";
+            sellRaw.Disabled = raw == 0;
+            sellRaw.Pressed += () => SellRaw(kind);
+            _marketRows.AddChild(sellRaw);
         }
         _marketSellButton.Disabled = !hasProducts;
+    }
+
+    private void SellRaw(CropKind crop)
+    {
+        SaleResult sale = _game.SellRaw(crop);
+        _messageLabel.Text = $"卖出 {sale.Quantity} 份{FarmGame.GetCrop(crop).CropName}原料，获得 {FormatCoins(sale.RevenueCents)} 金币";
+        RefreshUi();
     }
 
     private void SellAll()
@@ -569,7 +583,8 @@ public partial class Main : Node2D
                 _ => "等待工人照料",
             };
             _detailContent.AddChild(MakeInfoCard($"{crop.CropName}农田 · {status}"));
-            _detailContent.AddChild(MakeInfoCard($"{crop.CropName}原材料售价：待定\n原料价格规则尚未确定"));
+            _detailContent.AddChild(MakeInfoCard(
+                $"{crop.CropName}原材料售价：{FormatCoins(_game.GetRawPriceCents(crop.Kind))} 金币"));
             _detailContent.AddChild(MakeInfoCard(
                 $"{crop.CropName}原料库存：{_game.GetRawStock(crop.Kind)}\n" +
                 $"{crop.ProductName}加工品库存：{_game.GetProductStock(crop.Kind)}"));
