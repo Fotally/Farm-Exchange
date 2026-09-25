@@ -22,6 +22,7 @@
 ## 项目协作与依据
 
 - [系统规划](project/roadmap.md)、[构建与验收](project/build-and-validation.md)、[GitHub 协作](project/contribution-workflow.md)。
+- [macOS 构建与验收](project/macos-build.md)：Universal 2 导出、CI 和应用包启动。
 - [市场曲线调研](research/market-price-curve.md)、[测试分类调研](research/test-taxonomy.md)。
 - [EditorConfig 检查](static-checks/editorconfig.md)、[CI 静态检查](static-checks/ci.md)。
 - [规则加载与链接对应表](../.codex/rule-loading.md)。

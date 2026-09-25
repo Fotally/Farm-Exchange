@@ -11,3 +11,5 @@
 | 手动 `workflow_dispatch` 并勾选 `performance` | 是 | 是 | 是 | 仅在 `main` 执行 | 覆盖率与 FPS JSON 报告，保留 14 天 |
 
 工作流中的 Godot、.NET、`dotnet-coverage` 和 GitHub 官方 Action 均固定到明确主版本或工具版本。升级这些依赖时应通过独立 issue 修改版本，并在 `dev` 验证成功后再合并。`main` 的导出程序启动步骤使用上面的进程退出码检查，成功后才上传 Windows 构建；产物名包含提交 SHA，下载后应保持目录结构完整。它是提交级验收产物，不替代带版本号的正式 Release 压缩包。
+
+`.github/workflows/macos.yml` 是独立的 macOS 构建检查，在 `dev`、`main` 推送和手动触发时运行。它使用 macOS runner 编译 C#、导出 Universal 2 ZIP、检查双架构程序集并启动应用；通过后上传 ZIP，保留 14 天。详细命令、产物用途和签名范围见[macOS 构建与验收](macos-build.md)。

@@ -9,3 +9,5 @@ build/releases/v主版本.次版本.修订版本/FarmExchange-v主版本.次版�
 ```
 
 压缩包不纳入 Git，只上传到同版本 Git 标签对应的 GitHub Release。发布前须重新完成 Release 编译、全部自动化场景测试、Windows 导出和导出程序启动验收；标签、GitHub Release 与压缩包中的版本号一致才算发布完成。
+
+[macOS CI](macos-build.md) 生成的 Universal 2 ZIP 是提交级验收产物；当前未配置 Apple 公证，不纳入本节的正式发布包。

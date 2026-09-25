@@ -18,7 +18,8 @@
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、运行必需的 headless 测试套件、生成 Cobertura 报告，并要求业务脚本行覆盖率不低于 80%；`-Performance` 追加图形性能测试和 JSON 报告。
 - `tools/Repair-RuleLinks.ps1` 与 `tools/Test-StaticChecks.ps1`：按 `.codex/rule-links.json` 修复及检查目录指令符号链接，并检查文档路径、内部链接和脚本命名空间。
 - `.github/workflows/ci.yml`：`dev` 推送时自动运行 headless 测试；手动触发可选图形 FPS 性能测试；`main` 推送时在测试通过后额外完成 Windows Release 导出，通过进程退出码验收导出程序启动并上传构建产物。
-- `export_presets.cfg`：定义 Windows x86_64 验收构建。
+- `.github/workflows/macos.yml`：在 macOS runner 上编译、导出 Universal 2 ZIP、检查双架构程序集并启动应用，上传提交级构建产物。
+- `export_presets.cfg`：定义 Windows x86_64 与 macOS Universal 2 验收构建。
 
 # 工作约定
 
@@ -46,7 +47,7 @@
 - `docs/gameplay/`：玩家可观察的作物、加工、交易、土地和地图操作规则。
 - `docs/architecture/`：按模块整理的具名接口与对应实现说明。
 - `docs/project/roadmap.md`：已确认背景、待确认事项和交付阶段。
-- `docs/project/build-and-validation.md`：Windows 构建、测试、导出与启动验收。
+- `docs/project/build-and-validation.md`：Windows 与 macOS 构建、测试、导出与启动验收。
 - `docs/project/contribution-workflow.md`：issue、dev、main 与人工合并流程。
 - `docs/research/`：市场曲线与测试分类的调研依据。
 - `docs/static-checks/`：EditorConfig 与 CI 的机械检查范围。
