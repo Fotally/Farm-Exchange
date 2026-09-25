@@ -13,7 +13,7 @@
 1. 在 GitHub 中找到或创建一项 issue，写明本次修改的范围和验收标准。
 2. Agent 在 `dev` 分支只实施该 issue 记录的内容；范围需要变化时，先与用户沟通，并把确认后的范围更新到 issue。
 3. 完成实现、中文文档同步、编译、自动化场景测试、行覆盖率检查、Windows Release 中间导出及导出程序启动验证后，将提交推送到远端 `dev`。推送会触发 GitHub Actions，再次执行编译、测试与覆盖率检查。
-4. 使用仓库的 `farm-exchange-submit-pr` skill，按 `.github/PULL_REQUEST_TEMPLATE.md` 整理说明，提交并推送 `dev`，创建或更新从 `dev` 到 `main` 的 Pull Request；在说明中关联对应 issue，并列出验证结果。
+4. 使用仓库的 `farm-exchange-submit-pr` skill，按 `.github/PULL_REQUEST_TEMPLATE.md` 整理说明，提交并推送 `dev`，创建或更新从 `dev` 到 `main` 的 Pull Request；在说明中关联对应 issue，按实际改动多选附有简短说明的变更类型，并列出验证结果。
 5. Agent 停止在待合并状态，由人工审查和合并 Pull Request。
 
 ## Main 分支保护
