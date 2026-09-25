@@ -216,8 +216,14 @@ public partial class Main : Node2D
     {
         var bottom = new PanelContainer
         {
-            Name = "BottomBar", AnchorRight = 1f, AnchorTop = 1f, AnchorBottom = 1f,
-            OffsetLeft = 16f, OffsetRight = -16f, OffsetTop = -109f, OffsetBottom = -15f,
+            Name = "BottomBar",
+            AnchorRight = 1f,
+            AnchorTop = 1f,
+            AnchorBottom = 1f,
+            OffsetLeft = 16f,
+            OffsetRight = -16f,
+            OffsetTop = -109f,
+            OffsetBottom = -15f,
         };
         bottom.AddThemeStyleboxOverride("panel", Style(Dark, 16));
         _uiRoot.AddChild(bottom);

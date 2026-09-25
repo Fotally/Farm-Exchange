@@ -59,7 +59,8 @@ public partial class TestCoreLoop : Node
         var header = Find<Control>(detail, "Header");
         header.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton
         {
-            ButtonIndex = MouseButton.Left, Pressed = true,
+            ButtonIndex = MouseButton.Left,
+            Pressed = true,
         });
         main._Input(new InputEventMouseMotion { Position = new Vector2(30, 20) });
         main._Input(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
