@@ -5,3 +5,5 @@
 不同作物的加工时间见[作物表](crop-growth.md)。移除正在加工的场地时，已投入原料消失，不返还库存。公共库存中的原料可按品种直接出售；已投入加工的原料不再属于可售库存。两类出售规则见[出售与价格](../trading/sales.md)。
 
 场地分配与完成时机由[FarmGame 的 tick 实现](../../architecture/game-state/farm-game/implementation-tick-order.md)负责；tests/unit/TestFarmGame.cs 检查匹配、移除和切换后的结果。
+
+选中加工场地时，详情显示该场地的等待或加工状态、从投入原料到完成的加工周期、对应加工品的当日售价和公共加工品库存。周期按主场景每秒 1 tick 换算，时长见作物表。库存按品种共享，并非每座场地各自持有；农田详情只显示原料信息。

@@ -438,7 +438,7 @@ public partial class Main : Node2D
             CropKind kind = crop.Kind;
             Button option = MakeButton(
                 $"{crop.CropName} · 原料售价：{FormatCoins(_game.GetRawPriceCents(kind))} 金币\n" +
-                $"原料库存 {_game.GetRawStock(kind)} · {crop.ProductName}库存 {_game.GetProductStock(kind)}",
+                $"原料库存 {_game.GetRawStock(kind)}",
                 Mid, 390, 57);
             option.Name = $"CropCard{kind}";
             option.Pressed += () => SetCrop(kind);
@@ -587,8 +587,7 @@ public partial class Main : Node2D
             _detailContent.AddChild(MakeInfoCard(
                 $"{crop.CropName}原材料售价：{FormatCoins(_game.GetRawPriceCents(crop.Kind))} 金币"));
             _detailContent.AddChild(MakeInfoCard(
-                $"{crop.CropName}原料库存：{_game.GetRawStock(crop.Kind)}\n" +
-                $"{crop.ProductName}加工品库存：{_game.GetProductStock(crop.Kind)}"));
+                $"{crop.CropName}原料库存：{_game.GetRawStock(crop.Kind)}"));
             Button change = MakeButton("更换作物 · 查看价格与库存", Mid, 0, 43);
             change.Name = "ChangeCropButton";
             change.Pressed += OpenCrop;
@@ -605,6 +604,11 @@ public partial class Main : Node2D
             string status = plot.RemainingTicks > 0 ? "加工中" : $"等待{crop.CropName}";
             _detailContent.AddChild(MakeInfoCard($"{crop.BuildingName} · {status}"));
             _detailContent.AddChild(MakeInfoCard($"{crop.CropName} → {crop.ProductName}"));
+            _detailContent.AddChild(MakeInfoCard($"加工周期：投入原料后 {crop.ProcessingTicks} 秒完成"));
+            _detailContent.AddChild(MakeInfoCard(
+                $"{crop.ProductName}加工品售价：{FormatCoins(_game.GetProductPriceCents(crop.Kind))} 金币"));
+            _detailContent.AddChild(MakeInfoCard(
+                $"{crop.ProductName}加工品库存：{_game.GetProductStock(crop.Kind)}"));
             Button remove = MakeButton("移除加工场地", new Color(0.66f, 0.36f, 0.31f), 0, 43);
             remove.Name = "RemoveButton";
             remove.Pressed += RemoveSelected;
