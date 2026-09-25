@@ -13,7 +13,7 @@ public partial class TestFarmGame : Node
     }
 
     public static bool RunChecks() =>
-        CheckInitialCenter() && CheckAllCrops() && CheckMatchingAndSwitching() && CheckRemoval() &&
+        CheckInitialCenter() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
         CheckWorkerRotation();
 
     private static bool CheckInitialCenter()
@@ -26,16 +26,16 @@ public partial class TestFarmGame : Node
         {
             var game = new FarmGame(seed);
             var repeat = new FarmGame(seed);
-            if (game.MoneyCents != 5000 || game.FreeLandGrants != 2)
-                return Fail("开局金币或免费选地次数错误");
+            if (game.MoneyCents != 5000)
+                return Fail("开局金币错误");
             CropKind primary = game.GetPlot(farms[0]).CropKind;
             CropKind secondary = game.GetPlot(farms[2]).CropKind;
             foreach (Vector2I cell in farms)
             {
                 PlotSnapshot plot = game.GetPlot(cell);
-                if (!plot.IsUnlocked || plot.Building != BuildingKind.Farm ||
+                if (plot.Building != BuildingKind.Farm ||
                     plot.Crop != CropStage.None || plot.CropKind != repeat.GetPlot(cell).CropKind)
-                    return Fail("中心农田未解锁、提前播种或固定种子不可复现");
+                    return Fail("中心农田提前播种或固定种子不可复现");
             }
             if (game.GetPlot(farms[1]).CropKind != primary)
                 return Fail("开局农田没有形成 3+0 或 2+1");
@@ -43,7 +43,7 @@ public partial class TestFarmGame : Node
             {
                 PlotSnapshot plot = game.GetPlot(processors[i]);
                 CropKind expected = i == 0 ? primary : secondary;
-                if (!plot.IsUnlocked || plot.Building != BuildingKind.Processor ||
+                if (plot.Building != BuildingKind.Processor ||
                     plot.CropKind != expected || plot.CropKind != repeat.GetPlot(processors[i]).CropKind)
                     return Fail("中心加工场地未匹配农田或固定种子不可复现");
             }
@@ -74,26 +74,21 @@ public partial class TestFarmGame : Node
 
     private static bool CheckAllCrops()
     {
-        var game = new FarmGame(12345);
-        Vector2I farm = new(3, 4);
-        Vector2I processor = new(100, 100);
-        RemoveInitialBuildings(game);
-        if (game.MoneyCents != 5000 || game.FreeLandGrants != 2 ||
-            game.CurrentDay != 1 || game.CurrentFlourPriceCents != MarketPriceCurve.InitialPriceCents)
-            return Fail("初始资源错误");
-        if (game.UnlockLand(farm) != null || game.UnlockLand(processor) != null ||
-            game.FreeLandGrants != 0 || game.BuildFarm(new Vector2I(0, 127)) == null)
-            return Fail("免费解锁或购地规则错误");
-        if (game.BuildFarm(farm) != null || game.GetPlot(farm).CropKind != CropKind.Wheat)
-            return Fail("农田建造或默认作物错误");
-        game.RemoveBuilding(farm);
-
         foreach (CropDefinition crop in FarmGame.Crops)
         {
+            var game = new FarmGame(12345);
+            Vector2I farm = new(3, 4);
+            Vector2I processor = new(100, 100);
+            RemoveInitialBuildings(game);
+            if (game.MoneyCents != 5000 || game.CurrentDay != 1 ||
+                game.CurrentFlourPriceCents != MarketPriceCurve.InitialPriceCents)
+                return Fail("初始资源错误");
             if (game.BuildFarm(farm) != null ||
                 game.SetFarmCrop(farm, crop.Kind) != null ||
                 game.BuildProcessor(processor, crop.Kind) != null)
                 return Fail($"{crop.CropName}的农田或加工场地建造失败");
+            if (game.MoneyCents != 3000)
+                return Fail($"{crop.CropName}建造费用错误");
             if (crop.ProcessingTicks >= crop.GrowthTicks)
                 return Fail($"{crop.CropName}加工未快于成熟");
 
@@ -118,24 +113,36 @@ public partial class TestFarmGame : Node
             TickResult finished = game.AdvanceTick();
             if (finished.Produced != 1 || game.GetProductStock(crop.Kind) != 1)
                 return Fail($"{crop.ProductName}未按时产出");
-
-            game.RemoveBuilding(farm);
-            game.RemoveBuilding(processor);
+            int expectedRevenue = game.GetProductPriceCents(crop.Kind);
+            SaleResult sale = game.SellAll();
+            if (sale.Quantity != 1 || sale.RevenueCents != expectedRevenue ||
+                game.MoneyCents != 3000 + expectedRevenue ||
+                game.GetProductStock(crop.Kind) != 0 || game.SellAll().Quantity != 0)
+                return Fail($"{crop.ProductName}出售或库存更新错误");
         }
+        return true;
+    }
 
-        int expectedRevenue = 0;
-        foreach (CropDefinition crop in FarmGame.Crops)
-            expectedRevenue += game.GetProductPriceCents(crop.Kind);
-        SaleResult sale = game.SellAll();
-        if (sale.Quantity != FarmGame.Crops.Count || sale.RevenueCents != expectedRevenue ||
-            game.MoneyCents != 5000 + expectedRevenue || game.SellAll().Quantity != 0)
-            return Fail("六种加工品未按当天价格一并出售");
-        foreach (CropDefinition crop in FarmGame.Crops)
-            if (game.GetProductStock(crop.Kind) != 0)
-                return Fail($"{crop.ProductName}售后库存未清空");
-        if (game.UnlockLand(new Vector2I(0, 127)) != null ||
-            game.MoneyCents != 5000 + expectedRevenue - FarmGame.LandCostCents)
-            return Fail("出售后购地流程错误");
+    private static bool CheckBuildingCost()
+    {
+        var game = new FarmGame(12345);
+        RemoveInitialBuildings(game);
+        for (int col = 0; col < 5; col++)
+        {
+            Vector2I cell = new(col, 0);
+            if (game.BuildFarm(cell) != null || game.MoneyCents != 5000 - (col + 1) * FarmGame.BuildingCostCents)
+                return Fail("农田建造未按每座 10 金币收费");
+            if (game.BuildProcessor(cell, CropKind.Wheat) == null ||
+                game.MoneyCents != 5000 - (col + 1) * FarmGame.BuildingCostCents)
+                return Fail("占用地块仍可建造或重复扣费");
+        }
+        Vector2I another = new(5, 0);
+        if (game.BuildProcessor(another, CropKind.Wheat) == null ||
+            game.GetPlot(another).Building != BuildingKind.None || game.MoneyCents != 0)
+            return Fail("余额不足仍可建造");
+        game.RemoveBuilding(new Vector2I(0, 0));
+        if (game.MoneyCents != 0 || game.BuildFarm(new Vector2I(0, 0)) == null)
+            return Fail("移除建筑退费或重建未收费");
         return true;
     }
 
@@ -145,8 +152,6 @@ public partial class TestFarmGame : Node
         RemoveInitialBuildings(game);
         Vector2I farm = new(0, 0);
         Vector2I processor = new(1, 0);
-        game.UnlockLand(farm);
-        game.UnlockLand(processor);
         game.BuildFarm(farm);
         game.BuildProcessor(processor, CropKind.Rice);
         game.AdvanceTick();
@@ -181,8 +186,6 @@ public partial class TestFarmGame : Node
         RemoveInitialBuildings(game);
         Vector2I farm = new(0, 0);
         Vector2I processor = new(1, 0);
-        game.UnlockLand(farm);
-        game.UnlockLand(processor);
         game.BuildFarm(farm);
         game.BuildProcessor(processor, CropKind.Wheat);
         game.AdvanceTick();
@@ -196,9 +199,8 @@ public partial class TestFarmGame : Node
         for (int i = 0; i < FarmGame.GetCrop(CropKind.Wheat).ProcessingTicks; i++)
             game.AdvanceTick();
         if (game.GetProductStock(CropKind.Wheat) != 0 ||
-            game.GetPlot(farm).Building != BuildingKind.None ||
-            !game.GetPlot(farm).IsUnlocked)
-            return Fail("移除建筑后仍产出，或土地未保留");
+            game.GetPlot(farm).Building != BuildingKind.None || game.MoneyCents != 3000)
+            return Fail("移除建筑后仍产出或返还建造费");
         return true;
     }
 
@@ -208,8 +210,6 @@ public partial class TestFarmGame : Node
         RemoveInitialBuildings(game);
         Vector2I first = new(0, 0);
         Vector2I second = new(1, 0);
-        game.UnlockLand(first);
-        game.UnlockLand(second);
         game.BuildFarm(first);
         game.BuildFarm(second);
         game.SetFarmCrop(second, CropKind.Sunflower);

@@ -19,7 +19,6 @@ public partial class WorldMap : Node2D
     private const float HalfHeight = TileHeight / 2f;
     private const float SeamOverlap = 0.75f;
 
-    private static readonly Color LockedColor = new(0.34f, 0.37f, 0.33f);
     private static readonly Color TileColor = new(0.53f, 0.64f, 0.38f);
     private static readonly Color FarmColor = new(0.53f, 0.36f, 0.22f);
     private static readonly Color ProcessorColor = new(0.36f, 0.47f, 0.61f);
@@ -140,6 +139,12 @@ public partial class WorldMap : Node2D
         _overlay.QueueRedraw();
     }
 
+    public void ClearSelection()
+    {
+        _selectedCell = new Vector2I(-1, -1);
+        _overlay.QueueRedraw();
+    }
+
     public Vector2I CellAtWorld(Vector2 worldPosition)
     {
         Vector2 grid = WorldToGrid(worldPosition);
@@ -173,10 +178,9 @@ public partial class WorldMap : Node2D
         center + new Vector2(-HalfWidth - SeamOverlap, 0f),
     };
 
-    private readonly record struct PlotVisual(bool IsUnlocked, BuildingKind Building, CropKind CropKind, CropStage Crop)
+    private readonly record struct PlotVisual(BuildingKind Building, CropKind CropKind, CropStage Crop)
     {
         public static PlotVisual FromSnapshot(PlotSnapshot plot) => new(
-            plot.IsUnlocked,
             plot.Building,
             plot.Building == BuildingKind.Farm ? plot.CropKind : CropKind.Wheat,
             plot.Building == BuildingKind.Farm ? plot.Crop : CropStage.None);
@@ -237,14 +241,12 @@ public partial class WorldMap : Node2D
                     int mapRow = _firstRow + row;
                     Vector2 center = new((mapCol - mapRow) * HalfWidth, (mapCol + mapRow) * HalfHeight);
                     PlotVisual plot = _plots[row * ChunkSize + col];
-                    Color tileColor = !plot.IsUnlocked
-                        ? LockedColor
-                        : plot.Building switch
-                        {
-                            BuildingKind.Farm => FarmColor,
-                            BuildingKind.Processor => ProcessorColor,
-                            _ => TileColor,
-                        };
+                    Color tileColor = plot.Building switch
+                    {
+                        BuildingKind.Farm => FarmColor,
+                        BuildingKind.Processor => ProcessorColor,
+                        _ => TileColor,
+                    };
                     AddQuad(vertices, colors, indices, Outline(center), tileColor);
                 }
             }

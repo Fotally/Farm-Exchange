@@ -9,7 +9,7 @@ public partial class TestCoreLoop : Node
     {
         bool passed = RunChecks(this);
         if (passed)
-            GD.Print("主场景操作检查通过");
+            GD.Print("主场景建造与窗口操作检查通过");
         GetTree().Quit(passed ? 0 : 1);
     }
 
@@ -24,90 +24,125 @@ public partial class TestCoreLoop : Node
 
     private static bool Check(Main main)
     {
-        const string actions = "CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions/";
+        var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
         var map = main.GetNode<WorldMap>("WorldMap");
-        var economy = main.GetNode<Label>(actions + "EconomyLabel");
-        var plot = main.GetNode<Label>(actions + "PlotLabel");
-        var unlock = main.GetNode<Button>(actions + "UnlockButton");
-        var build = main.GetNode<Button>(actions + "BuildButton");
-        var buildProcessor = main.GetNode<Button>(actions + "BuildProcessorButton");
-        var cropOption = main.GetNode<OptionButton>(actions + "CropOption");
-        var processorOption = main.GetNode<OptionButton>(actions + "ProcessorOption");
-        var remove = main.GetNode<Button>(actions + "RemoveButton");
-        var sell = main.GetNode<Button>(actions + "SellButton");
+        var build = Find<Button>(ui, "BuildButton");
+        var detail = Find<Control>(ui, "DetailWindow");
+        var buildWindow = Find<Control>(ui, "BuildWindow");
+        var cropWindow = Find<Control>(ui, "CropWindow");
+        var marketWindow = Find<Control>(ui, "MarketWindow");
+        var inventoryWindow = Find<Control>(ui, "InventoryWindow");
+        var cancel = Find<Button>(ui, "CancelPlacementButton");
+        var message = Find<Label>(ui, "MessageLabel");
         var timer = main.GetNode<Timer>("TickTimer");
 
-        if (!economy.Text.Contains("第 1 天") || !economy.Text.Contains("面粉售价：5.00 金币") ||
-            !economy.Text.Contains("金币：50.00") || !economy.Text.Contains("今日涨跌：基准价"))
-            return Fail("初始天数、面粉价格或金币未显示");
+        if (main.Game.MoneyCents != 5000 || detail.Visible || buildWindow.Visible || cancel.Visible ||
+            HasVisibleInternalTime(ui))
+            return Fail("初始界面显示错误或暴露内部时间");
 
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(63, 63));
-        if (!plot.Text.Contains("农田") || !unlock.Disabled)
-            return Fail("主场景未显示中心预置农田");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(63, 64));
-        if (!plot.Text.Contains("等待") || !unlock.Disabled)
-            return Fail("主场景未显示中心预置加工场地");
-        Vector2I[] initialBuildings =
-        {
-            new(63, 63), new(64, 63), new(65, 63), new(63, 64), new(64, 64),
-        };
-        foreach (Vector2I cell in initialBuildings)
-        {
-            map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
-            remove.EmitSignal(Button.SignalName.Pressed);
-        }
-
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(62, 64));
-        if (!plot.Text.Contains("未解锁") || unlock.Disabled)
-            return Fail("未解锁土地没有正确显示或无法解锁");
-        unlock.EmitSignal(Button.SignalName.Pressed);
-        if (!economy.Text.Contains("免费土地：1") || build.Disabled)
-            return Fail("免费解锁未更新界面");
         build.EmitSignal(Button.SignalName.Pressed);
-        if (!plot.Text.Contains("农田"))
-            return Fail("建造农田未更新界面");
-        if (cropOption.Disabled || cropOption.ItemCount != FarmGame.Crops.Count)
-            return Fail("农田未提供六种作物选择");
-        cropOption.Select((int)CropKind.Corn);
-        cropOption.EmitSignal(OptionButton.SignalName.ItemSelected, (long)CropKind.Corn);
-        if (!plot.Text.Contains("玉米"))
-            return Fail("农田作物切换未更新界面");
+        if (!buildWindow.Visible || detail.Visible)
+            return Fail("建造入口未打开目录");
+        Find<Button>(buildWindow, "FarmCard").EmitSignal(Button.SignalName.Pressed);
+        if (buildWindow.Visible || !cancel.Visible)
+            return Fail("选中农田后未进入摆放状态");
 
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(65, 64));
-        if (unlock.Disabled)
-            return Fail("第二格土地不可解锁");
-        unlock.EmitSignal(Button.SignalName.Pressed);
-        if (buildProcessor.Disabled || processorOption.Disabled ||
-            processorOption.ItemCount != FarmGame.Crops.Count)
-            return Fail("六种加工场地不可选");
-        processorOption.Select((int)CropKind.Corn);
-        buildProcessor.EmitSignal(Button.SignalName.Pressed);
-        if (!plot.Text.Contains("玉米加工坊"))
-            return Fail("玉米加工坊状态未显示");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(62, 64));
-        timer.EmitSignal(Timer.SignalName.Timeout);
-        if (!plot.Text.Contains("待浇水"))
-            return Fail("工人未自动播种或界面未更新");
-        timer.EmitSignal(Timer.SignalName.Timeout);
-        if (!plot.Text.Contains("生长中"))
-            return Fail("工人未自动浇水或界面未更新");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(65, 64));
-        for (int i = 0; i < FarmGame.GetCrop(CropKind.Corn).GrowthTicks; i++)
+        Vector2I farm = new(62, 64);
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        if (main.Game.GetPlot(farm).Building != BuildingKind.Farm ||
+            main.Game.MoneyCents != 4000 || !detail.Visible || cancel.Visible ||
+            !ContainsVisibleText(detail, "原材料售价：待定") ||
+            !ContainsVisibleText(detail, "原料库存："))
+            return Fail("农田摆放、收费或详情显示错误");
+
+        detail.Position = new Vector2(760, 90);
+        var header = Find<Control>(detail, "Header");
+        header.EmitSignal(Control.SignalName.GuiInput, new InputEventMouseButton
+        {
+            ButtonIndex = MouseButton.Left, Pressed = true,
+        });
+        main._Input(new InputEventMouseMotion { Position = new Vector2(30, 20) });
+        main._Input(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
+        Vector2 remembered = detail.Position;
+        if (remembered == new Vector2(760, 90))
+            return Fail("详情标题栏拖动没有改变窗口位置");
+        Find<Button>(detail, "CloseButton").EmitSignal(Button.SignalName.Pressed);
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        if (!detail.Visible || detail.Position != remembered)
+            return Fail("详情窗口关闭后未记住位置");
+
+        Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
+        if (!cropWindow.Visible || !Find<Button>(cropWindow, "CropCardCorn").Text.Contains("待定"))
+            return Fail("作物菜单未提供原料价格待定信息");
+        cropWindow.Position = new Vector2(400, 120);
+        Find<Button>(cropWindow, "CropCardCorn").EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.GetPlot(farm).CropKind != CropKind.Corn || cropWindow.Visible)
+            return Fail("农田改种失败");
+        Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
+        if (cropWindow.Position != new Vector2(400, 120))
+            return Fail("作物菜单重新打开后未记住位置");
+        Find<Button>(cropWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);
+
+        build.EmitSignal(Button.SignalName.Pressed);
+        Find<Button>(buildWindow, "ProcessorTab").EmitSignal(Button.SignalName.Pressed);
+        if (!Find<Button>(buildWindow, "ProcessorCardCorn").Text.Contains("10.00"))
+            return Fail("加工场地目录未显示建造费");
+        Find<Button>(buildWindow, "ProcessorCardCorn").EmitSignal(Button.SignalName.Pressed);
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        if (!cancel.Visible || main.Game.MoneyCents != 4000 || !message.Text.Contains("已有建筑"))
+            return Fail("占用地块仍建造或扣费");
+        Vector2I processor = new(66, 64);
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
+        if (main.Game.GetPlot(processor).Building != BuildingKind.Processor ||
+            main.Game.MoneyCents != 3000 || cancel.Visible)
+            return Fail("加工场地摆放与收费错误");
+
+        Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
+        if (!inventoryWindow.Visible || !ContainsVisibleText(inventoryWindow, "玉米原料"))
+            return Fail("库存窗口未显示分类库存");
+        inventoryWindow.Position = new Vector2(260, 110);
+        Find<Button>(inventoryWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);
+        Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
+        if (inventoryWindow.Position != new Vector2(260, 110))
+            return Fail("库存窗口重新打开后未记住位置");
+        build.EmitSignal(Button.SignalName.Pressed);
+        if (inventoryWindow.Visible || !buildWindow.Visible)
+            return Fail("建造目录打开后库存窗口仍遮挡操作");
+        Find<Button>(buildWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);
+
+        for (int i = 0; i < 60; i++)
             timer.EmitSignal(Timer.SignalName.Timeout);
-        if (!economy.Text.Contains("玉米：0 → 玉米粉：0") || !sell.Disabled ||
-            !plot.Text.Contains("加工中"))
-            return Fail("玉米未自动进入对应场地，或原料可以直接出售");
-        for (int i = 0; i < FarmGame.GetCrop(CropKind.Corn).ProcessingTicks; i++)
-            timer.EmitSignal(Timer.SignalName.Timeout);
-        if (!economy.Text.Contains("第 2 天") || !economy.Text.Contains("今日涨跌：") ||
-            !(economy.Text.Contains("（小幅）") || economy.Text.Contains("（中幅）") || economy.Text.Contains("（大幅）")) ||
-            !economy.Text.Contains("玉米粉：1") || sell.Disabled)
-            return Fail("玉米加工坊未产出可出售玉米粉");
+        if (main.Game.GetProductStock(CropKind.Corn) == 0)
+            return Fail("新建玉米加工场地没有自动产出");
+        Find<Button>(ui, "MarketButton").EmitSignal(Button.SignalName.Pressed);
+        Button sell = Find<Button>(marketWindow, "SellButton");
+        if (!marketWindow.Visible || sell.Disabled || !ContainsVisibleText(marketWindow, "售价待定"))
+            return Fail("市场窗口未区分原料和可售加工品");
+        int beforeSale = main.Game.MoneyCents;
         sell.EmitSignal(Button.SignalName.Pressed);
-        if (economy.Text.Contains("金币：50.00") || !economy.Text.Contains("玉米粉：0"))
-            return Fail("商店出售未更新界面");
+        if (main.Game.MoneyCents <= beforeSale || main.Game.GetProductStock(CropKind.Corn) != 0)
+            return Fail("市场出售没有更新金币与库存");
         return true;
     }
+
+    private static T Find<T>(Node parent, string name) where T : Node =>
+        parent.FindChild(name, true, false) as T ??
+        throw new System.InvalidOperationException($"缺少界面节点：{name}");
+
+    private static bool ContainsVisibleText(Node parent, string text)
+    {
+        foreach (Node child in parent.GetChildren())
+        {
+            if (child is Label label && label.IsVisibleInTree() && label.Text.Contains(text))
+                return true;
+            if (ContainsVisibleText(child, text))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool HasVisibleInternalTime(Node parent) =>
+        ContainsVisibleText(parent, "tick") || ContainsVisibleText(parent, "第 1 天");
 
     private static bool Fail(string message)
     {

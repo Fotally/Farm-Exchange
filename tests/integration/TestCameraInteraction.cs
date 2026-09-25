@@ -21,11 +21,11 @@ public partial class TestCameraInteraction : Node
 
     private static bool Check(Main main)
     {
-        const string actions = "CanvasLayer/ActionsPanel/MarginContainer/ScrollContainer/Actions/";
         var map = main.GetNode<WorldMap>("WorldMap");
         var camera = main.GetNode<CameraController>("Camera2D");
-        var plot = main.GetNode<Label>(actions + "PlotLabel");
-        var unlock = main.GetNode<Button>(actions + "UnlockButton");
+        var detail = main.GetNode<Control>("CanvasLayer/UiRoot").FindChild("DetailWindow", true, false) as Control;
+        if (detail == null)
+            return Fail("主场景缺少选中详情窗口");
 
         if (!camera.Zoom.IsEqualApprox(new Vector2(1.25f, 1.25f)))
             return Fail("主场景未使用较近的默认镜头");
@@ -40,13 +40,13 @@ public partial class TestCameraInteraction : Node
         Vector2 firstScreen = map.GetGlobalTransformWithCanvas() * firstWorld;
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = firstScreen });
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = firstScreen });
-        if (!plot.Text.Contains("未解锁") || unlock.Disabled)
+        if (!detail.Visible || !ContainsText(detail, "地块 (62, 64)"))
             return Fail("左键点击未选中地图土地");
         Vector2 cameraBeforeDrag = camera.Position;
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = firstScreen });
         camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(100f, 0f), Relative = new Vector2(100f, 0f) });
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = firstScreen + new Vector2(100f, 0f) });
-        if (camera.Position == cameraBeforeDrag || !plot.Text.Contains("62, 64"))
+        if (camera.Position == cameraBeforeDrag || !ContainsText(detail, "地块 (62, 64)"))
             return Fail("左键拖动未移动镜头，或误选其他土地");
         Vector2 cameraAfterRelease = camera.Position;
         camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(120f, 0f), Relative = new Vector2(20f, 0f) });
@@ -63,13 +63,25 @@ public partial class TestCameraInteraction : Node
         Vector2 nextClickScreen = map.GetGlobalTransformWithCanvas() * firstWorld;
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = nextClickScreen });
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = nextClickScreen });
-        if (!plot.Text.Contains("62, 64"))
+        if (!ContainsText(detail, "地块 (62, 64)"))
             return Fail("左键拖动松开后无法再次短按选格");
         Vector2 outsideScreen = map.GetGlobalTransformWithCanvas() * new Vector2(9000f, 9000f);
         map.SelectAtScreenPosition(outsideScreen);
-        if (!plot.Text.Contains("62, 64"))
+        if (!ContainsText(detail, "地块 (62, 64)"))
             return Fail("地图外的位置仍可被选中");
         return true;
+    }
+
+    private static bool ContainsText(Node parent, string text)
+    {
+        foreach (Node child in parent.GetChildren())
+        {
+            if (child is Label label && label.Text.Contains(text))
+                return true;
+            if (ContainsText(child, text))
+                return true;
+        }
+        return false;
     }
 
     private static bool Fail(string message)

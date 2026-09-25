@@ -4,6 +4,6 @@
 
 左键短按选择格，右侧显示土地状态；左键移动达到 8 像素转为拖动镜头，松开立即停止，下一次短按仍能选格。中键拖动也可平移。鼠标滚轮以镜头中心缩放，范围为 1.25～2 倍；WASD 或方向键平移。镜头中心限制在地图菱形内。基准视窗为 1280×720，最远缩放 1.25 倍时最多显示 682 个完整或部分可见地块。
 
-灰色为未解锁地块，绿色为已解锁空地，棕色为农田，蓝灰色与白色方块为加工场地。空闲农田中央彩色点表示所选作物，黄色小点表示已播种，较大彩色点表示生长中；黄色边框表示当前选中格。地图边缘与选中框独立绘制。
+绿色为空地，棕色为农田，蓝灰色与白色方块为加工场地。空闲农田中央彩色点表示所选作物，黄色小点表示已播种，较大彩色点表示生长中；黄色边框表示当前选中格。地图边缘与选中框独立绘制。
 
-右侧面板可滚动，提供选种、建造、移除、库存、售价和出售操作。地图绘制接口见[WorldMap](../../architecture/world/world-map/interface-world-map.md)，镜头输入接口见[CameraController](../../architecture/world/camera-controller/interface-camera-controller.md)。tests/unit/TestWorldMap.cs 与 tests/integration/TestCameraInteraction.cs 检查坐标和输入行为。
+顶部状态栏提供库存与市场入口；底部建造按钮进入目录，选建筑后点击空地摆放。点击已有实体时，右侧可拖动详情窗口提供改种或移除；详情位置在本次运行内保留。市场窗口出售加工品，原料售价显示待定。完整层级见[主界面接口](../../architecture/ui/main/interface-main.md)。地图绘制接口见[WorldMap](../../architecture/world/world-map/interface-world-map.md)，镜头输入接口见[CameraController](../../architecture/world/camera-controller/interface-camera-controller.md)。tests/unit/TestWorldMap.cs 与 tests/integration/TestCameraInteraction.cs 检查坐标和输入行为。
