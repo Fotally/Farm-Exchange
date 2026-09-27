@@ -13,6 +13,8 @@ flowchart LR
     FarmGame --> Inventory[Inventory：分类库存]
     FarmGame --> Wallet[Wallet：金币余额]
     FarmGame --> Market[MarketPriceCurve：面粉曲线]
+    NpcPreview[NpcPreview：独立预览与输入] --> NpcCharacter[NpcCharacter：角色移动与动画]
+    NpcCharacter --> NpcSheets[20 张 NPC 动画图]
 ```
 
 | 状态或计算 | 当前拥有者 | 其他模块的使用方式 |
@@ -25,6 +27,8 @@ flowchart LR
 | 格坐标范围与等距本地坐标换算 | `MapCoordinates` | `WorldMap` 用于选格、绘制和镜头限制；地图格数引用 `FarmGame.MapSize`。 |
 | 地图块缓存、选中格和可见性 | `WorldMap` | `Main` 同步外观；`CameraController` 发起选格与限制镜头。 |
 | 摆放模式、窗口位置与控件状态 | `Main` | 通过经营命令和只读快照连接 `FarmGame`。 |
+| 独立 NPC 预览的角色选择和键盘输入 | `NpcPreview` | 将图集与移动方向交给 `NpcCharacter`；不修改 `FarmGame`。 |
+| NPC 图集帧、朝向与视觉移动 | `NpcCharacter` | 按预览输入显示角色；主地图尚未接入经营工人位置。 |
 
 | 要修改的现行行为 | 先查看 | 同时核对 |
 | --- | --- | --- |
@@ -33,5 +37,6 @@ flowchart LR
 | 作物、加工或库存 | `FarmGame`、`CropCatalog`、`Inventory` | 当前推进顺序、经营测试与玩法文档。 |
 | 市场价格或出售 | `MarketPriceCurve`、`FarmGame`、`Inventory`、`Wallet` | 当日成交价、交易测试与玩家规则。 |
 | 窗口交互 | `Main` | 玩家操作、场景节点名和端到端测试。 |
+| NPC 动画、角色图集或预览输入 | `NpcCharacter`、`NpcPreview` | 角色场景、20 张素材和预览集成测试；不要用动画回调推进经营。 |
 
 T03 已统一坐标入口；T04A 已搬迁作物定义、库存与余额。#46 的占用与建造命令尚未迁移，仍由 `FarmGame` 维护。

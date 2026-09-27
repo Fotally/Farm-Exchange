@@ -19,6 +19,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "Debug build failed with exit code $LASTEXITCODE"
 }
 
+& $GodotConsole --headless --path . --import
+if ($LASTEXITCODE -ne 0) {
+    throw "Godot asset import failed with exit code $LASTEXITCODE"
+}
+
 New-Item -ItemType Directory -Path coverage -Force | Out-Null
 dotnet tool run dotnet-coverage collect `
     --include-files .godot/mono/temp/bin/Debug/FarmExchange.dll `
