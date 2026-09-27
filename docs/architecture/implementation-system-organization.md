@@ -5,6 +5,9 @@
 ```mermaid
 flowchart LR
     Main[Main：场景与窗口] --> FarmGame[FarmGame：经营命令与推进]
+    Main --> UiWindows[UI 窗口：固定控件与玩家意图]
+    UiWindows --> DragWindow[DraggableWindow：拖动与位置]
+    Main --> UiStyle[UiElements：共用视觉元素]
     Main --> WorldMap[WorldMap：地图表现与选格]
     Camera[CameraController：输入] --> WorldMap
     WorldMap --> MapCoordinates[MapCoordinates：格与本地坐标]
@@ -41,7 +44,10 @@ flowchart LR
 | 面粉价格曲线 | `MarketPriceCurve` | `FarmGame` 按种子和日期查询价格。 |
 | 格坐标范围与等距本地坐标换算 | `MapCoordinates` | `WorldMap` 用于选格、绘制和镜头限制；地图格数引用 `FarmGame.MapSize`。 |
 | 地图块缓存、选中格和可见性 | `WorldMap` | `Main` 同步外观；`CameraController` 发起选格与限制镜头。 |
-| 摆放模式、窗口位置与控件状态 | `Main` | 通过经营命令和只读快照连接 `FarmGame`。 |
+| 摆放模式与所选格 | `Main` | 分发窗口意图，调用 `FarmGame`，在命令完成后刷新。 |
+| 窗口位置与拖动 | `DraggableWindow` | 各窗口继承统一标题栏、层级抬升和视窗限制；只在本次运行保留位置。 |
+| 目录选择、输入与固定控件 | 各 UI 窗口 | 只更新值和按钮状态，向 `Main` 发出选择、改种、出售或移除意图。 |
+| 农田与加工详情状态原因 | `FarmGame` | 通过两类详情快照给对应面板；UI 只映射可见文案。 |
 | 独立 NPC 预览的角色选择和键盘输入 | `NpcPreview` | 将图集与移动方向交给 `NpcCharacter`；不修改 `FarmGame`。 |
 | NPC 图集帧、朝向与视觉移动 | `NpcCharacter` | 按预览输入显示角色；主地图尚未接入经营工人位置。 |
 
@@ -52,7 +58,7 @@ flowchart LR
 | 作物、加工或库存 | `FarmGame`、`FarmingSystem`、`ProcessingSystem`、`WorkerScheduler`、`CropCatalog`、`Inventory` | 当前推进顺序、经营测试与玩法文档。 |
 | 市场价格或出售 | `MarketPriceCurve`、`FarmGame`、`Inventory`、`Wallet` | 当日成交价、交易测试与玩家规则。 |
 | 新日历的日期边界 | `GameCalendar` | 先看独立历法测试；接入经营时还需确认 T05B 的相位与生产参数。 |
-| 窗口交互 | `Main` | 玩家操作、场景节点名和端到端测试。 |
+| 窗口交互 | `Main`、`DraggableWindow`、对应具体窗口 | 玩家操作、固定控件刷新、场景节点名和端到端测试。 |
 | NPC 动画、角色图集或预览输入 | `NpcCharacter`、`NpcPreview` | 角色场景、20 张素材和预览集成测试；不要用动画回调推进经营。 |
 
-T03 已统一坐标入口，T04A 已搬迁资源与配置，T04B 已将占用和生产状态一次性迁出 `FarmGame`，T04C 已统一放置检查、越界结果及执行扣费。T05A 仅完成新历法的独立换算；`FarmGame` 仍按 10 tick/日经营。道路占格和实际工人移动分别留在 #45、#40。
+T01/T02 已将窗口容器、目录、选种、库存、市场和详情从 `Main` 的构造与重建逻辑中抽出；经营刷新保留控件实例。T03 已统一坐标入口，T04A～T04C 已统一状态归属和放置规则。T05A 仅完成新历法的独立换算；`FarmGame` 仍按 10 tick/日经营。道路占格和实际工人移动分别留在 #45、#40。

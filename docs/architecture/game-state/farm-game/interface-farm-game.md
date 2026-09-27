@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | 定义 | Crops、GetCrop | 委托 `CropCatalog`；六种作物的名称、场地、时长与独立定价倍率来自[作物表](../../../gameplay/production/crop-growth.md) |
 | 状态查询 | GetPlot、TryGetPlot、GetRawStock、GetProductStock、GetRawPriceCents、GetProductPriceCents | 返回指定格的只读快照、分类库存和两类当日售价；`TryGetPlot` 对地图外返回 `OutOfBounds`，库存查询委托 `Inventory` |
+| 详情查询 | GetFarmDetails、GetProcessorDetails | 分别返回现有农田的等待工人/待水/生长中，或加工场地的无原料等待/加工中状态，同时附带对应周期、当日售价和公共库存；类型不匹配属于调用错误 |
 | 放置 | CheckPlacement、TryPlace | 共用[放置规则](../../land/placement-rules/interface-placement-rules.md)；预检只读，执行时重新检查并返回实际扣费或稳定失败原因 |
 | 旧命令与编辑 | BuildFarm、BuildProcessor、SetFarmCrop、RemoveBuilding | 旧建造命令转发 `TryPlace`；成功返回 null，失败返回给玩家的原因；选种和拆除对地图外都返回“地图外地块” |
 | 时间 | AdvanceTick | 完整推进一次世界经营并返回 TickResult；每 10 tick 换日 |
@@ -13,6 +14,8 @@
 | 只读状态 | MoneyCents、BuildingCostCents、CurrentDay、CurrentFlourPriceCents、DailyPriceChangePercent | 余额由 `Wallet` 持有并委托查询，金额以分保存；日期从 1 开始，时间只供内部经营使用，玩家界面暂不显示 |
 
 GetPlot 从 `LandOccupancy`、`FarmingSystem`、`ProcessingSystem` 聚合 `PlotSnapshot`，不泄露可变内部状态；空地快照的作物字段没有经营含义。`TryGetPlot` 返回 `None` 或 `OutOfBounds`，无效时输出默认快照；既有 `GetPlot` 保留“调用方已确认有效格”的便利形式，越界抛 `ArgumentOutOfRangeException`。WorldMap 只对有效格调用 GetPlot 获取外观；它不能驱动 AdvanceTick，也不修改库存。Main 接收玩家操作、调用经营命令并在状态变化后通知地图同步。
+
+`FarmDetailsSnapshot` 与 `ProcessorDetailsSnapshot` 是只读值，包含作物定义、稳定状态原因、对应当日售价和库存。`Main` 先用 `GetPlot` 分派详情面板，再向对应查询索取语义快照；UI 只负责中文文案和控件更新。当前状态原因只覆盖已生效循环，季节与降雨等后续原因在对应任务增加。
 
 `FarmGame` 仍负责推进、建造与出售的业务顺序。建造通过 `PlacementRules` 检查后交 `Wallet` 扣款，占用与生产状态在同一调用内创建或清理；加工场地建成后立即按旧规则领取原料。收获和加工品进入 `Inventory`，出售先计算并入账再清空对应库存。无效作物的建造与选种命令返回失败原因，不修改地块和余额。`HasConsistentState` 是测试用内部检查，用于核对每格占用与对应生产状态恰好一致。
 

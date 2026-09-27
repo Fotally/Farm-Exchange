@@ -19,7 +19,7 @@
 ./tools/Run-Tests.ps1 -GodotConsole 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe'
 ```
 
-脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码；总行覆盖率不得低于 80%，T05A 独立日历加入后的本地结果为 92.61%。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
+脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码；总行覆盖率不得低于 80%，T01/T02 界面拆分后的本地结果为 93.23%。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
 
 图形 FPS 性能测试是同一测试脚本的可选阶段。修改地图绘制、镜头、实体负载或渲染设置，或需要建立性能基线时运行；一般业务规则修改先以必跑的 headless 测试为准：
 
@@ -38,3 +38,5 @@
 2026-09-27 T04C 放置规则后的本机 headless 检查：满地图 50 tick 耗时 45.80 ms，平均 0.916 ms/tick。该任务没有修改地图绘制、镜头或实体负载，沿用 T04B 的图形性能验收结果。
 
 2026-09-27 T05A 独立日历加入后的本机 headless 检查：满地图 50 tick 耗时 39.92 ms，平均 0.798 ms/tick。日历尚未接入经营或渲染，图形性能沿用 T04B 的验收结果。
+
+2026-09-27 T01/T02 窗口拆分后的本机 headless 检查：满地图 50 tick 耗时 39.66 ms，平均 0.793 ms/tick。新增的界面端到端断言覆盖目录避让、持续刷新时市场控件与滚动位置；未改地图绘制或镜头，图形性能沿用 T04B 的验收结果。
