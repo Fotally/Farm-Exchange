@@ -14,7 +14,7 @@ public partial class TestFarmGame : Node
 
     public static bool RunChecks() =>
         CheckInitialCenter() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
-        CheckWorkerRotation() && CheckRawSales();
+        CheckWorkerRotation() && CheckRawSales() && CheckInvalidCrops();
 
     private static bool CheckInitialCenter()
     {
@@ -266,6 +266,22 @@ public partial class TestFarmGame : Node
         mixed.SellRaw(CropKind.Wheat);
         if (mixed.GetRawStock(CropKind.Corn) != cornStock)
             return Fail("出售小麦原料改变了玉米原料库存");
+        return true;
+    }
+
+    private static bool CheckInvalidCrops()
+    {
+        var game = new FarmGame(12345);
+        CropKind invalid = (CropKind)999;
+        Vector2I processor = new(4, 5);
+        if (game.BuildProcessor(processor, invalid) == null ||
+            game.GetPlot(processor).Building != BuildingKind.None || game.MoneyCents != 5000)
+            return Fail("无效作物的加工场地建造修改了金币或土地");
+
+        Vector2I farm = new(5, 5);
+        if (game.BuildFarm(farm) != null || game.SetFarmCrop(farm, invalid) == null ||
+            game.GetPlot(farm).CropKind != CropKind.Wheat || game.MoneyCents != 4000)
+            return Fail("无效作物改种修改了农田或金币");
         return true;
     }
 

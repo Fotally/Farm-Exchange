@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using FarmExchange.Economy;
+using FarmExchange.Farming;
 using FarmExchange.Market;
+using GoodsInventory = FarmExchange.Inventory.Inventory;
 
 namespace FarmExchange.Gameplay;
 
@@ -23,16 +26,7 @@ public sealed class FarmGame
     public const int TicksPerDay = 10;
     public const int BuildingCostCents = 1000;
 
-    private static readonly CropDefinition[] CropDefinitions =
-    {
-        new(CropKind.Wheat, "小麦", "磨坊", "面粉", 5, 3, 100, 50),
-        new(CropKind.Corn, "玉米", "玉米加工坊", "玉米粉", 6, 4, 100, 50),
-        new(CropKind.Rice, "水稻", "碾米坊", "大米", 7, 4, 120, 50),
-        new(CropKind.Potato, "马铃薯", "淀粉坊", "淀粉", 6, 4, 80, 50),
-        new(CropKind.Sunflower, "向日葵", "榨油坊", "葵花籽油", 9, 5, 160, 50),
-        new(CropKind.Sugarcane, "甘蔗", "制糖坊", "蔗糖", 10, 6, 200, 50),
-    };
-    public static IReadOnlyList<CropDefinition> Crops { get; } = Array.AsReadOnly(CropDefinitions);
+    public static IReadOnlyList<CropDefinition> Crops => CropCatalog.Crops;
     private static readonly Vector2I[] InitialFarmCells =
     {
         new(63, 63), new(64, 63), new(65, 63),
@@ -43,13 +37,13 @@ public sealed class FarmGame
     };
 
     private readonly PlotState[] _plots = new PlotState[MapSize * MapSize];
-    private readonly int[] _rawStock = new int[CropDefinitions.Length];
-    private readonly int[] _productStock = new int[CropDefinitions.Length];
+    private readonly GoodsInventory _inventory = new();
+    private readonly Wallet _wallet = new(5000);
     private readonly MarketPriceCurve _marketPriceCurve;
     private int _nextWorkerPlotIndex;
     private int _ticksIntoDay;
 
-    public int MoneyCents { get; private set; } = 5000;
+    public int MoneyCents => _wallet.BalanceCents;
     public int CurrentDay { get; private set; } = 1;
     public int CurrentFlourPriceCents { get; private set; }
     public double DailyPriceChangePercent { get; private set; }
@@ -64,12 +58,12 @@ public sealed class FarmGame
 
     private void InitializeCenter(Random random)
     {
-        CropKind primary = (CropKind)random.Next(CropDefinitions.Length);
+        CropKind primary = (CropKind)random.Next(Crops.Count);
         bool split = random.Next(2) == 1;
         CropKind secondary = primary;
         if (split)
         {
-            int secondaryIndex = random.Next(CropDefinitions.Length - 1);
+            int secondaryIndex = random.Next(Crops.Count - 1);
             if (secondaryIndex >= (int)primary)
                 secondaryIndex++;
             secondary = (CropKind)secondaryIndex;
@@ -89,9 +83,9 @@ public sealed class FarmGame
         }
     }
 
-    public static CropDefinition GetCrop(CropKind crop) => CropDefinitions[(int)crop];
-    public int GetRawStock(CropKind crop) => _rawStock[(int)crop];
-    public int GetProductStock(CropKind crop) => _productStock[(int)crop];
+    public static CropDefinition GetCrop(CropKind crop) => CropCatalog.Get(crop);
+    public int GetRawStock(CropKind crop) => _inventory.GetRaw(crop);
+    public int GetProductStock(CropKind crop) => _inventory.GetProduct(crop);
     public int GetProductPriceCents(CropKind crop) =>
         (CurrentFlourPriceCents * GetCrop(crop).PricePercent + 50) / 100;
     public int GetRawPriceCents(CropKind crop) =>
@@ -110,7 +104,7 @@ public sealed class FarmGame
             for (int col = 0; col < MapSize; col++)
             {
                 ref PlotState plot = ref _plots[row * MapSize + col];
-                CropKind crop = (CropKind)((row * (MapSize / 2) + col / 2) % CropDefinitions.Length);
+                CropKind crop = (CropKind)((row * (MapSize / 2) + col / 2) % Crops.Count);
                 bool farm = col % 2 == 0;
                 plot.Building = farm ? BuildingKind.Farm : BuildingKind.Processor;
                 plot.CropKind = crop;
@@ -126,6 +120,8 @@ public sealed class FarmGame
 
     public string? BuildProcessor(Vector2I cell, CropKind crop)
     {
+        if (!CropCatalog.IsDefined(crop))
+            return "无效作物";
         string? error = Build(cell, BuildingKind.Processor, crop);
         if (error == null)
             StartIdleProcessors();
@@ -134,6 +130,8 @@ public sealed class FarmGame
 
     public string? SetFarmCrop(Vector2I cell, CropKind crop)
     {
+        if (!CropCatalog.IsDefined(crop))
+            return "无效作物";
         ref PlotState plot = ref _plots[IndexOf(cell)];
         if (plot.Building != BuildingKind.Farm)
             return "该土地没有农田";
@@ -169,7 +167,7 @@ public sealed class FarmGame
                 if (plot.RemainingTicks == 0)
                 {
                     plot.Crop = CropStage.None;
-                    _rawStock[(int)plot.CropKind]++;
+                    _inventory.AddRaw(plot.CropKind, 1);
                     harvested++;
                 }
             }
@@ -178,7 +176,7 @@ public sealed class FarmGame
                 plot.RemainingTicks--;
                 if (plot.RemainingTicks == 0)
                 {
-                    _productStock[(int)plot.CropKind]++;
+                    _inventory.AddProduct(plot.CropKind, 1);
                     produced++;
                 }
             }
@@ -191,27 +189,28 @@ public sealed class FarmGame
 
     public SaleResult SellAll()
     {
-        int sold = 0;
-        int revenue = 0;
+        long sold = 0;
+        long revenue = 0;
         foreach (CropDefinition crop in Crops)
         {
-            int index = (int)crop.Kind;
-            sold += _productStock[index];
-            revenue += _productStock[index] * GetProductPriceCents(crop.Kind);
-            _productStock[index] = 0;
+            int quantity = _inventory.GetProduct(crop.Kind);
+            sold += quantity;
+            revenue += (long)quantity * GetProductPriceCents(crop.Kind);
         }
-        MoneyCents += revenue;
-        return new SaleResult(sold, revenue);
+        int soldQuantity = checked((int)sold);
+        int revenueCents = checked((int)revenue);
+        _wallet.Credit(revenueCents);
+        _inventory.TakeAllProducts();
+        return new SaleResult(soldQuantity, revenueCents);
     }
 
     public SaleResult SellRaw(CropKind crop)
     {
-        int index = (int)crop;
-        int sold = _rawStock[index];
-        int revenue = sold * GetRawPriceCents(crop);
-        _rawStock[index] = 0;
-        MoneyCents += revenue;
-        return new SaleResult(sold, revenue);
+        int sold = _inventory.GetRaw(crop);
+        int revenueCents = checked((int)((long)sold * GetRawPriceCents(crop)));
+        _wallet.Credit(revenueCents);
+        _inventory.TakeAllRaw(crop);
+        return new SaleResult(sold, revenueCents);
     }
 
     private bool AdvanceDay()
@@ -233,9 +232,8 @@ public sealed class FarmGame
         ref PlotState plot = ref _plots[IndexOf(cell)];
         if (plot.Building != BuildingKind.None)
             return "该土地已有建筑";
-        if (MoneyCents < BuildingCostCents)
+        if (!_wallet.TrySpend(BuildingCostCents))
             return "金币不足，无法建造建筑";
-        MoneyCents -= BuildingCostCents;
         plot.Building = building;
         plot.CropKind = crop;
         return null;
@@ -248,10 +246,8 @@ public sealed class FarmGame
             ref PlotState plot = ref _plots[i];
             if (plot.Building != BuildingKind.Processor || plot.RemainingTicks != 0)
                 continue;
-            int index = (int)plot.CropKind;
-            if (_rawStock[index] == 0)
+            if (!_inventory.TryTakeRawForProcessing(plot.CropKind))
                 continue;
-            _rawStock[index]--;
             plot.RemainingTicks = GetCrop(plot.CropKind).ProcessingTicks;
         }
     }
