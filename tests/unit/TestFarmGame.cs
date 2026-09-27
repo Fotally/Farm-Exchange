@@ -14,7 +14,7 @@ public partial class TestFarmGame : Node
 
     public static bool RunChecks() =>
         CheckInitialCenter() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
-        CheckWorkerRotation() && CheckRawSales() && CheckInvalidCrops();
+        CheckWorkerRotation() && CheckRawSales() && CheckInvalidCrops() && CheckStateOwnership();
 
     private static bool CheckInitialCenter()
     {
@@ -282,6 +282,43 @@ public partial class TestFarmGame : Node
         if (game.BuildFarm(farm) != null || game.SetFarmCrop(farm, invalid) == null ||
             game.GetPlot(farm).CropKind != CropKind.Wheat || game.MoneyCents != 4000)
             return Fail("无效作物改种修改了农田或金币");
+        return true;
+    }
+
+    private static bool CheckStateOwnership()
+    {
+        var game = new FarmGame(12345);
+        if (!game.HasConsistentState())
+            return Fail("开局占用与生产状态不一致");
+        RemoveInitialBuildings(game);
+        Vector2I farm = new(0, 0);
+        Vector2I processor = new(1, 0);
+        game.BuildFarm(farm);
+        game.SetFarmCrop(farm, CropKind.Rice);
+        game.BuildProcessor(processor, CropKind.Rice);
+        game.AdvanceTick();
+        if (!game.HasConsistentState() ||
+            game.GetPlot(farm).Building != BuildingKind.Farm ||
+            game.GetPlot(farm).CropKind != CropKind.Rice ||
+            game.GetPlot(processor).Building != BuildingKind.Processor)
+            return Fail("建造或推进后占用与生产状态不一致");
+        game.RemoveBuilding(farm);
+        game.RemoveBuilding(processor);
+        if (!game.HasConsistentState() ||
+            game.GetPlot(farm).Building != BuildingKind.None ||
+            game.GetPlot(processor).Building != BuildingKind.None)
+            return Fail("拆除后留下农田或加工状态");
+
+        game.FillWorldForBenchmark();
+        Vector2I corner = new(127, 127);
+        if (!game.HasConsistentState() ||
+            game.GetPlot(new Vector2I(0, 0)).Building != BuildingKind.Farm ||
+            game.GetPlot(corner).Building != BuildingKind.Processor)
+            return Fail("满地图夹具占用与生产状态不一致");
+        game.RemoveBuilding(corner);
+        if (game.BuildFarm(corner) != null || !game.HasConsistentState() ||
+            game.GetPlot(corner).Building != BuildingKind.Farm)
+            return Fail("满地图拆除重建留下重复状态");
         return true;
     }
 

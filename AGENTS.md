@@ -9,8 +9,12 @@
 
 # 代码系统结构
 
-- `scripts/gameplay/FarmGame.cs`：经营协调模块。初始化中心随机农田与配套加工场地，持有固定 128×128 土地、每块农田所选作物、工人轮流工作、tick 与天数，协调逐作物售价、两类交易和建造规则；通过 `CropCatalog`、`Inventory`、`Wallet` 读取或修改各自唯一拥有的定义、库存和余额。界面继续通过格子快照、作物定义与经营命令使用它。测试专用的满地图填充方法生成 16,384 个现有实体。
+- `scripts/gameplay/FarmGame.cs`：经营协调模块。按原种子顺序初始化中心随机建筑，协调固定 128×128 格的建造、拆除、每 tick 的生产相位、天数、售价和交易；从占用、农田、加工模块聚合地块快照，通过资源模块读取或修改库存和余额。界面继续通过原经营命令使用它。测试专用夹具生成 16,384 个现有实体，并检查占用与生产状态一致。
 - `scripts/farming/CropCatalog.cs`：六种作物定义的唯一入口，提供只读作物表、按种类查询与种类有效性检查。
+- `scripts/land/LandOccupancy.cs`：固定地图每格主要占用类别的唯一拥有者；不持有作物或加工进度。
+- `scripts/farming/FarmingSystem.cs`：每块农田所选作物、播种与生长进度的唯一拥有者，提供受控工作和成熟推进。
+- `scripts/processing/ProcessingSystem.cs`：加工场地匹配作物与批次进度的唯一拥有者，负责按旧顺序从公共库存领取匹配原料。
+- `scripts/workers/WorkerScheduler.cs`：单工人旧轮转游标的唯一拥有者，每 tick 至多执行一次农田工作；尚无经营移动时间。
 - `scripts/inventory/Inventory.cs`：每局原料与加工品的分类库存唯一拥有者，供生产和出售流程查询、入库、加工领取及出售清空。
 - `scripts/economy/Wallet.cs`：每局金币余额唯一拥有者，验证初始余额、扣款及入账的数值范围。
 - `scripts/characters/NpcCharacter.cs` 与 `scenes/npc_character.tscn`：可复用的 NPC 动画角色。读取 64×64、每方向 6 帧的角色图集；按外部给定方向移动、切换朝向并在停步时保留首帧，不决定经营任务。
