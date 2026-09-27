@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Land;
 using FarmExchange.World;
 
 namespace FarmExchange.UI;
@@ -329,16 +330,14 @@ public partial class Main : Node2D
     {
         if (_placement is Placement placement)
         {
-            string? error = placement.Kind == BuildingKind.Farm
-                ? _game.BuildFarm(cell)
-                : _game.BuildProcessor(cell, placement.Crop);
-            if (error != null)
+            PlacementResult result = _game.TryPlace(cell, placement.Kind, placement.Crop);
+            if (!result.Success)
             {
-                _messageLabel.Text = error;
+                _messageLabel.Text = result.ErrorMessage;
                 _worldMap.ClearSelection();
                 return;
             }
-            _messageLabel.Text = $"{placement.Name}已建造，花费 {FormatCoins(FarmGame.BuildingCostCents)} 金币";
+            _messageLabel.Text = $"{placement.Name}已建造，花费 {FormatCoins(result.ChargedCents)} 金币";
             _placement = null;
             _worldMap.SyncFromGame();
         }

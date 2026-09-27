@@ -1,5 +1,6 @@
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Land;
 using FarmExchange.Market;
 
 public partial class TestFarmGame : Node
@@ -14,7 +15,8 @@ public partial class TestFarmGame : Node
 
     public static bool RunChecks() =>
         CheckInitialCenter() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
-        CheckWorkerRotation() && CheckRawSales() && CheckInvalidCrops() && CheckStateOwnership();
+        CheckWorkerRotation() && CheckRawSales() && CheckInvalidCrops() && CheckStateOwnership() &&
+        CheckPlacementRules();
 
     private static bool CheckInitialCenter()
     {
@@ -319,6 +321,64 @@ public partial class TestFarmGame : Node
         if (game.BuildFarm(corner) != null || !game.HasConsistentState() ||
             game.GetPlot(corner).Building != BuildingKind.Farm)
             return Fail("满地图拆除重建留下重复状态");
+        return true;
+    }
+
+    private static bool CheckPlacementRules()
+    {
+        var game = new FarmGame(12345);
+        Vector2I target = new(0, 0);
+        PlacementCheck preview = game.CheckPlacement(target, BuildingKind.Farm, CropKind.Wheat);
+        if (!preview.Allowed || preview.CostCents != FarmGame.BuildingCostCents)
+            return Fail("空地放置预检没有返回费用");
+        if (game.CheckPlacement(new Vector2I(-1, 0), BuildingKind.Farm, CropKind.Wheat).Failure !=
+                LandFailure.OutOfBounds ||
+            game.CheckPlacement(new Vector2I(128, 0), BuildingKind.Farm, CropKind.Wheat).Failure !=
+                LandFailure.OutOfBounds ||
+            game.TryGetPlot(new Vector2I(0, 128), out _) != LandFailure.OutOfBounds ||
+            game.RemoveBuilding(new Vector2I(-1, 0)) != "地图外地块" ||
+            game.SetFarmCrop(new Vector2I(128, 0), CropKind.Corn) != "地图外地块")
+            return Fail("地图外放置、查询、拆除或选种结果不一致");
+        if (game.TryPlace(new Vector2I(-1, 0), BuildingKind.Farm, CropKind.Wheat).Failure !=
+                LandFailure.OutOfBounds ||
+            game.TryPlace(target, (BuildingKind)999, CropKind.Wheat).Failure !=
+                LandFailure.InvalidBuilding ||
+            game.TryPlace(target, BuildingKind.Processor, (CropKind)999).Failure !=
+                LandFailure.InvalidCrop || game.MoneyCents != 5000 ||
+            game.GetPlot(target).Building != BuildingKind.None)
+            return Fail("无效放置修改了余额或占用");
+
+        PlacementResult placed = game.TryPlace(target, BuildingKind.Farm, CropKind.Wheat);
+        if (!placed.Success || placed.ChargedCents != 1000 || game.MoneyCents != 4000 ||
+            game.TryPlace(target, BuildingKind.Farm, CropKind.Wheat).Failure != LandFailure.Occupied ||
+            game.GetPlot(target).Building != BuildingKind.Farm)
+            return Fail("放置执行、收费或占用检查错误");
+        PlotSnapshot snapshot = game.GetPlot(target);
+        snapshot = snapshot with { Building = BuildingKind.Processor };
+        if (game.TryGetPlot(target, out PlotSnapshot queried) != LandFailure.None ||
+            queried.Building != BuildingKind.Farm || game.GetPlot(target).Building != BuildingKind.Farm ||
+            !game.HasConsistentState())
+            return Fail("地块快照修改了经营状态");
+
+        Vector2I occupiedLater = new(1, 0);
+        if (!game.CheckPlacement(occupiedLater, BuildingKind.Farm, CropKind.Wheat).Allowed ||
+            game.BuildFarm(occupiedLater) != null ||
+            game.TryPlace(occupiedLater, BuildingKind.Farm, CropKind.Wheat).Failure !=
+                LandFailure.Occupied)
+            return Fail("预检后占用变化未重新验证");
+        for (int col = 2; col <= 3; col++)
+            if (game.BuildFarm(new Vector2I(col, 0)) != null)
+                return Fail("余额准备失败");
+        Vector2I insufficientLater = new(5, 0);
+        if (!game.CheckPlacement(insufficientLater, BuildingKind.Farm, CropKind.Wheat).Allowed ||
+            game.BuildFarm(new Vector2I(4, 0)) != null ||
+            game.TryPlace(insufficientLater, BuildingKind.Farm, CropKind.Wheat).Failure !=
+                LandFailure.InsufficientFunds || game.MoneyCents != 0 ||
+            game.GetPlot(insufficientLater).Building != BuildingKind.None)
+            return Fail("预检后余额变化未重新验证");
+        if (game.RemoveBuilding(target) != null || game.GetPlot(target).Building != BuildingKind.None ||
+            game.BuildFarm(target) == null || !game.HasConsistentState())
+            return Fail("拆除后占用或余额规则错误");
         return true;
     }
 
