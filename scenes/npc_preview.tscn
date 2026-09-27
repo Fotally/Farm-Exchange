@@ -1,0 +1,42 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/NpcPreview.cs" id="1_preview"]
+[ext_resource type="PackedScene" path="res://scenes/npc_character.tscn" id="2_character"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_preview"]
+font_size = 20
+font_color = Color(0.9, 0.95, 1, 1)
+outline_size = 6
+outline_color = Color(0.05, 0.08, 0.12, 0.8)
+
+[node name="NpcPreview" type="Node2D"]
+script = ExtResource("1_preview")
+
+[node name="NpcCharacter" parent="." instance=ExtResource("2_character")]
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(2, 2)
+position_smoothing_enabled = true
+position_smoothing_speed = 7.0
+limit_left = -960
+limit_top = -540
+limit_right = 960
+limit_bottom = 540
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="Help" type="Label" parent="CanvasLayer"]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 620.0
+offset_bottom = 52.0
+text = "WASD / 方向键：移动    Q / E：切换角色"
+label_settings = SubResource("LabelSettings_preview")
+
+[node name="CharacterName" type="Label" parent="CanvasLayer"]
+offset_left = 24.0
+offset_top = 668.0
+offset_right = 900.0
+offset_bottom = 700.0
+text = "正在载入角色…"
+label_settings = SubResource("LabelSettings_preview")

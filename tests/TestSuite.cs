@@ -14,11 +14,13 @@ public partial class TestSuite : Node
         bool worldMapPassed = TestWorldMap.RunChecks();
         GD.Print("集成测试：镜头输入与地图选择");
         bool cameraPassed = TestCameraInteraction.RunChecks(this);
+        GD.Print("集成测试：NPC 动画与角色切换");
+        bool npcPassed = TestNpcPreview.RunChecks(this);
         GD.Print("端到端测试：主场景经营流程");
         bool coreLoopPassed = TestCoreLoop.RunChecks(this);
         GD.Print("性能测试：满地图 headless 负载");
         bool loadPassed = TestFullWorldLoad.RunChecks();
-        bool passed = farmGamePassed && resourcesPassed && marketPassed && worldMapPassed && cameraPassed &&
+        bool passed = farmGamePassed && resourcesPassed && marketPassed && worldMapPassed && cameraPassed && npcPassed &&
             coreLoopPassed && loadPassed;
 
         if (passed)

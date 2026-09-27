@@ -20,12 +20,14 @@
 - [WorldMap 接口](architecture/world/world-map/interface-world-map.md)及[分块缓存实现](architecture/world/world-map/implementation-chunk-cache.md)。
 - [镜头输入接口](architecture/world/camera-controller/interface-camera-controller.md)。
 - [主界面接口](architecture/ui/main/interface-main.md)与[可点击 HTML 原型](architecture/ui/main/prototype-main.html)：顶部状态、建造摆放、选中详情与二级窗口拖动、位置记忆。
+- [NPC 角色场景接口](architecture/characters/npc-character/interface-npc-character.md)及[独立预览操作](architecture/ui/npc-preview/interface-npc-preview.md)：角色动画、移动和切换图集。
 
 列出全部接口文档：`rg --files docs/architecture -g 'interface-*.md'`。新增模块时按模块路径添加具名接口文档；实现细节另写 `implementation-` 前缀文件。
 
 ## 项目协作与依据
 
 - [系统规划](project/roadmap.md)、[构建与验收](project/build-and-validation.md)、[GitHub 协作](project/contribution-workflow.md)。
+- [素材来源记录](project/asset-sources.md)：已纳入的第三方素材、出处与授权信息。
 - [macOS 构建与验收](project/macos-build.md)：Universal 2 导出、CI 和应用包启动。
 - [市场曲线调研](research/market-price-curve.md)、[测试分类调研](research/test-taxonomy.md)。
 - [EditorConfig 检查](static-checks/editorconfig.md)、[CI 静态检查](static-checks/ci.md)。

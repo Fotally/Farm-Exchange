@@ -1,4 +1,5 @@
 .godot/
+*.import
 .omx/
 .nuget/
 bin/

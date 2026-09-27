@@ -2,14 +2,14 @@
 
 ## 自动化测试与行覆盖率
 
-测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的游戏状态、作物定义、库存、钱包、市场和地图坐标；`tests/integration/` 检查镜头输入与地图选择协作；`tests/e2e/` 检查主场景完整经营流程；`tests/performance/` 测满地图负载与可选图形 FPS。`tests/test_suite.tscn` 汇总各类可在 headless 模式运行的检查，任一失败都会返回非零退出码。满地图检查将 16,384 格全部放上现有实体（8,192 块农田、8,192 处加工场地，六种作物均覆盖），推进 50 tick 并打印总耗时与平均耗时。耗时是本机观测值，没有固定通过阈值。Windows 导出程序启动另作构建冒烟测试。
+测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的游戏状态、作物定义、库存、钱包、市场和地图坐标；`tests/integration/` 检查镜头输入、地图选择及 NPC 动画场景协作；`tests/e2e/` 检查主场景完整经营流程；`tests/performance/` 测满地图负载与可选图形 FPS。`tests/test_suite.tscn` 汇总各类可在 headless 模式运行的检查，任一失败都会返回非零退出码。满地图检查将 16,384 格全部放上现有实体（8,192 块农田、8,192 处加工场地，六种作物均覆盖），推进 50 tick 并打印总耗时与平均耗时。耗时是本机观测值，没有固定通过阈值。Windows 导出程序启动另作构建冒烟测试。
 
 各文件都有独立的场景入口，排查时可用 `Godot控制台程序 --headless --path . 场景路径` 单独运行：
 
 | 类别 | 场景路径 |
 | --- | --- |
 | 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_world_map.tscn` |
-| 集成测试 | `tests/integration/test_camera_interaction.tscn` |
+| 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn` |
 | 端到端测试 | `tests/e2e/test_core_loop.tscn` |
 | 满地图负载测试 | `tests/performance/test_full_world_load.tscn` |
 
@@ -19,7 +19,7 @@
 ./tools/Run-Tests.ps1 -GodotConsole 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe'
 ```
 
-脚本使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码；总行覆盖率不得低于 80%，T04A 资源搬迁后的本地结果为 94.38%。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
+脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码；总行覆盖率不得低于 80%，NPC 预览场景接入后的本地结果为 92.71%。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
 
 图形 FPS 性能测试是同一测试脚本的可选阶段。修改地图绘制、镜头、实体负载或渲染设置，或需要建立性能基线时运行；一般业务规则修改先以必跑的 headless 测试为准：
 

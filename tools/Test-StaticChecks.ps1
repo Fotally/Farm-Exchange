@@ -46,7 +46,7 @@ foreach ($document in $documents) {
     }
 }
 
-$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; farming = 'FarmExchange.Farming'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; market = 'FarmExchange.Market'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI' }
+$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; farming = 'FarmExchange.Farming'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; characters = 'FarmExchange.Characters'; market = 'FarmExchange.Market'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI' }
 foreach ($group in $namespaces.Keys) {
     $directory = Join-Path $repoRoot "scripts/$group"
     foreach ($script in Get-ChildItem -LiteralPath $directory -File -Filter '*.cs') {
@@ -63,7 +63,7 @@ foreach ($group in $namespaces.Keys) {
 $assetsRoot = Join-Path $repoRoot 'assets'
 if (Test-Path -LiteralPath $assetsRoot) {
     foreach ($asset in Get-ChildItem -LiteralPath $assetsRoot -Recurse -File) {
-        if ($asset.Name -eq 'AGENTS.md') { continue }
+        if ($asset.Name -eq 'AGENTS.md' -or $asset.Extension -eq '.import') { continue }
         $relative = [IO.Path]::GetRelativePath($assetsRoot, $asset.FullName).Replace('\', '/')
         if ($relative -notmatch '^(?:[a-z0-9]+(?:_[a-z0-9]+)*/)*[a-z0-9]+(?:_[a-z0-9]+)*\.[a-z0-9]+$') {
             $errors.Add("素材路径不符合小写下划线命名：assets/$relative")
