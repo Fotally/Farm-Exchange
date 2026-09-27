@@ -103,6 +103,6 @@ public partial class CameraController : Camera2D
 
     private void ClampPosition()
     {
-        Position = _worldMap.ClampCameraCenter(Position);
+        GlobalPosition = _worldMap.ClampGlobalCameraCenter(GlobalPosition);
     }
 }

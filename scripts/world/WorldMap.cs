@@ -10,13 +10,11 @@ public partial class WorldMap : Node2D
     [Signal]
     public delegate void SelectionChangedEventHandler(Vector2I cell);
 
-    public const int MapSize = FarmGame.MapSize;
-    public const float TileWidth = 64f;
-    public const float TileHeight = 32f;
+    private const int MapSize = MapCoordinates.MapSize;
     private const int ChunkSize = 8;
     private const int ChunksPerSide = MapSize / ChunkSize;
-    private const float HalfWidth = TileWidth / 2f;
-    private const float HalfHeight = TileHeight / 2f;
+    private const float HalfWidth = MapCoordinates.TileWidth / 2f;
+    private const float HalfHeight = MapCoordinates.TileHeight / 2f;
     private const float SeamOverlap = 0.75f;
 
     private static readonly Color TileColor = new(0.53f, 0.64f, 0.38f);
@@ -130,8 +128,8 @@ public partial class WorldMap : Node2D
     public void SelectAtScreenPosition(Vector2 screenPosition)
     {
         Vector2 localPosition = GetGlobalTransformWithCanvas().AffineInverse() * screenPosition;
-        Vector2I cell = CellAtWorld(localPosition);
-        if (cell.X < 0 || cell.X >= MapSize || cell.Y < 0 || cell.Y >= MapSize)
+        Vector2I cell = MapCoordinates.LocalPositionToCell(localPosition);
+        if (!MapCoordinates.ContainsCell(cell))
             return;
 
         _selectedCell = cell;
@@ -145,30 +143,14 @@ public partial class WorldMap : Node2D
         _overlay.QueueRedraw();
     }
 
-    public Vector2I CellAtWorld(Vector2 worldPosition)
-    {
-        Vector2 grid = WorldToGrid(worldPosition);
-        return new Vector2I(Mathf.FloorToInt(grid.X + 0.5f), Mathf.FloorToInt(grid.Y + 0.5f));
-    }
+    public Vector2 GetCellWorldCenter(Vector2I cell) => ToGlobal(MapCoordinates.CellToLocalCenter(cell));
 
-    public Rect2 WorldBounds() => new(
+    public Rect2 LocalBounds() => new(
         new Vector2(-MapSize * HalfWidth, -HalfHeight),
-        new Vector2(MapSize * TileWidth, MapSize * TileHeight));
+        new Vector2(MapSize * MapCoordinates.TileWidth, MapSize * MapCoordinates.TileHeight));
 
-    public Vector2 ClampCameraCenter(Vector2 worldCenter)
-    {
-        Vector2 grid = WorldToGrid(worldCenter);
-        float col = Math.Clamp(grid.X, 0f, MapSize - 1f);
-        float row = Math.Clamp(grid.Y, 0f, MapSize - 1f);
-        return new Vector2((col - row) * HalfWidth, (col + row) * HalfHeight);
-    }
-
-    private static Vector2 WorldToGrid(Vector2 worldPosition)
-    {
-        float x = worldPosition.X / HalfWidth;
-        float y = worldPosition.Y / HalfHeight;
-        return new Vector2((x + y) / 2f, (y - x) / 2f);
-    }
+    public Vector2 ClampGlobalCameraCenter(Vector2 globalCenter) =>
+        ToGlobal(MapCoordinates.ClampLocalCenter(ToLocal(globalCenter)));
 
     private static Vector2[] Outline(Vector2 center) => new[]
     {
@@ -206,8 +188,8 @@ public partial class WorldMap : Node2D
             Bounds = new Rect2(
                 new Vector2((firstCol - (firstRow + ChunkSize - 1)) * HalfWidth - HalfWidth - SeamOverlap,
                     (firstCol + firstRow) * HalfHeight - HalfHeight - SeamOverlap),
-                new Vector2(ChunkSize * TileWidth + SeamOverlap * 2f,
-                    ChunkSize * TileHeight + SeamOverlap * 2f));
+                new Vector2(ChunkSize * MapCoordinates.TileWidth + SeamOverlap * 2f,
+                    ChunkSize * MapCoordinates.TileHeight + SeamOverlap * 2f));
         }
 
         public void SetVisual(int col, int row, PlotVisual visual)
@@ -239,7 +221,7 @@ public partial class WorldMap : Node2D
                 {
                     int mapCol = _firstCol + col;
                     int mapRow = _firstRow + row;
-                    Vector2 center = new((mapCol - mapRow) * HalfWidth, (mapCol + mapRow) * HalfHeight);
+                    Vector2 center = MapCoordinates.CellToLocalCenter(new Vector2I(mapCol, mapRow));
                     PlotVisual plot = _plots[row * ChunkSize + col];
                     Color tileColor = plot.Building switch
                     {
@@ -256,7 +238,7 @@ public partial class WorldMap : Node2D
                 {
                     int mapCol = _firstCol + col;
                     int mapRow = _firstRow + row;
-                    Vector2 center = new((mapCol - mapRow) * HalfWidth, (mapCol + mapRow) * HalfHeight);
+                    Vector2 center = MapCoordinates.CellToLocalCenter(new Vector2I(mapCol, mapRow));
                     PlotVisual plot = _plots[row * ChunkSize + col];
                     if (plot.Building == BuildingKind.Farm && plot.Crop == CropStage.None)
                         AddCircle(vertices, colors, indices, center, 4f, GrowingColors[(int)plot.CropKind]);
@@ -329,7 +311,7 @@ public partial class WorldMap : Node2D
             if (_map._selectedCell.X < 0)
                 return;
             Vector2I cell = _map._selectedCell;
-            Vector2 center = new((cell.X - cell.Y) * HalfWidth, (cell.X + cell.Y) * HalfHeight);
+            Vector2 center = MapCoordinates.CellToLocalCenter(cell);
             Vector2[] outline = Outline(center);
             DrawPolyline(new[] { outline[0], outline[1], outline[2], outline[3], outline[0] },
                 SelectedColor, 3f);
