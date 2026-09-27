@@ -69,6 +69,25 @@ public partial class TestCameraInteraction : Node
         map.SelectAtScreenPosition(outsideScreen);
         if (!ContainsText(detail, "地块 (62, 64)"))
             return Fail("地图外的位置仍可被选中");
+
+        map.Position = new Vector2(73f, -41f);
+        Vector2I translatedCell = new(62, 64);
+        if (map.GetCellWorldCenter(translatedCell) != new Vector2(9f, 1975f))
+            return Fail("平移后的格中心没有应用地图节点变换");
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(63, 63));
+        Vector2 translatedScreen = map.GetGlobalTransformWithCanvas() *
+            MapCoordinates.CellToLocalCenter(translatedCell);
+        map.SelectAtScreenPosition(translatedScreen);
+        if (!ContainsText(detail, "地块 (62, 64)"))
+            return Fail("地图平移后选格与全局格中心不一致");
+        camera.GlobalPosition = new Vector2(9073f, 1991f);
+        camera._UnhandledInput(new InputEventMouseButton
+        {
+            ButtonIndex = MouseButton.WheelUp,
+            Pressed = true,
+        });
+        if (camera.GlobalPosition != new Vector2(4137f, 1991f))
+            return Fail("地图平移后镜头没有按全局坐标限制");
         return true;
     }
 

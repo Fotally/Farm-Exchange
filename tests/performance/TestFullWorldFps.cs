@@ -53,7 +53,7 @@ public partial class TestFullWorldFps : Node
 
         ulong now = Time.GetTicksUsec();
         double seconds = (now - _readyAtUsec) / 1_000_000.0;
-        _camera.Position = _map.ClampCameraCenter(new Vector2(
+        _camera.GlobalPosition = _map.ClampGlobalCameraCenter(new Vector2(
             (float)(Math.Sin(seconds * 0.8) * 500.0), 2032f));
         _maxVisiblePlotCandidates = Math.Max(_maxVisiblePlotCandidates, _map.LastVisiblePlotCount);
 
