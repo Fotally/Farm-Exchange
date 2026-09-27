@@ -19,7 +19,7 @@
 ./tools/Run-Tests.ps1 -GodotConsole 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe'
 ```
 
-脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码；总行覆盖率不得低于 80%，NPC 预览场景接入后的本地结果为 92.71%。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
+脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码；总行覆盖率不得低于 80%，T04B 状态迁移后的本地结果为 92.55%。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
 
 图形 FPS 性能测试是同一测试脚本的可选阶段。修改地图绘制、镜头、实体负载或渲染设置，或需要建立性能基线时运行；一般业务规则修改先以必跑的 headless 测试为准：
 
@@ -32,3 +32,5 @@
 2026-09-24 本机优化前基线：AMD Ryzen 7 5800H、NVIDIA GeForce RTX 3060 Laptop GPU、Windows 10.0.26200、Godot 4.7.2 Mono Debug；1280×720、1.25 倍缩放、VSync 关闭、FPS 不限，镜头水平往返移动。满地图采样 8.06 秒、122 帧，平均 **15.14 FPS**，帧间隔中位数 64.64 ms、P95 为 76.42 ms、P99 为 80.71 ms；旧绘制循环每帧最多处理 1,600 个候选格。同期必跑的 50 tick 逻辑检查耗时 13.95 ms，平均 0.279 ms/tick。
 
 2026-09-25 本机分块网格缓存测量：同样的窗口、缩放、VSync 和镜头移动条件，满地图采样 8.00 秒、7,327 帧，平均 **915.78 FPS**，帧间隔中位数 0.97 ms、P95 为 1.53 ms、P99 为 2.05 ms；可见地图块最多覆盖 1,600 个候选格，采样期间重建 127 块。必跑的 50 tick 检查耗时 12.68 ms，平均 0.254 ms/tick。两组数据用于本机同条件对比，不代表所有硬件或 Release 成品。
+
+2026-09-27 T04B 状态迁移后的本机测量：满地图 8 秒图形采样平均 **986.0 FPS**，P95 帧间隔 **1.52 ms**，可见块最多覆盖 1,600 个候选格；前后截图中的建筑和作物标记正常。同期 50 tick headless 检查耗时 36.23 ms，平均 0.725 ms/tick。该数值记录结构迁移后的实测负载，图形指标仍满足项目合格线。

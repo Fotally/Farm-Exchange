@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using Godot;
 using FarmExchange.Economy;
 using FarmExchange.Farming;
+using FarmExchange.Land;
 using FarmExchange.Market;
+using FarmExchange.Processing;
+using FarmExchange.Workers;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
 namespace FarmExchange.Gameplay;
@@ -25,6 +28,7 @@ public sealed class FarmGame
     public const int MapSize = 128;
     public const int TicksPerDay = 10;
     public const int BuildingCostCents = 1000;
+    private const int CellCount = MapSize * MapSize;
 
     public static IReadOnlyList<CropDefinition> Crops => CropCatalog.Crops;
     private static readonly Vector2I[] InitialFarmCells =
@@ -36,11 +40,13 @@ public sealed class FarmGame
         new(63, 64), new(64, 64),
     };
 
-    private readonly PlotState[] _plots = new PlotState[MapSize * MapSize];
+    private readonly LandOccupancy _occupancy = new(CellCount);
+    private readonly FarmingSystem _farming = new(CellCount);
+    private readonly ProcessingSystem _processing = new(CellCount);
+    private readonly WorkerScheduler _workerScheduler = new();
     private readonly GoodsInventory _inventory = new();
     private readonly Wallet _wallet = new(5000);
     private readonly MarketPriceCurve _marketPriceCurve;
-    private int _nextWorkerPlotIndex;
     private int _ticksIntoDay;
 
     public int MoneyCents => _wallet.BalanceCents;
@@ -70,17 +76,9 @@ public sealed class FarmGame
         }
 
         for (int i = 0; i < InitialFarmCells.Length; i++)
-        {
-            ref PlotState plot = ref _plots[IndexOf(InitialFarmCells[i])];
-            plot.Building = BuildingKind.Farm;
-            plot.CropKind = i == 2 ? secondary : primary;
-        }
+            PlaceFarm(IndexOf(InitialFarmCells[i]), i == 2 ? secondary : primary);
         for (int i = 0; i < InitialProcessorCells.Length; i++)
-        {
-            ref PlotState plot = ref _plots[IndexOf(InitialProcessorCells[i])];
-            plot.Building = BuildingKind.Processor;
-            plot.CropKind = i == 1 ? secondary : primary;
-        }
+            PlaceProcessor(IndexOf(InitialProcessorCells[i]), i == 1 ? secondary : primary);
     }
 
     public static CropDefinition GetCrop(CropKind crop) => CropCatalog.Get(crop);
@@ -93,27 +91,65 @@ public sealed class FarmGame
 
     public PlotSnapshot GetPlot(Vector2I cell)
     {
-        PlotState plot = _plots[IndexOf(cell)];
-        return new PlotSnapshot(plot.Building, plot.CropKind, plot.Crop, plot.RemainingTicks);
+        int index = IndexOf(cell);
+        return _occupancy.Get(index) switch
+        {
+            BuildingKind.Farm => FarmPlot(index),
+            BuildingKind.Processor => ProcessorPlot(index),
+            _ => new PlotSnapshot(BuildingKind.None, default, CropStage.None, 0),
+        };
+    }
+
+    private PlotSnapshot FarmPlot(int index)
+    {
+        FarmSnapshot farm = _farming.Get(index);
+        return new PlotSnapshot(BuildingKind.Farm, farm.CropKind, farm.Stage, farm.RemainingTicks);
+    }
+
+    private PlotSnapshot ProcessorPlot(int index)
+    {
+        ProcessorSnapshot processor = _processing.Get(index);
+        return new PlotSnapshot(BuildingKind.Processor, processor.CropKind,
+            CropStage.None, processor.RemainingTicks);
     }
 
     internal void FillWorldForBenchmark()
     {
+        _occupancy.Clear();
+        _farming.Clear();
+        _processing.Clear();
         for (int row = 0; row < MapSize; row++)
         {
             for (int col = 0; col < MapSize; col++)
             {
-                ref PlotState plot = ref _plots[row * MapSize + col];
+                int index = row * MapSize + col;
                 CropKind crop = (CropKind)((row * (MapSize / 2) + col / 2) % Crops.Count);
-                bool farm = col % 2 == 0;
-                plot.Building = farm ? BuildingKind.Farm : BuildingKind.Processor;
-                plot.CropKind = crop;
-                plot.Crop = farm ? CropStage.Growing : CropStage.None;
-                plot.RemainingTicks = farm
-                    ? GetCrop(crop).GrowthTicks
-                    : GetCrop(crop).ProcessingTicks;
+                if (col % 2 == 0)
+                {
+                    _occupancy.Place(index, BuildingKind.Farm);
+                    _farming.SetGrowingForBenchmark(index, crop);
+                }
+                else
+                {
+                    _occupancy.Place(index, BuildingKind.Processor);
+                    _processing.SetProcessingForBenchmark(index, crop);
+                }
             }
         }
+    }
+
+    internal bool HasConsistentState()
+    {
+        for (int i = 0; i < CellCount; i++)
+        {
+            bool hasFarm = _farming.HasFarm(i);
+            bool hasProcessor = _processing.HasProcessor(i);
+            BuildingKind building = _occupancy.Get(i);
+            if (hasFarm != (building == BuildingKind.Farm) ||
+                hasProcessor != (building == BuildingKind.Processor))
+                return false;
+        }
+        return true;
     }
 
     public string? BuildFarm(Vector2I cell) => Build(cell, BuildingKind.Farm, CropKind.Wheat);
@@ -132,25 +168,24 @@ public sealed class FarmGame
     {
         if (!CropCatalog.IsDefined(crop))
             return "无效作物";
-        ref PlotState plot = ref _plots[IndexOf(cell)];
-        if (plot.Building != BuildingKind.Farm)
+        int index = IndexOf(cell);
+        if (_occupancy.Get(index) != BuildingKind.Farm)
             return "该土地没有农田";
-        if (plot.CropKind == crop)
-            return null;
-        plot.CropKind = crop;
-        plot.Crop = CropStage.None;
-        plot.RemainingTicks = 0;
+        _farming.SetCrop(index, crop);
         return null;
     }
 
     public string? RemoveBuilding(Vector2I cell)
     {
-        ref PlotState plot = ref _plots[IndexOf(cell)];
-        if (plot.Building == BuildingKind.None)
+        int index = IndexOf(cell);
+        BuildingKind building = _occupancy.Get(index);
+        if (building == BuildingKind.None)
             return "该土地没有建筑";
-        plot.Building = BuildingKind.None;
-        plot.Crop = CropStage.None;
-        plot.RemainingTicks = 0;
+        if (building == BuildingKind.Farm)
+            _farming.Remove(index);
+        else
+            _processing.Remove(index);
+        _occupancy.Remove(index);
         return null;
     }
 
@@ -158,31 +193,22 @@ public sealed class FarmGame
     {
         int harvested = 0;
         int produced = 0;
-        for (int i = 0; i < _plots.Length; i++)
+        for (int i = 0; i < CellCount; i++)
         {
-            ref PlotState plot = ref _plots[i];
-            if (plot.Building == BuildingKind.Farm && plot.Crop == CropStage.Growing)
+            BuildingKind building = _occupancy.Get(i);
+            if (building == BuildingKind.Farm && _farming.AdvanceGrowth(i, out CropKind harvestedCrop))
             {
-                plot.RemainingTicks--;
-                if (plot.RemainingTicks == 0)
-                {
-                    plot.Crop = CropStage.None;
-                    _inventory.AddRaw(plot.CropKind, 1);
-                    harvested++;
-                }
+                _inventory.AddRaw(harvestedCrop, 1);
+                harvested++;
             }
-            else if (plot.Building == BuildingKind.Processor && plot.RemainingTicks > 0)
+            else if (building == BuildingKind.Processor && _processing.Advance(i, out CropKind productCrop))
             {
-                plot.RemainingTicks--;
-                if (plot.RemainingTicks == 0)
-                {
-                    _inventory.AddProduct(plot.CropKind, 1);
-                    produced++;
-                }
+                _inventory.AddProduct(productCrop, 1);
+                produced++;
             }
         }
         StartIdleProcessors();
-        bool workerActed = WorkOneFarm();
+        bool workerActed = _workerScheduler.WorkOne(_farming);
         bool dayAdvanced = AdvanceDay();
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
     }
@@ -229,48 +255,35 @@ public sealed class FarmGame
 
     private string? Build(Vector2I cell, BuildingKind building, CropKind crop)
     {
-        ref PlotState plot = ref _plots[IndexOf(cell)];
-        if (plot.Building != BuildingKind.None)
+        int index = IndexOf(cell);
+        if (_occupancy.Get(index) != BuildingKind.None)
             return "该土地已有建筑";
         if (!_wallet.TrySpend(BuildingCostCents))
             return "金币不足，无法建造建筑";
-        plot.Building = building;
-        plot.CropKind = crop;
+        if (building == BuildingKind.Farm)
+            PlaceFarm(index, crop);
+        else
+            PlaceProcessor(index, crop);
         return null;
     }
 
     private void StartIdleProcessors()
     {
-        for (int i = 0; i < _plots.Length; i++)
-        {
-            ref PlotState plot = ref _plots[i];
-            if (plot.Building != BuildingKind.Processor || plot.RemainingTicks != 0)
-                continue;
-            if (!_inventory.TryTakeRawForProcessing(plot.CropKind))
-                continue;
-            plot.RemainingTicks = GetCrop(plot.CropKind).ProcessingTicks;
-        }
+        for (int i = 0; i < CellCount; i++)
+            if (_occupancy.Get(i) == BuildingKind.Processor)
+                _processing.TryStart(i, _inventory);
     }
 
-    private bool WorkOneFarm()
+    private void PlaceFarm(int index, CropKind crop)
     {
-        for (int offset = 0; offset < _plots.Length; offset++)
-        {
-            int index = (_nextWorkerPlotIndex + offset) % _plots.Length;
-            ref PlotState plot = ref _plots[index];
-            if (plot.Building != BuildingKind.Farm || plot.Crop == CropStage.Growing)
-                continue;
-            if (plot.Crop == CropStage.None)
-                plot.Crop = CropStage.Seeded;
-            else
-            {
-                plot.Crop = CropStage.Growing;
-                plot.RemainingTicks = GetCrop(plot.CropKind).GrowthTicks;
-            }
-            _nextWorkerPlotIndex = (index + 1) % _plots.Length;
-            return true;
-        }
-        return false;
+        _farming.Place(index, crop);
+        _occupancy.Place(index, BuildingKind.Farm);
+    }
+
+    private void PlaceProcessor(int index, CropKind crop)
+    {
+        _processing.Place(index, crop);
+        _occupancy.Place(index, BuildingKind.Processor);
     }
 
     private static int IndexOf(Vector2I cell)
@@ -278,13 +291,5 @@ public sealed class FarmGame
         if (cell.X < 0 || cell.X >= MapSize || cell.Y < 0 || cell.Y >= MapSize)
             throw new ArgumentOutOfRangeException(nameof(cell));
         return cell.Y * MapSize + cell.X;
-    }
-
-    private struct PlotState
-    {
-        public BuildingKind Building;
-        public CropKind CropKind;
-        public CropStage Crop;
-        public int RemainingTicks;
     }
 }
