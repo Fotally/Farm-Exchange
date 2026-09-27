@@ -1,6 +1,6 @@
 # FarmGame 的 tick 推进实现
 
-对应[FarmGame 对外接口](interface-farm-game.md)的 AdvanceTick。内部 PlotState、库存数组和工人游标仅由 FarmGame 维护，调用方只获得快照与结果。
+对应[FarmGame 对外接口](interface-farm-game.md)的 AdvanceTick。内部 PlotState 和工人游标由 `FarmGame` 维护，原料与加工品库存由 `Inventory` 唯一维护；调用方只获得快照与结果。
 
 一次 tick 依次：
 
