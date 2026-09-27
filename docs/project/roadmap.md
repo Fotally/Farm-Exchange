@@ -31,7 +31,7 @@
 | 模块 | 职责 | 对外接口应保持的形状 |
 | --- | --- | --- |
 | 经营入口 `FarmGame` | 生成中心开局布局，协调占用、农田、加工、工人、库存、金币与天数；按旧顺序推进 tick、换日并处理两类交易 | 聚合格子快照，查询库存价格，接收经营命令并推进一次 tick |
-| `LandOccupancy`、`FarmingSystem`、`ProcessingSystem`、`WorkerScheduler` | 分别唯一维护每格主要占用、农田生命周期、加工批次和单工人轮转游标 | 由 `FarmGame` 组合完整建造、拆除和推进；工人只通过农田受控操作工作 |
+| `LandOccupancy`、`PlacementRules`、`FarmingSystem`、`ProcessingSystem`、`WorkerScheduler` | 分别维护每格主要占用、只读放置检查、农田生命周期、加工批次和单工人轮转游标 | 由 `FarmGame` 组合完整建造、拆除和推进；放置预检与执行共用规则，工人只通过农田受控操作工作 |
 | `CropCatalog`、`Inventory`、`Wallet` | 分别唯一维护六作物定义、原料与加工品公共库存、金币余额 | `FarmGame` 查询定义并协调生产入库、出售和建造收支 |
 | 市场曲线 `MarketPriceCurve` | 按市场种子和天数计算有界面粉价格 | 输入任意有效天数，直接返回以分计价的当天价格 |
 | 地图表现 `WorldMap` | 分块缓存地块与作物绘制结果，绘制边缘，转换等距坐标，选择土地 | 接收游戏状态并在经营变化后同步外观，发出所选格坐标，限制镜头中心在菱形内 |

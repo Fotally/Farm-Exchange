@@ -7,6 +7,7 @@ using FarmExchange.Land;
 using FarmExchange.Market;
 using FarmExchange.Processing;
 using FarmExchange.Workers;
+using FarmExchange.World;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
 namespace FarmExchange.Gameplay;
@@ -76,9 +77,9 @@ public sealed class FarmGame
         }
 
         for (int i = 0; i < InitialFarmCells.Length; i++)
-            PlaceFarm(IndexOf(InitialFarmCells[i]), i == 2 ? secondary : primary);
+            PlaceInitial(InitialFarmCells[i], BuildingKind.Farm, i == 2 ? secondary : primary);
         for (int i = 0; i < InitialProcessorCells.Length; i++)
-            PlaceProcessor(IndexOf(InitialProcessorCells[i]), i == 1 ? secondary : primary);
+            PlaceInitial(InitialProcessorCells[i], BuildingKind.Processor, i == 1 ? secondary : primary);
     }
 
     public static CropDefinition GetCrop(CropKind crop) => CropCatalog.Get(crop);
@@ -91,13 +92,26 @@ public sealed class FarmGame
 
     public PlotSnapshot GetPlot(Vector2I cell)
     {
+        if (TryGetPlot(cell, out PlotSnapshot plot) == LandFailure.OutOfBounds)
+            throw new ArgumentOutOfRangeException(nameof(cell));
+        return plot;
+    }
+
+    public LandFailure TryGetPlot(Vector2I cell, out PlotSnapshot plot)
+    {
+        if (!MapCoordinates.ContainsCell(cell))
+        {
+            plot = default;
+            return LandFailure.OutOfBounds;
+        }
         int index = IndexOf(cell);
-        return _occupancy.Get(index) switch
+        plot = _occupancy.Get(index) switch
         {
             BuildingKind.Farm => FarmPlot(index),
             BuildingKind.Processor => ProcessorPlot(index),
             _ => new PlotSnapshot(BuildingKind.None, default, CropStage.None, 0),
         };
+        return LandFailure.None;
     }
 
     private PlotSnapshot FarmPlot(int index)
@@ -152,20 +166,39 @@ public sealed class FarmGame
         return true;
     }
 
-    public string? BuildFarm(Vector2I cell) => Build(cell, BuildingKind.Farm, CropKind.Wheat);
+    public PlacementCheck CheckPlacement(Vector2I cell, BuildingKind building, CropKind crop) =>
+        PlacementRules.Check(cell, building, crop, _occupancy, _wallet.BalanceCents,
+            BuildingCostCents);
 
-    public string? BuildProcessor(Vector2I cell, CropKind crop)
+    public PlacementResult TryPlace(Vector2I cell, BuildingKind building, CropKind crop)
     {
-        if (!CropCatalog.IsDefined(crop))
-            return "无效作物";
-        string? error = Build(cell, BuildingKind.Processor, crop);
-        if (error == null)
+        PlacementCheck check = CheckPlacement(cell, building, crop);
+        if (!check.Allowed)
+            return new PlacementResult(check.Failure, 0);
+
+        int index = IndexOf(cell);
+        if (!_wallet.TrySpend(check.CostCents))
+            throw new InvalidOperationException("放置检查与扣费状态不一致");
+        if (building == BuildingKind.Farm)
+            PlaceFarm(index, crop);
+        else
+        {
+            PlaceProcessor(index, crop);
             StartIdleProcessors();
-        return error;
+        }
+        return new PlacementResult(LandFailure.None, check.CostCents);
     }
+
+    public string? BuildFarm(Vector2I cell) =>
+        PlacementError(TryPlace(cell, BuildingKind.Farm, CropKind.Wheat));
+
+    public string? BuildProcessor(Vector2I cell, CropKind crop) =>
+        PlacementError(TryPlace(cell, BuildingKind.Processor, crop));
 
     public string? SetFarmCrop(Vector2I cell, CropKind crop)
     {
+        if (!MapCoordinates.ContainsCell(cell))
+            return PlacementRules.ErrorMessage(LandFailure.OutOfBounds);
         if (!CropCatalog.IsDefined(crop))
             return "无效作物";
         int index = IndexOf(cell);
@@ -177,6 +210,8 @@ public sealed class FarmGame
 
     public string? RemoveBuilding(Vector2I cell)
     {
+        if (!MapCoordinates.ContainsCell(cell))
+            return PlacementRules.ErrorMessage(LandFailure.OutOfBounds);
         int index = IndexOf(cell);
         BuildingKind building = _occupancy.Get(index);
         if (building == BuildingKind.None)
@@ -253,18 +288,20 @@ public sealed class FarmGame
         return true;
     }
 
-    private string? Build(Vector2I cell, BuildingKind building, CropKind crop)
+    private static string? PlacementError(PlacementResult result) =>
+        result.Success ? null : PlacementRules.ErrorMessage(result.Failure);
+
+    private void PlaceInitial(Vector2I cell, BuildingKind building, CropKind crop)
     {
+        PlacementCheck check = PlacementRules.Check(cell, building, crop, _occupancy,
+            _wallet.BalanceCents, 0);
+        if (!check.Allowed)
+            throw new InvalidOperationException("开局建筑放置无效");
         int index = IndexOf(cell);
-        if (_occupancy.Get(index) != BuildingKind.None)
-            return "该土地已有建筑";
-        if (!_wallet.TrySpend(BuildingCostCents))
-            return "金币不足，无法建造建筑";
         if (building == BuildingKind.Farm)
             PlaceFarm(index, crop);
         else
             PlaceProcessor(index, crop);
-        return null;
     }
 
     private void StartIdleProcessors()
@@ -288,7 +325,7 @@ public sealed class FarmGame
 
     private static int IndexOf(Vector2I cell)
     {
-        if (cell.X < 0 || cell.X >= MapSize || cell.Y < 0 || cell.Y >= MapSize)
+        if (!MapCoordinates.ContainsCell(cell))
             throw new ArgumentOutOfRangeException(nameof(cell));
         return cell.Y * MapSize + cell.X;
     }

@@ -38,7 +38,7 @@
 
 ## 与经营模块的接口
 
-主界面从 `FarmGame` 查询地块快照、作物定义、金币、分类库存和已确定的售价；玩家操作通过其公开经营命令执行，成功后通知 `WorldMap` 更新。农田详情从当前作物定义读取 `GrowthTicks`，按主场景每秒一 tick 显示“生长周期：浇水后 N 秒成熟”；改种后随详情刷新。加工场地详情从对应作物定义读取 `ProcessingTicks`，显示“加工周期：投入原料后 N 秒完成”。两类详情各显示自己负责的库存与售价，库存仍按品种共享；主界面不复制建造费用、价格曲线或生产时间计算，也不暴露内部 `tick`。
+主界面从 `FarmGame` 查询地块快照、作物定义、金币、分类库存和已确定的售价；点击摆放时调用 `TryPlace`，失败显示结果原因，成功显示实际扣费 `ChargedCents` 并通知 `WorldMap` 更新。农田详情从当前作物定义读取 `GrowthTicks`，按主场景每秒一 tick 显示“生长周期：浇水后 N 秒成熟”；改种后随详情刷新。加工场地详情从对应作物定义读取 `ProcessingTicks`，显示“加工周期：投入原料后 N 秒完成”。两类详情各显示自己负责的库存与售价，库存仍按品种共享；主界面不复制建造费用、价格曲线或生产时间计算，也不暴露内部 `tick`。
 
 [建造规则 issue #26](https://github.com/Fotally/Farm-Exchange/issues/26)已按当前约定取消土地解锁，并实行暂定的 10.00 金币建造费。年月与市场周波动的换算记录在[市场 issue #25](https://github.com/Fotally/Farm-Exchange/issues/25)；在规则确定前，Godot 界面不显示时间。[原料交易 issue #27](https://github.com/Fotally/Farm-Exchange/issues/27)确定了逐作物价格和按品种出售；详情、作物选择列表与市场均从 `FarmGame` 查询实时原料售价和库存，结算规则见[出售与价格](../../../gameplay/trading/sales.md)。
 
