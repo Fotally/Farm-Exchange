@@ -22,7 +22,7 @@
 
 - 六种作物和配套加工场地以外的建筑类型与建造规则。
 - 存档与离线收益规则。
-- 玩家年月与经营时间的换算、每周价格波动和交易交互，见 [issue #25](https://github.com/Fotally/Farm-Exchange/issues/25)。
+- 新日历接入经营时的相位顺序、生产数值切换和旧行情过渡频率，见 [日历 issue #33](https://github.com/Fotally/Farm-Exchange/issues/33)；每周价格波动和交易交互见 [市场 issue #25](https://github.com/Fotally/Farm-Exchange/issues/25)。
 
 ## 系统划分
 
@@ -34,6 +34,7 @@
 | `LandOccupancy`、`PlacementRules`、`FarmingSystem`、`ProcessingSystem`、`WorkerScheduler` | 分别维护每格主要占用、只读放置检查、农田生命周期、加工批次和单工人轮转游标 | 由 `FarmGame` 组合完整建造、拆除和推进；放置预检与执行共用规则，工人只通过农田受控操作工作 |
 | `CropCatalog`、`Inventory`、`Wallet` | 分别唯一维护六作物定义、原料与加工品公共库存、金币余额 | `FarmGame` 查询定义并协调生产入库、出售和建造收支 |
 | 市场曲线 `MarketPriceCurve` | 按市场种子和天数计算有界面粉价格 | 输入任意有效天数，直接返回以分计价的当天价格 |
+| 独立日历 `GameCalendar` | 按累计模拟秒数换算年月日、周内日期和季节，显式暂停，拒绝秒数溢出 | T05A 仅接受固定输入验证；尚未接管 `FarmGame` 的 10 tick/日经营 |
 | 地图表现 `WorldMap` | 分块缓存地块与作物绘制结果，绘制边缘，转换等距坐标，选择土地 | 接收游戏状态并在经营变化后同步外观，发出所选格坐标，限制镜头中心在菱形内 |
 | 镜头输入 `CameraController` | 区分左键点击与拖动，处理缩放和平移 | 将短按交给地图选择，将镜头位置交给地图限制 |
 | 场景协调 `Main` | 接收按钮操作、驱动计时器、刷新界面 | 将玩家操作转交游戏状态并显示结果 |

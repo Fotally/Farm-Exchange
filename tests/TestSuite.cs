@@ -10,6 +10,8 @@ public partial class TestSuite : Node
         bool resourcesPassed = TestResources.RunChecks();
         GD.Print("单元测试：市场价格与换日");
         bool marketPassed = TestMarketRules.RunChecks();
+        GD.Print("单元测试：独立日历换算");
+        bool calendarPassed = TestGameCalendar.RunChecks();
         GD.Print("单元测试：等距地图坐标");
         bool worldMapPassed = TestWorldMap.RunChecks();
         GD.Print("集成测试：镜头输入与地图选择");
@@ -20,7 +22,7 @@ public partial class TestSuite : Node
         bool coreLoopPassed = TestCoreLoop.RunChecks(this);
         GD.Print("性能测试：满地图 headless 负载");
         bool loadPassed = TestFullWorldLoad.RunChecks();
-        bool passed = farmGamePassed && resourcesPassed && marketPassed && worldMapPassed && cameraPassed && npcPassed &&
+        bool passed = farmGamePassed && resourcesPassed && marketPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
             coreLoopPassed && loadPassed;
 
         if (passed)
