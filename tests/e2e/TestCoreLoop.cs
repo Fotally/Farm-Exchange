@@ -49,6 +49,13 @@ public partial class TestCoreLoop : Node
         build.EmitSignal(Button.SignalName.Pressed);
         if (!buildWindow.Visible || detail.Visible)
             return Fail("建造入口未打开目录");
+        buildWindow.Position = new Vector2(9999, 9999);
+        build.EmitSignal(Button.SignalName.Pressed);
+        Vector2 viewportSize = main.GetViewport().GetVisibleRect().Size;
+        if (buildWindow.Position.X + buildWindow.Size.X > viewportSize.X - 8f ||
+            buildWindow.Position.Y + buildWindow.Size.Y > viewportSize.Y - 111f - 8f)
+            return Fail("建造目录超出视窗或遮挡底栏");
+        buildWindow.Position = new Vector2(30, 252);
         Find<Button>(buildWindow, "FarmCard").EmitSignal(Button.SignalName.Pressed);
         if (buildWindow.Visible || !cancel.Visible)
             return Fail("选中农田后未进入摆放状态");
@@ -70,8 +77,8 @@ public partial class TestCoreLoop : Node
             ButtonIndex = MouseButton.Left,
             Pressed = true,
         });
-        main._Input(new InputEventMouseMotion { Position = new Vector2(30, 20) });
-        main._Input(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
+        detail._Input(new InputEventMouseMotion { Position = new Vector2(30, 20) });
+        detail._Input(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false });
         Vector2 remembered = detail.Position;
         if (remembered == new Vector2(760, 90))
             return Fail("详情标题栏拖动没有改变窗口位置");
@@ -156,6 +163,15 @@ public partial class TestCoreLoop : Node
         if (!marketWindow.Visible || sell.Disabled || ContainsVisibleText(marketWindow, "待定") ||
             !ContainsVisibleText(marketWindow, "玉米原料"))
             return Fail("市场窗口未区分原料和可售加工品");
+        ScrollContainer marketScroll = Find<ScrollContainer>(marketWindow, "MarketScroll");
+        Button cornRawButton = Find<Button>(marketWindow, "SellRawCornButton");
+        marketScroll.ScrollVertical = 30;
+        int scrollPosition = marketScroll.ScrollVertical;
+        timer.EmitSignal(Timer.SignalName.Timeout);
+        if (marketScroll.ScrollVertical != scrollPosition ||
+            !object.ReferenceEquals(sell, Find<Button>(marketWindow, "SellButton")) ||
+            !object.ReferenceEquals(cornRawButton, Find<Button>(marketWindow, "SellRawCornButton")))
+            return Fail("经营刷新重置了市场滚动位置或操作按钮");
         int beforeSale = main.Game.MoneyCents;
         sell.EmitSignal(Button.SignalName.Pressed);
         if (main.Game.MoneyCents <= beforeSale || main.Game.GetProductStock(CropKind.Corn) != 0 ||

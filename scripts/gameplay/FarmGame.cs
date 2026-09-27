@@ -15,12 +15,18 @@ namespace FarmExchange.Gameplay;
 public enum CropStage { None, Seeded, Growing }
 public enum BuildingKind { None, Farm, Processor }
 public enum CropKind { Wheat, Corn, Rice, Potato, Sunflower, Sugarcane }
+public enum FarmStatus { WaitingForWorker, WaitingForWater, Growing }
+public enum ProcessorStatus { WaitingForRaw, Processing }
 
 public readonly record struct CropDefinition(
     CropKind Kind, string CropName, string BuildingName, string ProductName,
     int GrowthTicks, int ProcessingTicks, int PricePercent, int RawPricePercent);
 public readonly record struct PlotSnapshot(
     BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingTicks);
+public readonly record struct FarmDetailsSnapshot(
+    CropDefinition Crop, FarmStatus Status, int RawPriceCents, int RawStock);
+public readonly record struct ProcessorDetailsSnapshot(
+    CropDefinition Crop, ProcessorStatus Status, int ProductPriceCents, int ProductStock);
 public readonly record struct TickResult(int Harvested, int Produced, bool WorkerActed, bool DayAdvanced);
 public readonly record struct SaleResult(int Quantity, int RevenueCents);
 
@@ -125,6 +131,34 @@ public sealed class FarmGame
         ProcessorSnapshot processor = _processing.Get(index);
         return new PlotSnapshot(BuildingKind.Processor, processor.CropKind,
             CropStage.None, processor.RemainingTicks);
+    }
+
+    public FarmDetailsSnapshot GetFarmDetails(Vector2I cell)
+    {
+        PlotSnapshot plot = GetPlot(cell);
+        if (plot.Building != BuildingKind.Farm)
+            throw new InvalidOperationException("该土地没有农田");
+        CropDefinition crop = GetCrop(plot.CropKind);
+        FarmStatus status = plot.Crop switch
+        {
+            CropStage.Seeded => FarmStatus.WaitingForWater,
+            CropStage.Growing => FarmStatus.Growing,
+            _ => FarmStatus.WaitingForWorker,
+        };
+        return new FarmDetailsSnapshot(crop, status, GetRawPriceCents(crop.Kind),
+            GetRawStock(crop.Kind));
+    }
+
+    public ProcessorDetailsSnapshot GetProcessorDetails(Vector2I cell)
+    {
+        PlotSnapshot plot = GetPlot(cell);
+        if (plot.Building != BuildingKind.Processor)
+            throw new InvalidOperationException("该土地没有加工场地");
+        CropDefinition crop = GetCrop(plot.CropKind);
+        ProcessorStatus status = plot.RemainingTicks > 0
+            ? ProcessorStatus.Processing : ProcessorStatus.WaitingForRaw;
+        return new ProcessorDetailsSnapshot(crop, status, GetProductPriceCents(crop.Kind),
+            GetProductStock(crop.Kind));
     }
 
     internal void FillWorldForBenchmark()

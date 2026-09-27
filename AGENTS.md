@@ -9,7 +9,7 @@
 
 # 代码系统结构
 
-- `scripts/gameplay/FarmGame.cs`：经营协调模块。按原种子顺序初始化中心随机建筑，协调固定 128×128 格的建造、拆除、每 tick 的生产相位、天数、售价和交易；提供只读放置预检、执行时重验与实际扣费结果、只读地块快照及明确的越界查询结果，旧建造命令转发新路径。测试专用夹具生成 16,384 个现有实体，并检查占用与生产状态一致。
+- `scripts/gameplay/FarmGame.cs`：经营协调模块。按原种子顺序初始化中心随机建筑，协调固定 128×128 格的建造、拆除、每 tick 的生产相位、天数、售价和交易；提供只读放置预检、执行时重验与实际扣费结果、地块及两类详情语义快照，旧建造命令转发新路径。测试专用夹具生成 16,384 个现有实体，并检查占用与生产状态一致。
 - `scripts/farming/CropCatalog.cs`：六种作物定义的唯一入口，提供只读作物表、按种类查询与种类有效性检查。
 - `scripts/land/LandOccupancy.cs`：固定地图每格主要占用类别的唯一拥有者；不持有作物或加工进度。
 - `scripts/land/PlacementRules.cs`：只读放置规则模块；统一验证建筑描述、格范围、占用与余额，为预检和实际执行返回稳定原因。现有合法占用只有农田和加工场地。
@@ -24,7 +24,8 @@
 - `scripts/world/MapCoordinates.cs`：固定等距地图的格坐标与地图本地坐标换算入口，使用 `FarmGame.MapSize` 定义的同一地图范围；不读取节点或经营状态。
 - `scripts/world/WorldMap.cs`：地图表现模块。按 8×8 格缓存带顶点颜色的地图块网格，镜头移动只更新块可见性，经营变化后同步完整世界快照并重建外观变化的块；独立绘制选中框和地图边缘，将屏幕输入转为地图本地格坐标，并提供有效格的全局中心与镜头限制。不维护经营规则。
 - `scripts/world/CameraController.cs`：输入与镜头模块。区分左键点击、左键拖动，左键释放时结束拖动，并在释放事件被界面拦截时逐帧校正状态；处理缩放和键盘移动，通过 `WorldMap` 的接口选择格子及限制镜头。
-- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调及界面。顶部显示金币、工人及库存/市场入口；底部单一建造入口打开农田或加工场地目录，地图点击执行摆放；右侧农田详情显示作物状态、生长周期、原料售价与库存，加工场地详情显示加工状态、加工周期、加工品售价与库存，实体详情和其他二级窗口可拖动并在本次运行内保留位置。市场可按品种出售原料或出售全部加工品；按钮命令和计时器交给 `FarmGame`，再刷新地图、分类库存与当日售价。
+- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。持有摆放和所选格，分发窗口意图及计时器命令，经营变化后统一刷新；只在地块变化时同步地图。
+- `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与范围、建造目录、固定的选种/库存/市场控件、两类详情展示及共用视觉元素。窗口发出玩家意图，不持有经营状态；刷新只更新值与按钮状态。
 - `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`：独立角色预览，接收 WASD/方向键移动、Q/E 切换 20 位角色并显示名称与跟随镜头；不接入主经营场景。
 - `tests/unit/`：农田、加工、交易、作物定义、库存、钱包、市场、独立日历及地图坐标的单元测试；`tests/integration/`：镜头输入、地图选择与 NPC 动画预览的集成测试；`tests/e2e/`：主场景经营流程的端到端测试；`tests/performance/`：必跑的满地图 50 tick 负载测试（含角落实体推进检查）与按需的有窗口 FPS 性能测试。图形测试要求平均至少 60 FPS、P95 帧间隔不超过 16.67 ms，并保存前后截图。根目录 `TestSuite` 汇总 headless 检查；导出程序启动是构建冒烟测试。
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、导入 Godot 图片资源、运行必需的 headless 测试套件、生成 Cobertura 报告，并要求业务脚本行覆盖率不低于 80%；`-Performance` 追加图形性能测试和 JSON 报告。

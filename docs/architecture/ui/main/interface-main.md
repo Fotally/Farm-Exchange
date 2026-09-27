@@ -18,7 +18,7 @@
 
 | 层级 | 内容与作用 |
 | --- | --- |
-| 顶部常驻状态 | 金币与工人摘要常驻；库存、市场是全局窗口入口；存档、人物状态保留规划位置。不展示免费选地次数或内部 `tick`。年月换算未确定，**本轮先隐藏时间**。 |
+| 顶部常驻状态 | 金币与工人摘要常驻；库存、市场是全局窗口入口；存档、人物状态保留规划位置。不展示免费选地次数或内部 `tick`。新日历尚未接入经营，**当前仍隐藏时间**。 |
 | 地图 | 平时点击地块选择对象；进入建造摆放后，点击符合条件的空位执行建造。拖动和缩放仍交给镜头与地图模块。 |
 | 底部建造 | 一个“建造”入口打开目录。目录先选择农田或加工场地，再选具体建筑；选择后进入摆放状态，点击目标空位即执行，不需要第二次确认。摆放可取消。 |
 | 选中详情 | 仅在选中地块或建筑后出现；农田显示作物状态、浇水后成熟所需秒数、对应原料当日售价和公共原料库存，并提供改种入口。加工场地显示加工状态、从投入原料到完成所需秒数、原料与产物关系、对应加工品当日售价和公共加工品库存。 |
@@ -38,10 +38,12 @@
 
 ## 与经营模块的接口
 
-主界面从 `FarmGame` 查询地块快照、作物定义、金币、分类库存和已确定的售价；点击摆放时调用 `TryPlace`，失败显示结果原因，成功显示实际扣费 `ChargedCents` 并通知 `WorldMap` 更新。农田详情从当前作物定义读取 `GrowthTicks`，按主场景每秒一 tick 显示“生长周期：浇水后 N 秒成熟”；改种后随详情刷新。加工场地详情从对应作物定义读取 `ProcessingTicks`，显示“加工周期：投入原料后 N 秒完成”。两类详情各显示自己负责的库存与售价，库存仍按品种共享；主界面不复制建造费用、价格曲线或生产时间计算，也不暴露内部 `tick`。
+`Main` 负责组装窗口、保留摆放与所选格、分发玩家命令，并在命令或 tick 完成后统一刷新。建造目录发出建筑意图，地图点击时 `Main` 调用 `FarmGame.TryPlace`，失败显示结果原因，成功显示实际扣费 `ChargedCents`。库存、市场和选种窗口只更新固定控件并发出操作意图；农田与加工详情分别读取 `FarmGame` 的语义快照，不在界面重判经营状态。地图外观仅在影响地块或 tick 的命令后同步，出售只刷新经营窗口。
+
+当前农田详情仍按主场景每秒一 tick 显示“生长周期：浇水后 N 秒成熟”，加工详情显示“加工周期：投入原料后 N 秒完成”。两类详情各显示自己负责的库存与售价，库存仍按品种共享；主界面不计算建造费用、价格曲线或生产时间，也不暴露内部 `tick`。窗口实现见 [DraggableWindow](../draggable-window/interface-draggable-window.md)、[BuildCatalogWindow](../build-catalog-window/interface-build-catalog-window.md)、[CropSelectionWindow](../crop-selection-window/interface-crop-selection-window.md)、[InventoryWindow](../inventory-window/interface-inventory-window.md)、[MarketWindow](../market-window/interface-market-window.md)、[FarmDetailsPanel](../farm-details-panel/interface-farm-details-panel.md)、[ProcessorDetailsPanel](../processor-details-panel/interface-processor-details-panel.md) 和 [UiElements](../ui-elements/interface-ui-elements.md)。
 
 [建造规则 issue #26](https://github.com/Fotally/Farm-Exchange/issues/26)已按当前约定取消土地解锁，并实行暂定的 10.00 金币建造费。年月与市场周波动的换算记录在[市场 issue #25](https://github.com/Fotally/Farm-Exchange/issues/25)；在规则确定前，Godot 界面不显示时间。[原料交易 issue #27](https://github.com/Fotally/Farm-Exchange/issues/27)确定了逐作物价格和按品种出售；详情、作物选择列表与市场均从 `FarmGame` 查询实时原料售价和库存，结算规则见[出售与价格](../../../gameplay/trading/sales.md)。
 
 ## 验收对应
 
-`tests/e2e/TestCoreLoop.cs` 覆盖目录选择、单次摆放、占用地块不扣费、两类建筑详情的状态、周期、售价与库存、详情与作物窗口重新打开时保留位置，以及两类市场交易。`tests/integration/TestCameraInteraction.cs` 覆盖地图点击与镜头拖动的衔接。窗口只保存当前运行的节点位置，不写入存档。
+`tests/e2e/TestCoreLoop.cs` 覆盖目录选择、单次摆放、占用地块不扣费、两类建筑详情的状态、周期、售价与库存、窗口拖动、底栏避让、关闭重开位置、市场刷新后滚动与按钮身份，以及两类市场交易。`tests/integration/TestCameraInteraction.cs` 覆盖地图点击与镜头拖动的衔接。窗口只保存当前运行的节点位置，不写入存档。
