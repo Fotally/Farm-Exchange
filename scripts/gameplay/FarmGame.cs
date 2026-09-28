@@ -6,6 +6,7 @@ using FarmExchange.Farming;
 using FarmExchange.Land;
 using FarmExchange.Market;
 using FarmExchange.Processing;
+using FarmExchange.Time;
 using FarmExchange.Workers;
 using FarmExchange.World;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
@@ -14,15 +15,16 @@ namespace FarmExchange.Gameplay;
 
 public enum CropStage { None, Seeded, Growing }
 public enum BuildingKind { None, Farm, Processor }
-public enum CropKind { Wheat, Corn, Rice, Potato, Sunflower, Sugarcane }
+public enum CropKind { Wheat, Corn, Rice, Potato, Sunflower, Sugarcane, Radish }
 public enum FarmStatus { WaitingForWorker, WaitingForWater, Growing }
 public enum ProcessorStatus { WaitingForRaw, Processing }
 
 public readonly record struct CropDefinition(
     CropKind Kind, string CropName, string BuildingName, string ProductName,
-    int GrowthTicks, int ProcessingTicks, int PricePercent, int RawPricePercent);
+    int GrowthDays, int HarvestQuantity, int ProcessingHalfDays,
+    int PricePercent, int RawPricePercent);
 public readonly record struct PlotSnapshot(
-    BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingTicks);
+    BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingSeconds);
 public readonly record struct FarmDetailsSnapshot(
     CropDefinition Crop, FarmStatus Status, int RawPriceCents, int RawStock);
 public readonly record struct ProcessorDetailsSnapshot(
@@ -33,7 +35,6 @@ public readonly record struct SaleResult(int Quantity, int RevenueCents);
 public sealed class FarmGame
 {
     public const int MapSize = 128;
-    public const int TicksPerDay = 10;
     public const int BuildingCostCents = 1000;
     private const int CellCount = MapSize * MapSize;
 
@@ -54,10 +55,12 @@ public sealed class FarmGame
     private readonly GoodsInventory _inventory = new();
     private readonly Wallet _wallet = new(5000);
     private readonly MarketPriceCurve _marketPriceCurve;
-    private int _ticksIntoDay;
+    private readonly GameCalendar _calendar = new();
 
     public int MoneyCents => _wallet.BalanceCents;
-    public int CurrentDay { get; private set; } = 1;
+    public int CurrentDay => (int)_calendar.Snapshot.ElapsedDays + 1;
+    public CalendarSnapshot Calendar => _calendar.Snapshot;
+    public bool IsPaused => _calendar.IsPaused;
     public int CurrentFlourPriceCents { get; private set; }
     public double DailyPriceChangePercent { get; private set; }
 
@@ -123,14 +126,14 @@ public sealed class FarmGame
     private PlotSnapshot FarmPlot(int index)
     {
         FarmSnapshot farm = _farming.Get(index);
-        return new PlotSnapshot(BuildingKind.Farm, farm.CropKind, farm.Stage, farm.RemainingTicks);
+        return new PlotSnapshot(BuildingKind.Farm, farm.CropKind, farm.Stage, farm.RemainingSeconds);
     }
 
     private PlotSnapshot ProcessorPlot(int index)
     {
         ProcessorSnapshot processor = _processing.Get(index);
         return new PlotSnapshot(BuildingKind.Processor, processor.CropKind,
-            CropStage.None, processor.RemainingTicks);
+            CropStage.None, processor.RemainingSeconds);
     }
 
     public FarmDetailsSnapshot GetFarmDetails(Vector2I cell)
@@ -155,7 +158,7 @@ public sealed class FarmGame
         if (plot.Building != BuildingKind.Processor)
             throw new InvalidOperationException("该土地没有加工场地");
         CropDefinition crop = GetCrop(plot.CropKind);
-        ProcessorStatus status = plot.RemainingTicks > 0
+        ProcessorStatus status = plot.RemainingSeconds > 0
             ? ProcessorStatus.Processing : ProcessorStatus.WaitingForRaw;
         return new ProcessorDetailsSnapshot(crop, status, GetProductPriceCents(crop.Kind),
             GetProductStock(crop.Kind));
@@ -260,6 +263,10 @@ public sealed class FarmGame
 
     public TickResult AdvanceTick()
     {
+        if (_calendar.IsPaused)
+            return default;
+        if (_calendar.Snapshot.ElapsedSeconds == uint.MaxValue)
+            throw new InvalidOperationException("模拟时间已达到上限");
         int harvested = 0;
         int produced = 0;
         for (int i = 0; i < CellCount; i++)
@@ -267,8 +274,9 @@ public sealed class FarmGame
             BuildingKind building = _occupancy.Get(i);
             if (building == BuildingKind.Farm && _farming.AdvanceGrowth(i, out CropKind harvestedCrop))
             {
-                _inventory.AddRaw(harvestedCrop, 1);
-                harvested++;
+                int quantity = GetCrop(harvestedCrop).HarvestQuantity;
+                _inventory.AddRaw(harvestedCrop, quantity);
+                harvested += quantity;
             }
             else if (building == BuildingKind.Processor && _processing.Advance(i, out CropKind productCrop))
             {
@@ -310,17 +318,19 @@ public sealed class FarmGame
 
     private bool AdvanceDay()
     {
-        _ticksIntoDay++;
-        if (_ticksIntoDay < TicksPerDay)
+        uint previousDays = _calendar.Snapshot.ElapsedDays;
+        if (!_calendar.TryAdvanceSeconds(1))
+            throw new InvalidOperationException("模拟时间已达到上限");
+        if (_calendar.Snapshot.ElapsedDays == previousDays)
             return false;
-        _ticksIntoDay = 0;
         int previousPrice = CurrentFlourPriceCents;
-        CurrentDay++;
         CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
         DailyPriceChangePercent =
             (CurrentFlourPriceCents - previousPrice) * 100.0 / previousPrice;
         return true;
     }
+
+    public void SetPaused(bool paused) => _calendar.SetPaused(paused);
 
     private static string? PlacementError(PlacementResult result) =>
         result.Success ? null : PlacementRules.ErrorMessage(result.Failure);

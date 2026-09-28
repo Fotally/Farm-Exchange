@@ -8,8 +8,6 @@ public readonly record struct CalendarSnapshot(
 
 public sealed class GameCalendar
 {
-    private const uint SecondsPerWeek = 360;
-    private const uint DaysPerWeek = 7;
     private const uint DaysPerMonth = 28;
     private const uint DaysPerYear = 336;
     private uint _elapsedSeconds;
@@ -22,13 +20,14 @@ public sealed class GameCalendar
     {
         get
         {
-            uint elapsedDays = (uint)((ulong)_elapsedSeconds * DaysPerWeek / SecondsPerWeek);
+            uint elapsedDays = (uint)((ulong)_elapsedSeconds * GameTimeUnits.PerSecond /
+                GameTimeUnits.PerDay);
             uint dayOfYear = elapsedDays % DaysPerYear;
             int monthIndex = (int)(dayOfYear / DaysPerMonth);
             return new CalendarSnapshot(
                 _elapsedSeconds, elapsedDays, (int)(elapsedDays / DaysPerYear) + 1,
                 monthIndex + 1, (int)(dayOfYear % DaysPerMonth) + 1,
-                (int)(elapsedDays % DaysPerWeek) + 1, (Season)(monthIndex / 3), IsPaused);
+                (int)(elapsedDays % 7) + 1, (Season)(monthIndex / 3), IsPaused);
         }
     }
 

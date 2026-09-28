@@ -30,6 +30,7 @@ public partial class WorldMap : Node2D
         new(0.70f, 0.57f, 0.40f),
         new(0.95f, 0.78f, 0.28f),
         new(0.54f, 0.88f, 0.57f),
+        new(0.94f, 0.43f, 0.28f),
     };
     private static readonly Color SelectedColor = new(0.95f, 0.76f, 0.31f);
     private static readonly Color EdgeColor = new(0.91f, 0.86f, 0.66f);

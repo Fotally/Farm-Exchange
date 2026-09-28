@@ -35,7 +35,7 @@ public partial class ProcessorDetailsPanel : VBoxContainer
             ? "加工中" : $"等待{details.Crop.CropName}";
         _status.Text = $"{details.Crop.BuildingName} · {status}";
         _relation.Text = $"{details.Crop.CropName} → {details.Crop.ProductName}";
-        _processing.Text = $"加工周期：投入原料后 {details.Crop.ProcessingTicks} 秒完成";
+        _processing.Text = $"加工周期：投入原料后 {details.Crop.ProcessingHalfDays / 2m:0.#} 天完成";
         _price.Text = $"{details.Crop.ProductName}加工品售价：{FormatCoins(details.ProductPriceCents)} 金币";
         _stock.Text = $"{details.Crop.ProductName}加工品库存：{details.ProductStock}";
     }

@@ -1,6 +1,7 @@
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
+using FarmExchange.Time;
 using FarmExchange.World;
 using static FarmExchange.UI.UiElements;
 
@@ -12,6 +13,8 @@ public partial class Main : Node2D
     private WorldMap _worldMap = null!;
     private Control _uiRoot = null!;
     private Label _moneyLabel = null!;
+    private Label _calendarLabel = null!;
+    private Button _pauseButton = null!;
     private Label _messageLabel = null!;
     private Label _buildHint = null!;
     private Button _cancelPlacementButton = null!;
@@ -122,6 +125,11 @@ public partial class Main : Node2D
         row.AddChild(gameTitle);
         row.AddChild(MakeStat("金币", out _moneyLabel));
         row.AddChild(MakeStat("工人", out _, "1 · 自动照料"));
+        row.AddChild(MakeStat("日期", out _calendarLabel, width: 235));
+        _pauseButton = MakeButton("暂停", Mid, 70, 44);
+        _pauseButton.Name = "PauseButton";
+        _pauseButton.Pressed += TogglePause;
+        row.AddChild(_pauseButton);
         row.AddChild(new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
         Button inventory = MakeButton("▣ 库存", Mid, 92, 44);
         inventory.Name = "InventoryButton";
@@ -314,6 +322,8 @@ public partial class Main : Node2D
 
     private void OnTick()
     {
+        if (_game.IsPaused)
+            return;
         TickResult result = _game.AdvanceTick();
         if (result.Harvested > 0 || result.Produced > 0)
             _messageLabel.Text = $"收获 {result.Harvested} 份原料，加工产出 {result.Produced} 份";
@@ -330,11 +340,27 @@ public partial class Main : Node2D
     private void RefreshUi()
     {
         _moneyLabel.Text = FormatCoins(_game.MoneyCents);
+        CalendarSnapshot calendar = _game.Calendar;
+        string season = calendar.Season switch
+        {
+            Season.Spring => "春",
+            Season.Summer => "夏",
+            Season.Autumn => "秋",
+            _ => "冬",
+        };
+        _calendarLabel.Text = $"{season} · 第 {calendar.Year} 年 · {calendar.Month} 月 · {calendar.Day} 日";
+        _pauseButton.Text = _game.IsPaused ? "继续" : "暂停";
         RefreshFooter();
         RefreshDetail();
         if (_inventoryWindow.Visible) _inventoryWindow.Refresh(_game);
         if (_marketWindow.Visible) _marketWindow.Refresh(_game);
         if (_cropWindow.Visible) _cropWindow.Refresh(_game);
+    }
+
+    private void TogglePause()
+    {
+        _game.SetPaused(!_game.IsPaused);
+        RefreshUi();
     }
 
     private void RefreshFooter()
@@ -365,9 +391,9 @@ public partial class Main : Node2D
         _detailWindow.ClampToViewport();
     }
 
-    private static PanelContainer MakeStat(string caption, out Label value, string initial = "")
+    private static PanelContainer MakeStat(string caption, out Label value, string initial = "", int width = 0)
     {
-        var panel = new PanelContainer { CustomMinimumSize = new Vector2(caption == "工人" ? 140 : 105, 48) };
+        var panel = new PanelContainer { CustomMinimumSize = new Vector2(width > 0 ? width : caption == "工人" ? 140 : 105, 48) };
         panel.AddThemeStyleboxOverride("panel", Style(new Color(0.22f, 0.36f, 0.31f), 10));
         var margin = WrapMargin(panel, 10, 4);
         var box = new VBoxContainer();
