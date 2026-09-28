@@ -19,7 +19,26 @@
 ./tools/Run-Tests.ps1 -GodotConsole 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe'
 ```
 
-脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码；总行覆盖率不得低于 80%，T01/T02 界面拆分后的本地结果为 93.23%。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
+脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码。以 `scripts/` 的每个一级目录为模块，**每个模块及业务脚本总体的行覆盖率均不得低于 80%**；高覆盖率模块不能抵消未达标模块。现有 `Run-Tests.ps1` 自动检查总体门槛，模块门槛需从 Cobertura 报告按目录汇总有效行与已覆盖行，逐项核对并记录。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
+
+2026-09-28 的本地 Cobertura 报告中，总体为 **1576/1698（92.82%）**；按上述模块口径，各模块均达到 80%：
+
+| 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `land` | 36 / 41 | 87.80% |
+| `ui` | 674 / 736 | 91.58% |
+| `world` | 315 / 343 | 91.84% |
+| `characters` | 59 / 63 | 93.65% |
+| `processing` | 45 / 48 | 93.75% |
+| `farming` | 76 / 81 | 93.83% |
+| `economy` | 18 / 19 | 94.74% |
+| `gameplay` | 256 / 268 | 95.52% |
+| `inventory` | 29 / 30 | 96.67% |
+| `market` | 37 / 38 | 97.37% |
+| `time` | 21 / 21 | 100.00% |
+| `workers` | 10 / 10 | 100.00% |
+
+该门槛针对模块汇总，不针对每个文件；例如 `ui/NpcPreview.cs` 单文件为 36/63（57.14%），而 `ui` 模块为 91.58%。
 
 图形 FPS 性能测试是同一测试脚本的可选阶段。修改地图绘制、镜头、实体负载或渲染设置，或需要建立性能基线时运行；一般业务规则修改先以必跑的 headless 测试为准：
 
