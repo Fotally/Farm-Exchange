@@ -1,14 +1,14 @@
 # 自动化测试与性能测量
 
-## 自动化测试与行覆盖率
+## 自动化测试与覆盖率
 
-测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的游戏状态、作物定义、库存、钱包、市场、日历和地图坐标；`tests/integration/` 检查镜头输入、地图选择及 NPC 动画场景协作；`tests/e2e/` 检查主场景完整经营流程；`tests/performance/` 测满地图负载与可选图形 FPS。`tests/test_suite.tscn` 汇总各类可在 headless 模式运行的检查，任一失败都会返回非零退出码。满地图检查将 16,384 格全部放上现有实体（8,192 块农田、8,192 处加工场地，七种作物均覆盖），推进 50 个经营步进并打印总耗时与平均耗时。耗时是本机观测值，没有固定通过阈值。Windows 导出程序启动另作构建冒烟测试。
+测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的游戏状态、土地占用、农田与加工状态边界、作物定义、库存、钱包、市场、日历和地图坐标；`tests/integration/` 检查镜头输入、地图选择及 NPC 动画场景协作；`tests/e2e/` 检查主场景完整经营流程；`tests/performance/` 测满地图负载与可选图形 FPS。`tests/test_suite.tscn` 汇总各类可在 headless 模式运行的检查，任一失败都会返回非零退出码。满地图检查将 16,384 格全部放上现有实体（8,192 块农田、8,192 处加工场地，七种作物均覆盖），推进 50 个经营步进并打印总耗时与平均耗时。耗时是本机观测值，没有固定通过阈值。Windows 导出程序启动另作构建冒烟测试。
 
 各文件都有独立的场景入口，排查时可用 `Godot控制台程序 --headless --path . 场景路径` 单独运行：
 
 | 类别 | 场景路径 |
 | --- | --- |
-| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
+| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
 | 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn` |
 | 端到端测试 | `tests/e2e/test_core_loop.tscn` |
 | 满地图负载测试 | `tests/performance/test_full_world_load.tscn` |
@@ -21,24 +21,36 @@
 
 脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码。以 `scripts/` 的每个一级目录为模块，**每个模块及业务脚本总体的行覆盖率均不得低于 80%**；高覆盖率模块不能抵消未达标模块。现有 `Run-Tests.ps1` 自动检查总体门槛，模块门槛需从 Cobertura 报告按目录汇总有效行与已覆盖行，逐项核对并记录。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
 
-2026-09-28 的本地 Cobertura 报告中，总体为 **1576/1698（92.82%）**；按上述模块口径，各模块均达到 80%：
+2026-09-28 补测后的本地 Cobertura 报告中，总体为 **1589/1698（93.58%）**；按上述模块口径，各模块均达到 80%：
 
 | 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
 | --- | ---: | ---: |
-| `land` | 36 / 41 | 87.80% |
+| `land` | 40 / 41 | 97.56% |
 | `ui` | 674 / 736 | 91.58% |
 | `world` | 315 / 343 | 91.84% |
 | `characters` | 59 / 63 | 93.65% |
-| `processing` | 45 / 48 | 93.75% |
-| `farming` | 76 / 81 | 93.83% |
+| `processing` | 48 / 48 | 100.00% |
+| `farming` | 81 / 81 | 100.00% |
 | `economy` | 18 / 19 | 94.74% |
 | `gameplay` | 256 / 268 | 95.52% |
 | `inventory` | 29 / 30 | 96.67% |
-| `market` | 37 / 38 | 97.37% |
+| `market` | 38 / 38 | 100.00% |
 | `time` | 21 / 21 | 100.00% |
 | `workers` | 10 / 10 | 100.00% |
 
 该门槛针对模块汇总，不针对每个文件；例如 `ui/NpcPreview.cs` 单文件为 36/63（57.14%），而 `ui` 模块为 91.58%。
+
+同一 Cobertura 报告也包含分支数据。此次新增的生产状态测试验证空状态、非法输入、重复操作、改种与加工时长边界；市场测试验证非法日期，作物定义测试验证非法标识。分支覆盖率用于定位未测到的决策路径，目前不设硬性门槛：
+
+| 范围 | 补测前 | 补测后 |
+| --- | ---: | ---: |
+| `land` | 21 / 28（75.00%） | 27 / 28（96.43%） |
+| `farming` | 20 / 28（71.43%） | 28 / 28（100.00%） |
+| `processing` | 15 / 20（75.00%） | 20 / 20（100.00%） |
+| `market` | 3 / 4（75.00%） | 4 / 4（100.00%） |
+| 业务脚本总体 | 382 / 520（73.46%） | 402 / 520（77.31%） |
+
+`ui` 仍为 101 / 180（56.11%）；它的输入与界面路径未包含在本次经营规则分支补测中。
 
 图形 FPS 性能测试是同一测试脚本的可选阶段。修改地图绘制、镜头、实体负载或渲染设置，或需要建立性能基线时运行；一般业务规则修改先以必跑的 headless 测试为准：
 

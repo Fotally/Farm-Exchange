@@ -1,3 +1,4 @@
+using System;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Market;
@@ -24,6 +25,8 @@ public partial class TestMarketRules : Node
         int largeChanges = 0;
         if (previousPrice != MarketPriceCurve.InitialPriceCents)
             return Fail("市场曲线未从 5.00 金币开始");
+        if (!Throws<ArgumentOutOfRangeException>(() => curve.GetPriceCents(0)))
+            return Fail("市场曲线接受了第 0 天");
         var game = new FarmGame(12345);
         int[] initialPrices = { 500, 500, 600, 400, 800, 1000, 50 };
         int[] initialRawPrices = { 250, 250, 300, 200, 400, 500, 25 };
@@ -87,6 +90,19 @@ public partial class TestMarketRules : Node
         if (!game.AdvanceTick().WorkerActed || game.Calendar.ElapsedSeconds != 1)
             return Fail("恢复后未从原进度继续");
         return true;
+    }
+
+    private static bool Throws<TException>(Action action) where TException : Exception
+    {
+        try
+        {
+            action();
+            return false;
+        }
+        catch (TException)
+        {
+            return true;
+        }
     }
 
     private static bool Fail(string message)

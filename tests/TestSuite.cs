@@ -8,6 +8,8 @@ public partial class TestSuite : Node
         bool farmGamePassed = TestFarmGame.RunChecks();
         GD.Print("单元测试：资源与作物定义");
         bool resourcesPassed = TestResources.RunChecks();
+        GD.Print("单元测试：土地、农田与加工状态边界");
+        bool productionStatePassed = TestProductionState.RunChecks();
         GD.Print("单元测试：市场价格与换日");
         bool marketPassed = TestMarketRules.RunChecks();
         GD.Print("单元测试：独立日历换算");
@@ -22,7 +24,7 @@ public partial class TestSuite : Node
         bool coreLoopPassed = TestCoreLoop.RunChecks(this);
         GD.Print("性能测试：满地图 headless 负载");
         bool loadPassed = TestFullWorldLoad.RunChecks();
-        bool passed = farmGamePassed && resourcesPassed && marketPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
+        bool passed = farmGamePassed && resourcesPassed && productionStatePassed && marketPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
             coreLoopPassed && loadPassed;
 
         if (passed)

@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using FarmExchange.Economy;
+using FarmExchange.Farming;
 using FarmExchange.Gameplay;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
@@ -41,6 +42,8 @@ public partial class TestResources : Node
                 crop.PricePercent != row.ProductPercent || crop.RawPricePercent != row.RawPercent)
                 return Fail($"{row.Kind} 的名称、时长或售价倍率改变");
         }
+        if (!Throws<ArgumentOutOfRangeException>(() => CropCatalog.Get((CropKind)999)))
+            return Fail("无效作物标识没有被作物定义入口拒绝");
         return true;
     }
 
