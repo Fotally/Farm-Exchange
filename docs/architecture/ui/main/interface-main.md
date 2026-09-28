@@ -14,6 +14,8 @@
 
 ![建造目录](godot-build.png)
 
+![日历与七作物满地图表现](godot-calendar-radish.png)
+
 ## 玩家看到的层级
 
 | 层级 | 内容与作用 |
