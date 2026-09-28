@@ -24,7 +24,10 @@ flowchart LR
     FarmGame --> Inventory[Inventory：分类库存]
     FarmGame --> Wallet[Wallet：金币余额]
     FarmGame --> Market[MarketPriceCurve：面粉曲线]
-    GameCalendar[GameCalendar：独立日历换算]
+    FarmGame --> GameCalendar[GameCalendar：唯一日历与暂停状态]
+    FarmingSystem --> GameTimeUnits[GameTimeUnits：精确时间比例]
+    ProcessingSystem --> GameTimeUnits
+    GameCalendar --> GameTimeUnits
     NpcPreview[NpcPreview：独立预览与输入] --> NpcCharacter[NpcCharacter：角色移动与动画]
     NpcCharacter --> NpcSheets[20 张 NPC 动画图]
 ```
@@ -33,12 +36,13 @@ flowchart LR
 | --- | --- | --- |
 | 每格主要占用类别 | `LandOccupancy` | `FarmGame` 协调建造、拆除，并聚合地块快照。 |
 | 建筑描述、范围、占用与余额的放置检查 | `PlacementRules` | `FarmGame` 预检和执行使用同一规则；执行时重新检查并返回实际扣费。 |
-| 农田选种、阶段与剩余 tick | `FarmingSystem` | `FarmGame` 协调收获入库；`WorkerScheduler` 只通过受控工作操作照料。 |
+| 农田选种、阶段与剩余精确时长 | `FarmingSystem` | `FarmGame` 协调按作物收获量入库；`WorkerScheduler` 只通过受控工作操作照料。 |
 | 加工场地配对与进行中批次 | `ProcessingSystem` | `FarmGame` 协调完工入库与领取相位；模块从 `Inventory` 领取原料。 |
 | 单工人下一个候选农田索引 | `WorkerScheduler` | `FarmGame` 每 tick 请求至多一次工作。 |
-| 当日 tick、天数与市场更新 | `FarmGame` | `Main` 驱动 tick，界面查询当日信息。 |
-| 累计模拟秒与新历法换算 | `GameCalendar` | 目前只由单元测试传入固定秒数验证，尚未接管 `FarmGame` 的时间状态。 |
-| 六种作物的定义 | `CropCatalog` | `FarmGame` 查询只读作物表与单种定义。 |
+| 累计模拟秒、日历和暂停 | `GameCalendar` | `FarmGame` 每次经营步进推进一秒；主界面读取日期并设置暂停。 |
+| 跨日市场更新 | `FarmGame` | 日历进入新日时查询旧市场曲线并刷新当日价格。 |
+| 生产共用的时间比例 | `GameTimeUnits` | 日历、农田和加工使用同一整数比例与剩余秒数换算。 |
+| 七种作物的定义 | `CropCatalog` | `FarmGame` 查询只读作物表与单种定义。 |
 | 各作物的原料和加工品库存 | `Inventory` | `FarmGame` 在生产和交易时查询或修改；界面仍通过 `FarmGame` 查询。 |
 | 金币余额 | `Wallet` | `FarmGame` 在建造和交易时扣款或入账；界面仍通过 `FarmGame.MoneyCents` 查询。 |
 | 面粉价格曲线 | `MarketPriceCurve` | `FarmGame` 按种子和日期查询价格。 |
@@ -57,8 +61,8 @@ flowchart LR
 | 建造、占用或拆除 | `FarmGame`、`PlacementRules`、`LandOccupancy`、`FarmingSystem`、`ProcessingSystem` | `Main`、`WorldMap` 的快照同步和建造测试。 |
 | 作物、加工或库存 | `FarmGame`、`FarmingSystem`、`ProcessingSystem`、`WorkerScheduler`、`CropCatalog`、`Inventory` | 当前推进顺序、经营测试与玩法文档。 |
 | 市场价格或出售 | `MarketPriceCurve`、`FarmGame`、`Inventory`、`Wallet` | 当日成交价、交易测试与玩家规则。 |
-| 新日历的日期边界 | `GameCalendar` | 先看独立历法测试；接入经营时还需确认 T05B 的相位与生产参数。 |
+| 日期边界与生产时间 | `GameCalendar`、`GameTimeUnits` | 同步核对 `FarmGame` 相位、生产模块和日历测试。 |
 | 窗口交互 | `Main`、`DraggableWindow`、对应具体窗口 | 玩家操作、固定控件刷新、场景节点名和端到端测试。 |
 | NPC 动画、角色图集或预览输入 | `NpcCharacter`、`NpcPreview` | 角色场景、20 张素材和预览集成测试；不要用动画回调推进经营。 |
 
-T01/T02 已将窗口容器、目录、选种、库存、市场和详情从 `Main` 的构造与重建逻辑中抽出；经营刷新保留控件实例。T03 已统一坐标入口，T04A～T04C 已统一状态归属和放置规则。T05A 仅完成新历法的独立换算；`FarmGame` 仍按 10 tick/日经营。道路占格和实际工人移动分别留在 #45、#40。
+T01/T02 已将窗口容器、目录、选种、库存、市场和详情从 `Main` 的构造与重建逻辑中抽出；经营刷新保留控件实例。T03 已统一坐标入口，T04A～T04C 已统一状态归属和放置规则。T05A 完成独立历法，T05B 已接管经营时间并切换七作物参数。道路占格和实际工人移动分别留在 #45、#40。

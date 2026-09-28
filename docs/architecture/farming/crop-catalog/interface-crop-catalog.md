@@ -4,8 +4,8 @@
 
 | 成员 | 约定 |
 | --- | --- |
-| `Crops` | 返回六种作物的只读定义列表，沿用原顺序与全部配置值。 |
+| `Crops` | 返回七种作物的只读定义列表：原六种顺序不变，萝卜列在末尾。 |
 | `Get(crop)` | 返回指定作物定义；无效作物抛出 `ArgumentOutOfRangeException`。 |
 | `IsDefined(crop)` | 检查作物编号是否在当前定义范围内，供经营命令在修改状态前校验。 |
 
-作物名称、加工场地、生长与加工时长、价格倍率仍以[作物表](../../../gameplay/production/crop-growth.md)为准。`FarmGame.Crops` 和 `FarmGame.GetCrop` 保留原查询入口并委托本模块。新作物或新规则在后续对应任务确认前不加入。
+作物名称、加工场地、生长天数、单次收获量、加工半天数和价格倍率以[作物表](../../../gameplay/production/crop-growth.md)为准。`FarmGame.Crops` 和 `FarmGame.GetCrop` 保留查询入口并委托本模块。

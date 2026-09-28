@@ -23,7 +23,7 @@ public partial class TestFullWorldLoad : Node
             for (int col = 0; col < FarmGame.MapSize; col++)
             {
                 PlotSnapshot plot = game.GetPlot(new Vector2I(col, row));
-                if (plot.Building == BuildingKind.None || plot.RemainingTicks <= 0)
+                if (plot.Building == BuildingKind.None || plot.RemainingSeconds <= 0)
                     return Fail("满地图负载场景存在空地或非活动实体");
                 if (plot.Building == BuildingKind.Farm)
                 {
@@ -41,18 +41,19 @@ public partial class TestFullWorldLoad : Node
             return Fail("满地图负载测试的农田与加工场地数量错误");
         for (int crop = 0; crop < FarmGame.Crops.Count; crop++)
             if (farmCropCounts[crop] == 0 || processorCropCounts[crop] == 0)
-                return Fail("满地图负载测试没有同时覆盖六种农田和加工场地");
+                return Fail("满地图负载测试没有同时覆盖七种农田和加工场地");
         var watch = Stopwatch.StartNew();
-        int distantFarmTicks = game.GetPlot(new Vector2I(0, 0)).RemainingTicks;
-        int distantProcessorTicks = game.GetPlot(new Vector2I(127, 127)).RemainingTicks;
+        int distantFarmSeconds = game.GetPlot(new Vector2I(0, 0)).RemainingSeconds;
+        int distantProcessorSeconds = game.GetPlot(new Vector2I(127, 127)).RemainingSeconds;
         game.AdvanceTick();
-        if (game.GetPlot(new Vector2I(0, 0)).RemainingTicks != distantFarmTicks - 1 ||
-            game.GetPlot(new Vector2I(127, 127)).RemainingTicks != distantProcessorTicks - 1)
+        if (game.GetPlot(new Vector2I(0, 0)).RemainingSeconds != distantFarmSeconds - 1 ||
+            game.GetPlot(new Vector2I(127, 127)).RemainingSeconds != distantProcessorSeconds - 1)
             return Fail("地图角落的实体没有在 tick 中继续生产或加工");
         for (int tick = 1; tick < 50; tick++)
             game.AdvanceTick();
         watch.Stop();
-        if (game.CurrentDay != 6 || game.GetProductStock(CropKind.Wheat) == 0)
+        if (game.Calendar.ElapsedSeconds != 50 || game.CurrentDay != 1 ||
+            game.GetProductStock(CropKind.Radish) == 0)
             return Fail("满地图负载测试没有持续推进生产和日期");
         GD.Print($"满地图负载测试：50 tick 耗时 {watch.Elapsed.TotalMilliseconds:F2} ms，平均 {watch.Elapsed.TotalMilliseconds / 50:F3} ms/tick");
         return true;

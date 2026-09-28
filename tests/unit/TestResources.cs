@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using FarmExchange.Economy;
+using FarmExchange.Farming;
 using FarmExchange.Gameplay;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
@@ -19,14 +20,15 @@ public partial class TestResources : Node
     private static bool CheckCropDefinitions()
     {
         (CropKind Kind, string Crop, string Building, string Product,
-            int Growth, int Processing, int ProductPercent, int RawPercent)[] expected =
+            int GrowthDays, int Harvest, int ProcessingHalfDays, int ProductPercent, int RawPercent)[] expected =
         {
-            (CropKind.Wheat, "小麦", "磨坊", "面粉", 5, 3, 100, 50),
-            (CropKind.Corn, "玉米", "玉米加工坊", "玉米粉", 6, 4, 100, 50),
-            (CropKind.Rice, "水稻", "碾米坊", "大米", 7, 4, 120, 50),
-            (CropKind.Potato, "马铃薯", "淀粉坊", "淀粉", 6, 4, 80, 50),
-            (CropKind.Sunflower, "向日葵", "榨油坊", "葵花籽油", 9, 5, 160, 50),
-            (CropKind.Sugarcane, "甘蔗", "制糖坊", "蔗糖", 10, 6, 200, 50),
+            (CropKind.Wheat, "小麦", "磨坊", "面粉", 16, 2, 4, 100, 50),
+            (CropKind.Corn, "玉米", "玉米加工坊", "玉米粉", 20, 4, 6, 100, 50),
+            (CropKind.Rice, "水稻", "碾米坊", "大米", 12, 3, 4, 120, 50),
+            (CropKind.Potato, "马铃薯", "淀粉坊", "淀粉", 14, 8, 2, 80, 50),
+            (CropKind.Sunflower, "向日葵", "榨油坊", "葵花籽油", 17, 1, 12, 160, 50),
+            (CropKind.Sugarcane, "甘蔗", "制糖坊", "蔗糖", 40, 12, 4, 200, 50),
+            (CropKind.Radish, "萝卜", "腌制坊", "腌萝卜", 4, 6, 1, 10, 50),
         };
         if (FarmGame.Crops.Count != expected.Length)
             return Fail("迁移后作物数量改变");
@@ -35,10 +37,13 @@ public partial class TestResources : Node
             CropDefinition crop = FarmGame.GetCrop(row.Kind);
             if (crop.Kind != row.Kind || crop.CropName != row.Crop ||
                 crop.BuildingName != row.Building || crop.ProductName != row.Product ||
-                crop.GrowthTicks != row.Growth || crop.ProcessingTicks != row.Processing ||
+                crop.GrowthDays != row.GrowthDays || crop.HarvestQuantity != row.Harvest ||
+                crop.ProcessingHalfDays != row.ProcessingHalfDays ||
                 crop.PricePercent != row.ProductPercent || crop.RawPricePercent != row.RawPercent)
                 return Fail($"{row.Kind} 的名称、时长或售价倍率改变");
         }
+        if (!Throws<ArgumentOutOfRangeException>(() => CropCatalog.Get((CropKind)999)))
+            return Fail("无效作物标识没有被作物定义入口拒绝");
         return true;
     }
 

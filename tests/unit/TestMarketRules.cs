@@ -1,3 +1,4 @@
+using System;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Market;
@@ -10,7 +11,7 @@ public partial class TestMarketRules : Node
         GetTree().Quit(passed ? 0 : 1);
     }
 
-    public static bool RunChecks() => CheckMarketCurve() && CheckDayTiming();
+    public static bool RunChecks() => CheckMarketCurve() && CheckDayTiming() && CheckPause();
 
     private static bool CheckMarketCurve()
     {
@@ -24,9 +25,11 @@ public partial class TestMarketRules : Node
         int largeChanges = 0;
         if (previousPrice != MarketPriceCurve.InitialPriceCents)
             return Fail("市场曲线未从 5.00 金币开始");
+        if (!Throws<ArgumentOutOfRangeException>(() => curve.GetPriceCents(0)))
+            return Fail("市场曲线接受了第 0 天");
         var game = new FarmGame(12345);
-        int[] initialPrices = { 500, 500, 600, 400, 800, 1000 };
-        int[] initialRawPrices = { 250, 250, 300, 200, 400, 500 };
+        int[] initialPrices = { 500, 500, 600, 400, 800, 1000, 50 };
+        int[] initialRawPrices = { 250, 250, 300, 200, 400, 500, 25 };
         foreach (CropDefinition crop in FarmGame.Crops)
             if (game.GetProductPriceCents(crop.Kind) != initialPrices[(int)crop.Kind] ||
                 game.GetRawPriceCents(crop.Kind) != initialRawPrices[(int)crop.Kind] ||
@@ -58,12 +61,12 @@ public partial class TestMarketRules : Node
     private static bool CheckDayTiming()
     {
         var game = new FarmGame(12345);
-        for (int i = 0; i < FarmGame.TicksPerDay - 1; i++)
+        for (int i = 0; i < 51; i++)
             if (game.AdvanceTick().DayAdvanced || game.CurrentDay != 1)
-                return Fail("未满 10 tick 就提前进入下一天");
+                return Fail("未跨过精确日界时提前进入下一天");
         if (!game.AdvanceTick().DayAdvanced || game.CurrentDay != 2 ||
             game.DailyPriceChangePercent == 0.0)
-            return Fail("第 10 tick 未进入下一天并更新价格");
+            return Fail("第 52 秒未进入下一天并更新价格");
         foreach (CropDefinition crop in FarmGame.Crops)
         {
             int productPrice = (game.CurrentFlourPriceCents * crop.PricePercent + 50) / 100;
@@ -72,6 +75,34 @@ public partial class TestMarketRules : Node
                 return Fail($"{crop.CropName}原料或加工品没有按当天价格计价");
         }
         return true;
+    }
+
+    private static bool CheckPause()
+    {
+        var game = new FarmGame(12345);
+        int price = game.CurrentFlourPriceCents;
+        game.SetPaused(true);
+        for (int i = 0; i < 100; i++)
+            if (game.AdvanceTick() != default || game.Calendar.ElapsedSeconds != 0 ||
+                game.CurrentFlourPriceCents != price)
+                return Fail("暂停时经营、日历或行情继续推进");
+        game.SetPaused(false);
+        if (!game.AdvanceTick().WorkerActed || game.Calendar.ElapsedSeconds != 1)
+            return Fail("恢复后未从原进度继续");
+        return true;
+    }
+
+    private static bool Throws<TException>(Action action) where TException : Exception
+    {
+        try
+        {
+            action();
+            return false;
+        }
+        catch (TException)
+        {
+            return true;
+        }
     }
 
     private static bool Fail(string message)

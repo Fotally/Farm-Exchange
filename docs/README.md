@@ -4,7 +4,7 @@
 
 ## 游戏规则
 
-- [作物与选种](gameplay/production/crop-growth.md)：六种作物、详情显示的生长周期和切换规则。
+- [作物与选种](gameplay/production/crop-growth.md)：七种作物、收获数量、详情显示的生长周期和切换规则。
 - [加工](gameplay/production/processing.md)：对应场地、加工时间、场地详情与投入损失。
 - [出售与价格](gameplay/trading/sales.md)：原料与加工品的当日定价、库存与结算。
 - [开局与建造](gameplay/land/opening-and-building.md)：预置建筑、建造收费与扩张。
@@ -17,7 +17,7 @@
 - [CropCatalog 接口](architecture/farming/crop-catalog/interface-crop-catalog.md)、[Inventory 接口](architecture/inventory/inventory/interface-inventory.md)与[Wallet 接口](architecture/economy/wallet/interface-wallet.md)：作物定义、分类库存和余额的唯一拥有者。
 - [LandOccupancy 接口](architecture/land/land-occupancy/interface-land-occupancy.md)、[PlacementRules 接口](architecture/land/placement-rules/interface-placement-rules.md)、[FarmingSystem 接口](architecture/farming/farming-system/interface-farming-system.md)、[ProcessingSystem 接口](architecture/processing/processing-system/interface-processing-system.md)和[WorkerScheduler 接口](architecture/workers/worker-scheduler/interface-worker-scheduler.md)：地块占用、统一放置规则、生产状态与旧单工人轮转。
 - [市场价格接口](architecture/market/market-price-curve/interface-market-price-curve.md)及[曲线实现](architecture/market/market-price-curve/implementation-bounded-curve.md)。
-- [GameCalendar 接口](architecture/time/game-calendar/interface-game-calendar.md)：已验证的独立日历换算；尚未接管当前经营时间。
+- [GameCalendar 接口](architecture/time/game-calendar/interface-game-calendar.md)和[GameTimeUnits 接口](architecture/time/game-time-units/interface-game-time-units.md)：经营日历、暂停与生产共用的精确时间比例。
 - [MapCoordinates 接口](architecture/world/map-coordinates/interface-map-coordinates.md)：格坐标与地图本地坐标的统一换算。
 - [WorldMap 接口](architecture/world/world-map/interface-world-map.md)及[分块缓存实现](architecture/world/world-map/implementation-chunk-cache.md)。
 - [镜头输入接口](architecture/world/camera-controller/interface-camera-controller.md)。

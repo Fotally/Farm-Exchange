@@ -1,11 +1,12 @@
 using System;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
+using FarmExchange.Time;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
 namespace FarmExchange.Processing;
 
-internal readonly record struct ProcessorSnapshot(CropKind CropKind, int RemainingTicks);
+internal readonly record struct ProcessorSnapshot(CropKind CropKind, int RemainingSeconds);
 
 internal sealed class ProcessingSystem
 {
@@ -19,7 +20,8 @@ internal sealed class ProcessingSystem
     {
         ProcessorState processor = _processors[index] ??
             throw new InvalidOperationException("土地没有加工状态");
-        return new ProcessorSnapshot(processor.CropKind, processor.RemainingTicks);
+        return new ProcessorSnapshot(processor.CropKind,
+            GameTimeUnits.RemainingSeconds(processor.RemainingTimeUnits));
     }
 
     internal void Place(int index, CropKind crop)
@@ -42,11 +44,12 @@ internal sealed class ProcessingSystem
     {
         productCrop = default;
         ProcessorState? processor = _processors[index];
-        if (processor == null || processor.RemainingTicks == 0)
+        if (processor == null || processor.RemainingTimeUnits == 0)
             return false;
-        processor.RemainingTicks--;
-        if (processor.RemainingTicks != 0)
+        processor.RemainingTimeUnits -= GameTimeUnits.PerSecond;
+        if (processor.RemainingTimeUnits > 0)
             return false;
+        processor.RemainingTimeUnits = 0;
         productCrop = processor.CropKind;
         return true;
     }
@@ -54,17 +57,19 @@ internal sealed class ProcessingSystem
     internal bool TryStart(int index, GoodsInventory inventory)
     {
         ProcessorState? processor = _processors[index];
-        if (processor == null || processor.RemainingTicks != 0 ||
+        if (processor == null || processor.RemainingTimeUnits != 0 ||
             !inventory.TryTakeRawForProcessing(processor.CropKind))
             return false;
-        processor.RemainingTicks = CropCatalog.Get(processor.CropKind).ProcessingTicks;
+        processor.RemainingTimeUnits = CropCatalog.Get(processor.CropKind).ProcessingHalfDays *
+            GameTimeUnits.PerHalfDay;
         return true;
     }
 
     internal void SetProcessingForBenchmark(int index, CropKind crop)
     {
         Place(index, crop);
-        _processors[index]!.RemainingTicks = CropCatalog.Get(crop).ProcessingTicks;
+        _processors[index]!.RemainingTimeUnits = CropCatalog.Get(crop).ProcessingHalfDays *
+            GameTimeUnits.PerHalfDay;
     }
 
     internal void Clear() => Array.Clear(_processors);
@@ -72,7 +77,7 @@ internal sealed class ProcessingSystem
     private sealed class ProcessorState
     {
         internal CropKind CropKind;
-        internal int RemainingTicks;
+        internal int RemainingTimeUnits;
 
         internal ProcessorState(CropKind crop) => CropKind = crop;
     }

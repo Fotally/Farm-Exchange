@@ -42,7 +42,7 @@ public partial class FarmDetailsPanel : VBoxContainer
             _ => "等待工人照料",
         };
         _status.Text = $"{details.Crop.CropName}农田 · {status}";
-        _growth.Text = $"生长周期：浇水后 {details.Crop.GrowthTicks} 秒成熟";
+        _growth.Text = $"生长周期：浇水后 {details.Crop.GrowthDays} 天成熟";
         _price.Text = $"{details.Crop.CropName}原材料售价：{FormatCoins(details.RawPriceCents)} 金币";
         _stock.Text = $"{details.Crop.CropName}原料库存：{details.RawStock}";
     }

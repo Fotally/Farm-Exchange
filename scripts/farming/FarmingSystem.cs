@@ -1,9 +1,10 @@
 using System;
 using FarmExchange.Gameplay;
+using FarmExchange.Time;
 
 namespace FarmExchange.Farming;
 
-internal readonly record struct FarmSnapshot(CropKind CropKind, CropStage Stage, int RemainingTicks);
+internal readonly record struct FarmSnapshot(CropKind CropKind, CropStage Stage, int RemainingSeconds);
 
 internal sealed class FarmingSystem
 {
@@ -17,7 +18,8 @@ internal sealed class FarmingSystem
     internal FarmSnapshot Get(int index)
     {
         FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
-        return new FarmSnapshot(farm.CropKind, farm.Stage, farm.RemainingTicks);
+        return new FarmSnapshot(farm.CropKind, farm.Stage,
+            GameTimeUnits.RemainingSeconds(farm.RemainingTimeUnits));
     }
 
     internal void Place(int index, CropKind crop)
@@ -45,7 +47,7 @@ internal sealed class FarmingSystem
             return;
         farm.CropKind = crop;
         farm.Stage = CropStage.None;
-        farm.RemainingTicks = 0;
+        farm.RemainingTimeUnits = 0;
     }
 
     internal bool AdvanceGrowth(int index, out CropKind harvestedCrop)
@@ -54,10 +56,11 @@ internal sealed class FarmingSystem
         FarmState? farm = _farms[index];
         if (farm == null || farm.Stage != CropStage.Growing)
             return false;
-        farm.RemainingTicks--;
-        if (farm.RemainingTicks != 0)
+        farm.RemainingTimeUnits -= GameTimeUnits.PerSecond;
+        if (farm.RemainingTimeUnits > 0)
             return false;
         farm.Stage = CropStage.None;
+        farm.RemainingTimeUnits = 0;
         harvestedCrop = farm.CropKind;
         return true;
     }
@@ -72,7 +75,8 @@ internal sealed class FarmingSystem
         else
         {
             farm.Stage = CropStage.Growing;
-            farm.RemainingTicks = CropCatalog.Get(farm.CropKind).GrowthTicks;
+            farm.RemainingTimeUnits = CropCatalog.Get(farm.CropKind).GrowthDays *
+                GameTimeUnits.PerDay;
         }
         return true;
     }
@@ -82,7 +86,7 @@ internal sealed class FarmingSystem
         Place(index, crop);
         FarmState farm = _farms[index]!;
         farm.Stage = CropStage.Growing;
-        farm.RemainingTicks = CropCatalog.Get(crop).GrowthTicks;
+        farm.RemainingTimeUnits = CropCatalog.Get(crop).GrowthDays * GameTimeUnits.PerDay;
     }
 
     internal void Clear() => Array.Clear(_farms);
@@ -91,7 +95,7 @@ internal sealed class FarmingSystem
     {
         internal CropKind CropKind;
         internal CropStage Stage;
-        internal int RemainingTicks;
+        internal int RemainingTimeUnits;
 
         internal FarmState(CropKind crop) => CropKind = crop;
     }
