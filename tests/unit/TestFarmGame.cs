@@ -15,7 +15,8 @@ public partial class TestFarmGame : Node
 
     public static bool RunChecks() =>
         CheckInitialCenter() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
-        CheckWorkerRotation() && CheckRawSales() && CheckInvalidCrops() && CheckStateOwnership() &&
+        CheckWorkerRotation() && CheckRainSupply() && CheckRawSales() &&
+        CheckInvalidCrops() && CheckStateOwnership() &&
         CheckPlacementRules();
 
     private static bool CheckInitialCenter()
@@ -229,6 +230,77 @@ public partial class TestFarmGame : Node
         if (game.GetPlot(first).RemainingSeconds != 822 ||
             game.GetPlot(second).RemainingSeconds != 875)
             return Fail("不同作物未按各自成熟时间生长");
+        return true;
+    }
+
+    private static bool CheckRainSupply()
+    {
+        var retained = new FarmGame(12345);
+        RemoveInitialBuildings(retained);
+        Vector2I first = new(0, 0);
+        Vector2I second = new(1, 0);
+        retained.BuildFarm(first);
+        retained.BuildFarm(second);
+        retained.SetFarmCrop(second, CropKind.Radish);
+        retained.SetPaused(true);
+        retained.AdvanceTick(isRaining: true);
+        if (retained.GetPlot(second).HasWater || retained.Calendar.ElapsedSeconds != 0)
+            return Fail("暂停期间降雨改变了农田或日历");
+        retained.SetPaused(false);
+        retained.AdvanceTick(isRaining: true);
+        if (retained.GetPlot(second).Crop != CropStage.None ||
+            !retained.GetPlot(second).HasWater ||
+            retained.GetFarmDetails(second).Status != FarmStatus.WaitingForWorkerWithWater)
+            return Fail("未播种农田没有在雨后留存水分");
+        TickResult usedRain = retained.AdvanceTick();
+        if (!usedRain.WorkerActed || retained.GetPlot(second).Crop != CropStage.Growing ||
+            retained.GetPlot(second).RemainingSeconds != 206)
+            return Fail("雨停后播种没有使用留存水分开始生长");
+
+        var seeded = new FarmGame(12345);
+        RemoveInitialBuildings(seeded);
+        Vector2I farm = new(3, 4);
+        seeded.BuildFarm(farm);
+        seeded.SetFarmCrop(farm, CropKind.Radish);
+        seeded.AdvanceTick();
+        if (seeded.GetPlot(farm).Crop != CropStage.Seeded || seeded.GetPlot(farm).HasWater)
+            return Fail("无雨时农田未进入待水阶段");
+        TickResult rainOnSeed = seeded.AdvanceTick(isRaining: true);
+        if (rainOnSeed.WorkerActed || seeded.GetPlot(farm).Crop != CropStage.Growing ||
+            seeded.GetPlot(farm).RemainingSeconds != 205 ||
+            !seeded.GetPlot(farm).HasWater)
+            return Fail("已播种农田遇雨后没有从本秒开始生长，或工人重复浇水");
+        seeded.SetFarmCrop(farm, CropKind.Potato);
+        if (!seeded.GetPlot(farm).HasWater || seeded.GetPlot(farm).Crop != CropStage.None ||
+            !seeded.AdvanceTick().WorkerActed ||
+            seeded.GetPlot(farm).Crop != CropStage.Growing)
+            return Fail("改种后没有保留水分，或又安排了浇水动作");
+        seeded.RemoveBuilding(farm);
+        seeded.BuildFarm(farm);
+        if (seeded.GetPlot(farm).HasWater)
+            return Fail("拆除重建的农田保留了旧水分");
+
+        var continuous = new FarmGame(12345);
+        RemoveInitialBuildings(continuous);
+        continuous.BuildFarm(farm);
+        continuous.SetFarmCrop(farm, CropKind.Radish);
+        continuous.AdvanceTick();
+        continuous.AdvanceTick();
+        TickResult repeatedRain = continuous.AdvanceTick(isRaining: true);
+        if (repeatedRain.WorkerActed || continuous.GetPlot(farm).RemainingSeconds != 205)
+            return Fail("人工浇水后遇雨重置了生长进度");
+        TickResult harvest = default;
+        for (int step = 0; step < 205; step++)
+            harvest = continuous.AdvanceTick(isRaining: true);
+        if (harvest.Harvested != 6 || continuous.GetRawStock(CropKind.Radish) != 6 ||
+            continuous.GetPlot(farm).Crop != CropStage.Seeded ||
+            continuous.GetPlot(farm).HasWater)
+            return Fail("持续降雨中收获没有清除本轮水分");
+        TickResult nextRain = continuous.AdvanceTick(isRaining: true);
+        if (nextRain.WorkerActed || continuous.GetPlot(farm).Crop != CropStage.Growing ||
+            !continuous.GetPlot(farm).HasWater ||
+            continuous.GetPlot(farm).RemainingSeconds != 205)
+            return Fail("收获后的下一秒持续降雨没有重新供水");
         return true;
     }
 

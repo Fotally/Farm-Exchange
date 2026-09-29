@@ -14,7 +14,8 @@ public partial class TestProductionState : Node
         GetTree().Quit(passed ? 0 : 1);
     }
 
-    public static bool RunChecks() => CheckLand() && CheckPlacementMessages() && CheckFarming() && CheckProcessing();
+    public static bool RunChecks() => CheckLand() && CheckPlacementMessages() &&
+        CheckFarming() && CheckWater() && CheckProcessing();
 
     private static bool CheckLand()
     {
@@ -125,6 +126,39 @@ public partial class TestProductionState : Node
         processors.Remove(0);
         if (processors.HasProcessor(0) || processors.TryStart(0, inventory))
             return Fail("拆除后仍能启动加工");
+        return true;
+    }
+
+    private static bool CheckWater()
+    {
+        var farms = new FarmingSystem(1);
+        farms.Place(0, CropKind.Wheat);
+        farms.SupplyWater(0);
+        if (farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.None, 0, true) ||
+            !farms.TryWork(0) ||
+            farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.Growing, 823, true))
+            return Fail("空田留水后播种没有直接开始生长");
+
+        farms.AdvanceGrowth(0, out _);
+        farms.SupplyWater(0);
+        if (farms.Get(0).RemainingSeconds != 822)
+            return Fail("生长中重复供水重置了进度");
+
+        farms.SetCrop(0, CropKind.Radish);
+        if (farms.Get(0) != new FarmSnapshot(CropKind.Radish, CropStage.None, 0, true) ||
+            !farms.TryWork(0) || farms.Get(0).RemainingSeconds != 206)
+            return Fail("改种没有保留水分供下一轮播种使用");
+        for (int second = 0; second < 205; second++)
+            if (farms.AdvanceGrowth(0, out _))
+                return Fail("获水后萝卜提前成熟");
+        if (!farms.AdvanceGrowth(0, out _) ||
+            farms.Get(0) != new FarmSnapshot(CropKind.Radish, CropStage.None, 0))
+            return Fail("收获没有清除本轮水分");
+
+        farms.Remove(0);
+        farms.Place(0, CropKind.Wheat);
+        if (farms.Get(0).HasWater)
+            return Fail("拆除后重建的农田继承了旧水分");
         return true;
     }
 

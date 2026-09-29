@@ -5,6 +5,7 @@
 ## 游戏规则
 
 - [作物与选种](gameplay/production/crop-growth.md)：七种作物、收获数量、详情显示的生长周期和切换规则。
+- [农田供水与降雨](gameplay/production/water-and-rain.md)：留水、雨中播种、改种与收获后的水分处理。
 - [加工](gameplay/production/processing.md)：对应场地、加工时间、场地详情与投入损失。
 - [出售与价格](gameplay/trading/sales.md)：原料与加工品的当日定价、库存与结算。
 - [开局与建造](gameplay/land/opening-and-building.md)：预置建筑、建造收费与扩张。
