@@ -16,7 +16,7 @@ namespace FarmExchange.Gameplay;
 public enum CropStage { None, Seeded, Growing }
 public enum BuildingKind { None, Farm, Processor }
 public enum CropKind { Wheat, Corn, Rice, Potato, Sunflower, Sugarcane, Radish }
-public enum FarmStatus { WaitingForWorker, WaitingForWater, Growing }
+public enum FarmStatus { WaitingForWorker, WaitingForWorkerWithWater, WaitingForWater, Growing }
 public enum ProcessorStatus { WaitingForRaw, Processing }
 
 public readonly record struct CropDefinition(
@@ -24,7 +24,8 @@ public readonly record struct CropDefinition(
     int GrowthDays, int HarvestQuantity, int ProcessingHalfDays,
     int PricePercent, int RawPricePercent);
 public readonly record struct PlotSnapshot(
-    BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingSeconds);
+    BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingSeconds,
+    bool HasWater = false);
 public readonly record struct FarmDetailsSnapshot(
     CropDefinition Crop, FarmStatus Status, int RawPriceCents, int RawStock);
 public readonly record struct ProcessorDetailsSnapshot(
@@ -126,7 +127,8 @@ public sealed class FarmGame
     private PlotSnapshot FarmPlot(int index)
     {
         FarmSnapshot farm = _farming.Get(index);
-        return new PlotSnapshot(BuildingKind.Farm, farm.CropKind, farm.Stage, farm.RemainingSeconds);
+        return new PlotSnapshot(BuildingKind.Farm, farm.CropKind, farm.Stage,
+            farm.RemainingSeconds, farm.HasWater);
     }
 
     private PlotSnapshot ProcessorPlot(int index)
@@ -146,6 +148,7 @@ public sealed class FarmGame
         {
             CropStage.Seeded => FarmStatus.WaitingForWater,
             CropStage.Growing => FarmStatus.Growing,
+            _ when plot.HasWater => FarmStatus.WaitingForWorkerWithWater,
             _ => FarmStatus.WaitingForWorker,
         };
         return new FarmDetailsSnapshot(crop, status, GetRawPriceCents(crop.Kind),
@@ -261,12 +264,14 @@ public sealed class FarmGame
         return null;
     }
 
-    public TickResult AdvanceTick()
+    public TickResult AdvanceTick(bool isRaining = false)
     {
         if (_calendar.IsPaused)
             return default;
         if (_calendar.Snapshot.ElapsedSeconds == uint.MaxValue)
             throw new InvalidOperationException("模拟时间已达到上限");
+        if (isRaining)
+            ApplyRain();
         int harvested = 0;
         int produced = 0;
         for (int i = 0; i < CellCount; i++)
@@ -331,6 +336,13 @@ public sealed class FarmGame
     }
 
     public void SetPaused(bool paused) => _calendar.SetPaused(paused);
+
+    private void ApplyRain()
+    {
+        for (int i = 0; i < CellCount; i++)
+            if (_occupancy.Get(i) == BuildingKind.Farm)
+                _farming.SupplyWater(i);
+    }
 
     private static string? PlacementError(PlacementResult result) =>
         result.Success ? null : PlacementRules.ErrorMessage(result.Failure);

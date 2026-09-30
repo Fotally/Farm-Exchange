@@ -20,7 +20,23 @@ public partial class TestCoreLoop : Node
         parent.AddChild(main);
         bool passed = Check(main);
         main.QueueFree();
-        return passed;
+        return passed && CheckRainUi(parent);
+    }
+
+    private static bool CheckRainUi(Node parent)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        parent.AddChild(main);
+        main.Game.AdvanceTick(isRaining: true);
+        Vector2I wetFarm = new(65, 63);
+        main.GetNode<WorldMap>("WorldMap").EmitSignal(
+            WorldMap.SignalName.SelectionChanged, wetFarm);
+        Control detail = Find<Control>(main.GetNode<Control>("CanvasLayer/UiRoot"), "DetailWindow");
+        bool visible = main.Game.GetFarmDetails(wetFarm).Status ==
+            FarmStatus.WaitingForWorkerWithWater &&
+            ContainsVisibleText(detail, "待播种 · 已有水分");
+        main.QueueFree();
+        return visible || Fail("雨后未播种农田的已湿润状态没有显示在详情中");
     }
 
     private static bool Check(Main main)
@@ -73,7 +89,7 @@ public partial class TestCoreLoop : Node
         if (main.Game.GetPlot(farm).Building != BuildingKind.Farm ||
             main.Game.MoneyCents != 4000 || !detail.Visible || cancel.Visible ||
             !ContainsVisibleText(detail, "原材料售价：2.50 金币") ||
-            !ContainsVisibleText(detail, "生长周期：浇水后 16 天成熟") ||
+            !ContainsVisibleText(detail, "生长周期：获得水后 16 天成熟") ||
             !ContainsVisibleText(detail, "原料库存：") ||
             ContainsVisibleText(detail, "加工品库存"))
             return Fail("农田摆放、收费或详情显示错误");
@@ -113,7 +129,7 @@ public partial class TestCoreLoop : Node
         {
             Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
             Find<Button>(cropWindow, $"CropCard{crop.Kind}").EmitSignal(Button.SignalName.Pressed);
-            if (!ContainsVisibleText(detail, $"生长周期：浇水后 {growthDays[(int)crop.Kind]} 天成熟"))
+            if (!ContainsVisibleText(detail, $"生长周期：获得水后 {growthDays[(int)crop.Kind]} 天成熟"))
                 return Fail($"{crop.CropName}农田详情未显示正确生长周期");
         }
         Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);

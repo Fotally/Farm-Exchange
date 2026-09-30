@@ -26,7 +26,7 @@ public partial class FarmDetailsPanel : VBoxContainer
         change.Name = "ChangeCropButton";
         change.Pressed += () => ChangeCropRequested?.Invoke();
         AddChild(change);
-        AddChild(MakeLabel("改种会清除当前未收获作物。", 12, Ink));
+        AddChild(MakeLabel("改种会清除当前未收获作物；田块水分保留。", 12, Ink));
         Button remove = MakeButton("移除农田", new Color(0.66f, 0.36f, 0.31f), 0, 43);
         remove.Name = "RemoveButton";
         remove.Pressed += () => RemoveRequested?.Invoke();
@@ -38,11 +38,12 @@ public partial class FarmDetailsPanel : VBoxContainer
         string status = details.Status switch
         {
             FarmStatus.WaitingForWater => "等待浇水",
+            FarmStatus.WaitingForWorkerWithWater => "待播种 · 已有水分",
             FarmStatus.Growing => "生长中",
             _ => "等待工人照料",
         };
         _status.Text = $"{details.Crop.CropName}农田 · {status}";
-        _growth.Text = $"生长周期：浇水后 {details.Crop.GrowthDays} 天成熟";
+        _growth.Text = $"生长周期：获得水后 {details.Crop.GrowthDays} 天成熟";
         _price.Text = $"{details.Crop.CropName}原材料售价：{FormatCoins(details.RawPriceCents)} 金币";
         _stock.Text = $"{details.Crop.CropName}原料库存：{details.RawStock}";
     }
