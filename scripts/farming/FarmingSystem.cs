@@ -75,13 +75,15 @@ internal sealed class FarmingSystem
         return true;
     }
 
-    internal bool TryWork(int index)
+    internal bool TryWork(int index, CalendarSnapshot calendar)
     {
         FarmState? farm = _farms[index];
         if (farm == null || farm.Stage == CropStage.Growing)
             return false;
         if (farm.Stage == CropStage.None)
         {
+            if (PlantingRules.Check(farm.CropKind, calendar, farm.HasWater) != PlantingFailure.None)
+                return false;
             farm.Stage = CropStage.Seeded;
             if (farm.HasWater)
                 StartGrowth(farm);

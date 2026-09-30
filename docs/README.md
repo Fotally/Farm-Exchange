@@ -4,7 +4,7 @@
 
 ## 游戏规则
 
-- [作物与选种](gameplay/production/crop-growth.md)：七种作物、收获数量、详情显示的生长周期和切换规则。
+- [作物与选种](gameplay/production/crop-growth.md)：七种作物、适宜季节、播种前检查、收获数量和切换规则。
 - [农田供水与降雨](gameplay/production/water-and-rain.md)：留水、雨中播种、改种与收获后的水分处理。
 - [加工](gameplay/production/processing.md)：对应场地、加工时间、场地详情与投入损失。
 - [出售与价格](gameplay/trading/sales.md)：原料与加工品的当日定价、库存与结算。
@@ -16,7 +16,7 @@
 - [当前系统组织与状态归属](architecture/implementation-system-organization.md)：已落地模块关系和修改入口。
 - [FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)及[推进顺序](architecture/game-state/farm-game/implementation-tick-order.md)。
 - [CropCatalog 接口](architecture/farming/crop-catalog/interface-crop-catalog.md)、[Inventory 接口](architecture/inventory/inventory/interface-inventory.md)与[Wallet 接口](architecture/economy/wallet/interface-wallet.md)：作物定义、分类库存和余额的唯一拥有者。
-- [LandOccupancy 接口](architecture/land/land-occupancy/interface-land-occupancy.md)、[PlacementRules 接口](architecture/land/placement-rules/interface-placement-rules.md)、[FarmingSystem 接口](architecture/farming/farming-system/interface-farming-system.md)、[ProcessingSystem 接口](architecture/processing/processing-system/interface-processing-system.md)和[WorkerScheduler 接口](architecture/workers/worker-scheduler/interface-worker-scheduler.md)：地块占用、统一放置规则、生产状态与旧单工人轮转。
+- [LandOccupancy 接口](architecture/land/land-occupancy/interface-land-occupancy.md)、[PlacementRules 接口](architecture/land/placement-rules/interface-placement-rules.md)、[FarmingSystem 接口](architecture/farming/farming-system/interface-farming-system.md)、[PlantingRules 接口](architecture/farming/planting-rules/interface-planting-rules.md)、[ProcessingSystem 接口](architecture/processing/processing-system/interface-processing-system.md)和[WorkerScheduler 接口](architecture/workers/worker-scheduler/interface-worker-scheduler.md)：地块占用、放置与播种检查、生产状态与旧单工人轮转。
 - [市场价格接口](architecture/market/market-price-curve/interface-market-price-curve.md)及[曲线实现](architecture/market/market-price-curve/implementation-bounded-curve.md)。
 - [GameCalendar 接口](architecture/time/game-calendar/interface-game-calendar.md)和[GameTimeUnits 接口](architecture/time/game-time-units/interface-game-time-units.md)：经营日历、暂停与生产共用的精确时间比例。
 - [MapCoordinates 接口](architecture/world/map-coordinates/interface-map-coordinates.md)：格坐标与地图本地坐标的统一换算。

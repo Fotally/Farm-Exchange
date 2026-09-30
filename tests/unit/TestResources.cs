@@ -20,15 +20,23 @@ public partial class TestResources : Node
     private static bool CheckCropDefinitions()
     {
         (CropKind Kind, string Crop, string Building, string Product,
-            int GrowthDays, int Harvest, int ProcessingHalfDays, int ProductPercent, int RawPercent)[] expected =
+            int GrowthDays, int Harvest, int ProcessingHalfDays, int ProductPercent,
+            int RawPercent, GrowingSeasons Seasons)[] expected =
         {
-            (CropKind.Wheat, "小麦", "磨坊", "面粉", 16, 2, 4, 100, 50),
-            (CropKind.Corn, "玉米", "玉米加工坊", "玉米粉", 20, 4, 6, 100, 50),
-            (CropKind.Rice, "水稻", "碾米坊", "大米", 12, 3, 4, 120, 50),
-            (CropKind.Potato, "马铃薯", "淀粉坊", "淀粉", 14, 8, 2, 80, 50),
-            (CropKind.Sunflower, "向日葵", "榨油坊", "葵花籽油", 17, 1, 12, 160, 50),
-            (CropKind.Sugarcane, "甘蔗", "制糖坊", "蔗糖", 40, 12, 4, 200, 50),
-            (CropKind.Radish, "萝卜", "腌制坊", "腌萝卜", 4, 6, 1, 10, 50),
+            (CropKind.Wheat, "小麦", "磨坊", "面粉", 16, 2, 4, 100, 50,
+                GrowingSeasons.Spring | GrowingSeasons.Autumn | GrowingSeasons.Winter),
+            (CropKind.Corn, "玉米", "玉米加工坊", "玉米粉", 20, 4, 6, 100, 50,
+                GrowingSeasons.Spring | GrowingSeasons.Summer),
+            (CropKind.Rice, "水稻", "碾米坊", "大米", 12, 3, 4, 120, 50,
+                GrowingSeasons.Spring | GrowingSeasons.Summer),
+            (CropKind.Potato, "马铃薯", "淀粉坊", "淀粉", 14, 8, 2, 80, 50,
+                GrowingSeasons.Spring | GrowingSeasons.Autumn),
+            (CropKind.Sunflower, "向日葵", "榨油坊", "葵花籽油", 17, 1, 12, 160, 50,
+                GrowingSeasons.Spring | GrowingSeasons.Summer),
+            (CropKind.Sugarcane, "甘蔗", "制糖坊", "蔗糖", 40, 12, 4, 200, 50,
+                GrowingSeasons.Summer | GrowingSeasons.Autumn),
+            (CropKind.Radish, "萝卜", "腌制坊", "腌萝卜", 4, 6, 1, 10, 50,
+                GrowingSeasons.Spring | GrowingSeasons.Autumn | GrowingSeasons.Winter),
         };
         if (FarmGame.Crops.Count != expected.Length)
             return Fail("迁移后作物数量改变");
@@ -39,8 +47,9 @@ public partial class TestResources : Node
                 crop.BuildingName != row.Building || crop.ProductName != row.Product ||
                 crop.GrowthDays != row.GrowthDays || crop.HarvestQuantity != row.Harvest ||
                 crop.ProcessingHalfDays != row.ProcessingHalfDays ||
-                crop.PricePercent != row.ProductPercent || crop.RawPricePercent != row.RawPercent)
-                return Fail($"{row.Kind} 的名称、时长或售价倍率改变");
+                crop.PricePercent != row.ProductPercent || crop.RawPricePercent != row.RawPercent ||
+                crop.GrowingSeasons != row.Seasons)
+                return Fail($"{row.Kind} 的名称、时长、售价倍率或适宜季节改变");
         }
         if (!Throws<ArgumentOutOfRangeException>(() => CropCatalog.Get((CropKind)999)))
             return Fail("无效作物标识没有被作物定义入口拒绝");
