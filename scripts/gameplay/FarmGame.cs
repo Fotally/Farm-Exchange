@@ -16,13 +16,19 @@ namespace FarmExchange.Gameplay;
 public enum CropStage { None, Seeded, Growing }
 public enum BuildingKind { None, Farm, Processor }
 public enum CropKind { Wheat, Corn, Rice, Potato, Sunflower, Sugarcane, Radish }
-public enum FarmStatus { WaitingForWorker, WaitingForWorkerWithWater, WaitingForWater, Growing }
+[Flags]
+public enum GrowingSeasons { Spring = 1, Summer = 2, Autumn = 4, Winter = 8 }
+public enum FarmStatus
+{
+    WaitingForWorker, WaitingForWorkerWithWater, WaitingForWater, Growing,
+    WrongSeason, InsufficientTime,
+}
 public enum ProcessorStatus { WaitingForRaw, Processing }
 
 public readonly record struct CropDefinition(
     CropKind Kind, string CropName, string BuildingName, string ProductName,
     int GrowthDays, int HarvestQuantity, int ProcessingHalfDays,
-    int PricePercent, int RawPricePercent);
+    int PricePercent, int RawPricePercent, GrowingSeasons GrowingSeasons);
 public readonly record struct PlotSnapshot(
     BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingSeconds,
     bool HasWater = false);
@@ -56,7 +62,7 @@ public sealed class FarmGame
     private readonly GoodsInventory _inventory = new();
     private readonly Wallet _wallet = new(5000);
     private readonly MarketPriceCurve _marketPriceCurve;
-    private readonly GameCalendar _calendar = new();
+    private readonly GameCalendar _calendar;
 
     public int MoneyCents => _wallet.BalanceCents;
     public int CurrentDay => (int)_calendar.Snapshot.ElapsedDays + 1;
@@ -65,8 +71,11 @@ public sealed class FarmGame
     public int CurrentFlourPriceCents { get; private set; }
     public double DailyPriceChangePercent { get; private set; }
 
-    public FarmGame(int? marketSeed = null)
+    public FarmGame(int? marketSeed = null) : this(marketSeed, 0) { }
+
+    internal FarmGame(int? marketSeed, uint elapsedSeconds)
     {
+        _calendar = new GameCalendar(elapsedSeconds);
         int seed = marketSeed ?? Random.Shared.Next();
         _marketPriceCurve = new MarketPriceCurve(seed);
         CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
@@ -144,10 +153,15 @@ public sealed class FarmGame
         if (plot.Building != BuildingKind.Farm)
             throw new InvalidOperationException("该土地没有农田");
         CropDefinition crop = GetCrop(plot.CropKind);
+        PlantingFailure plantingFailure = plot.Crop == CropStage.None
+            ? PlantingRules.Check(plot.CropKind, _calendar.Snapshot, plot.HasWater)
+            : PlantingFailure.None;
         FarmStatus status = plot.Crop switch
         {
             CropStage.Seeded => FarmStatus.WaitingForWater,
             CropStage.Growing => FarmStatus.Growing,
+            _ when plantingFailure == PlantingFailure.WrongSeason => FarmStatus.WrongSeason,
+            _ when plantingFailure == PlantingFailure.InsufficientTime => FarmStatus.InsufficientTime,
             _ when plot.HasWater => FarmStatus.WaitingForWorkerWithWater,
             _ => FarmStatus.WaitingForWorker,
         };
@@ -290,7 +304,7 @@ public sealed class FarmGame
             }
         }
         StartIdleProcessors();
-        bool workerActed = _workerScheduler.WorkOne(_farming);
+        bool workerActed = _workerScheduler.WorkOne(_farming, _calendar.Snapshot);
         bool dayAdvanced = AdvanceDay();
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
     }

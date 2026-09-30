@@ -15,7 +15,7 @@ public partial class TestFarmGame : Node
 
     public static bool RunChecks() =>
         CheckInitialCenter() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
-        CheckWorkerRotation() && CheckRainSupply() && CheckRawSales() &&
+        CheckWorkerRotation() && CheckRainSupply() && CheckSeasonalSowing() && CheckRawSales() &&
         CheckInvalidCrops() && CheckStateOwnership() &&
         CheckPlacementRules();
 
@@ -76,12 +76,14 @@ public partial class TestFarmGame : Node
         int[] expectedProcessingSeconds = { 103, 155, 103, 52, 309, 103, 26 };
         foreach (CropDefinition crop in FarmGame.Crops)
         {
-            var game = new FarmGame(12345);
+            uint startSecond = crop.Kind == CropKind.Sugarcane ? 4320u : 0u;
+            var game = new FarmGame(12345, startSecond);
             Vector2I farm = new(3, 4);
             Vector2I processor = new(100, 100);
             RemoveInitialBuildings(game);
-            if (game.MoneyCents != 5000 || game.CurrentDay != 1 ||
-                game.CurrentFlourPriceCents != MarketPriceCurve.InitialPriceCents)
+            if (game.MoneyCents != 5000 || game.CurrentDay != (int)(startSecond * 7 / 360) + 1 ||
+                game.CurrentFlourPriceCents !=
+                    new MarketPriceCurve(12345).GetPriceCents(game.CurrentDay))
                 return Fail("初始资源错误");
             if (game.BuildFarm(farm) != null ||
                 game.SetFarmCrop(farm, crop.Kind) != null ||
@@ -304,11 +306,43 @@ public partial class TestFarmGame : Node
         return true;
     }
 
+    private static bool CheckSeasonalSowing()
+    {
+        var summer = new FarmGame(12345, 4320);
+        RemoveInitialBuildings(summer);
+        Vector2I farm = new(3, 4);
+        summer.BuildFarm(farm);
+        summer.SetFarmCrop(farm, CropKind.Potato);
+        int money = summer.MoneyCents;
+        if (summer.GetFarmDetails(farm).Status != FarmStatus.WrongSeason ||
+            summer.AdvanceTick().WorkerActed ||
+            summer.GetPlot(farm).Crop != CropStage.None ||
+            summer.GetPlot(farm).CropKind != CropKind.Potato ||
+            summer.GetRawStock(CropKind.Potato) != 0 || summer.MoneyCents != money)
+            return Fail("不适季仍播种，或拒绝后改动了作物、库存、金币");
+
+        summer.SetFarmCrop(farm, CropKind.Sugarcane);
+        if (summer.GetFarmDetails(farm).Status != FarmStatus.WaitingForWorker ||
+            !summer.AdvanceTick().WorkerActed || summer.GetPlot(farm).Crop != CropStage.Seeded)
+            return Fail("改为当季适宜作物后没有恢复自动播种");
+
+        var boundary = new FarmGame(12345, 4320 - 207);
+        RemoveInitialBuildings(boundary);
+        boundary.BuildFarm(farm);
+        boundary.SetFarmCrop(farm, CropKind.Radish);
+        if (boundary.GetFarmDetails(farm).Status != FarmStatus.InsufficientTime ||
+            boundary.AdvanceTick(isRaining: true).WorkerActed != true ||
+            boundary.GetPlot(farm).Crop != CropStage.Growing)
+            return Fail("季末干田时间不足后，雨水留存没有使播种恢复");
+        return true;
+    }
+
     private static bool CheckRawSales()
     {
         foreach (CropDefinition crop in FarmGame.Crops)
         {
-            var game = new FarmGame(12345);
+            var game = new FarmGame(12345,
+                crop.Kind == CropKind.Sugarcane ? 4320u : 0u);
             RemoveInitialBuildings(game);
             Vector2I farm = new(3, 4);
             game.BuildFarm(farm);

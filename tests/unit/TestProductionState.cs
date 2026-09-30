@@ -4,6 +4,7 @@ using FarmExchange.Farming;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
 using FarmExchange.Processing;
+using FarmExchange.Time;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
 public partial class TestProductionState : Node
@@ -15,7 +16,7 @@ public partial class TestProductionState : Node
     }
 
     public static bool RunChecks() => CheckLand() && CheckPlacementMessages() &&
-        CheckFarming() && CheckWater() && CheckProcessing();
+        CheckFarming() && CheckWater() && CheckPlantingRules() && CheckProcessing();
 
     private static bool CheckLand()
     {
@@ -54,8 +55,9 @@ public partial class TestProductionState : Node
     private static bool CheckFarming()
     {
         var farms = new FarmingSystem(2);
+        CalendarSnapshot spring = new GameCalendar().Snapshot;
         CropKind invalid = (CropKind)999;
-        if (farms.TryWork(0) || farms.AdvanceGrowth(0, out _) ||
+        if (farms.TryWork(0, spring) || farms.AdvanceGrowth(0, out _) ||
             !Throws<InvalidOperationException>(() => farms.Get(0)) ||
             !Throws<InvalidOperationException>(() => farms.Remove(0)) ||
             !Throws<InvalidOperationException>(() => farms.SetCrop(0, CropKind.Radish)) ||
@@ -69,7 +71,7 @@ public partial class TestProductionState : Node
             farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.None, 0))
             return Fail("重复放置或无效改种改变了农田状态");
 
-        if (!farms.TryWork(0))
+        if (!farms.TryWork(0, spring))
             return Fail("空农田没有进入已播种阶段");
         farms.SetCrop(0, CropKind.Wheat);
         if (farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.Seeded, 0) ||
@@ -77,7 +79,8 @@ public partial class TestProductionState : Node
             return Fail("选择相同作物清除了播种状态，或播种后提前生长");
         farms.SetCrop(0, CropKind.Radish);
         if (farms.Get(0) != new FarmSnapshot(CropKind.Radish, CropStage.None, 0) ||
-            !farms.TryWork(0) || !farms.TryWork(0) || farms.TryWork(0) ||
+            !farms.TryWork(0, spring) || !farms.TryWork(0, spring) ||
+            farms.TryWork(0, spring) ||
             farms.Get(0).RemainingSeconds != 206)
             return Fail("改种没有清除旧进度，或生长中仍允许工人工作");
 
@@ -88,7 +91,7 @@ public partial class TestProductionState : Node
             farms.Get(0) != new FarmSnapshot(CropKind.Radish, CropStage.None, 0))
             return Fail("萝卜到期后没有一次性收获并清除进度");
         farms.Remove(0);
-        if (farms.HasFarm(0) || farms.AdvanceGrowth(0, out _) || farms.TryWork(0))
+        if (farms.HasFarm(0) || farms.AdvanceGrowth(0, out _) || farms.TryWork(0, spring))
             return Fail("拆除后仍能推进或照料农田");
         return true;
     }
@@ -132,10 +135,11 @@ public partial class TestProductionState : Node
     private static bool CheckWater()
     {
         var farms = new FarmingSystem(1);
+        CalendarSnapshot spring = new GameCalendar().Snapshot;
         farms.Place(0, CropKind.Wheat);
         farms.SupplyWater(0);
         if (farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.None, 0, true) ||
-            !farms.TryWork(0) ||
+            !farms.TryWork(0, spring) ||
             farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.Growing, 823, true))
             return Fail("空田留水后播种没有直接开始生长");
 
@@ -146,7 +150,7 @@ public partial class TestProductionState : Node
 
         farms.SetCrop(0, CropKind.Radish);
         if (farms.Get(0) != new FarmSnapshot(CropKind.Radish, CropStage.None, 0, true) ||
-            !farms.TryWork(0) || farms.Get(0).RemainingSeconds != 206)
+            !farms.TryWork(0, spring) || farms.Get(0).RemainingSeconds != 206)
             return Fail("改种没有保留水分供下一轮播种使用");
         for (int second = 0; second < 205; second++)
             if (farms.AdvanceGrowth(0, out _))
@@ -159,6 +163,37 @@ public partial class TestProductionState : Node
         farms.Place(0, CropKind.Wheat);
         if (farms.Get(0).HasWater)
             return Fail("拆除后重建的农田继承了旧水分");
+        return true;
+    }
+
+    private static bool CheckPlantingRules()
+    {
+        static PlantingFailure Check(CropKind crop, uint second, bool wet = false) =>
+            PlantingRules.Check(crop, new GameCalendar(second).Snapshot, wet);
+
+        const uint season = 4320;
+        if (Check(CropKind.Sugarcane, 0) != PlantingFailure.WrongSeason ||
+            Check(CropKind.Sugarcane, season) != PlantingFailure.None ||
+            Check(CropKind.Potato, season) != PlantingFailure.WrongSeason ||
+            Check(CropKind.Radish, season * 2) != PlantingFailure.None)
+            return Fail("作物适宜季节表没有参与播种检查");
+
+        // 萝卜需 206 秒生长，工人动作后再过 1 秒才开始按秒结算。
+        // 干田多预留 1 秒供水；恰在边界成熟允许播种。
+        if (Check(CropKind.Radish, season - 208) != PlantingFailure.None ||
+            Check(CropKind.Radish, season - 207) != PlantingFailure.InsufficientTime ||
+            Check(CropKind.Radish, season - 207, true) != PlantingFailure.None ||
+            Check(CropKind.Radish, season - 206) != PlantingFailure.InsufficientTime ||
+            Check(CropKind.Radish, season - 206, true) != PlantingFailure.InsufficientTime ||
+            Check(CropKind.Radish, season - 205, true) != PlantingFailure.InsufficientTime)
+            return Fail("干湿农田预计成熟或季节临界秒错误");
+
+        if (Check(CropKind.Corn, season - 2) != PlantingFailure.None ||
+            Check(CropKind.Corn, season * 2 - 1031) != PlantingFailure.None ||
+            Check(CropKind.Corn, season * 2 - 1030) != PlantingFailure.InsufficientTime ||
+            Check(CropKind.Wheat, season * 5 - 825) != PlantingFailure.None ||
+            Check(CropKind.Wheat, season * 5 - 824) != PlantingFailure.InsufficientTime)
+            return Fail("连续适宜季节或跨年边界没有按完整区间计算");
         return true;
     }
 

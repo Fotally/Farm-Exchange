@@ -9,13 +9,14 @@
 
 # 代码系统结构
 
-- `scripts/gameplay/FarmGame.cs`：经营协调模块。按原种子顺序初始化中心随机建筑，协调固定 128×128 格的建造、拆除、每秒显式降雨与生产相位、日历、逐日售价和交易；提供只读放置预检、执行时重验与实际扣费结果、地块及两类详情语义快照，旧建造命令转发新路径。测试专用夹具生成 16,384 个现有实体，并检查占用与生产状态一致。
-- `scripts/farming/CropCatalog.cs`：七种作物定义的唯一入口，提供只读作物表、按种类查询与种类有效性检查。
+- `scripts/gameplay/FarmGame.cs`：经营协调模块。按原种子顺序初始化中心随机建筑，协调固定 128×128 格的建造、拆除、每秒显式降雨与生产相位、日历、播种季节检查、逐日售价和交易；提供只读放置预检、执行时重验与实际扣费结果、地块及两类详情语义快照，旧建造命令转发新路径。测试专用夹具生成 16,384 个现有实体，并检查占用与生产状态一致。
+- `scripts/farming/CropCatalog.cs`：七种作物定义的唯一入口，包含适宜季节，提供只读作物表、按种类查询与种类有效性检查。
+- `scripts/farming/PlantingRules.cs`：播种季节与预计成熟的只读判断模块；按相邻适宜季节计算可用时间，干田预留最少 1 秒供水，统一返回不适季或时间不足原因。
 - `scripts/land/LandOccupancy.cs`：固定地图每格主要占用类别的唯一拥有者；不持有作物或加工进度。
 - `scripts/land/PlacementRules.cs`：只读放置规则模块；统一验证建筑描述、格范围、占用与余额，为预检和实际执行返回稳定原因。现有合法占用只有农田和加工场地。
-- `scripts/farming/FarmingSystem.cs`：每块农田所选作物、水分、播种与生长进度的唯一拥有者；工人浇水和显式降雨共用供水操作，改种留水、收获与拆除清水。
+- `scripts/farming/FarmingSystem.cs`：每块农田所选作物、水分、播种与生长进度的唯一拥有者；播种前调用统一季节检查，工人浇水和显式降雨共用供水操作，改种留水、收获与拆除清水。
 - `scripts/processing/ProcessingSystem.cs`：加工场地匹配作物与批次进度的唯一拥有者，负责按旧顺序从公共库存领取匹配原料。
-- `scripts/workers/WorkerScheduler.cs`：单工人旧轮转游标的唯一拥有者，每 tick 至多执行一次农田工作；尚无经营移动时间。
+- `scripts/workers/WorkerScheduler.cs`：单工人旧轮转游标的唯一拥有者，传递当前日历快照，每 tick 至多执行一次符合播种或浇水规则的农田工作；尚无经营移动时间。
 - `scripts/inventory/Inventory.cs`：每局原料与加工品的分类库存唯一拥有者，供生产和出售流程查询、入库、加工领取及出售清空。
 - `scripts/economy/Wallet.cs`：每局金币余额唯一拥有者，验证初始余额、扣款及入账的数值范围。
 - `scripts/characters/NpcCharacter.cs` 与 `scenes/npc_character.tscn`：可复用的 NPC 动画角色。读取 64×64、每方向 6 帧的角色图集；按外部给定方向移动、切换朝向并在停步时保留首帧，不决定经营任务。
@@ -40,10 +41,11 @@
 2. 实施前核对 `docs/project/roadmap.md` 中的已确认范围。具体数值和操作规则未确认前仅做不依赖它们的工作；需要变更已沟通的实施方案时，先与用户沟通。
 3. 保持模块接口简洁；只为实际出现的需求建立模块与接缝，不为假想情况增加兜底或抽象层。
 4. 使用项目指定的 Godot 引擎验证场景与脚本。引擎可执行文件位于上述目录。
-5. GitHub issue 是所有修改的唯一入口：收到功能请求后，Agent 自动查找对应 issue；没有匹配项时自动创建写明范围和验收标准的 issue。关联 issue 后才开始开发，并且只完成该 issue 记录的内容。
-6. 功能开发与验证均在 `dev` 分支进行。代码和文档完成后，Agent 必须使用项目指定引擎依次完成编译、自动化场景测试、Windows Release 中间导出，并运行 `build/windows/FarmExchange.exe` 验证导出产物；发现失败则继续修复并重新验证，直至全部通过，形成“issue → 开发 → 文档 → 编译 → 测试 → 导出 → 运行导出程序”的闭环。
-7. 闭环验证通过后，使用 `.codex/skills/farm-exchange-submit-pr/SKILL.md` 提交并推送 `dev`，创建或更新关联 issue 的 `dev` → `main` Pull Request，等待人工合并。Agent 不直接提交或推送 `main`，也不自行合并 Pull Request。
-8. 行覆盖率以 `scripts/` 的每个一级目录为模块分别验收：每个模块及业务脚本总体均须达到 80%。根据 Cobertura 报告逐模块核对并记录结果；现有测试脚本仅自动检查总体，模块验收需另行核对。
+5. GitHub issue 是所有修改的唯一入口：收到功能请求后，Agent 自动查找对应 issue；没有匹配项时自动创建写明范围和验收标准的 issue。关联 issue 后才开始开发，并且只完成该 issue 记录的内容。用户已持续授权只读查看 GitHub issue 和 PR，Agent 直接查询，不再请求逐次许可；`.codex/rules/github-read.rules` 放行对应的 `gh` 只读命令。
+6. 以本 issue 或事先划定的小模块为审查单元：主 Agent 先完成该单元全部计划内代码和对应中文文档，再集中调用 `.codex/agents/code-checker.toml` 定义的只读 `code_checker` 子 Agent；开发到一半时不穿插审查。调用时提供 issue 号、已完成单元、改动基准和变更文件，审查该单元完整改动。审查代码规范、可证实的缺陷、回归风险、必要测试及与已确认规则的一致性；不评价业务功能或玩法设计是否合理。子 Agent 按文件和行号报告待修问题；主 Agent 修复并同步文档后再次调用其审查，直到没有待修问题。后续验收若引起代码改动，也须重新审查。
+7. 功能开发与验证均在 `dev` 分支进行。代码、文档和审查完成后，Agent 必须使用项目指定引擎依次完成编译、自动化场景测试、Windows Release 中间导出，并运行 `build/windows/FarmExchange.exe` 验证导出产物；发现失败则继续修复并重新验证，直至全部通过，形成“issue → 开发 → 文档 → 审查与修复复查 → 编译 → 测试 → 导出 → 运行导出程序”的闭环。
+8. 闭环验证通过后，使用 `.codex/skills/farm-exchange-submit-pr/SKILL.md` 提交并推送 `dev`，创建或更新关联 issue 的 `dev` → `main` Pull Request，等待人工合并。Agent 不直接提交或推送 `main`，也不自行合并 Pull Request。
+9. 行覆盖率以 `scripts/` 的每个一级目录为模块分别验收：每个模块及业务脚本总体均须达到 80%。根据 Cobertura 报告逐模块核对并记录结果；现有测试脚本仅自动检查总体，模块验收需另行核对。
 
 # 目录规范加载
 

@@ -40,6 +40,8 @@ public partial class FarmDetailsPanel : VBoxContainer
             FarmStatus.WaitingForWater => "等待浇水",
             FarmStatus.WaitingForWorkerWithWater => "待播种 · 已有水分",
             FarmStatus.Growing => "生长中",
+            FarmStatus.WrongSeason => "当前季节不适宜播种",
+            FarmStatus.InsufficientTime => "本轮适宜季节剩余时间不足",
             _ => "等待工人照料",
         };
         _status.Text = $"{details.Crop.CropName}农田 · {status}";

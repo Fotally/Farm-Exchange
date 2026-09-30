@@ -1,0 +1,41 @@
+prefix_rule(
+    pattern = ["gh", "issue", ["list", "view", "status"]],
+    decision = "allow",
+    justification = "用户已持续授权读取 GitHub issue。",
+    match = [
+        "gh issue list --repo Fotally/Farm-Exchange",
+        "gh issue view 67 --repo Fotally/Farm-Exchange",
+        "gh issue status --repo Fotally/Farm-Exchange",
+    ],
+    not_match = [
+        "gh issue edit 67 --repo Fotally/Farm-Exchange",
+        "gh issue close 67 --repo Fotally/Farm-Exchange",
+    ],
+)
+
+prefix_rule(
+    pattern = ["gh", "pr", ["list", "view", "status", "checks", "diff"]],
+    decision = "allow",
+    justification = "用户已持续授权读取 GitHub PR。",
+    match = [
+        "gh pr list --repo Fotally/Farm-Exchange",
+        "gh pr view 68 --repo Fotally/Farm-Exchange",
+        "gh pr checks 68 --repo Fotally/Farm-Exchange",
+        "gh pr diff 68 --repo Fotally/Farm-Exchange",
+    ],
+    not_match = [
+        "gh pr edit 68 --repo Fotally/Farm-Exchange",
+        "gh pr merge 68 --repo Fotally/Farm-Exchange",
+    ],
+)
+
+prefix_rule(
+    pattern = ["gh", "search", ["issues", "prs"]],
+    decision = "allow",
+    justification = "用户已持续授权搜索 GitHub issue 和 PR。",
+    match = [
+        "gh search issues agent --repo Fotally/Farm-Exchange",
+        "gh search prs agent --repo Fotally/Farm-Exchange",
+    ],
+    not_match = ["gh search code agent --repo Fotally/Farm-Exchange"],
+)

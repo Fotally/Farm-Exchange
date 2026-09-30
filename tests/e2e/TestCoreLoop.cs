@@ -27,6 +27,8 @@ public partial class TestCoreLoop : Node
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
         parent.AddChild(main);
+        main.Game.SetFarmCrop(new Vector2I(63, 63), CropKind.Radish);
+        main.Game.SetFarmCrop(new Vector2I(65, 63), CropKind.Radish);
         main.Game.AdvanceTick(isRaining: true);
         Vector2I wetFarm = new(65, 63);
         main.GetNode<WorldMap>("WorldMap").EmitSignal(
@@ -131,6 +133,9 @@ public partial class TestCoreLoop : Node
             Find<Button>(cropWindow, $"CropCard{crop.Kind}").EmitSignal(Button.SignalName.Pressed);
             if (!ContainsVisibleText(detail, $"生长周期：获得水后 {growthDays[(int)crop.Kind]} 天成熟"))
                 return Fail($"{crop.CropName}农田详情未显示正确生长周期");
+            if (crop.Kind == CropKind.Sugarcane &&
+                !ContainsVisibleText(detail, "当前季节不适宜播种"))
+                return Fail("春季选择甘蔗后详情未显示不适季原因");
         }
         Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
         Find<Button>(cropWindow, "CropCardRadish").EmitSignal(Button.SignalName.Pressed);
