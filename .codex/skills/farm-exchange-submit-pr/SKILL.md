@@ -15,3 +15,17 @@ description: 在 Farm Exchange 的 issue 范围内完成代码与文档验收后
 6. 将 PR 地址和验证结果告知用户，停在人工合并前。
 
 项目已授权上述闭环中的提交、推送 dev 和创建 PR。正常流程无需逐项再问用户；运行环境的权限或 GitHub 鉴权失败时报告具体阻碍，skill 不改变权限策略，也不直接提交、推送或合并 main。
+
+## 固定的 GitHub CLI 命令
+
+本 skill 只使用下列 `gh` 命令。将尖括号占位符替换为实际值；PR 正文先写入 UTF-8 文件，再传给 `--body-file`。按上面的步骤选择所需命令，不自行尝试其他 `gh` 子命令或参数组合。
+
+```text
+gh issue view <issue号> --repo Fotally/Farm-Exchange --json number,title,body,state,url
+gh pr list --repo Fotally/Farm-Exchange --base main --head dev --state open --limit 100 --json number,title,body,url,baseRefName,headRefName
+gh pr view <PR号> --repo Fotally/Farm-Exchange --json number,title,body,url,baseRefName,headRefName,commits
+gh pr create --repo Fotally/Farm-Exchange --base main --head dev --title "<中文标题>" --body-file "<PR正文文件>"
+gh pr edit <PR号> --repo Fotally/Farm-Exchange --title "<中文标题>" --body-file "<PR正文文件>"
+```
+
+先用 `gh issue view` 核对关联 issue，再用 `gh pr list` 找到现有 PR；有匹配项时用 `gh pr view` 核对并用 `gh pr edit` 更新，否则用 `gh pr create` 创建。操作后再次用 `gh pr view` 核对 base、head、issue 链接和正文。命令失败时记录错误并停止 GitHub 操作。
