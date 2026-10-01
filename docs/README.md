@@ -37,10 +37,13 @@
 ## 项目协作与依据
 
 - [系统规划](project/roadmap.md)、[构建与验收](project/build-and-validation.md)、[GitHub 协作](project/contribution-workflow.md)。
-- [独立行情与即时交易实施方案](project/market-proposal.md)：T09 的价格、事件、节日排期与交易规则已确认并完成验收，等待 PR #70 人工合并。
+- [后续功能计划](project/deferred-features-plan.md)：原 T11 的季节耕作表、后续扩员、高级交易与行情学习反馈，四项均继续暂缓，待规则确认。
+- [已完成系统设计与执行计划归档](archive/farm-exchange-system-design-and-execution-plan.md)：T00～T10 与 T12 的设计、实施和验收历史，PR #70 已人工合并。
+- [独立行情与即时交易实施方案](project/market-proposal.md)：T09 的价格、事件、节日排期与交易规则已确认并完成验收，PR #70 已人工合并。
 - [素材来源记录](project/asset-sources.md)：已纳入的第三方素材、出处与授权信息。
 - [macOS 构建与验收](project/macos-build.md)：Universal 2 导出、CI 和应用包启动。
 - [市场曲线调研](research/market-price-curve.md)、[测试分类调研](research/test-taxonomy.md)。
 - [基础格细分调研](research/grid-subdivision.md)：用户最终选择 64×32 基础格与 3×3（192×96）生产设施，保留各轮比例示例和最小空间 Interface；#75 已完成新地图实现与完整验收。
+- [成熟作品的窗口、地图与 UI 缩放调研](research/window-size-and-map-zoom.md)：以一手资料区分窗口变大、分辨率、地图镜头与界面缩放，记录证实行为和证据边界；用于显示策略讨论。
 - [EditorConfig 检查](static-checks/editorconfig.md)、[CI 静态检查](static-checks/ci.md)。
 - [规则加载与链接对应表](../.codex/rule-loading.md)。
