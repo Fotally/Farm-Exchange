@@ -37,6 +37,13 @@ public partial class TestWorldMap : Node
             }
         }
 
+        if (MapCoordinates.GridPositionToLocal(new Vector2(63.5f, 62.25f)) != new Vector2(40f, 2012f) ||
+            MapCoordinates.GridPositionToLocal(new Vector2(127, 127)) != new Vector2(0, 4064))
+        {
+            GD.PushError("分数格位置没有沿用统一等距换算");
+            return false;
+        }
+
         if (MapCoordinates.LocalPositionToCell(new Vector2(31f, 0f)) != new Vector2I(0, 0) ||
             MapCoordinates.LocalPositionToCell(new Vector2(33f, 0f)) != new Vector2I(1, -1) ||
             MapCoordinates.ContainsCell(new Vector2I(-1, 0)) ||

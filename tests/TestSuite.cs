@@ -10,6 +10,8 @@ public partial class TestSuite : Node
         bool resourcesPassed = TestResources.RunChecks();
         GD.Print("单元测试：土地、农田与加工状态边界");
         bool productionStatePassed = TestProductionState.RunChecks();
+        GD.Print("单元测试：工人移动、完整动作与多人调度");
+        bool workersPassed = TestWorkerScheduler.RunChecks();
         GD.Print("单元测试：市场价格与换日");
         bool marketPassed = TestMarketRules.RunChecks();
         GD.Print("单元测试：独立日历换算");
@@ -26,8 +28,10 @@ public partial class TestSuite : Node
         bool loadPassed = TestFullWorldLoad.RunChecks();
         GD.Print("端到端测试：库存编辑真实布局与滚动");
         bool inventoryLayoutPassed = await TestCoreLoop.RunLayoutChecks(this);
+        GD.Print("集成测试：工人经营快照与主地图表现");
+        bool workerPresentationPassed = await TestWorkerPresentation.RunChecksAsync(this);
         bool passed = farmGamePassed && resourcesPassed && productionStatePassed && marketPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && loadPassed && inventoryLayoutPassed;
+            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");

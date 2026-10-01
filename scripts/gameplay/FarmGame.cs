@@ -59,7 +59,7 @@ public sealed class FarmGame
     private readonly LandOccupancy _occupancy = new(CellCount);
     private readonly FarmingSystem _farming = new(CellCount);
     private readonly ProcessingSystem _processing = new(CellCount);
-    private readonly WorkerScheduler _workerScheduler = new();
+    private readonly WorkerScheduler _workerScheduler = new(InitialFarmCells);
     private readonly GoodsInventory _inventory = new();
     private readonly Wallet _wallet = new(5000);
     private readonly MarketPriceCurve _marketPriceCurve;
@@ -103,6 +103,7 @@ public sealed class FarmGame
     }
 
     public static CropDefinition GetCrop(CropKind crop) => CropCatalog.Get(crop);
+    public IReadOnlyList<WorkerSnapshot> GetWorkers() => _workerScheduler.GetSnapshots();
     public int GetRawStock(CropKind crop) => _inventory.GetRaw(crop);
     public int GetRawReserve(CropKind crop) => _inventory.GetRawReserve(crop);
 
@@ -315,7 +316,7 @@ public sealed class FarmGame
             }
         }
         StartIdleProcessors();
-        bool workerActed = _workerScheduler.WorkOne(_farming, _calendar.Snapshot);
+        bool workerActed = _workerScheduler.AdvanceOneSecond(_farming, _calendar.Snapshot);
         bool dayAdvanced = AdvanceDay();
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
     }

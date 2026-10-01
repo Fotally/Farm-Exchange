@@ -8,8 +8,8 @@
 
 | 类别 | 场景路径 |
 | --- | --- |
-| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
-| 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn` |
+| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_worker_scheduler.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
+| 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn`、`tests/integration/test_worker_presentation.tscn` |
 | 端到端测试 | `tests/e2e/test_core_loop.tscn` |
 | 满地图负载测试 | `tests/performance/test_full_world_load.tscn` |
 
@@ -94,6 +94,27 @@
 | `world` | 316 / 343 | 92.13% |
 
 完整 headless 套件包含越季清理与成熟先结算、逐作物保留底线、稳定格序竞争、新建全场即时领取、投入物与公共库存守恒，以及编辑草稿/焦点/光标/滚动保持。新增实际布局检查在布局帧后断言七行标签单行、输入与按钮合理高度及最后一行可滚动完整显示，并在汇总套件和独立端到端场景均等待执行。最终满地图 50 步耗时 **65.23 ms**，平均 **1.305 ms/步**；实际库存界面截图 `coverage/inventory-reserve.png` 已检查。没有改变地图渲染或实体负载，本批不新增 FPS 基线。静态与格式检查、Debug/Release 编译、Windows Release 导出及实际导出程序退出码 0 均通过。
+
+2026-10-01 T07 / #40 与 #43 开局三人接入后的报告总体为 **1962/2069（94.83%）**；模块按文件与行号去重，12 个模块均达到 80%。
+
+| 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `economy` | 18 / 19 | 94.74% |
+| `farming` | 158 / 158 | 100.00% |
+| `gameplay` | 283 / 295 | 95.93% |
+| `inventory` | 44 / 45 | 97.78% |
+| `land` | 40 / 41 | 97.56% |
+| `market` | 38 / 38 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 21 / 21 | 100.00% |
+| `ui` | 749 / 814 | 92.01% |
+| `workers` | 86 / 90 | 95.56% |
+| `world` | 387 / 408 | 94.85% |
+
+完整套件验证三人实际参与、一田独占、目标版本失效、降雨取消人工供水、季末重验、暂停与确定性，以及单工人 8 田和三人 24 田的连续三轮生产。冷启动用例验证首轮 40/72 秒，另用确定夹具先建立真实认领再出现其余待工田，验证完整等工至供水的 45/81 秒上限；不依赖同批作物复种时偶然出现任务重叠。主场景接入、既有七作物精确时长、越季历史库存、保留底线与真实库存布局回归继续通过。满地图 50 步为 **116.34 ms**，平均 **2.327 ms/步**。
+
+同条件图形检查仍有 16,384 个实体（8,192 田、8,192 场地），通过三块远田改种触发三人 17～23 秒的直线移动；预热 2 秒、采样 8.000405 秒，起止移动人数均为 3。平均 **844.8 FPS**，P95 **1.55 ms**，窗口 1280×720、1.25 倍缩放、VSync 关闭；前后截图 `coverage/performance.png` 与 `coverage/performance-end.png` 已核对，三人采用既有 `npc_animation_001/002/005.png`。报告见 `coverage/performance.json`。静态/格式、Debug/Release 编译、Windows 导出及实际 EXE 启动退出码 0 均通过；已生成新脚本对应的 UID 伴随文件，并随本批提交纳入 Git。
 
 2026-09-28 的 Cobertura 报告也包含分支数据。#63 新增的生产状态测试验证空状态、非法输入、重复操作、改种与加工时长边界；市场测试验证非法日期，作物定义测试验证非法标识。分支覆盖率用于定位未测到的决策路径，目前不设硬性门槛：
 

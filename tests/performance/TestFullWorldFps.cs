@@ -7,6 +7,7 @@ using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.UI;
 using FarmExchange.World;
+using FarmExchange.Workers;
 
 public partial class TestFullWorldFps : Node
 {
@@ -14,6 +15,7 @@ public partial class TestFullWorldFps : Node
     private const ulong SampleUsec = 8_000_000;
 
     private Camera2D _camera = null!;
+    private Main _main = null!;
     private WorldMap _map = null!;
     private readonly List<double> _frameTimesMs = new();
     private ulong _readyAtUsec;
@@ -23,6 +25,7 @@ public partial class TestFullWorldFps : Node
     private int _ticks;
     private int _maxVisiblePlotCandidates;
     private int _startChunkRedraws;
+    private int _movingWorkersAtStart;
 
     public override void _Ready()
     {
@@ -34,7 +37,14 @@ public partial class TestFullWorldFps : Node
         }
 
         Main main = GetNode<Main>("Main");
+        _main = main;
         main.Game.FillWorldForBenchmark();
+        Vector2I[] workerTargets = { new(82, 54), new(84, 52), new(86, 50) };
+        foreach (Vector2I target in workerTargets)
+        {
+            CropKind current = main.Game.GetPlot(target).CropKind;
+            main.Game.SetFarmCrop(target, current == CropKind.Wheat ? CropKind.Radish : CropKind.Wheat);
+        }
         _map = main.GetNode<WorldMap>("WorldMap");
         _map.SyncFromGame();
         _camera = main.GetNode<Camera2D>("Camera2D");
@@ -43,7 +53,7 @@ public partial class TestFullWorldFps : Node
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Directory.CreateDirectory(Path.GetDirectoryName(ProjectSettings.GlobalizePath("res://coverage/performance.json"))!);
         _readyAtUsec = Time.GetTicksUsec();
-        GD.Print("满地图渲染性能测试：16,384 格实体，预热 2 秒，采样 8 秒");
+        GD.Print("满地图渲染性能测试：16,384 格实体，3 名移动工人，预热 2 秒，采样 8 秒");
     }
 
     public override void _Process(double delta)
@@ -67,6 +77,7 @@ public partial class TestFullWorldFps : Node
             _previousFrameUsec = now;
             _startFrames = Engine.GetFramesDrawn();
             _startChunkRedraws = _map.ChunkRedrawCount;
+            _movingWorkersAtStart = CountMovingWorkers();
             return;
         }
 
@@ -76,9 +87,11 @@ public partial class TestFullWorldFps : Node
             return;
 
         int renderedFrames = Engine.GetFramesDrawn() - _startFrames;
-        if (renderedFrames == 0 || _frameTimesMs.Count < 2 || _maxVisiblePlotCandidates == 0 || _ticks == 0)
+        int movingWorkersAtEnd = CountMovingWorkers();
+        if (renderedFrames == 0 || _frameTimesMs.Count < 2 || _maxVisiblePlotCandidates == 0 || _ticks == 0 ||
+            _movingWorkersAtStart != 3 || movingWorkersAtEnd != 3)
         {
-            GD.PushError("帧率性能测试没有取得有效的渲染帧、可见地块或经营 tick");
+            GD.PushError("帧率性能测试缺少有效渲染、可见地块、经营步进或采样前后三名移动工人");
             GetTree().Quit(1);
             return;
         }
@@ -90,10 +103,13 @@ public partial class TestFullWorldFps : Node
         string reportPath = ProjectSettings.GlobalizePath("res://coverage/performance.json");
         var report = new
         {
-            Scenario = "128x128 满地图，8,192 农田与 8,192 加工场地，六种作物，镜头水平往返移动",
+            Scenario = "128x128 满地图，8,192 农田与 8,192 加工场地，七种作物，三田改种触发三工人直线移动，镜头水平往返移动",
             EntityCount = FarmGame.MapSize * FarmGame.MapSize,
             FarmCount = 8192,
             ProcessorCount = 8192,
+            WorkerCount = _main.Game.GetWorkers().Count,
+            MovingWorkersAtStart = _movingWorkersAtStart,
+            MovingWorkersAtEnd = movingWorkersAtEnd,
             TickCount = _ticks,
             MaxVisiblePlotCandidates = _maxVisiblePlotCandidates,
             ChunkRedraws = _map.ChunkRedrawCount - _startChunkRedraws,
@@ -127,6 +143,14 @@ public partial class TestFullWorldFps : Node
             return;
         }
         GetTree().Quit(0);
+    }
+
+    private int CountMovingWorkers()
+    {
+        int moving = 0;
+        foreach (WorkerSnapshot worker in _main.Game.GetWorkers())
+            if (worker.Activity == WorkerActivity.Moving) moving++;
+        return moving;
     }
 
     private static double Percentile(List<double> sorted, double fraction)

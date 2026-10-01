@@ -19,8 +19,12 @@ public static class MapCoordinates
     {
         if (!ContainsCell(cell))
             throw new ArgumentOutOfRangeException(nameof(cell));
-        return new Vector2((cell.X - cell.Y) * HalfWidth, (cell.X + cell.Y) * HalfHeight);
+        return GridPositionToLocal((Vector2)cell);
     }
+
+    public static Vector2 GridPositionToLocal(Vector2 gridPosition) => new(
+        (gridPosition.X - gridPosition.Y) * HalfWidth,
+        (gridPosition.X + gridPosition.Y) * HalfHeight);
 
     public static Vector2I LocalPositionToCell(Vector2 localPosition)
     {
@@ -33,7 +37,7 @@ public static class MapCoordinates
         Vector2 grid = LocalPositionToGrid(localCenter);
         float col = Math.Clamp(grid.X, 0f, MapSize - 1f);
         float row = Math.Clamp(grid.Y, 0f, MapSize - 1f);
-        return new Vector2((col - row) * HalfWidth, (col + row) * HalfHeight);
+        return GridPositionToLocal(new Vector2(col, row));
     }
 
     private static Vector2 LocalPositionToGrid(Vector2 localPosition)

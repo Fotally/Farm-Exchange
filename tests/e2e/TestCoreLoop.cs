@@ -68,9 +68,12 @@ public partial class TestCoreLoop : Node
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
         parent.AddChild(main);
         main.Game.SetFarmCrop(new Vector2I(63, 63), CropKind.Radish);
+        main.Game.SetFarmCrop(new Vector2I(64, 63), CropKind.Radish);
         main.Game.SetFarmCrop(new Vector2I(65, 63), CropKind.Radish);
+        Vector2I wetFarm = new(66, 63);
+        main.Game.BuildFarm(wetFarm);
+        main.Game.SetFarmCrop(wetFarm, CropKind.Radish);
         main.Game.AdvanceTick(isRaining: true);
-        Vector2I wetFarm = new(65, 63);
         main.GetNode<WorldMap>("WorldMap").EmitSignal(
             WorldMap.SignalName.SelectionChanged, wetFarm);
         Control detail = Find<Control>(main.GetNode<Control>("CanvasLayer/UiRoot"), "DetailWindow");
@@ -94,7 +97,7 @@ public partial class TestCoreLoop : Node
     {
         Vector2I[] initial = { new(63, 63), new(64, 63), new(65, 63), new(63, 64), new(64, 64) };
         foreach (Vector2I cell in initial) main.Game.RemoveBuilding(cell);
-        Vector2I farm = new(4, 4);
+        Vector2I farm = new(63, 63);
         Vector2I processor = new(5, 4);
         main.Game.SetRawReserve(CropKind.Radish, 6);
         main.Game.BuildFarm(farm);

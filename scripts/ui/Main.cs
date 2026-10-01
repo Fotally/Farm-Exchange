@@ -13,6 +13,7 @@ public partial class Main : Node2D
     private WorldMap _worldMap = null!;
     private Control _uiRoot = null!;
     private Label _moneyLabel = null!;
+    private Label _workerLabel = null!;
     private Label _calendarLabel = null!;
     private Button _pauseButton = null!;
     private Label _messageLabel = null!;
@@ -41,6 +42,9 @@ public partial class Main : Node2D
     {
         _worldMap = GetNode<WorldMap>("WorldMap");
         _worldMap.SetGame(_game);
+        var workerPresentation = new WorkerPresentation();
+        _worldMap.AddChild(workerPresentation);
+        workerPresentation.SetGame(_game, _worldMap);
         _worldMap.SelectionChanged += OnSelectionChanged;
         _uiRoot = GetNode<Control>("CanvasLayer/UiRoot");
         BuildInterface();
@@ -125,7 +129,8 @@ public partial class Main : Node2D
         gameTitle.CustomMinimumSize = new Vector2(160, 0);
         row.AddChild(gameTitle);
         row.AddChild(MakeStat("金币", out _moneyLabel));
-        row.AddChild(MakeStat("工人", out _, "1 · 自动照料"));
+        row.AddChild(MakeStat("工人", out _workerLabel));
+        _workerLabel.Name = "WorkerCountLabel";
         row.AddChild(MakeStat("日期", out _calendarLabel, width: 235));
         _pauseButton = MakeButton("暂停", Mid, 70, 44);
         _pauseButton.Name = "PauseButton";
@@ -355,6 +360,7 @@ public partial class Main : Node2D
     private void RefreshUi()
     {
         _moneyLabel.Text = FormatCoins(_game.MoneyCents);
+        _workerLabel.Text = $"{_game.GetWorkers().Count} · 自动照料";
         CalendarSnapshot calendar = _game.Calendar;
         string season = calendar.Season switch
         {

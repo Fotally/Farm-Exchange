@@ -146,6 +146,9 @@ public partial class WorldMap : Node2D
 
     public Vector2 GetCellWorldCenter(Vector2I cell) => ToGlobal(MapCoordinates.CellToLocalCenter(cell));
 
+    public Vector2 GetGridWorldPosition(Vector2 gridPosition) =>
+        ToGlobal(MapCoordinates.GridPositionToLocal(gridPosition));
+
     public Rect2 LocalBounds() => new(
         new Vector2(-MapSize * HalfWidth, -HalfHeight),
         new Vector2(MapSize * MapCoordinates.TileWidth, MapSize * MapCoordinates.TileHeight));
