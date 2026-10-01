@@ -1,7 +1,10 @@
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Inventory;
 using FarmExchange.Land;
+using FarmExchange.Market;
 using FarmExchange.Time;
+using FarmExchange.Trading;
 using FarmExchange.World;
 using static FarmExchange.UI.UiElements;
 
@@ -118,6 +121,10 @@ public partial class Main : Node2D
         _marketWindow = new MarketWindow();
         _marketWindow.SellRawRequested += SellRaw;
         _marketWindow.SellAllRequested += SellAll;
+        _marketWindow.BuyRequested += (commodity, quantity) => Trade(commodity, quantity, buy: true);
+        _marketWindow.SellRequested += (commodity, quantity) => Trade(commodity, quantity, buy: false);
+        _marketWindow.SellCommodityAllRequested += SellCommodityAll;
+        _marketWindow.TradeInputRejected += message => _messageLabel.Text = message;
         _uiRoot.AddChild(_marketWindow);
     }
 
@@ -335,17 +342,43 @@ public partial class Main : Node2D
     private void SellRaw(CropKind crop)
     {
         SaleResult sale = _game.SellRaw(crop);
-        _messageLabel.Text = $"卖出 {sale.Quantity} 份{FarmGame.GetCrop(crop).CropName}原料，获得 {FormatCoins(sale.RevenueCents)} 金币";
+        ShowMarketFeedback(sale.Success
+            ? $"卖出 {sale.Quantity} 份{FarmGame.GetCrop(crop).CropName}原料，获得 {FormatCoins(sale.RevenueCents)} 金币"
+            : sale.ErrorMessage!);
         RefreshAfterGameChange(worldChanged: false);
     }
 
     private void SellAll()
     {
         SaleResult sale = _game.SellAll();
-        _messageLabel.Text = sale.Quantity == 0
+        ShowMarketFeedback(!sale.Success ? sale.ErrorMessage! : sale.Quantity == 0
             ? "加工品库存为空"
-            : $"卖出 {sale.Quantity} 份加工品，获得 {FormatCoins(sale.RevenueCents)} 金币";
+            : $"卖出 {sale.Quantity} 份加工品，获得 {FormatCoins(sale.RevenueCents)} 金币");
         RefreshAfterGameChange(worldChanged: false);
+    }
+
+    private void Trade(CommodityId commodity, int quantity, bool buy)
+    {
+        TradeResult result = buy ? _game.Buy(commodity, quantity) : _game.Sell(commodity, quantity);
+        ShowTradeFeedback(commodity, result, buy);
+    }
+
+    private void SellCommodityAll(CommodityId commodity) =>
+        ShowTradeFeedback(commodity, _game.SellCommodityAll(commodity), buy: false);
+
+    private void ShowTradeFeedback(CommodityId commodity, TradeResult result, bool buy)
+    {
+        ShowMarketFeedback(result.Success
+            ? $"{(buy ? "买入" : "卖出")} {result.Quantity} 份{CommodityCatalog.Get(commodity).Name}，" +
+                $"{(buy ? "花费" : "获得")} {FormatCoins(result.TotalCents)} 金币"
+            : result.ErrorMessage!);
+        RefreshAfterGameChange(worldChanged: false);
+    }
+
+    private void ShowMarketFeedback(string message)
+    {
+        _messageLabel.Text = message;
+        _marketWindow.ShowFeedback(message);
     }
 
     private void OnTick()

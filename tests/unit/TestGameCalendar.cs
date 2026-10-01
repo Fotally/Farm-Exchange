@@ -11,7 +11,26 @@ public partial class TestGameCalendar : Node
         GetTree().Quit(passed ? 0 : 1);
     }
 
-    public static bool RunChecks() => CheckDateBoundaries() && CheckAdvanceAndPause() && CheckLimit();
+    public static bool RunChecks() => CheckDateBoundaries() && CheckDateProjection() && CheckAdvanceAndPause() && CheckLimit();
+
+    private static bool CheckDateProjection()
+    {
+        uint[] days = { 0, 14, 28, 83, 84, 98, 99, 167, 168, 181, 182, 251, 252, 335, 336 };
+        foreach (uint elapsedDays in days)
+        {
+            uint seconds = (elapsedDays * 360 + 6) / 7;
+            CalendarSnapshot calendar = new GameCalendar(seconds).Snapshot;
+            GameDate date = GameCalendar.GetDate(elapsedDays);
+            if (date.ElapsedDays != calendar.ElapsedDays || date.Year != calendar.Year ||
+                date.Month != calendar.Month || date.Day != calendar.Day || date.Season != calendar.Season)
+                return Fail("纯日期换算与日历快照不一致");
+        }
+        if (GameCalendar.GetDate(98) != new GameDate(98, 1, 4, 15, Season.Summer) ||
+            GameCalendar.GetDate(181) != new GameDate(181, 1, 7, 14, Season.Autumn) ||
+            GameCalendar.GetDate(uint.MaxValue) != new GameDate(uint.MaxValue, 12782641, 10, 4, Season.Winter))
+            return Fail("节日或 uint32 日数上限的纯日期换算错误");
+        return true;
+    }
 
     private static bool CheckDateBoundaries()
     {

@@ -76,6 +76,6 @@ internal static class UiElements
         }
     }
 
-    internal static string FormatCoins(int cents) =>
+    internal static string FormatCoins(long cents) =>
         (cents / 100m).ToString("0.00", CultureInfo.InvariantCulture);
 }

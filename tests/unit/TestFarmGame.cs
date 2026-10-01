@@ -1,5 +1,6 @@
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Inventory;
 using FarmExchange.Land;
 using FarmExchange.Market;
 using FarmExchange.Workers;
@@ -92,8 +93,9 @@ public partial class TestFarmGame : Node
             Vector2I processor = new(100, 100);
             RemoveInitialBuildings(game);
             if (game.MoneyCents != 5000 || game.CurrentDay != (int)(startSecond * 7 / 360) + 1 ||
-                game.CurrentFlourPriceCents !=
-                    new MarketPriceCurve(12345).GetPriceCents(game.CurrentDay))
+                game.CurrentFlourPriceCents != new MarketQuotes(12345,
+                    game.Calendar.ElapsedDays).GetQuote(new CommodityId(
+                        CropKind.Wheat, CommodityKind.Product)).PriceCents)
                 return Fail("初始资源错误");
             if (game.BuildFarm(farm) != null ||
                 game.SetFarmCrop(farm, crop.Kind) != null ||

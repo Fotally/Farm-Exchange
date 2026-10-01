@@ -39,7 +39,7 @@ public partial class CropSelectionWindow : DraggableWindow
     {
         foreach (CropDefinition crop in FarmGame.Crops)
             _options[(int)crop.Kind].Text =
-                $"{crop.CropName} · 原料售价：{FormatCoins(game.GetRawPriceCents(crop.Kind))} 金币\n" +
+                $"{crop.CropName} · 原料当前报价：{FormatCoins(game.GetRawPriceCents(crop.Kind))} 金币\n" +
                 $"原料库存 {game.GetRawStock(crop.Kind)}";
     }
 }

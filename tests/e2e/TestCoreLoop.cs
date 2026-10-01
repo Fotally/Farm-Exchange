@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Threading.Tasks;
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Inventory;
+using FarmExchange.Market;
 using FarmExchange.UI;
 using FarmExchange.World;
 
@@ -21,7 +23,8 @@ public partial class TestCoreLoop : Node
         parent.AddChild(main);
         bool passed = Check(main);
         main.QueueFree();
-        return passed && CheckRainUi(parent) && CheckReserveUi(parent) && CheckRoadUi(parent);
+        return passed && CheckRainUi(parent) && CheckReserveUi(parent) && CheckRoadUi(parent) &&
+            CheckMarketUi(parent);
     }
 
     public static async Task<bool> RunLayoutChecks(Node parent)
@@ -60,7 +63,164 @@ public partial class TestCoreLoop : Node
             lastRect.End.Y > viewportRect.End.Y)
             passed = Fail("库存正常滚动无法完整显示最后一种作物的输入框");
         window.QueueFree();
+        return passed && await CheckMarketLayout(parent);
+    }
+
+    private static async Task<bool> CheckMarketLayout(Node parent)
+    {
+        var game = new FarmGame(12345);
+        for (int i = 0; i < 669; i++) game.AdvanceTick();
+        var window = new MarketWindow();
+        parent.AddChild(window);
+        window.Refresh(game);
+        window.ShowRaised();
+        await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+        await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool passed = true;
+        Rect2 windowRect = window.GetGlobalRect();
+        Rect2 viewport = parent.GetViewport().GetVisibleRect();
+        if (windowRect.Position.Y < 70 || windowRect.End.Y > viewport.End.Y - 109 ||
+            windowRect.Position.X < 0 || windowRect.End.X > viewport.End.X)
+            passed = Fail("市场窗口溢出1280×720可用区域或覆盖顶部/底部操作");
+        var scroll = Find<ScrollContainer>(window, "MarketScroll");
+        var newsScroll = Find<ScrollContainer>(window, "MarketNewsScroll");
+        var input = Find<LineEdit>(window, "MarketQuantityInput");
+        var controls = Find<Control>(window, "MarketTradeControls");
+        Rect2 tradeRect = controls.GetGlobalRect();
+        if (newsScroll.Size.Y > 65 || scroll.Size.Y < 120 ||
+            tradeRect.Position.Y < scroll.GetGlobalRect().End.Y ||
+            tradeRect.End.Y > windowRect.End.Y || input.Size.Y < 36)
+            passed = Fail("市场消息挤出表格或数量操作，或操作区发生重叠");
+        Button last = Find<Button>(window, "CommodityRadishProductButton");
+        scroll.EnsureControlVisible(last);
+        await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+        await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+        Rect2 rowRect = last.GetGlobalRect();
+        Rect2 scrollRect = scroll.GetGlobalRect();
+        if (scroll.ScrollVertical <= 0 || rowRect.Position.Y < scrollRect.Position.Y ||
+            rowRect.End.Y > scrollRect.End.Y)
+            passed = Fail("行情表正常滚动无法完整展示最后一个商品");
+        foreach (string name in new[] { "BuyCommodityButton", "SellCommodityButton", "SellCommodityAllButton", "SellButton" })
+        {
+            Rect2 buttonRect = Find<Button>(window, name).GetGlobalRect();
+            if (!windowRect.Encloses(buttonRect))
+                passed = Fail("市场交易按钮超出窗口：" + name);
+        }
+        if (game.GetMarketSnapshot().News is not MarketNewsSnapshot news ||
+            !Find<Label>(window, "MarketNews").Text.Contains(news.Lines[^1]))
+            passed = Fail("真实已公布因素消息未完整写入独立滚动区");
+        window.QueueFree();
         return passed;
+    }
+
+    private static bool CheckMarketUi(Node parent)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        parent.AddChild(main);
+        bool passed = CheckMarketControls(main);
+        main.QueueFree();
+        return passed;
+    }
+
+    private static bool CheckMarketControls(Main main)
+    {
+        var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
+        Find<Button>(ui, "MarketButton").EmitSignal(Button.SignalName.Pressed);
+        var window = Find<MarketWindow>(ui, "MarketWindow");
+        var input = Find<LineEdit>(window, "MarketQuantityInput");
+        var buy = Find<Button>(window, "BuyCommodityButton");
+        var sell = Find<Button>(window, "SellCommodityButton");
+        var all = Find<Button>(window, "SellCommodityAllButton");
+        var timer = main.GetNode<Timer>("TickTimer");
+        foreach (MarketQuoteSnapshot quote in main.Game.GetMarketSnapshot().Quotes)
+        {
+            string prefix = $"Quote{quote.Id.Crop}{quote.Id.Kind}";
+            if (Find<Label>(window, prefix + "Price").Text !=
+                    (quote.PriceCents / 100m).ToString("0.00", CultureInfo.InvariantCulture) ||
+                Find<Label>(window, prefix + "Previous").Text !=
+                    (quote.PreviousPriceCents / 100m).ToString("0.00", CultureInfo.InvariantCulture) ||
+                Find<Label>(window, prefix + "Change").Text !=
+                    quote.ChangePercent.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture) + "%" ||
+                Find<Label>(window, prefix + "Stock").Text != main.Game.GetStock(quote.Id).ToString(CultureInfo.InvariantCulture))
+                return Fail("十四商品的当前/上次报价、涨跌或库存未读取真实经营快照");
+        }
+        CommodityId raw = new(CropKind.Radish, CommodityKind.Raw);
+        Find<Button>(window, "CommodityRadishRawButton").EmitSignal(Button.SignalName.Pressed);
+        EnterText(input, "123");
+        input.GrabFocus();
+        input.CaretColumn = 2;
+        var scroll = Find<ScrollContainer>(window, "MarketScroll");
+        scroll.ScrollVertical = 30;
+        int scrollPosition = scroll.ScrollVertical;
+        timer.EmitSignal(Timer.SignalName.Timeout);
+        if (input.Text != "123" || !input.HasFocus() || input.CaretColumn != 2 ||
+            scroll.ScrollVertical != scrollPosition ||
+            Find<Label>(window, "SelectedCommodityLabel").Text != "萝卜原料" ||
+            !object.ReferenceEquals(input, Find<LineEdit>(window, "MarketQuantityInput")))
+            return Fail("行情刷新丢失所选商品、数量草稿、焦点、光标或滚动");
+        input.ReleaseFocus();
+        Find<Button>(window, "CloseButton").EmitSignal(Button.SignalName.Pressed);
+        Find<Button>(ui, "MarketButton").EmitSignal(Button.SignalName.Pressed);
+        if (input.Text != "123" || Find<Label>(window, "SelectedCommodityLabel").Text != "萝卜原料")
+            return Fail("市场关闭重开丢失数量草稿或商品选择");
+        foreach (string invalid in new[] { "", "0", "-1", "1.5", "2147483648" })
+        {
+            int balance = main.Game.MoneyCents;
+            int stock = main.Game.GetStock(raw);
+            EnterText(input, invalid);
+            buy.EmitSignal(Button.SignalName.Pressed);
+            if (main.Game.MoneyCents != balance || main.Game.GetStock(raw) != stock ||
+                input.Text != invalid || !ContainsVisibleText(window, "请输入 1 到 2147483647"))
+                return Fail("非法交易数量改变经营状态或缺少错误反馈");
+        }
+        EnterText(input, "1000000");
+        buy.EmitSignal(Button.SignalName.Pressed);
+        if (!ContainsVisibleText(window, "金币不足"))
+            return Fail("资金不足没有显示正常失败原因");
+        main.Game.SetPaused(true);
+        uint pausedSecond = main.Game.Calendar.ElapsedSeconds;
+        int before = main.Game.MoneyCents;
+        int beforeStock = main.Game.GetStock(raw);
+        int price = main.Game.GetQuote(raw).PriceCents;
+        EnterText(input, "2");
+        buy.EmitSignal(Button.SignalName.Pressed);
+        timer.EmitSignal(Timer.SignalName.Timeout);
+        if (main.Game.MoneyCents != before - 2 * price || main.Game.GetStock(raw) != beforeStock + 2 ||
+            main.Game.Calendar.ElapsedSeconds != pausedSecond || input.Text != "2")
+            return Fail("暂停买入未按当前报价进入公共库存，或推进了经营");
+        sell.EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.MoneyCents != before || main.Game.GetStock(raw) != beforeStock)
+            return Fail("同价卖出未恢复买入前的余额和公共库存");
+        EnterText(input, "2147483647");
+        sell.EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.MoneyCents != before || main.Game.GetStock(raw) != beforeStock ||
+            !ContainsVisibleText(window, "公共库存不足"))
+            return Fail("库存不足没有零修改拒绝或没有反馈");
+        main.Game.SetPaused(false);
+        for (int i = 0; i < 724; i++) main.Game.AdvanceTick();
+        main.Game.SetPaused(true);
+        before = main.Game.MoneyCents;
+        beforeStock = main.Game.GetStock(raw);
+        price = main.Game.GetQuote(raw).PriceCents;
+        EnterText(input, "1");
+        buy.EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.MoneyCents != before - price || main.Game.GetStock(raw) != beforeStock + 1 ||
+            Find<Label>(window, "QuoteRadishRawPrice").Text != (price / 100m).ToString("0.00", CultureInfo.InvariantCulture))
+            return Fail("行情变化后成交使用了窗口旧报价或未刷新生效价");
+        int quantity = main.Game.GetStock(raw);
+        before = main.Game.MoneyCents;
+        all.EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.GetStock(raw) != 0 || main.Game.MoneyCents != before + quantity * price || !all.Disabled)
+            return Fail("该商品全售没有结算同一公共库存或更新按钮");
+        CommodityId product = new(CropKind.Radish, CommodityKind.Product);
+        Find<Button>(window, "CommodityRadishProductButton").EmitSignal(Button.SignalName.Pressed);
+        beforeStock = main.Game.GetStock(product);
+        EnterText(input, "1");
+        buy.EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.GetStock(product) != beforeStock + 1)
+            return Fail("加工品未接入选中商品数量买入");
+        sell.EmitSignal(Button.SignalName.Pressed);
+        return main.Game.GetStock(product) == beforeStock || Fail("加工品未接入选中商品数量卖出");
     }
 
     private static bool CheckRainUi(Node parent)
@@ -315,7 +475,7 @@ public partial class TestCoreLoop : Node
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
         if (main.Game.GetPlot(farm).Building != BuildingKind.Farm ||
             main.Game.MoneyCents != 4000 || !detail.Visible || cancel.Visible ||
-            !ContainsVisibleText(detail, "原材料售价：2.50 金币") ||
+            !ContainsVisibleText(detail, "原料当前报价：2.50 金币") ||
             !ContainsVisibleText(detail, "生长周期：获得水后 16 天成熟") ||
             !ContainsVisibleText(detail, "原料库存：") ||
             ContainsVisibleText(detail, "加工品库存"))
@@ -379,11 +539,11 @@ public partial class TestCoreLoop : Node
             main.Game.MoneyCents != 3000 || cancel.Visible ||
             !ContainsVisibleText(detail, "等待萝卜") ||
             !ContainsVisibleText(detail, "加工周期：投入原料后 0.5 天完成") ||
-            !ContainsVisibleText(detail, "腌萝卜加工品售价：0.50 金币") ||
+            !ContainsVisibleText(detail, "腌萝卜加工品当前报价：0.50 金币") ||
             !ContainsVisibleText(detail, "腌萝卜加工品库存：0") ||
             ContainsVisibleText(detail, "生长周期") ||
             ContainsVisibleText(detail, "原料库存") ||
-            ContainsVisibleText(detail, "原材料售价"))
+            ContainsVisibleText(detail, "原料当前报价"))
             return Fail("加工场地摆放与收费错误");
 
         Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
@@ -410,7 +570,7 @@ public partial class TestCoreLoop : Node
             .ToString("0.00", CultureInfo.InvariantCulture);
         if (!sawProcessing || radishProducts == 0 ||
             !ContainsVisibleText(detail, $"腌萝卜加工品库存：{radishProducts}") ||
-            !ContainsVisibleText(detail, $"腌萝卜加工品售价：{radishProductPrice} 金币"))
+            !ContainsVisibleText(detail, $"腌萝卜加工品当前报价：{radishProductPrice} 金币"))
             return Fail("萝卜加工场地没有显示随经营更新的售价与库存");
         Find<Button>(ui, "MarketButton").EmitSignal(Button.SignalName.Pressed);
         Button sell = Find<Button>(marketWindow, "SellButton");
@@ -459,6 +619,8 @@ public partial class TestCoreLoop : Node
         foreach (Node child in parent.GetChildren())
         {
             if (child is Label label && label.IsVisibleInTree() && label.Text.Contains(text))
+                return true;
+            if (child is Button button && button.IsVisibleInTree() && button.Text.Contains(text))
                 return true;
             if (ContainsVisibleText(child, text))
                 return true;

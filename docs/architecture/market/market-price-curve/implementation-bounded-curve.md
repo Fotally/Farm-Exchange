@@ -11,4 +11,4 @@
 
 权重和为 1。归一化结果 q 位于 [-1,1]，再用 P(d) = L × (U / L)^((q(d) + 1) / 2) 映射到 L=1.00、U=20.00 金币，并按分四舍五入。参数给出的保守最大日差约 0.1159，对应未取整价格理论最大涨幅约 19.0%，为取整留余量。测试另以固定种子验证 10 万天的边界、20% 日幅和分类。
 
-这里是当前实现参数的准则；[调研](../../../research/market-price-curve.md)保存候选模型、公式推导和资料来源。玩家看到的定价与出售规则见[交易](../../../gameplay/trading/sales.md)。
+这里记录历史独立曲线的实现参数；[调研](../../../research/market-price-curve.md)保存候选模型、公式推导和资料来源。T09 后正式经营使用 [MarketQuotes](../market-quotes/interface-market-quotes.md)，不再使用本曲线的每日面粉基准或固定倍率；玩家现行独立行情规则见[独立商品报价](../../../gameplay/trading/market-quotes.md)，结算规则见[交易](../../../gameplay/trading/sales.md)。

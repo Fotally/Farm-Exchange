@@ -12,8 +12,9 @@ internal sealed class Inventory
     private readonly int[] _productStock = new int[CropCatalog.Crops.Count];
     private readonly int[] _rawReserve = new int[CropCatalog.Crops.Count];
 
-    internal int GetRaw(CropKind crop) => _rawStock[IndexOf(crop)];
-    internal int GetProduct(CropKind crop) => _productStock[IndexOf(crop)];
+    internal int Get(CommodityId commodity) => StocksFor(commodity)[(int)commodity.Crop];
+    internal int GetRaw(CropKind crop) => Get(new CommodityId(crop, CommodityKind.Raw));
+    internal int GetProduct(CropKind crop) => Get(new CommodityId(crop, CommodityKind.Product));
     internal int GetRawReserve(CropKind crop) => _rawReserve[IndexOf(crop)];
 
     internal void SetRawReserve(CropKind crop, int quantity)
@@ -33,21 +34,30 @@ internal sealed class Inventory
             ? RawProcessingAvailability.Available : RawProcessingAvailability.Reserved;
     }
 
-    internal void AddRaw(CropKind crop, int quantity)
+    internal void Add(CommodityId commodity, int quantity)
     {
-        int index = IndexOf(crop);
+        int[] stocks = StocksFor(commodity);
         if (quantity < 0)
             throw new ArgumentOutOfRangeException(nameof(quantity));
-        _rawStock[index] = checked(_rawStock[index] + quantity);
+        int index = (int)commodity.Crop;
+        stocks[index] = checked(stocks[index] + quantity);
     }
 
-    internal void AddProduct(CropKind crop, int quantity)
+    internal void Remove(CommodityId commodity, int quantity)
     {
-        int index = IndexOf(crop);
+        int[] stocks = StocksFor(commodity);
         if (quantity < 0)
             throw new ArgumentOutOfRangeException(nameof(quantity));
-        _productStock[index] = checked(_productStock[index] + quantity);
+        int index = (int)commodity.Crop;
+        if (stocks[index] < quantity)
+            throw new InvalidOperationException("公共库存不足");
+        stocks[index] -= quantity;
     }
+
+    internal void AddRaw(CropKind crop, int quantity) =>
+        Add(new CommodityId(crop, CommodityKind.Raw), quantity);
+    internal void AddProduct(CropKind crop, int quantity) =>
+        Add(new CommodityId(crop, CommodityKind.Product), quantity);
 
     internal bool TryTakeRawForProcessing(CropKind crop)
     {
@@ -58,9 +68,21 @@ internal sealed class Inventory
         return true;
     }
 
-    internal void TakeAllRaw(CropKind crop) => _rawStock[IndexOf(crop)] = 0;
+    internal void TakeAllRaw(CropKind crop) =>
+        Remove(new CommodityId(crop, CommodityKind.Raw), GetRaw(crop));
 
-    internal void TakeAllProducts() => Array.Clear(_productStock);
+    internal void TakeAllProducts()
+    {
+        foreach (CropDefinition crop in CropCatalog.Crops)
+            Remove(new CommodityId(crop.Kind, CommodityKind.Product), GetProduct(crop.Kind));
+    }
+
+    private int[] StocksFor(CommodityId commodity)
+    {
+        if (!commodity.IsDefined)
+            throw new ArgumentOutOfRangeException(nameof(commodity));
+        return commodity.Kind == CommodityKind.Raw ? _rawStock : _productStock;
+    }
 
     private static int IndexOf(CropKind crop)
     {

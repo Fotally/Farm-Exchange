@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using Godot;
 using FarmExchange.Economy;
 using FarmExchange.Farming;
+using FarmExchange.Inventory;
 using FarmExchange.Land;
 using FarmExchange.Market;
 using FarmExchange.Processing;
 using FarmExchange.Time;
+using FarmExchange.Trading;
 using FarmExchange.Workers;
 using FarmExchange.World;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
@@ -38,7 +40,12 @@ public readonly record struct FarmDetailsSnapshot(
 public readonly record struct ProcessorDetailsSnapshot(
     CropDefinition Crop, ProcessorStatus Status, int ProductPriceCents, int ProductStock);
 public readonly record struct TickResult(int Harvested, int Produced, bool WorkerActed, bool DayAdvanced);
-public readonly record struct SaleResult(int Quantity, int RevenueCents);
+public readonly record struct SaleResult(
+    int Quantity, int RevenueCents, TradeFailure Failure = TradeFailure.None)
+{
+    public bool Success => Failure == TradeFailure.None;
+    public string? ErrorMessage => new TradeResult(Failure, Quantity, RevenueCents).ErrorMessage;
+}
 
 public sealed class FarmGame
 {
@@ -62,15 +69,17 @@ public sealed class FarmGame
     private readonly WorkerScheduler _workerScheduler = new(InitialFarmCells);
     private readonly GoodsInventory _inventory = new();
     private readonly Wallet _wallet = new(5000);
-    private readonly MarketPriceCurve _marketPriceCurve;
+    private readonly MarketQuotes _market;
+    private readonly TradingService _trading;
     private readonly GameCalendar _calendar;
 
     public int MoneyCents => _wallet.BalanceCents;
     public int CurrentDay => (int)_calendar.Snapshot.ElapsedDays + 1;
     public CalendarSnapshot Calendar => _calendar.Snapshot;
     public bool IsPaused => _calendar.IsPaused;
-    public int CurrentFlourPriceCents { get; private set; }
-    public double DailyPriceChangePercent { get; private set; }
+    public int CurrentFlourPriceCents => GetProductPriceCents(CropKind.Wheat);
+    public double DailyPriceChangePercent =>
+        (double)GetQuote(new CommodityId(CropKind.Wheat, CommodityKind.Product)).ChangePercent;
 
     public FarmGame(int? marketSeed = null) : this(marketSeed, 0) { }
 
@@ -78,8 +87,8 @@ public sealed class FarmGame
     {
         _calendar = new GameCalendar(elapsedSeconds);
         int seed = marketSeed ?? Random.Shared.Next();
-        _marketPriceCurve = new MarketPriceCurve(seed);
-        CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
+        _market = new MarketQuotes(seed, _calendar.Snapshot.ElapsedDays);
+        _trading = new TradingService(_inventory, _wallet, _market);
         InitializeCenter(new Random(seed));
     }
 
@@ -123,10 +132,13 @@ public sealed class FarmGame
         return RawReserveFailure.None;
     }
     public int GetProductStock(CropKind crop) => _inventory.GetProduct(crop);
+    public int GetStock(CommodityId commodity) => _inventory.Get(commodity);
+    public MarketQuoteSnapshot GetQuote(CommodityId commodity) => _market.GetQuote(commodity);
+    public MarketSnapshot GetMarketSnapshot() => _market.GetSnapshot();
     public int GetProductPriceCents(CropKind crop) =>
-        (CurrentFlourPriceCents * GetCrop(crop).PricePercent + 50) / 100;
+        GetQuote(new CommodityId(crop, CommodityKind.Product)).PriceCents;
     public int GetRawPriceCents(CropKind crop) =>
-        (GetProductPriceCents(crop) * GetCrop(crop).RawPricePercent + 50) / 100;
+        GetQuote(new CommodityId(crop, CommodityKind.Raw)).PriceCents;
 
     public PlotSnapshot GetPlot(Vector2I cell)
     {
@@ -335,31 +347,16 @@ public sealed class FarmGame
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
     }
 
-    public SaleResult SellAll()
-    {
-        long sold = 0;
-        long revenue = 0;
-        foreach (CropDefinition crop in Crops)
-        {
-            int quantity = _inventory.GetProduct(crop.Kind);
-            sold += quantity;
-            revenue += (long)quantity * GetProductPriceCents(crop.Kind);
-        }
-        int soldQuantity = checked((int)sold);
-        int revenueCents = checked((int)revenue);
-        _wallet.Credit(revenueCents);
-        _inventory.TakeAllProducts();
-        return new SaleResult(soldQuantity, revenueCents);
-    }
+    public TradeResult Buy(CommodityId commodity, int quantity) => _trading.Buy(commodity, quantity);
+    public TradeResult Sell(CommodityId commodity, int quantity) => _trading.Sell(commodity, quantity);
+    public TradeResult SellCommodityAll(CommodityId commodity) => _trading.SellAll(commodity);
 
-    public SaleResult SellRaw(CropKind crop)
-    {
-        int sold = _inventory.GetRaw(crop);
-        int revenueCents = checked((int)((long)sold * GetRawPriceCents(crop)));
-        _wallet.Credit(revenueCents);
-        _inventory.TakeAllRaw(crop);
-        return new SaleResult(sold, revenueCents);
-    }
+    public SaleResult SellAll() => LegacySale(_trading.SellAllProducts());
+    public SaleResult SellRaw(CropKind crop) =>
+        LegacySale(SellCommodityAll(new CommodityId(crop, CommodityKind.Raw)));
+
+    private static SaleResult LegacySale(TradeResult result) =>
+        new((int)result.Quantity, (int)result.TotalCents, result.Failure);
 
     private bool AdvanceDay()
     {
@@ -371,10 +368,7 @@ public sealed class FarmGame
             _farming.ClearDisallowedCrops(calendar.Season);
         if (calendar.ElapsedDays == previousCalendar.ElapsedDays)
             return false;
-        int previousPrice = CurrentFlourPriceCents;
-        CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
-        DailyPriceChangePercent =
-            (CurrentFlourPriceCents - previousPrice) * 100.0 / previousPrice;
+        _market.Advance(calendar);
         return true;
     }
 

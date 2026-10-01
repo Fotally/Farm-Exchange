@@ -46,7 +46,7 @@ foreach ($document in $documents) {
     }
 }
 
-$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; farming = 'FarmExchange.Farming'; land = 'FarmExchange.Land'; processing = 'FarmExchange.Processing'; workers = 'FarmExchange.Workers'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; characters = 'FarmExchange.Characters'; market = 'FarmExchange.Market'; time = 'FarmExchange.Time'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI' }
+$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; farming = 'FarmExchange.Farming'; land = 'FarmExchange.Land'; processing = 'FarmExchange.Processing'; workers = 'FarmExchange.Workers'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; characters = 'FarmExchange.Characters'; market = 'FarmExchange.Market'; trading = 'FarmExchange.Trading'; time = 'FarmExchange.Time'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI' }
 foreach ($group in $namespaces.Keys) {
     $directory = Join-Path $repoRoot "scripts/$group"
     foreach ($script in Get-ChildItem -LiteralPath $directory -File -Filter '*.cs') {

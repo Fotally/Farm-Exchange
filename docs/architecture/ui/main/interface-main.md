@@ -2,7 +2,7 @@
 
 本页对应 [UI issue #24](https://github.com/Fotally/Farm-Exchange/issues/24)，记录 `scenes/main.tscn` 与 `scripts/ui/Main.cs` 的已实现界面接口。具体经营规则仍以 `docs/gameplay/` 为准。
 
-[单文件 HTML 原型](prototype-main.html)用于查看界面层级和点击流程，仅演示视觉与交互；其中的原料价格是首日示意值，库存、交易和建造费不参与真实经营计算。下图为原型市场，实际 Godot 市场以卡片显示两类价格并按品种提供原料出售按钮。
+[单文件 HTML 原型](prototype-main.html)用于查看界面层级和点击流程，仅演示视觉与交互；其中的原料价格是首日示意值，库存、交易和建造费不参与真实经营计算。下图为原型市场，实际 Godot 市场采用十四商品固定行、单一数量输入和独立消息滚动区，见[市场窗口接口](../market-window/interface-market-window.md)。
 
 ![HTML 原型市场首日示意](prototype-market.png)
 
@@ -27,10 +27,10 @@
 | 顶部常驻状态 | 金币、工人摘要与“季 · 第 N 年 · N 月 · N 日”常驻；人数读取真实工人快照数量，开局显示“3 · 自动照料”；暂停/继续控制经营时间；库存、市场是全局窗口入口；存档、人物状态保留规划位置。不展示内部 `tick`。 |
 | 地图 | 平时点击地块选择对象；进入建造摆放后，点击符合条件的空位执行建造。拖动和缩放仍交给镜头与地图模块。 |
 | 底部建造 | 一个“建造”入口打开目录。目录可选农田、加工场地或道路；选择后点击目标空位执行。农田与加工场地成功后退出摆放，道路成功后保持逐格连续铺设；占用失败不扣费且保持模式。道路每格费用与其他建筑费用读取统一查询，Esc 或“取消摆放”退出。 |
-| 选中详情 | 仅在选中地块或建筑后出现；农田显示作物状态、获水后成熟所需天数、对应原料当日售价和公共原料库存，并提供改种入口。湿润空田显示待播种状态；不适季或剩余时间不足时显示播种等待原因。加工场地显示加工状态、从投入原料到完成所需天数、原料与产物关系、对应加工品当日售价和公共加工品库存。道路显式显示布局用途和拆除不退款说明，并提供拆除按钮。 |
+| 选中详情 | 仅在选中地块或建筑后出现；农田显示作物状态、获水后成熟所需天数、对应原料当前报价和公共原料库存，并提供改种入口。湿润空田显示待播种状态；不适季或剩余时间不足时显示播种等待原因。加工场地显示加工状态、从投入原料到完成所需天数、原料与产物关系、对应加工品当前报价和公共加工品库存。道路显式显示布局用途和拆除不退款说明，并提供拆除按钮。 |
 | 全局窗口 | 库存显示两类公共库存并逐作物编辑非负整数保留底线；市场负责已确认的交易命令。窗口不自行计算价格、费用或加工规则。 |
 
-加工场地目录按名称搜索并可滚动；新增建筑只增加目录条目，不增加底栏固定按钮。作物选择列表只展示每种作物的原料当日价格与公共原料库存，便于比较。市场每种原料配有卖出该种全部库存的按钮，底部保留出售全部加工品的按钮；无对应库存时按钮禁用。
+加工场地目录按名称搜索并可滚动；新增建筑只增加目录条目，不增加底栏固定按钮。作物选择列表只展示每种作物的原料当前报价与公共原料库存，便于比较。市场显示十四商品当前/上次报价、实际涨跌与公共库存，选择商品后用一个数量输入买入、卖出或全售该商品；每种原料表行保留按品种全部出售快捷，底部保留出售全部加工品。报价日期与已公布真实因素/节日改期消息直接读取经营快照；无对应库存时全部出售按钮禁用。
 
 ## 二级及以下窗口的位置约定
 
@@ -46,7 +46,7 @@
 
 `Main` 负责组装窗口、保留摆放与所选格、分发玩家命令，并在命令或 tick 完成后统一刷新。建造目录发出建筑意图，地图点击时 `Main` 调用 `FarmGame.TryPlace`，失败显示结果原因，成功显示实际扣费 `ChargedCents`；目录和底栏费用都读取 `GetBuildingCostCents`。连续道路模式在每次成功和失败后保留，直到 Esc、取消或重新打开建造目录；农田与加工场地保持原单次成功退出路径。道路模式下 Esc 优先结束铺设，避免只关窗口却继续扣费铺路。
 
-库存、市场和选种窗口只更新固定控件并发出操作意图；农田与加工详情分别读取 `FarmGame` 的语义快照，道路按 `BuildingKind.Road` 显式显示固定 [RoadDetailsPanel](../road-details-panel/interface-road-details-panel.md)，不对道路调用作物或加工详情查询。地图外观仅在影响地块或 tick 的命令后同步，出售只刷新经营窗口。
+库存、市场和选种窗口只更新固定控件并发出操作意图；农田与加工详情分别读取 `FarmGame` 的语义快照，道路按 `BuildingKind.Road` 显式显示固定 [RoadDetailsPanel](../road-details-panel/interface-road-details-panel.md)，不对道路调用作物或加工详情查询。地图外观仅在影响地块或 tick 的命令后同步，交易只刷新经营窗口，不同步地图或直接启动加工。
 
 库存的 `RawReserveRequested` 交给 `FarmGame.SetRawReserve`；成功后 `Main` 调用窗口确认输入并统一刷新，失败显示稳定原因。底线修改只刷新经营窗口，不同步地图、不启动加工。库存窗口的草稿、焦点与滚动由窗口自身维护。加工详情区分缺料、底线限制、待领取与进行中；底线编辑与生效规则见[原料加工](../../../gameplay/production/processing.md)。
 
@@ -54,7 +54,7 @@
 
 当前农田详情显示“生长周期：获得水后 N 天成熟”，加工详情显示“加工周期：投入原料后 N 天完成”。生产详情各显示自己负责的库存与售价，库存仍按品种共享；道路详情仅显示当前用途和拆除操作。主界面不计算建造费用、价格曲线或生产时间，也不暴露内部 `tick`。窗口实现见 [DraggableWindow](../draggable-window/interface-draggable-window.md)、[BuildCatalogWindow](../build-catalog-window/interface-build-catalog-window.md)、[CropSelectionWindow](../crop-selection-window/interface-crop-selection-window.md)、[InventoryWindow](../inventory-window/interface-inventory-window.md)、[MarketWindow](../market-window/interface-market-window.md)、[FarmDetailsPanel](../farm-details-panel/interface-farm-details-panel.md)、[ProcessorDetailsPanel](../processor-details-panel/interface-processor-details-panel.md)、[RoadDetailsPanel](../road-details-panel/interface-road-details-panel.md) 和 [UiElements](../ui-elements/interface-ui-elements.md)。
 
-[建造规则 issue #26](https://github.com/Fotally/Farm-Exchange/issues/26)已按当前约定取消土地解锁，并实行暂定的 10.00 金币建造费。年月日和季节由 `GameCalendar` 给出；每周独立行情仍归[市场 issue #25](https://github.com/Fotally/Farm-Exchange/issues/25)。[原料交易 issue #27](https://github.com/Fotally/Farm-Exchange/issues/27)确定了逐作物价格和按品种出售；详情、作物选择列表与市场均从 `FarmGame` 查询实时原料售价和库存，结算规则见[出售与价格](../../../gameplay/trading/sales.md)。
+[建造规则 issue #26](https://github.com/Fotally/Farm-Exchange/issues/26)已按当前约定取消土地解锁，并实行暂定的 10.00 金币建造费。年月日和季节由 `GameCalendar` 给出；独立双周行情与即时交易对应[市场 issue #25](https://github.com/Fotally/Farm-Exchange/issues/25)及[完整接入 issue #73](https://github.com/Fotally/Farm-Exchange/issues/73)。[原料交易 issue #27](https://github.com/Fotally/Farm-Exchange/issues/27)是按品种出售原料快捷操作的历史来源；当前独立报价与完整结算遵循 #25 / T09 [市场规则](../../../project/market-proposal.md)，详情、作物选择列表与市场均从 `FarmGame` 查询当前报价和公共库存，现行交易规则见[出售与价格](../../../gameplay/trading/sales.md)。
 
 ## 验收对应
 
@@ -63,3 +63,7 @@
 道路端到端用例另覆盖灰色目录卡片和每格费用、连续两格各扣 100 分、重复铺设失败保持模式且不扣费、Esc/取消退出、道路固定详情和不退款拆除；分类切换保持卡片身份，加工搜索在经营刷新时保留焦点。地图灰色路面与分块缓存由 `tests/integration/TestRoadMap.cs` 验证，仍通过根 `TestSuite` 汇总。
 
 库存编辑用例还验证按钮与回车提交、非法文本拒绝、下一步领取和提高底线不退料，以及经营刷新、失焦、关闭重开时保留草稿、焦点、光标、滚动与控件身份。
+
+市场数量意图由 Main 调用 FarmGame.Buy/Sell/SellCommodityAll；主界面与市场内反馈同时显示实际数量、金额或 TradeResult.ErrorMessage。七原料快捷与全部加工品快捷同样检查 SaleResult.Success，并显示容量不足等原因，不把拒绝当成交。金额格式接受 long，金币和库存经营容量仍为 int。输入非法时窗口不发出交易意图，Main 只同步输入错误消息。暂停允许主动交易；刷新不改数量草稿或商品选择。
+
+市场端到端检查额外覆盖数量与资金/库存失败零修改、暂停交易、买卖两类商品、全售、报价变化后按执行时报价成交、草稿/焦点/光标/滚动与关闭重开，以及有真实十五行公告时窗口/消息/按钮与最后一行的可见布局。

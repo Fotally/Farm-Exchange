@@ -8,7 +8,7 @@
 
 | 类别 | 场景路径 |
 | --- | --- |
-| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_worker_scheduler.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
+| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_worker_scheduler.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_market_quotes.tscn`、`tests/unit/test_trading_service.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
 | 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn`、`tests/integration/test_worker_presentation.tscn`、`tests/integration/test_road_map.tscn` |
 | 端到端测试 | `tests/e2e/test_core_loop.tscn` |
 | 满地图负载测试 | `tests/performance/test_full_world_load.tscn` |
@@ -138,6 +138,30 @@
 道路地图专项在 headless 中验证跨块同步与平移后的选格；另用指定引擎有窗口运行 `tests/integration/test_road_map.tscn`，实际像素验证灰色、金色选框及拆除恢复绿色且相邻道路保留，退出码 0。`coverage/road-map-before.png` 和 `road-map-after.png` 已查看；真实主场景目录与详情截图也已检查，见[目录 Interface](../architecture/ui/build-catalog-window/interface-build-catalog-window.md)与[道路详情 Interface](../architecture/ui/road-details-panel/interface-road-details-panel.md)。
 
 同条件满地图图形测试仍保持 8,192 田、8,192 场地和 3 名移动工人；预热 2 秒、采样 8.000418 秒，平均 **920.8 FPS**、P95 **1.485 ms**，起止移动人数均为 3，前后截图已查看。集中只读审查无待修，静态/格式、Debug/Release 编译、Windows Release 导出与实际 EXE 启动退出码 0 均通过。两份新脚本 UID 随本批提交纳入 Git。
+
+2026-10-01 T09 / #71/#72/#73 完整接入后的最终 Cobertura 总体为 **2453/2545（96.39%）**。按文件与行号去重，新增 `trading` 后 13 个模块均达到 80%；总体与模块去重口径存在少量多类型行差异：
+
+| 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `economy` | 18 / 19 | 94.74% |
+| `farming` | 158 / 158 | 100.00% |
+| `gameplay` | 288 / 301 | 95.68% |
+| `inventory` | 62 / 62 | 100.00% |
+| `land` | 39 / 41 | 95.12% |
+| `market` | 224 / 224 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 25 / 25 | 100.00% |
+| `trading` | 71 / 72 | 98.61% |
+| `ui` | 947 / 1002 | 94.51% |
+| `workers` | 86 / 90 | 95.56% |
+| `world` | 396 / 410 | 96.59% |
+
+完整套件包含十四商品的因素独立复算、本期原料成本关系、半分取整/单次限幅、三事件及跨季持续、节日与前一日消息、跨年非漂移、暂停和最大模拟日期回放；交易覆盖整数容量失败零修改、公共库存守恒、整组全售预检、执行时价格、买后领取和暂停主动交易。旧七作物生产、季节、工人、底线、道路与镜头回归继续通过。
+
+初次运行真实市场布局发现反馈文字在首次极窄宽度下换行，造成临时 377 px 最小高度、窗口 780×849，表格全部容纳后无法正常滚动。按单行控件约束修复数量标题与短反馈，保留原窗口/末行断言；独立端到端场景由退出码 1 转为 0，集中复审后完整套件再次通过。两个真实主场景截图已查看：[数量买卖与末行](../architecture/ui/market-window/market-trading.png)、[报价前消息](../architecture/ui/market-window/market-news.png)。初始暂停买入 2 份萝卜花费 0.50；显式推进 669 秒到经过 13 日，1 月 14 日公告对应 1 月 15 日报价。不是靠延迟重设窗口尺寸、扩大视窗或放宽测试通过。
+
+最终满地图 50 步 **115.72 ms**，平均 **2.314 ms/步**。图形预热 2 秒、采样 8.000015 秒，8,192 田/8,192 场地及 3 名移动工人；平均 **925.0 FPS**、P95 **1.417 ms**，起止移动人数均为 3，前后截图已查看。静态、全仓格式、集中审查复查、指定引擎 Debug/Release 编译、Windows Release 导出及实际 EXE 退出码 0 均通过。十份新 C# UID 随本批提交纳入 Git。#74 细分图是另一个静态研究工件，不声称已运行新基础格或完成其点击/FPS 验收。
 
 2026-09-28 的 Cobertura 报告也包含分支数据。#63 新增的生产状态测试验证空状态、非法输入、重复操作、改种与加工时长边界；市场测试验证非法日期，作物定义测试验证非法标识。分支覆盖率用于定位未测到的决策路径，目前不设硬性门槛：
 
