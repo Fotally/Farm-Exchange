@@ -15,9 +15,10 @@ public partial class TestFarmGame : Node
 
     public static bool RunChecks() =>
         CheckInitialCenter() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
-        CheckWorkerRotation() && CheckRainSupply() && CheckSeasonalSowing() && CheckRawSales() &&
+        CheckWorkerRotation() && CheckRainSupply() && CheckSeasonalSowing() &&
+        CheckSeasonFailure() && CheckSeasonBoundaries() && CheckRawSales() &&
         CheckInvalidCrops() && CheckStateOwnership() &&
-        CheckPlacementRules();
+        CheckPlacementRules() && CheckRawReservePhases() && CheckRawReserveConstruction();
 
     private static bool CheckInitialCenter()
     {
@@ -337,6 +338,95 @@ public partial class TestFarmGame : Node
         return true;
     }
 
+    private static bool CheckSeasonFailure()
+    {
+        // 春季 3 月 20 日起步：第一轮正常收获，第二轮因三块新田排队延迟供水。
+        var game = new FarmGame(12345, 3904);
+        RemoveInitialBuildings(game);
+        Vector2I farm = new(0, 0);
+        Vector2I processor = new(100, 100);
+        game.BuildFarm(farm);
+        game.SetFarmCrop(farm, CropKind.Radish);
+        for (int step = 0; step < 208; step++)
+            game.AdvanceTick();
+        if (game.GetRawStock(CropKind.Radish) != 6 ||
+            game.GetPlot(farm).Crop != CropStage.Seeded)
+            return Fail("越季回归没有建立上一轮收成与本轮待水作物");
+        game.BuildProcessor(processor, CropKind.Radish);
+        for (int col = 1; col <= 3; col++)
+        {
+            Vector2I other = new(col, 0);
+            game.BuildFarm(other);
+            game.SetFarmCrop(other, CropKind.Corn);
+        }
+        for (int step = 0; step < 26; step++)
+            game.AdvanceTick();
+        // 留下一份历史成品和四份公共原料；拆除损失已投入的第二份原料。
+        game.RemoveBuilding(processor);
+        int rawStock = game.GetRawStock(CropKind.Radish);
+        int productStock = game.GetProductStock(CropKind.Radish);
+        int money = game.MoneyCents;
+        if (rawStock != 4 || productStock != 1)
+            return Fail("越季回归没有建立两类历史库存");
+        while (game.Calendar.ElapsedSeconds < 4319)
+            game.AdvanceTick();
+        if (game.GetPlot(farm).Crop != CropStage.Growing ||
+            !game.GetPlot(farm).HasWater || game.GetPlot(farm).RemainingSeconds <= 1)
+            return Fail("工人排队未使本轮生长延迟至禁生季节");
+
+        TickResult crossing = game.AdvanceTick();
+        PlotSnapshot cleared = new(BuildingKind.Farm, CropKind.Radish, CropStage.None, 0);
+        if (!crossing.DayAdvanced || crossing.Harvested != 0 ||
+            game.GetPlot(farm) != cleared ||
+            game.GetFarmDetails(farm).Status != FarmStatus.WrongSeason ||
+            game.GetRawStock(CropKind.Radish) != rawStock ||
+            game.GetProductStock(CropKind.Radish) != productStock || game.MoneyCents != money ||
+            !game.HasConsistentState())
+            return Fail("越季失败没有自动清理，或影响了选种、历史库存、金币与详情原因");
+        for (int step = 0; step < 10; step++)
+            if (game.AdvanceTick().Harvested != 0 || game.GetPlot(farm) != cleared)
+                return Fail("清理后在不适季反复播种或产生了本轮收成");
+
+        game.SetFarmCrop(farm, CropKind.Rice);
+        for (int step = 0; step < 620; step++)
+            game.AdvanceTick();
+        if (game.GetRawStock(CropKind.Rice) != 3 ||
+            game.GetRawStock(CropKind.Radish) != rawStock ||
+            game.GetProductStock(CropKind.Radish) != productStock || game.MoneyCents != money)
+            return Fail("失败改种后没有恢复完整生产，或恢复影响了历史库存与金币");
+        return true;
+    }
+
+    private static bool CheckSeasonBoundaries()
+    {
+        Vector2I farm = new(0, 0);
+        // 春末最后两秒播种玉米，春夏连续适宜，跨季后仍按原进度生长。
+        var continuous = new FarmGame(12345, 4318);
+        RemoveInitialBuildings(continuous);
+        continuous.BuildFarm(farm);
+        continuous.SetFarmCrop(farm, CropKind.Corn);
+        continuous.AdvanceTick(isRaining: true);
+        continuous.AdvanceTick();
+        if (continuous.GetPlot(farm) !=
+            new PlotSnapshot(BuildingKind.Farm, CropKind.Corn, CropStage.Growing, 1028, true))
+            return Fail("相邻适宜季节误清了生长中的玉米");
+
+        // 春末剩 208 秒播种干田萝卜，下一秒浇水，恰好在夏季起点成熟。
+        var exact = new FarmGame(12345, 4112);
+        RemoveInitialBuildings(exact);
+        exact.BuildFarm(farm);
+        exact.SetFarmCrop(farm, CropKind.Radish);
+        for (int step = 0; step < 207; step++)
+            exact.AdvanceTick();
+        TickResult harvest = exact.AdvanceTick();
+        if (!harvest.DayAdvanced || harvest.Harvested != 6 ||
+            exact.GetRawStock(CropKind.Radish) != 6 ||
+            exact.GetPlot(farm) != new PlotSnapshot(BuildingKind.Farm, CropKind.Radish, CropStage.None, 0) ||
+            exact.GetFarmDetails(farm).Status != FarmStatus.WrongSeason)
+            return Fail("恰在换季时成熟的萝卜被清理或没有先收获入库");
+        return true;
+    }
+
     private static bool CheckRawSales()
     {
         foreach (CropDefinition crop in FarmGame.Crops)
@@ -488,6 +578,97 @@ public partial class TestFarmGame : Node
         if (game.RemoveBuilding(target) != null || game.GetPlot(target).Building != BuildingKind.None ||
             game.BuildFarm(target) == null || !game.HasConsistentState())
             return Fail("拆除后占用或余额规则错误");
+        return true;
+    }
+
+    private static bool CheckRawReservePhases()
+    {
+        var game = new FarmGame(12345);
+        RemoveInitialBuildings(game);
+        foreach (CropDefinition crop in FarmGame.Crops)
+            if (game.GetRawReserve(crop.Kind) != 0)
+                return Fail("经营入口的保留底线默认值错误");
+        if (game.SetRawReserve((CropKind)999, 1) != RawReserveFailure.InvalidCrop ||
+            game.SetRawReserve(CropKind.Radish, -1) != RawReserveFailure.InvalidQuantity ||
+            game.GetRawReserve(CropKind.Radish) != 0 || game.MoneyCents != 5000)
+            return Fail("非法底线命令未拒绝，或修改了经营状态");
+
+        Vector2I farm = new(4, 4);
+        Vector2I first = new(127, 0);
+        Vector2I second = new(0, 1);
+        game.SetRawReserve(CropKind.Radish, 6);
+        game.BuildFarm(farm);
+        game.SetFarmCrop(farm, CropKind.Radish);
+        game.BuildProcessor(second, CropKind.Radish);
+        game.BuildProcessor(first, CropKind.Radish);
+        game.AdvanceTick(isRaining: true);
+        for (int i = 0; i < 206; i++) game.AdvanceTick();
+        game.RemoveBuilding(farm);
+        if (game.GetRawStock(CropKind.Radish) != 6 ||
+            game.GetProcessorDetails(first).Status != ProcessorStatus.WaitingForReserve ||
+            game.GetProcessorDetails(second).Status != ProcessorStatus.WaitingForReserve)
+            return Fail("原料保留底线阻塞了农田收获，或空闲场地错误领取");
+
+        game.SetRawReserve(CropKind.Radish, 5);
+        game.SetRawReserve(CropKind.Radish, 5);
+        if (game.GetRawStock(CropKind.Radish) != 6 ||
+            game.GetPlot(first).RemainingSeconds != 0 ||
+            game.GetProcessorDetails(first).Status != ProcessorStatus.ReadyToProcess)
+            return Fail("底线修改或查询立即启动了领取");
+        game.AdvanceTick();
+        if (game.GetRawStock(CropKind.Radish) != 5 ||
+            game.GetPlot(first).RemainingSeconds != 26 || game.GetPlot(second).RemainingSeconds != 0)
+            return Fail("下一经营领取阶段未按格序竞争，或取走了保留部分");
+
+        game.SetRawReserve(CropKind.Radish, 99);
+        if (game.GetRawStock(CropKind.Radish) != 5 || game.GetPlot(first).RemainingSeconds != 26 ||
+            game.GetProcessorDetails(first).Status != ProcessorStatus.Processing)
+            return Fail("提高底线退回投入物或重置了批次");
+        SaleResult rawSale = game.SellRaw(CropKind.Radish);
+        if (rawSale.Quantity != 5 || game.GetRawStock(CropKind.Radish) != 0 ||
+            game.GetRawReserve(CropKind.Radish) != 99 ||
+            game.GetProcessorDetails(second).Status != ProcessorStatus.WaitingForRaw)
+            return Fail("出售未包含保留公共原料，或错误出售了投入物");
+        for (int i = 0; i < 26; i++) game.AdvanceTick();
+        if (game.GetProductStock(CropKind.Radish) != 1 ||
+            game.GetPlot(first).RemainingSeconds != 0 ||
+            rawSale.Quantity + game.GetProductStock(CropKind.Radish) != 6)
+            return Fail("收获、领取、出售与加工完成数量不守恒");
+        SaleResult products = game.SellAll();
+        if (products.Quantity != 1 || rawSale.Quantity + products.Quantity != 6 ||
+            game.GetProductStock(CropKind.Radish) != 0)
+            return Fail("成品出售后数量不守恒");
+        return true;
+    }
+
+    private static bool CheckRawReserveConstruction()
+    {
+        var game = new FarmGame(12345);
+        RemoveInitialBuildings(game);
+        Vector2I farm = new(4, 4);
+        Vector2I existing = new(0, 0);
+        Vector2I later = new(0, 1);
+        Vector2I earlier = new(1, 0);
+        game.SetRawReserve(CropKind.Radish, 6);
+        game.BuildFarm(farm);
+        game.SetFarmCrop(farm, CropKind.Radish);
+        game.BuildProcessor(existing, CropKind.Radish);
+        game.AdvanceTick(isRaining: true);
+        for (int i = 0; i < 206; i++) game.AdvanceTick();
+        game.RemoveBuilding(farm);
+        game.SetRawReserve(CropKind.Radish, 5);
+        if (game.BuildProcessor(later, CropKind.Radish) != null ||
+            game.GetPlot(existing).RemainingSeconds != 26 || game.GetPlot(later).RemainingSeconds != 0 ||
+            game.GetRawStock(CropKind.Radish) != 5)
+            return Fail("新建未立即执行全场格序领取，或取走底线库存");
+
+        game.RemoveBuilding(existing); // 已投入的一份随拆除丢弃，不返回公共库存。
+        game.SetRawReserve(CropKind.Radish, 4);
+        if (game.BuildProcessor(earlier, CropKind.Radish) != null ||
+            game.GetPlot(earlier).RemainingSeconds != 26 || game.GetPlot(later).RemainingSeconds != 0 ||
+            game.GetRawStock(CropKind.Radish) != 4 || game.GetProductStock(CropKind.Radish) != 0 ||
+            game.GetRawStock(CropKind.Radish) + 1 + 1 != 6 || !game.HasConsistentState())
+            return Fail("新场地未按格序立即领取，或拆除损耗/投入/公共数量不守恒");
         return true;
     }
 

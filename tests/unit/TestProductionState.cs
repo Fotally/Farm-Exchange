@@ -16,7 +16,8 @@ public partial class TestProductionState : Node
     }
 
     public static bool RunChecks() => CheckLand() && CheckPlacementMessages() &&
-        CheckFarming() && CheckWater() && CheckPlantingRules() && CheckProcessing();
+        CheckFarming() && CheckWater() && CheckPlantingRules() && CheckSeasonFailure() &&
+        CheckProcessing() && CheckProcessingReserve();
 
     private static bool CheckLand()
     {
@@ -132,6 +133,35 @@ public partial class TestProductionState : Node
         return true;
     }
 
+    private static bool CheckProcessingReserve()
+    {
+        var processors = new ProcessingSystem(2);
+        var inventory = new GoodsInventory();
+        processors.Place(0, CropKind.Radish);
+        processors.Place(1, CropKind.Radish);
+        if (processors.GetStatus(0, inventory) != ProcessorStatus.WaitingForRaw)
+            return Fail("空库存场地没有返回缺少原料状态");
+        inventory.AddRaw(CropKind.Radish, 3);
+        inventory.SetRawReserve(CropKind.Radish, 3);
+        if (processors.TryStart(0, inventory) ||
+            processors.GetStatus(0, inventory) != ProcessorStatus.WaitingForReserve)
+            return Fail("保留底线未阻止启动或等待原因错误");
+        inventory.SetRawReserve(CropKind.Radish, 2);
+        if (processors.GetStatus(0, inventory) != ProcessorStatus.ReadyToProcess ||
+            processors.Get(0).RemainingSeconds != 0 || inventory.GetRaw(CropKind.Radish) != 3)
+            return Fail("只读待领取查询消费了原料或启动批次");
+        if (!processors.TryStart(0, inventory) || processors.TryStart(1, inventory) ||
+            inventory.GetRaw(CropKind.Radish) != 2)
+            return Fail("多场地竞争取走了保留原料");
+        inventory.SetRawReserve(CropKind.Radish, 99);
+        inventory.TakeAllRaw(CropKind.Radish);
+        if (processors.GetStatus(0, inventory) != ProcessorStatus.Processing ||
+            processors.GetStatus(1, inventory) != ProcessorStatus.WaitingForRaw ||
+            processors.Get(0).RemainingSeconds != 26 || processors.TryStart(0, inventory))
+            return Fail("提高底线或出售改变了进行中批次，或等待原因未实时更新");
+        return true;
+    }
+
     private static bool CheckWater()
     {
         var farms = new FarmingSystem(1);
@@ -194,6 +224,51 @@ public partial class TestProductionState : Node
             Check(CropKind.Wheat, season * 5 - 825) != PlantingFailure.None ||
             Check(CropKind.Wheat, season * 5 - 824) != PlantingFailure.InsufficientTime)
             return Fail("连续适宜季节或跨年边界没有按完整区间计算");
+        return true;
+    }
+
+    private static bool CheckSeasonFailure()
+    {
+        foreach (CropDefinition crop in FarmGame.Crops)
+        {
+            CalendarSnapshot plantingDate = new GameCalendar(
+                crop.Kind == CropKind.Sugarcane ? 4320u : 0u).Snapshot;
+            foreach (Season season in Enum.GetValues<Season>())
+            {
+                var farms = new FarmingSystem(4);
+                farms.Place(0, crop.Kind);
+                farms.Place(1, crop.Kind);
+                farms.Place(2, crop.Kind);
+                farms.SupplyWater(2);
+                if (!farms.TryWork(0, plantingDate) || !farms.TryWork(1, plantingDate) ||
+                    !farms.TryWork(1, plantingDate))
+                    return Fail("越季测试没有建立待水与生长中的作物");
+                farms.AdvanceGrowth(1, out _);
+                FarmSnapshot seeded = farms.Get(0);
+                FarmSnapshot growing = farms.Get(1);
+                FarmSnapshot empty = farms.Get(2);
+                bool allowed = (crop.GrowingSeasons & (GrowingSeasons)(1 << (int)season)) != 0;
+
+                farms.ClearDisallowedCrops(season);
+                FarmSnapshot cleared = new(crop.Kind, CropStage.None, 0);
+                if (farms.Get(0) != (allowed ? seeded : cleared) ||
+                    farms.Get(1) != (allowed ? growing : cleared) ||
+                    farms.Get(2) != empty || farms.HasFarm(3))
+                    return Fail($"{crop.CropName}进入{season}时未按阶段清理，或清理了空田留水");
+                if (!allowed)
+                {
+                    if (farms.AdvanceGrowth(0, out _) || farms.AdvanceGrowth(1, out _) ||
+                        farms.TryWork(0, new GameCalendar((uint)season * 4320).Snapshot))
+                        return Fail("越季失败仍收获，或禁生季节清理后反复播种");
+                    farms.SupplyWater(1);
+                    farms.ClearDisallowedCrops(season);
+                    if (farms.Get(1) != new FarmSnapshot(crop.Kind, CropStage.None, 0, true))
+                        return Fail("重复越季清理影响了已清空农田的新留水");
+                    if (!farms.TryWork(0, plantingDate) || farms.Get(0).Stage != CropStage.Seeded)
+                        return Fail("适宜条件恢复后没有重新播种");
+                }
+            }
+        }
         return true;
     }
 

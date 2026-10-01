@@ -3,6 +3,7 @@ using Godot;
 using FarmExchange.Economy;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
+using FarmExchange.Inventory;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
 public partial class TestResources : Node
@@ -15,7 +16,8 @@ public partial class TestResources : Node
         GetTree().Quit(passed ? 0 : 1);
     }
 
-    public static bool RunChecks() => CheckCropDefinitions() && CheckInventory() && CheckWallet();
+    public static bool RunChecks() => CheckCropDefinitions() && CheckInventory() &&
+        CheckInventoryReserve() && CheckWallet();
 
     private static bool CheckCropDefinitions()
     {
@@ -79,6 +81,47 @@ public partial class TestResources : Node
         if (!Throws<OverflowException>(() => stock.AddRaw(CropKind.Wheat, 1)) ||
             stock.GetRaw(CropKind.Wheat) != int.MaxValue)
             return Fail("库存溢出未在修改前拒绝");
+        return true;
+    }
+
+    private static bool CheckInventoryReserve()
+    {
+        var stock = new GoodsInventory();
+        foreach (CropDefinition crop in FarmGame.Crops)
+            if (stock.GetRawReserve(crop.Kind) != 0 ||
+                stock.GetProcessingAvailability(crop.Kind) != RawProcessingAvailability.NoRaw)
+                return Fail("原料保留底线不是默认 0，或空库存原因错误");
+
+        stock.AddRaw(CropKind.Radish, 3);
+        stock.SetRawReserve(CropKind.Radish, 4);
+        if (stock.TryTakeRawForProcessing(CropKind.Radish) || stock.GetRaw(CropKind.Radish) != 3 ||
+            stock.GetProcessingAvailability(CropKind.Radish) != RawProcessingAvailability.Reserved)
+            return Fail("库存低于保留底线仍被领取");
+        stock.SetRawReserve(CropKind.Radish, 3);
+        if (stock.TryTakeRawForProcessing(CropKind.Radish))
+            return Fail("库存等于保留底线仍被领取");
+        stock.SetRawReserve(CropKind.Radish, 2);
+        if (stock.GetProcessingAvailability(CropKind.Radish) != RawProcessingAvailability.Available ||
+            !stock.TryTakeRawForProcessing(CropKind.Radish) || stock.TryTakeRawForProcessing(CropKind.Radish) ||
+            stock.GetRaw(CropKind.Radish) != 2 || stock.GetRawReserve(CropKind.Wheat) != 0)
+            return Fail("领取未保留底线，或影响了其他品种");
+
+        if (!Throws<ArgumentOutOfRangeException>(() => stock.SetRawReserve(CropKind.Radish, -1)) ||
+            !Throws<ArgumentOutOfRangeException>(() => stock.SetRawReserve((CropKind)999, 1)) ||
+            !Throws<ArgumentOutOfRangeException>(() => stock.GetRawReserve((CropKind)999)) ||
+            !Throws<ArgumentOutOfRangeException>(() => stock.GetProcessingAvailability((CropKind)999)) ||
+            stock.GetRawReserve(CropKind.Radish) != 2 || stock.GetRaw(CropKind.Radish) != 2)
+            return Fail("非法底线或作物修改了库存状态");
+
+        stock.SetRawReserve(CropKind.Radish, int.MaxValue);
+        stock.TakeAllRaw(CropKind.Radish);
+        if (stock.GetRaw(CropKind.Radish) != 0 || stock.GetRawReserve(CropKind.Radish) != int.MaxValue ||
+            stock.GetProcessingAvailability(CropKind.Radish) != RawProcessingAvailability.NoRaw)
+            return Fail("公共原料出售受底线阻止，或出售清除了底线");
+        stock.SetRawReserve(CropKind.Radish, 0);
+        stock.AddRaw(CropKind.Radish, 1);
+        if (!stock.TryTakeRawForProcessing(CropKind.Radish) || stock.GetRaw(CropKind.Radish) != 0)
+            return Fail("默认底线 0 未允许最后一份原料加工");
         return true;
     }
 

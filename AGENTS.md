@@ -9,15 +9,15 @@
 
 # 代码系统结构
 
-- `scripts/gameplay/FarmGame.cs`：经营协调模块。按原种子顺序初始化中心随机建筑，协调固定 128×128 格的建造、拆除、每秒显式降雨与生产相位、日历、播种季节检查、逐日售价和交易；提供只读放置预检、执行时重验与实际扣费结果、地块及两类详情语义快照，旧建造命令转发新路径。测试专用夹具生成 16,384 个现有实体，并检查占用与生产状态一致。
+- `scripts/gameplay/FarmGame.cs`：经营协调模块。按原种子顺序初始化中心随机建筑，协调固定 128×128 格的建造、拆除、每秒显式降雨与生产相位、日历、播种季节检查、逐日售价和交易；换季时在成熟结算之后请求农田清理禁生作物。提供只读放置预检、执行时重验与实际扣费结果、地块及两类详情语义快照，旧建造命令转发新路径。测试专用夹具生成 16,384 个现有实体，并检查占用与生产状态一致。
 - `scripts/farming/CropCatalog.cs`：七种作物定义的唯一入口，包含适宜季节，提供只读作物表、按种类查询与种类有效性检查。
 - `scripts/farming/PlantingRules.cs`：播种季节与预计成熟的只读判断模块；按相邻适宜季节计算可用时间，干田预留最少 1 秒供水，统一返回不适季或时间不足原因。
 - `scripts/land/LandOccupancy.cs`：固定地图每格主要占用类别的唯一拥有者；不持有作物或加工进度。
 - `scripts/land/PlacementRules.cs`：只读放置规则模块；统一验证建筑描述、格范围、占用与余额，为预检和实际执行返回稳定原因。现有合法占用只有农田和加工场地。
-- `scripts/farming/FarmingSystem.cs`：每块农田所选作物、水分、播种与生长进度的唯一拥有者；播种前调用统一季节检查，工人浇水和显式降雨共用供水操作，改种留水、收获与拆除清水。
+- `scripts/farming/FarmingSystem.cs`：每块农田所选作物、水分、播种与生长进度的唯一拥有者；播种前调用统一季节检查，工人浇水和显式降雨共用供水操作，改种留水、收获与拆除清水；进入禁生季节时完整清理待水或生长中的本轮作物与水分，保留农田和选种。
 - `scripts/processing/ProcessingSystem.cs`：加工场地匹配作物与批次进度的唯一拥有者，负责按旧顺序从公共库存领取匹配原料。
 - `scripts/workers/WorkerScheduler.cs`：单工人旧轮转游标的唯一拥有者，传递当前日历快照，每 tick 至多执行一次符合播种或浇水规则的农田工作；尚无经营移动时间。
-- `scripts/inventory/Inventory.cs`：每局原料与加工品的分类库存唯一拥有者，供生产和出售流程查询、入库、加工领取及出售清空。
+- `scripts/inventory/Inventory.cs`：每局原料、加工品分类库存与逐作物原料保留底线的唯一拥有者，统一查询领取可用性并完整扣除超过底线的一份原料；手动出售仍可清空公共库存。
 - `scripts/economy/Wallet.cs`：每局金币余额唯一拥有者，验证初始余额、扣款及入账的数值范围。
 - `scripts/characters/NpcCharacter.cs` 与 `scenes/npc_character.tscn`：可复用的 NPC 动画角色。读取 64×64、每方向 6 帧的角色图集；按外部给定方向移动、切换朝向并在停步时保留首帧，不决定经营任务。
 - `scripts/market/MarketPriceCurve.cs`：市场曲线模块。按市场种子与天数直接计算 1.00～20.00 金币之间的面粉价格，以多周期正弦和小权重平滑噪声形成走势。
@@ -26,7 +26,7 @@
 - `scripts/world/WorldMap.cs`：地图表现模块。按 8×8 格缓存带顶点颜色的地图块网格，镜头移动只更新块可见性，经营变化后同步完整世界快照并重建外观变化的块；独立绘制选中框和地图边缘，将屏幕输入转为地图本地格坐标，并提供有效格的全局中心与镜头限制。不维护经营规则。
 - `scripts/world/CameraController.cs`：输入与镜头模块。区分左键点击、左键拖动，左键释放时结束拖动，并在释放事件被界面拦截时逐帧校正状态；处理缩放和键盘移动，通过 `WorldMap` 的接口选择格子及限制镜头。
 - `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。持有摆放和所选格，分发窗口意图及计时器命令，显示季、年、月、日与暂停按钮，经营变化后统一刷新；只在地块变化时同步地图。
-- `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与范围、建造目录、固定的选种/库存/市场控件、两类详情展示及共用视觉元素。窗口发出玩家意图，不持有经营状态；刷新只更新值与按钮状态。
+- `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与范围、建造目录、固定的选种/库存/市场控件、两类详情展示及共用视觉元素。库存窗口逐作物编辑原料保留底线并在刷新时保留未提交输入及焦点；加工详情区分缺料、受底线限制、待领取和加工中。窗口发出玩家意图，不持有经营状态。
 - `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`：独立角色预览，接收 WASD/方向键移动、Q/E 切换 20 位角色并显示名称与跟随镜头；不接入主经营场景。
 - `tests/unit/`：经营流程、土地占用、农田与加工状态边界、交易、作物定义、库存、钱包、市场、独立日历及地图坐标的单元测试；`tests/integration/`：镜头输入、地图选择与 NPC 动画预览的集成测试；`tests/e2e/`：主场景经营流程的端到端测试；`tests/performance/`：必跑的满地图 50 tick 负载测试（含角落实体推进检查）与按需的有窗口 FPS 性能测试。图形测试要求平均至少 60 FPS、P95 帧间隔不超过 16.67 ms，并保存前后截图。根目录 `TestSuite` 汇总 headless 检查；导出程序启动是构建冒烟测试。
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、导入 Godot 图片资源、运行必需的 headless 测试套件、生成 Cobertura 报告，并自动检查业务脚本总体行覆盖率不低于 80%；`-Performance` 追加图形性能测试和 JSON 报告。

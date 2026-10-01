@@ -102,6 +102,7 @@ public partial class Main : Node2D
         _uiRoot.AddChild(_cropWindow);
 
         _inventoryWindow = new InventoryWindow();
+        _inventoryWindow.RawReserveRequested += SetRawReserve;
         _uiRoot.AddChild(_inventoryWindow);
 
         _marketWindow = new MarketWindow();
@@ -302,6 +303,20 @@ public partial class Main : Node2D
         _inventoryWindow.Hide();
         _marketWindow.Refresh(_game);
         _marketWindow.ShowRaised();
+    }
+
+    private void SetRawReserve(CropKind crop, int quantity)
+    {
+        RawReserveFailure failure = _game.SetRawReserve(crop, quantity);
+        if (failure == RawReserveFailure.None)
+        {
+            _inventoryWindow.ConfirmRawReserve(crop, quantity);
+            _messageLabel.Text = $"{FarmGame.GetCrop(crop).CropName}原料保留底线已设为 {quantity}";
+        }
+        else
+            _messageLabel.Text = failure == RawReserveFailure.InvalidCrop
+                ? "无效作物" : "保留底线必须是非负整数";
+        RefreshAfterGameChange(worldChanged: false);
     }
 
     private void SellRaw(CropKind crop)

@@ -31,8 +31,13 @@ public partial class ProcessorDetailsPanel : VBoxContainer
 
     public void Refresh(ProcessorDetailsSnapshot details)
     {
-        string status = details.Status == ProcessorStatus.Processing
-            ? "加工中" : $"等待{details.Crop.CropName}";
+        string status = details.Status switch
+        {
+            ProcessorStatus.Processing => "加工中",
+            ProcessorStatus.WaitingForReserve => "等待原料超过保留底线",
+            ProcessorStatus.ReadyToProcess => "待领取原料",
+            _ => $"等待{details.Crop.CropName}",
+        };
         _status.Text = $"{details.Crop.BuildingName} · {status}";
         _relation.Text = $"{details.Crop.CropName} → {details.Crop.ProductName}";
         _processing.Text = $"加工周期：投入原料后 {details.Crop.ProcessingHalfDays / 2m:0.#} 天完成";

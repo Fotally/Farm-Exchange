@@ -2,7 +2,7 @@ using Godot;
 
 public partial class TestSuite : Node
 {
-    public override void _Ready()
+    public override async void _Ready()
     {
         GD.Print("单元测试：农田、加工与交易");
         bool farmGamePassed = TestFarmGame.RunChecks();
@@ -24,8 +24,10 @@ public partial class TestSuite : Node
         bool coreLoopPassed = TestCoreLoop.RunChecks(this);
         GD.Print("性能测试：满地图 headless 负载");
         bool loadPassed = TestFullWorldLoad.RunChecks();
+        GD.Print("端到端测试：库存编辑真实布局与滚动");
+        bool inventoryLayoutPassed = await TestCoreLoop.RunLayoutChecks(this);
         bool passed = farmGamePassed && resourcesPassed && productionStatePassed && marketPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && loadPassed;
+            coreLoopPassed && loadPassed && inventoryLayoutPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");
