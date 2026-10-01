@@ -612,7 +612,7 @@ Main 接收意图 → 调用 FarmGame → 显示结果 → 统一刷新。窗口
 
 ### T05：接入新日历，明确边界调度
 
-**关联：**#33，生产参数切换同时关联 #34/#35。**阻塞：**D02/D08 影响经营接入；D01 只影响节日与报价排期。不要因为节日未定阻断独立日历换算。
+**关联：**#33，生产参数切换同时关联 #34/#35；实际交付为 #55/#60。**当前状态：**T05A 独立日历与 T05B 经营接入、七作物切换均已完成；当时的 D02 经营规则及 D08 内容已确认并落实。D01 的节日与正式报价排期仍待确认，随 T09 接入，不能据此重新阻断或重复实现已完成的日历。
 
 **T05A：建立并验证日历，不接管经营。**
 
@@ -942,7 +942,7 @@ Main 接收意图 → 调用 FarmGame → 显示结果 → 统一刷新。窗口
 | [#46](https://github.com/Fotally/Farm-Exchange/issues/46) | 格子底座 | 占用和坐标 |
 | [#45](https://github.com/Fotally/Farm-Exchange/issues/45) | 道路 | 独占、视觉、无可达限制 |
 | [#42](https://github.com/Fotally/Farm-Exchange/issues/42) | 季节耕作表 | 后续接入，不实施 |
-| [#43](https://github.com/Fotally/Farm-Exchange/issues/43) | 增加人力 | 后续接入，不实施 |
+| [#43](https://github.com/Fotally/Farm-Exchange/issues/43) | 增加人力 | 开局三人已由 T07 完成；后续扩员仍暂缓 |
 | [#36](https://github.com/Fotally/Farm-Exchange/issues/36) | 挂单、自动交易、手续费 | 后续接入，不实施 |
 | [#44](https://github.com/Fotally/Farm-Exchange/issues/44) | 行情学习反馈 | 后续接入，不实施 |
 
