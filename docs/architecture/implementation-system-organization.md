@@ -43,7 +43,7 @@ flowchart LR
 
 | 状态或计算 | 当前拥有者 | 其他模块的使用方式 |
 | --- | --- | --- |
-| 每格主要占用类别 | `LandOccupancy` | `FarmGame` 协调建造、拆除，并聚合地块快照。 |
+| 每格主要占用类别 | `LandOccupancy` | `FarmGame` 协调农田、加工场地与道路建造、拆除，并聚合地块快照；道路没有生产状态。 |
 | 建筑描述、范围、占用与余额的放置检查 | `PlacementRules` | `FarmGame` 预检和执行使用同一规则；执行时重新检查并返回实际扣费。 |
 | 农田选种、水分、阶段与剩余精确时长 | `FarmingSystem` | `FarmGame` 在步进开始传入显式降雨，协调按作物收获量入库；换季后通过完整清理操作处理禁生作物，`WorkerScheduler` 只通过受控工作操作照料。 |
 | 播种适宜季节与预计成熟判断 | `PlantingRules` | `FarmingSystem` 执行播种和 `FarmGame` 查询详情共用同一只读结果。 |
@@ -75,12 +75,15 @@ flowchart LR
 | 工人画面、朝向或插值 | `WorkerPresentation`、`NpcCharacter`、`MapCoordinates` | 主场景组装、地图变换、暂停与镜头外生产；动画回调不写经营状态。 |
 | 市场价格或出售 | `MarketPriceCurve`、`FarmGame`、`Inventory`、`Wallet` | 当日成交价、交易测试与玩家规则。 |
 | 原料保留底线与加工竞争 | `Inventory`、`ProcessingSystem`、`FarmGame` | 下次经营领取、新建全场即时领取、稳定格序、手动出售与库存输入刷新。 |
+| 道路收费、占用、铺设或外观 | `FarmGame.GetBuildingCostCents`、`LandOccupancy`、`PlacementRules`、`BuildCatalogWindow`、`Main`、`WorldMap` | 道路仅占格、不触发加工领取；UI 显式分派道路详情，未来移动属性只接内部计时。 |
 | 日期边界与生产时间 | `GameCalendar`、`GameTimeUnits` | 同步核对 `FarmGame` 相位、生产模块和日历测试。 |
 | 窗口交互 | `Main`、`DraggableWindow`、对应具体窗口 | 玩家操作、固定控件刷新、场景节点名和端到端测试。 |
 | NPC 动画、角色图集或预览输入 | `NpcCharacter`、`NpcPreview` | 角色场景、20 张素材和预览集成测试；不要用动画回调推进经营。 |
 
-T01/T02 已将窗口容器、目录、选种、库存、市场和详情从 `Main` 的构造与重建逻辑中抽出；经营刷新保留控件实例。T03 已统一坐标入口，T04A～T04C 已统一状态归属和放置规则。T05A 完成独立历法，T05B 已接管经营时间并切换七作物参数；T06A 的田块水分由 `FarmingSystem` 唯一持有，T06B 的播种判断由 `PlantingRules` 统一提供。T06C 的 `ClearDisallowedCrops(Season)` 把阶段筛选、适宜季节判断与本轮清理收在农田模块内；经营入口只在成熟结算后的换季相位调用。道路占格留在 #45；实际工人移动由 T07 接入。
+T01/T02 已将窗口容器、目录、选种、库存、市场和详情从 `Main` 的构造与重建逻辑中抽出；经营刷新保留控件实例。T03 已统一坐标入口，T04A～T04C 已统一状态归属和放置规则。T05A 完成独立历法，T05B 已接管经营时间并切换七作物参数；T06A 的田块水分由 `FarmingSystem` 唯一持有，T06B 的播种判断由 `PlantingRules` 统一提供。T06C 的 `ClearDisallowedCrops(Season)` 把阶段筛选、适宜季节判断与本轮清理收在农田模块内；经营入口只在成熟结算后的换季相位调用。
 
 T08 的底线与领取判定收在 `Inventory` 中，`ProcessingSystem.TryStart` 完成领取及启动批次，状态查询实时复用同一判定；`FarmGame.SetRawReserve` 仅设置，不泄露内部容器或让 UI 协调加工步骤。默认 0、非法值、稳定竞争、设置时点、完工/出售/拆除守恒与库存编辑刷新由现有资源、生产、经营和端到端测试覆盖。
 
 T07 将真实工人状态收在 `WorkerScheduler`，农田 Interface 负责与策略无关的需求和执行凭据重验，表现只读取快照。当前稳定轮转可在内部任务选择方法替换，经营入口与表现的 Interface 保持稳定；后续扩员方式仍待 #43 的后续范围确认。
+
+T10 将道路接入既有占用和放置命令，费用查询由 `FarmGame` 统一提供。道路不创建生产状态；目录和场景协调连续铺设，独立道路详情只发出移除意图，地图复用现有块网格绘制灰色路面。未来确认移动属性后，从只读土地查询接入工人内部计时，不修改当前 UI 和经营推进 Interface。

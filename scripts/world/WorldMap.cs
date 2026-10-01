@@ -20,6 +20,7 @@ public partial class WorldMap : Node2D
     private static readonly Color TileColor = new(0.53f, 0.64f, 0.38f);
     private static readonly Color FarmColor = new(0.53f, 0.36f, 0.22f);
     private static readonly Color ProcessorColor = new(0.36f, 0.47f, 0.61f);
+    private static readonly Color RoadColor = new(0.52f, 0.52f, 0.52f);
     private static readonly Color ProcessorMarkerColor = new(0.86f, 0.90f, 0.93f);
     private static readonly Color SeedColor = new(0.98f, 0.84f, 0.46f);
     private static readonly Color[] GrowingColors =
@@ -231,6 +232,7 @@ public partial class WorldMap : Node2D
                     {
                         BuildingKind.Farm => FarmColor,
                         BuildingKind.Processor => ProcessorColor,
+                        BuildingKind.Road => RoadColor,
                         _ => TileColor,
                     };
                     AddQuad(vertices, colors, indices, Outline(center), tileColor);

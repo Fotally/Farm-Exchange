@@ -30,8 +30,10 @@ public partial class TestSuite : Node
         bool inventoryLayoutPassed = await TestCoreLoop.RunLayoutChecks(this);
         GD.Print("集成测试：工人经营快照与主地图表现");
         bool workerPresentationPassed = await TestWorkerPresentation.RunChecksAsync(this);
+        GD.Print("集成测试：道路灰色地图、分块缓存与选择");
+        bool roadMapPassed = await TestRoadMap.RunChecksAsync(this);
         bool passed = farmGamePassed && resourcesPassed && productionStatePassed && marketPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed;
+            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");

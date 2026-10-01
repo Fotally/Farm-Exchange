@@ -31,18 +31,30 @@ public partial class TestProductionState : Node
 
         land.Place(0, BuildingKind.Farm);
         land.Place(1, BuildingKind.Processor);
+        land.Place(2, BuildingKind.Road);
         if (!Throws<InvalidOperationException>(() => land.Place(0, BuildingKind.Processor)) ||
-            land.Get(0) != BuildingKind.Farm || land.Get(1) != BuildingKind.Processor)
+            !Throws<InvalidOperationException>(() => land.Place(2, BuildingKind.Farm)) ||
+            !Throws<InvalidOperationException>(() => land.Place(2, BuildingKind.Road)) ||
+            land.Get(0) != BuildingKind.Farm || land.Get(1) != BuildingKind.Processor ||
+            land.Get(2) != BuildingKind.Road)
             return Fail("重复放置覆盖了已有建筑");
         land.Remove(0);
         land.Remove(1);
-        if (land.Get(0) != BuildingKind.None || land.Get(1) != BuildingKind.None)
+        land.Remove(2);
+        if (land.Get(0) != BuildingKind.None || land.Get(1) != BuildingKind.None ||
+            land.Get(2) != BuildingKind.None)
             return Fail("拆除后建筑仍占用土地");
         return true;
     }
 
     private static bool CheckPlacementMessages()
     {
+        if (FarmGame.GetBuildingCostCents(BuildingKind.Farm) != 1000 ||
+            FarmGame.GetBuildingCostCents(BuildingKind.Processor) != 1000 ||
+            FarmGame.GetBuildingCostCents(BuildingKind.Road) != 100 ||
+            !Throws<ArgumentOutOfRangeException>(() => FarmGame.GetBuildingCostCents(BuildingKind.None)) ||
+            !Throws<ArgumentOutOfRangeException>(() => FarmGame.GetBuildingCostCents((BuildingKind)999)))
+            return Fail("统一类型费用查询错误，或非法类型被解释成免费建筑");
         if (new PlacementResult(LandFailure.None, 1000).ErrorMessage != null ||
             new PlacementResult(LandFailure.InvalidBuilding, 0).ErrorMessage != "无效建筑" ||
             new PlacementResult(LandFailure.InvalidCrop, 0).ErrorMessage != "无效作物" ||

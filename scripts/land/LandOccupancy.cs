@@ -13,7 +13,7 @@ internal sealed class LandOccupancy
 
     internal void Place(int index, BuildingKind building)
     {
-        if (building is not (BuildingKind.Farm or BuildingKind.Processor))
+        if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
             throw new ArgumentOutOfRangeException(nameof(building));
         if (_buildings[index] != BuildingKind.None)
             throw new InvalidOperationException("土地已有建筑");

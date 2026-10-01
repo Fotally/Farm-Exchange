@@ -21,7 +21,7 @@ public partial class TestCoreLoop : Node
         parent.AddChild(main);
         bool passed = Check(main);
         main.QueueFree();
-        return passed && CheckRainUi(parent) && CheckReserveUi(parent);
+        return passed && CheckRainUi(parent) && CheckReserveUi(parent) && CheckRoadUi(parent);
     }
 
     public static async Task<bool> RunLayoutChecks(Node parent)
@@ -172,6 +172,98 @@ public partial class TestCoreLoop : Node
     {
         input.Text = text;
         input.EmitSignal(LineEdit.SignalName.TextChanged, text);
+    }
+
+    private static bool CheckRoadUi(Node parent)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        parent.AddChild(main);
+        bool passed = CheckRoadControls(main);
+        main.QueueFree();
+        return passed;
+    }
+
+    private static bool CheckRoadControls(Main main)
+    {
+        var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
+        var map = main.GetNode<WorldMap>("WorldMap");
+        Button build = Find<Button>(ui, "BuildButton");
+        Control window = Find<Control>(ui, "BuildWindow");
+        Control detail = Find<Control>(ui, "DetailWindow");
+        Button cancel = Find<Button>(ui, "CancelPlacementButton");
+        Label footer = Find<Label>(ui, "BuildHint");
+        Label message = Find<Label>(ui, "MessageLabel");
+        Timer timer = main.GetNode<Timer>("TickTimer");
+        build.EmitSignal(Button.SignalName.Pressed);
+        Button farmCard = Find<Button>(window, "FarmCard");
+        Button roadCard = Find<Button>(window, "RoadCard");
+        Button processorCard = Find<Button>(window, "ProcessorCardRadish");
+        Find<Button>(window, "RoadTab").EmitSignal(Button.SignalName.Pressed);
+        var roadStyle = (StyleBoxFlat)roadCard.GetThemeStylebox("normal");
+        if (!roadCard.IsVisibleInTree() || farmCard.IsVisibleInTree() ||
+            !roadCard.Text.Contains("1.00 金币/格") || roadStyle.BgColor.R != roadStyle.BgColor.G ||
+            roadStyle.BgColor.G != roadStyle.BgColor.B)
+            return Fail("道路目录未显示独立灰色卡片与每格1.00金币价格");
+        Find<Button>(window, "ProcessorTab").EmitSignal(Button.SignalName.Pressed);
+        LineEdit search = Find<LineEdit>(window, "BuildSearch");
+        EnterText(search, "腌制坊");
+        search.GrabFocus();
+        timer.EmitSignal(Timer.SignalName.Timeout);
+        if (!processorCard.IsVisibleInTree() || !processorCard.Text.Contains("10.00 金币") ||
+            search.Text != "腌制坊" || !search.HasFocus() ||
+            !object.ReferenceEquals(processorCard, Find<Button>(window, "ProcessorCardRadish")))
+            return Fail("目录分类或经营刷新丢失加工搜索、焦点或固定卡片");
+        Find<Button>(window, "FarmTab").EmitSignal(Button.SignalName.Pressed);
+        if (!farmCard.IsVisibleInTree() || !farmCard.Text.Contains("10.00 金币") ||
+            !object.ReferenceEquals(farmCard, Find<Button>(window, "FarmCard")))
+            return Fail("道路接入改变农田目录价格或卡片身份");
+        Find<Button>(window, "RoadTab").EmitSignal(Button.SignalName.Pressed);
+        if (!object.ReferenceEquals(roadCard, Find<Button>(window, "RoadCard")))
+            return Fail("目录切换重新创建了道路卡片");
+        roadCard.EmitSignal(Button.SignalName.Pressed);
+        if (window.Visible || !cancel.Visible || !footer.Text.Contains("每格 1.00 金币"))
+            return Fail("道路选择没有进入连续铺设并显示统一费用");
+        Vector2I first = new(61, 64);
+        Vector2I second = new(60, 64);
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+        if (main.Game.GetPlot(first).Building != BuildingKind.Road || main.Game.MoneyCents != 4900 ||
+            !cancel.Visible || detail.Visible || !message.Text.Contains("花费 1.00 金币"))
+            return Fail("道路首格没有扣实际100分，或铺设后退出了连续模式");
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, second);
+        if (main.Game.GetPlot(second).Building != BuildingKind.Road || main.Game.MoneyCents != 4800 ||
+            !cancel.Visible || !footer.Text.Contains("每格 1.00 金币"))
+            return Fail("道路第二格未连续铺设或实际扣费错误");
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+        if (main.Game.MoneyCents != 4800 || main.Game.GetPlot(first).Building != BuildingKind.Road ||
+            !cancel.Visible || !message.Text.Contains("已有建筑"))
+            return Fail("道路占用失败扣费、覆盖，或丢失连续铺设模式");
+        main._UnhandledInput(new InputEventKey { Pressed = true, Keycode = Key.Escape });
+        if (cancel.Visible || footer.Text.Contains("铺路中"))
+            return Fail("Esc没有退出连续道路模式");
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+        Control roadDetails = Find<Control>(detail, "RoadDetailsPanel");
+        Button remove = Find<Button>(roadDetails, "RemoveRoadButton");
+        if (!detail.Visible || !roadDetails.IsVisibleInTree() || !remove.IsVisibleInTree() ||
+            !ContainsVisibleText(detail, "当前仅用于布局和外观") || !ContainsVisibleText(detail, "不退还建造费") ||
+            ContainsVisibleText(detail, "生长周期") || ContainsVisibleText(detail, "加工周期") ||
+            ContainsVisibleText(detail, "库存") || ContainsVisibleText(detail, "售价"))
+            return Fail("道路详情误读作物/加工字段或没有独立拆除说明");
+        timer.EmitSignal(Timer.SignalName.Timeout);
+        if (!object.ReferenceEquals(remove, Find<Button>(roadDetails, "RemoveRoadButton")) ||
+            !roadDetails.IsVisibleInTree() || Find<Label>(ui, "WorkerCountLabel").Text != "3 · 自动照料")
+            return Fail("经营刷新重建道路详情控件或改变真实三人工人摘要");
+        remove.EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.GetPlot(first).Building != BuildingKind.None || main.Game.MoneyCents != 4800 ||
+            roadDetails.IsVisibleInTree() || !ContainsVisibleText(detail, "空地") ||
+            main.Game.GetPlot(second).Building != BuildingKind.Road)
+            return Fail("道路拆除没有释放占用、发生退款或误拆相邻道路");
+        build.EmitSignal(Button.SignalName.Pressed);
+        roadCard.EmitSignal(Button.SignalName.Pressed);
+        cancel.EmitSignal(Button.SignalName.Pressed);
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+        if (cancel.Visible || main.Game.GetPlot(first).Building != BuildingKind.None || main.Game.MoneyCents != 4800)
+            return Fail("取消按钮没有停止铺路，或普通选择仍触发扣费");
+        return true;
     }
 
     private static bool Check(Main main)

@@ -9,7 +9,7 @@
 | 类别 | 场景路径 |
 | --- | --- |
 | 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_worker_scheduler.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
-| 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn`、`tests/integration/test_worker_presentation.tscn` |
+| 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn`、`tests/integration/test_worker_presentation.tscn`、`tests/integration/test_road_map.tscn` |
 | 端到端测试 | `tests/e2e/test_core_loop.tscn` |
 | 满地图负载测试 | `tests/performance/test_full_world_load.tscn` |
 
@@ -115,6 +115,29 @@
 完整套件验证三人实际参与、一田独占、目标版本失效、降雨取消人工供水、季末重验、暂停与确定性，以及单工人 8 田和三人 24 田的连续三轮生产。冷启动用例验证首轮 40/72 秒，另用确定夹具先建立真实认领再出现其余待工田，验证完整等工至供水的 45/81 秒上限；不依赖同批作物复种时偶然出现任务重叠。主场景接入、既有七作物精确时长、越季历史库存、保留底线与真实库存布局回归继续通过。满地图 50 步为 **116.34 ms**，平均 **2.327 ms/步**。
 
 同条件图形检查仍有 16,384 个实体（8,192 田、8,192 场地），通过三块远田改种触发三人 17～23 秒的直线移动；预热 2 秒、采样 8.000405 秒，起止移动人数均为 3。平均 **844.8 FPS**，P95 **1.55 ms**，窗口 1280×720、1.25 倍缩放、VSync 关闭；前后截图 `coverage/performance.png` 与 `coverage/performance-end.png` 已核对，三人采用既有 `npc_animation_001/002/005.png`。报告见 `coverage/performance.json`。静态/格式、Debug/Release 编译、Windows 导出及实际 EXE 启动退出码 0 均通过；已生成新脚本对应的 UID 伴随文件，并随本批提交纳入 Git。
+
+2026-10-01 T10 / #45 道路接入后的最终报告总体为 **2041/2133（95.69%）**；按文件与行号去重，12 个模块均达到 80%：
+
+| 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `economy` | 18 / 19 | 94.74% |
+| `farming` | 158 / 158 | 100.00% |
+| `gameplay` | 301 / 313 | 96.17% |
+| `inventory` | 44 / 45 | 97.78% |
+| `land` | 39 / 41 | 95.12% |
+| `market` | 38 / 38 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 21 / 21 | 100.00% |
+| `ui` | 803 / 858 | 93.59% |
+| `workers` | 86 / 90 | 95.56% |
+| `world` | 395 / 410 | 96.34% |
+
+完整套件覆盖三类占用互斥、100 分费用、执行重验、失败零修改、拆除不退款和生产隔离。经营测试逐秒比较无路、有路、断路 650 秒的工人及农田快照、库存和三轮产出；主场景验证连续铺设、Esc/取消退出、道路详情和固定控件。满地图 50 步 **113.18 ms**，平均 **2.264 ms/步**。
+
+道路地图专项在 headless 中验证跨块同步与平移后的选格；另用指定引擎有窗口运行 `tests/integration/test_road_map.tscn`，实际像素验证灰色、金色选框及拆除恢复绿色且相邻道路保留，退出码 0。`coverage/road-map-before.png` 和 `road-map-after.png` 已查看；真实主场景目录与详情截图也已检查，见[目录 Interface](../architecture/ui/build-catalog-window/interface-build-catalog-window.md)与[道路详情 Interface](../architecture/ui/road-details-panel/interface-road-details-panel.md)。
+
+同条件满地图图形测试仍保持 8,192 田、8,192 场地和 3 名移动工人；预热 2 秒、采样 8.000418 秒，平均 **920.8 FPS**、P95 **1.485 ms**，起止移动人数均为 3，前后截图已查看。集中只读审查无待修，静态/格式、Debug/Release 编译、Windows Release 导出与实际 EXE 启动退出码 0 均通过。两份新脚本 UID 随本批提交纳入 Git。
 
 2026-09-28 的 Cobertura 报告也包含分支数据。#63 新增的生产状态测试验证空状态、非法输入、重复操作、改种与加工时长边界；市场测试验证非法日期，作物定义测试验证非法标识。分支覆盖率用于定位未测到的决策路径，目前不设硬性门槛：
 

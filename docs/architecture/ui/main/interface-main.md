@@ -26,8 +26,8 @@
 | --- | --- |
 | 顶部常驻状态 | 金币、工人摘要与“季 · 第 N 年 · N 月 · N 日”常驻；人数读取真实工人快照数量，开局显示“3 · 自动照料”；暂停/继续控制经营时间；库存、市场是全局窗口入口；存档、人物状态保留规划位置。不展示内部 `tick`。 |
 | 地图 | 平时点击地块选择对象；进入建造摆放后，点击符合条件的空位执行建造。拖动和缩放仍交给镜头与地图模块。 |
-| 底部建造 | 一个“建造”入口打开目录。目录先选择农田或加工场地，再选具体建筑；选择后进入摆放状态，点击目标空位即执行，不需要第二次确认。摆放可取消。 |
-| 选中详情 | 仅在选中地块或建筑后出现；农田显示作物状态、获水后成熟所需天数、对应原料当日售价和公共原料库存，并提供改种入口。湿润空田显示待播种状态；不适季或剩余时间不足时显示播种等待原因。加工场地显示加工状态、从投入原料到完成所需天数、原料与产物关系、对应加工品当日售价和公共加工品库存。 |
+| 底部建造 | 一个“建造”入口打开目录。目录可选农田、加工场地或道路；选择后点击目标空位执行。农田与加工场地成功后退出摆放，道路成功后保持逐格连续铺设；占用失败不扣费且保持模式。道路每格费用与其他建筑费用读取统一查询，Esc 或“取消摆放”退出。 |
+| 选中详情 | 仅在选中地块或建筑后出现；农田显示作物状态、获水后成熟所需天数、对应原料当日售价和公共原料库存，并提供改种入口。湿润空田显示待播种状态；不适季或剩余时间不足时显示播种等待原因。加工场地显示加工状态、从投入原料到完成所需天数、原料与产物关系、对应加工品当日售价和公共加工品库存。道路显式显示布局用途和拆除不退款说明，并提供拆除按钮。 |
 | 全局窗口 | 库存显示两类公共库存并逐作物编辑非负整数保留底线；市场负责已确认的交易命令。窗口不自行计算价格、费用或加工规则。 |
 
 加工场地目录按名称搜索并可滚动；新增建筑只增加目录条目，不增加底栏固定按钮。作物选择列表只展示每种作物的原料当日价格与公共原料库存，便于比较。市场每种原料配有卖出该种全部库存的按钮，底部保留出售全部加工品的按钮；无对应库存时按钮禁用。
@@ -44,18 +44,22 @@
 
 ## 与经营模块的接口
 
-`Main` 负责组装窗口、保留摆放与所选格、分发玩家命令，并在命令或 tick 完成后统一刷新。建造目录发出建筑意图，地图点击时 `Main` 调用 `FarmGame.TryPlace`，失败显示结果原因，成功显示实际扣费 `ChargedCents`。库存、市场和选种窗口只更新固定控件并发出操作意图；农田与加工详情分别读取 `FarmGame` 的语义快照，不在界面重判经营状态。地图外观仅在影响地块或 tick 的命令后同步，出售只刷新经营窗口。
+`Main` 负责组装窗口、保留摆放与所选格、分发玩家命令，并在命令或 tick 完成后统一刷新。建造目录发出建筑意图，地图点击时 `Main` 调用 `FarmGame.TryPlace`，失败显示结果原因，成功显示实际扣费 `ChargedCents`；目录和底栏费用都读取 `GetBuildingCostCents`。连续道路模式在每次成功和失败后保留，直到 Esc、取消或重新打开建造目录；农田与加工场地保持原单次成功退出路径。道路模式下 Esc 优先结束铺设，避免只关窗口却继续扣费铺路。
+
+库存、市场和选种窗口只更新固定控件并发出操作意图；农田与加工详情分别读取 `FarmGame` 的语义快照，道路按 `BuildingKind.Road` 显式显示固定 [RoadDetailsPanel](../road-details-panel/interface-road-details-panel.md)，不对道路调用作物或加工详情查询。地图外观仅在影响地块或 tick 的命令后同步，出售只刷新经营窗口。
 
 库存的 `RawReserveRequested` 交给 `FarmGame.SetRawReserve`；成功后 `Main` 调用窗口确认输入并统一刷新，失败显示稳定原因。底线修改只刷新经营窗口，不同步地图、不启动加工。库存窗口的草稿、焦点与滚动由窗口自身维护。加工详情区分缺料、底线限制、待领取与进行中；底线编辑与生效规则见[原料加工](../../../gameplay/production/processing.md)。
 
 `Main` 在地图下创建[WorkerPresentation](../../world/worker-presentation/interface-worker-presentation.md)，提供同一局 `FarmGame` 与地图坐标变换；不为显示调用经营推进或接收到达回调。工人摘要标签为 `WorkerCountLabel`，每次经营刷新从 `GetWorkers().Count` 更新。暂停同时停止经营与工人插值/动画，恢复不补现实时间；主地图的三名角色与独立 NPC 预览使用同一角色 Module。
 
-当前农田详情显示“生长周期：获得水后 N 天成熟”，加工详情显示“加工周期：投入原料后 N 天完成”。两类详情各显示自己负责的库存与售价，库存仍按品种共享；主界面不计算建造费用、价格曲线或生产时间，也不暴露内部 `tick`。窗口实现见 [DraggableWindow](../draggable-window/interface-draggable-window.md)、[BuildCatalogWindow](../build-catalog-window/interface-build-catalog-window.md)、[CropSelectionWindow](../crop-selection-window/interface-crop-selection-window.md)、[InventoryWindow](../inventory-window/interface-inventory-window.md)、[MarketWindow](../market-window/interface-market-window.md)、[FarmDetailsPanel](../farm-details-panel/interface-farm-details-panel.md)、[ProcessorDetailsPanel](../processor-details-panel/interface-processor-details-panel.md) 和 [UiElements](../ui-elements/interface-ui-elements.md)。
+当前农田详情显示“生长周期：获得水后 N 天成熟”，加工详情显示“加工周期：投入原料后 N 天完成”。生产详情各显示自己负责的库存与售价，库存仍按品种共享；道路详情仅显示当前用途和拆除操作。主界面不计算建造费用、价格曲线或生产时间，也不暴露内部 `tick`。窗口实现见 [DraggableWindow](../draggable-window/interface-draggable-window.md)、[BuildCatalogWindow](../build-catalog-window/interface-build-catalog-window.md)、[CropSelectionWindow](../crop-selection-window/interface-crop-selection-window.md)、[InventoryWindow](../inventory-window/interface-inventory-window.md)、[MarketWindow](../market-window/interface-market-window.md)、[FarmDetailsPanel](../farm-details-panel/interface-farm-details-panel.md)、[ProcessorDetailsPanel](../processor-details-panel/interface-processor-details-panel.md)、[RoadDetailsPanel](../road-details-panel/interface-road-details-panel.md) 和 [UiElements](../ui-elements/interface-ui-elements.md)。
 
 [建造规则 issue #26](https://github.com/Fotally/Farm-Exchange/issues/26)已按当前约定取消土地解锁，并实行暂定的 10.00 金币建造费。年月日和季节由 `GameCalendar` 给出；每周独立行情仍归[市场 issue #25](https://github.com/Fotally/Farm-Exchange/issues/25)。[原料交易 issue #27](https://github.com/Fotally/Farm-Exchange/issues/27)确定了逐作物价格和按品种出售；详情、作物选择列表与市场均从 `FarmGame` 查询实时原料售价和库存，结算规则见[出售与价格](../../../gameplay/trading/sales.md)。
 
 ## 验收对应
 
 `tests/e2e/TestCoreLoop.cs` 覆盖目录选择、单次摆放、占用地块不扣费、两类建筑详情的状态、周期、售价与库存、春季甘蔗的不适季提示、窗口拖动、底栏避让、关闭重开位置、市场刷新后滚动与按钮身份，以及两类市场交易。`tests/integration/TestCameraInteraction.cs` 覆盖地图点击与镜头拖动的衔接。窗口只保存当前运行的节点位置，不写入存档。
+
+道路端到端用例另覆盖灰色目录卡片和每格费用、连续两格各扣 100 分、重复铺设失败保持模式且不扣费、Esc/取消退出、道路固定详情和不退款拆除；分类切换保持卡片身份，加工搜索在经营刷新时保留焦点。地图灰色路面与分块缓存由 `tests/integration/TestRoadMap.cs` 验证，仍通过根 `TestSuite` 汇总。
 
 库存编辑用例还验证按钮与回车提交、非法文本拒绝、下一步领取和提高底线不退料，以及经营刷新、失焦、关闭重开时保留草稿、焦点、光标、滚动与控件身份。

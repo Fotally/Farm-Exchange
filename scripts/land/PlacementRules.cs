@@ -31,9 +31,9 @@ internal static class PlacementRules
     internal static PlacementCheck Check(Vector2I cell, BuildingKind building, CropKind crop,
         LandOccupancy occupancy, int balanceCents, int costCents)
     {
-        if (building is not (BuildingKind.Farm or BuildingKind.Processor))
+        if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
             return new PlacementCheck(LandFailure.InvalidBuilding, 0);
-        if (!CropCatalog.IsDefined(crop))
+        if (building != BuildingKind.Road && !CropCatalog.IsDefined(crop))
             return new PlacementCheck(LandFailure.InvalidCrop, 0);
         if (!MapCoordinates.ContainsCell(cell))
             return new PlacementCheck(LandFailure.OutOfBounds, 0);

@@ -15,3 +15,7 @@
 WorldMap 只通过 FarmGame.GetPlot 读取经营状态。SyncFromGame 的次数、镜头位置及可见块数量不得影响农田、加工、库存、价格或日期。绘制缓存的内部结构见[实现](implementation-chunk-cache.md)，格子坐标与玩家操作见[地图规则](../../../gameplay/world/map-and-camera.md)。
 
 主场景在地图下组合[WorkerPresentation](../worker-presentation/interface-worker-presentation.md)，其角色随地图变换且覆盖地块网格。地图块可见性只影响块绘制，不隐藏或停止经营工人；工人经营位置由调度 Module 持有，地图不判断到达或作业完成。
+
+道路快照显式使用 `BuildingKind.Road`。`SyncFromGame` 将它存入现有块外观值，道路以灰色地块顶点颜色绘制，不生成农田作物圆点或加工场地标记；非农田的作物字段不参与外观。新增与移除道路沿用8×8块变化检测和重建，选框仍独立绘制；道路选择、平移地图与镜头限制没有另一条坐标路径。
+
+`TestRoadMap.RunChecksAsync` 在挂树并等待显示帧后验证相邻块道路同步、平移地图后的道路选择、选框不重建地块、移除与相邻道路保持。headless 覆盖连接与重建；独立有窗口运行还读取实际灰色/空地像素，保存 `coverage/road-map-before.png` 和 `road-map-after.png`。原满地图FPS夹具继续保持三名移动工人与原农田/场地数量，道路图形另由本场景验收。

@@ -28,12 +28,14 @@ public partial class Main : Node2D
     private PanelContainer _emptyDetails = null!;
     private FarmDetailsPanel _farmDetails = null!;
     private ProcessorDetailsPanel _processorDetails = null!;
+    private RoadDetailsPanel _roadDetails = null!;
     private Vector2I? _selectedCell;
     private Placement? _placement;
 
     private readonly record struct Placement(BuildingKind Kind, CropKind Crop)
     {
-        public string Name => Kind == BuildingKind.Farm ? "农田" : FarmGame.GetCrop(Crop).BuildingName;
+        public string Name => Kind == BuildingKind.Farm ? "农田" :
+            Kind == BuildingKind.Road ? "道路" : FarmGame.GetCrop(Crop).BuildingName;
     }
 
     internal FarmGame Game => _game;
@@ -56,7 +58,8 @@ public partial class Main : Node2D
     {
         if (inputEvent is not InputEventKey { Pressed: true, Keycode: Key.Escape })
             return;
-        if (_marketWindow.Visible) _marketWindow.Hide();
+        if (_placement is { Kind: BuildingKind.Road }) CancelPlacement();
+        else if (_marketWindow.Visible) _marketWindow.Hide();
         else if (_inventoryWindow.Visible) _inventoryWindow.Hide();
         else if (_cropWindow.Visible) _cropWindow.Hide();
         else if (_buildWindow.Visible) _buildWindow.Hide();
@@ -96,6 +99,9 @@ public partial class Main : Node2D
         _processorDetails = new ProcessorDetailsPanel();
         _processorDetails.RemoveRequested += RemoveSelected;
         detailContent.AddChild(_processorDetails);
+        _roadDetails = new RoadDetailsPanel();
+        _roadDetails.RemoveRequested += RemoveSelected;
+        detailContent.AddChild(_roadDetails);
 
         _buildWindow = new BuildCatalogWindow();
         _buildWindow.SelectionRequested += (kind, crop) => StartPlacement(new Placement(kind, crop));
@@ -211,7 +217,8 @@ public partial class Main : Node2D
                 return;
             }
             _messageLabel.Text = $"{placement.Name}已建造，花费 {FormatCoins(result.ChargedCents)} 金币";
-            _placement = null;
+            if (placement.Kind != BuildingKind.Road)
+                _placement = null;
             built = true;
         }
         _selectedCell = cell;
@@ -244,7 +251,8 @@ public partial class Main : Node2D
         _detailWindow.Hide();
         _buildWindow.Hide();
         _cropWindow.Hide();
-        _messageLabel.Text = $"选择地图空位摆放{placement.Name}，按 Esc 可取消";
+        _messageLabel.Text = placement.Kind == BuildingKind.Road ? "逐格点击空位铺设道路，按 Esc 可取消" :
+            $"选择地图空位摆放{placement.Name}，按 Esc 可取消";
         RefreshFooter();
     }
 
@@ -386,10 +394,17 @@ public partial class Main : Node2D
 
     private void RefreshFooter()
     {
-        _buildHint.Text = _placement is Placement placement
-            ? $"摆放中：{placement.Name} · 点击地图空位建造 · 费用 {FormatCoins(FarmGame.BuildingCostCents)} 金币"
-            : "选择建筑，再点击地图空位摆放";
-        _cancelPlacementButton.Visible = _placement != null;
+        if (_placement is not Placement placement)
+        {
+            _buildHint.Text = "选择建筑，再点击地图空位摆放";
+            _cancelPlacementButton.Hide();
+            return;
+        }
+        string cost = FormatCoins(FarmGame.GetBuildingCostCents(placement.Kind));
+        _buildHint.Text = placement.Kind == BuildingKind.Road
+            ? $"铺路中：道路 · 连续点击地图空位 · 每格 {cost} 金币"
+            : $"摆放中：{placement.Name} · 点击地图空位建造 · 费用 {cost} 金币";
+        _cancelPlacementButton.Show();
     }
 
     private void RefreshDetail()
@@ -404,6 +419,7 @@ public partial class Main : Node2D
         _emptyDetails.Visible = plot.Building == BuildingKind.None;
         _farmDetails.Visible = plot.Building == BuildingKind.Farm;
         _processorDetails.Visible = plot.Building == BuildingKind.Processor;
+        _roadDetails.Visible = plot.Building == BuildingKind.Road;
         if (_farmDetails.Visible)
             _farmDetails.Refresh(_game.GetFarmDetails(cell));
         else if (_processorDetails.Visible)

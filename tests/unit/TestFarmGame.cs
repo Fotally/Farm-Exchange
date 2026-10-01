@@ -19,7 +19,8 @@ public partial class TestFarmGame : Node
         CheckWorkerParticipation() && CheckContinuousProduction() && CheckRainSupply() && CheckSeasonalSowing() &&
         CheckSeasonFailure() && CheckSeasonBoundaries() && CheckRawSales() &&
         CheckInvalidCrops() && CheckStateOwnership() &&
-        CheckPlacementRules() && CheckRawReservePhases() && CheckRawReserveConstruction();
+        CheckPlacementRules() && CheckRawReservePhases() && CheckRawReserveConstruction() &&
+        CheckRoadPlacement() && CheckRoadDoesNotClaimInventory() && CheckRoadIndependentProduction();
 
     private static bool CheckInitialCenter()
     {
@@ -733,6 +734,149 @@ public partial class TestFarmGame : Node
             game.GetRawStock(CropKind.Radish) != 4 || game.GetProductStock(CropKind.Radish) != 0 ||
             game.GetRawStock(CropKind.Radish) + 1 + 1 != 6 || !game.HasConsistentState())
             return Fail("新场地未按格序立即领取，或拆除损耗/投入/公共数量不守恒");
+        return true;
+    }
+
+    private static bool CheckRoadPlacement()
+    {
+        var game = new FarmGame(12345);
+        Vector2I road = new(0, 0);
+        PlacementCheck preview = game.CheckPlacement(road, BuildingKind.Road, default);
+        if (!preview.Allowed || preview.CostCents != 100 || game.MoneyCents != 5000 ||
+            game.GetPlot(road).Building != BuildingKind.None ||
+            game.CheckPlacement(road, BuildingKind.None, default).Failure != LandFailure.InvalidBuilding ||
+            game.CheckPlacement(road, (BuildingKind)999, default).Failure != LandFailure.InvalidBuilding ||
+            game.TryPlace(road, BuildingKind.None, default) != new PlacementResult(LandFailure.InvalidBuilding, 0) ||
+            game.TryPlace(road, (BuildingKind)999, default) != new PlacementResult(LandFailure.InvalidBuilding, 0))
+            return Fail("道路预检修改状态、费用错误，或非法类型命令未稳定拒绝");
+        PlacementResult built = game.TryPlace(road, BuildingKind.Road, (CropKind)999);
+        PlotSnapshot expectedRoad = new(BuildingKind.Road, default, CropStage.None, 0);
+        if (!built.Success || built.ChargedCents != 100 || game.MoneyCents != 4900 ||
+            game.GetPlot(road) != expectedRoad || !game.HasConsistentState())
+            return Fail("道路没有按100分占格，或错误创建了农田/加工/水分状态");
+        foreach (BuildingKind kind in new[] { BuildingKind.Road, BuildingKind.Farm, BuildingKind.Processor })
+            if (game.TryPlace(road, kind, default) != new PlacementResult(LandFailure.Occupied, 0) ||
+                game.MoneyCents != 4900 || game.GetPlot(road) != expectedRoad)
+                return Fail("道路重复铺设或被生产建筑覆盖，或失败仍扣费");
+        foreach (Vector2I cell in new[] { new Vector2I(63, 63), new Vector2I(63, 64) })
+        {
+            PlotSnapshot before = game.GetPlot(cell);
+            if (game.TryPlace(cell, BuildingKind.Road, default) != new PlacementResult(LandFailure.Occupied, 0) ||
+                game.GetPlot(cell) != before || game.MoneyCents != 4900)
+                return Fail("道路覆盖了农田或加工场地");
+        }
+        foreach (Vector2I cell in new[] { new Vector2I(-1, 0), new Vector2I(128, 0),
+                     new Vector2I(0, -1), new Vector2I(0, 128) })
+            if (game.CheckPlacement(cell, BuildingKind.Road, default).Failure != LandFailure.OutOfBounds ||
+                game.TryPlace(cell, BuildingKind.Road, default) != new PlacementResult(LandFailure.OutOfBounds, 0) ||
+                game.RemoveBuilding(cell) != "地图外地块" || game.MoneyCents != 4900)
+                return Fail("越界铺路或拆路没有零修改拒绝");
+        if (game.SetFarmCrop(road, CropKind.Radish) != "该土地没有农田" ||
+            game.GetPlot(road) != expectedRoad || game.MoneyCents != 4900)
+            return Fail("道路被改种命令当作农田");
+
+        Vector2I changed = new(1, 0);
+        if (!game.CheckPlacement(changed, BuildingKind.Road, default).Allowed ||
+            game.BuildFarm(changed) != null ||
+            game.TryPlace(changed, BuildingKind.Road, default) != new PlacementResult(LandFailure.Occupied, 0) ||
+            game.MoneyCents != 3900 || game.GetPlot(changed).Building != BuildingKind.Farm)
+            return Fail("道路预检后占用变化没有执行时重验");
+        if (game.RemoveBuilding(road) != null || game.MoneyCents != 3900 ||
+            game.GetPlot(road).Building != BuildingKind.None ||
+            game.TryPlace(road, BuildingKind.Road, default).ChargedCents != 100 ||
+            game.MoneyCents != 3800 || game.RemoveBuilding(road) != null ||
+            game.BuildProcessor(road, CropKind.Radish) != null || game.MoneyCents != 2800 ||
+            game.GetPlot(road).Building != BuildingKind.Processor || !game.HasConsistentState())
+            return Fail("拆路退费、释放失败，或重铺/改建后的生产状态不一致");
+        if (game.RemoveBuilding(road) != null || game.BuildFarm(road) != null ||
+            game.GetPlot(road) != new PlotSnapshot(BuildingKind.Farm, CropKind.Wheat, CropStage.None, 0) ||
+            game.MoneyCents != 1800 || !game.HasConsistentState())
+            return Fail("道路释放后改建农田继承了旧状态，或扣费与生产占用不一致");
+
+        var poor = new FarmGame(12345);
+        RemoveInitialBuildings(poor);
+        for (int col = 0; col < 49; col++)
+            if (poor.TryPlace(new Vector2I(col, 0), BuildingKind.Road, default).ChargedCents != 100)
+                return Fail("余额边界夹具铺路失败");
+        Vector2I last = new(100, 0);
+        if (poor.MoneyCents != 100 || !poor.CheckPlacement(last, BuildingKind.Road, default).Allowed ||
+            poor.TryPlace(new Vector2I(49, 0), BuildingKind.Road, default).ChargedCents != 100 ||
+            poor.TryPlace(last, BuildingKind.Road, default) != new PlacementResult(LandFailure.InsufficientFunds, 0) ||
+            poor.MoneyCents != 0 || poor.GetPlot(last).Building != BuildingKind.None || !poor.HasConsistentState())
+            return Fail("道路预检后余额变化未重验，或不足100分仍铺路");
+        TickResult rain = poor.AdvanceTick(isRaining: true);
+        if (rain.Harvested != 0 || rain.Produced != 0 || rain.WorkerActed ||
+            poor.GetPlot(new Vector2I(0, 0)) != expectedRoad || poor.MoneyCents != 0)
+            return Fail("道路参与了播种、供水或生产");
+        return true;
+    }
+
+    private static bool CheckRoadDoesNotClaimInventory()
+    {
+        var game = new FarmGame(12345);
+        RemoveInitialBuildings(game);
+        Vector2I farm = new(63, 63);
+        Vector2I processor = new(10, 10);
+        game.BuildFarm(farm);
+        game.SetFarmCrop(farm, CropKind.Radish);
+        game.SetRawReserve(CropKind.Radish, 6);
+        game.BuildProcessor(processor, CropKind.Radish);
+        for (int step = 0; step < 208; step++)
+            game.AdvanceTick();
+        game.RemoveBuilding(farm);
+        game.SetRawReserve(CropKind.Radish, 5);
+        int money = game.MoneyCents;
+        if (game.GetRawStock(CropKind.Radish) != 6 ||
+            game.GetProcessorDetails(processor).Status != ProcessorStatus.ReadyToProcess ||
+            game.TryPlace(new Vector2I(0, 0), BuildingKind.Road, default).ChargedCents != 100 ||
+            game.MoneyCents != money - 100 || game.GetRawStock(CropKind.Radish) != 6 ||
+            game.GetPlot(processor).RemainingSeconds != 0 ||
+            game.GetProcessorDetails(processor).Status != ProcessorStatus.ReadyToProcess)
+            return Fail("铺路错误触发了空闲加工场地领取历史库存");
+        game.AdvanceTick();
+        if (game.GetRawStock(CropKind.Radish) != 5 || game.GetPlot(processor).RemainingSeconds != 26)
+            return Fail("铺路后的正常经营领取阶段发生回归");
+        return true;
+    }
+
+    private static bool CheckRoadIndependentProduction()
+    {
+        var bare = new FarmGame(12345);
+        var connected = new FarmGame(12345);
+        var broken = new FarmGame(12345);
+        Vector2I farm = new(67, 63);
+        foreach (FarmGame game in new[] { bare, connected, broken })
+        {
+            RemoveInitialBuildings(game);
+            game.BuildFarm(farm);
+            game.SetFarmCrop(farm, CropKind.Radish);
+        }
+        foreach (FarmGame game in new[] { connected, broken })
+            for (int col = 64; col <= 66; col++)
+                if (!game.TryPlace(new Vector2I(col, 63), BuildingKind.Road, default).Success)
+                    return Fail("有路/断路验收布局铺设失败");
+        broken.RemoveBuilding(new Vector2I(65, 63));
+        for (int second = 0; second < 650; second++)
+        {
+            TickResult baseline = bare.AdvanceTick();
+            if (connected.AdvanceTick() != baseline || broken.AdvanceTick() != baseline ||
+                connected.GetPlot(farm) != bare.GetPlot(farm) || broken.GetPlot(farm) != bare.GetPlot(farm))
+                return Fail("道路连通改变了移动到田、播种供水或生长节奏");
+            var bareWorkers = bare.GetWorkers();
+            var connectedWorkers = connected.GetWorkers();
+            var brokenWorkers = broken.GetWorkers();
+            for (int i = 0; i < bareWorkers.Count; i++)
+                if (bareWorkers[i] != connectedWorkers[i] || bareWorkers[i] != brokenWorkers[i])
+                    return Fail("道路暗中改变了工人位置、目标或动作");
+            if (bare.GetRawStock(CropKind.Radish) != connected.GetRawStock(CropKind.Radish) ||
+                bare.GetRawStock(CropKind.Radish) != broken.GetRawStock(CropKind.Radish))
+                return Fail("有路、无路和断路的累计产出不同");
+        }
+        if (bare.GetRawStock(CropKind.Radish) != 18 ||
+            connected.GetPlot(new Vector2I(65, 63)).Building != BuildingKind.Road ||
+            broken.GetPlot(new Vector2I(65, 63)).Building != BuildingKind.None ||
+            !bare.HasConsistentState() || !connected.HasConsistentState() || !broken.HasConsistentState())
+            return Fail("三种道路布局未持续生产三轮，或道路占用状态异常");
         return true;
     }
 

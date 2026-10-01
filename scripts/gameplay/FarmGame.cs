@@ -14,7 +14,7 @@ using GoodsInventory = FarmExchange.Inventory.Inventory;
 namespace FarmExchange.Gameplay;
 
 public enum CropStage { None, Seeded, Growing }
-public enum BuildingKind { None, Farm, Processor }
+public enum BuildingKind { None, Farm, Processor, Road }
 public enum CropKind { Wheat, Corn, Rice, Potato, Sunflower, Sugarcane, Radish }
 [Flags]
 public enum GrowingSeasons { Spring = 1, Summer = 2, Autumn = 4, Winter = 8 }
@@ -103,6 +103,12 @@ public sealed class FarmGame
     }
 
     public static CropDefinition GetCrop(CropKind crop) => CropCatalog.Get(crop);
+    public static int GetBuildingCostCents(BuildingKind building) => building switch
+    {
+        BuildingKind.Farm or BuildingKind.Processor => BuildingCostCents,
+        BuildingKind.Road => 100,
+        _ => throw new ArgumentOutOfRangeException(nameof(building)),
+    };
     public IReadOnlyList<WorkerSnapshot> GetWorkers() => _workerScheduler.GetSnapshots();
     public int GetRawStock(CropKind crop) => _inventory.GetRaw(crop);
     public int GetRawReserve(CropKind crop) => _inventory.GetRawReserve(crop);
@@ -141,6 +147,7 @@ public sealed class FarmGame
         {
             BuildingKind.Farm => FarmPlot(index),
             BuildingKind.Processor => ProcessorPlot(index),
+            BuildingKind.Road => new PlotSnapshot(BuildingKind.Road, default, CropStage.None, 0),
             _ => new PlotSnapshot(BuildingKind.None, default, CropStage.None, 0),
         };
         return LandFailure.None;
@@ -232,9 +239,13 @@ public sealed class FarmGame
         return true;
     }
 
-    public PlacementCheck CheckPlacement(Vector2I cell, BuildingKind building, CropKind crop) =>
-        PlacementRules.Check(cell, building, crop, _occupancy, _wallet.BalanceCents,
-            BuildingCostCents);
+    public PlacementCheck CheckPlacement(Vector2I cell, BuildingKind building, CropKind crop)
+    {
+        if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
+            return new PlacementCheck(LandFailure.InvalidBuilding, 0);
+        return PlacementRules.Check(cell, building, crop, _occupancy, _wallet.BalanceCents,
+            GetBuildingCostCents(building));
+    }
 
     public PlacementResult TryPlace(Vector2I cell, BuildingKind building, CropKind crop)
     {
@@ -245,13 +256,9 @@ public sealed class FarmGame
         int index = IndexOf(cell);
         if (!_wallet.TrySpend(check.CostCents))
             throw new InvalidOperationException("放置检查与扣费状态不一致");
-        if (building == BuildingKind.Farm)
-            PlaceFarm(index, crop);
-        else
-        {
-            PlaceProcessor(index, crop);
+        PlaceBuilding(index, building, crop);
+        if (building == BuildingKind.Processor)
             StartIdleProcessors();
-        }
         return new PlacementResult(LandFailure.None, check.CostCents);
     }
 
@@ -282,10 +289,17 @@ public sealed class FarmGame
         BuildingKind building = _occupancy.Get(index);
         if (building == BuildingKind.None)
             return "该土地没有建筑";
-        if (building == BuildingKind.Farm)
-            _farming.Remove(index);
-        else
-            _processing.Remove(index);
+        switch (building)
+        {
+            case BuildingKind.Farm:
+                _farming.Remove(index);
+                break;
+            case BuildingKind.Processor:
+                _processing.Remove(index);
+                break;
+            case BuildingKind.Road:
+                break;
+        }
         _occupancy.Remove(index);
         return null;
     }
@@ -383,10 +397,7 @@ public sealed class FarmGame
         if (!check.Allowed)
             throw new InvalidOperationException("开局建筑放置无效");
         int index = IndexOf(cell);
-        if (building == BuildingKind.Farm)
-            PlaceFarm(index, crop);
-        else
-            PlaceProcessor(index, crop);
+        PlaceBuilding(index, building, crop);
     }
 
     private void StartIdleProcessors()
@@ -406,6 +417,22 @@ public sealed class FarmGame
     {
         _processing.Place(index, crop);
         _occupancy.Place(index, BuildingKind.Processor);
+    }
+
+    private void PlaceBuilding(int index, BuildingKind building, CropKind crop)
+    {
+        switch (building)
+        {
+            case BuildingKind.Farm:
+                PlaceFarm(index, crop);
+                break;
+            case BuildingKind.Processor:
+                PlaceProcessor(index, crop);
+                break;
+            case BuildingKind.Road:
+                _occupancy.Place(index, BuildingKind.Road);
+                break;
+        }
     }
 
     private static int IndexOf(Vector2I cell)
