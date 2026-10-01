@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Land;
 
 namespace FarmExchange.World;
 
@@ -13,13 +14,12 @@ public partial class WorldMap : Node2D
     private const int MapSize = MapCoordinates.MapSize;
     private const int ChunkSize = 8;
     private const int ChunksPerSide = MapSize / ChunkSize;
-    private const float HalfWidth = MapCoordinates.TileWidth / 2f;
-    private const float HalfHeight = MapCoordinates.TileHeight / 2f;
     private const float SeamOverlap = 0.75f;
 
     private static readonly Color TileColor = new(0.53f, 0.64f, 0.38f);
     private static readonly Color FarmColor = new(0.53f, 0.36f, 0.22f);
     private static readonly Color ProcessorColor = new(0.36f, 0.47f, 0.61f);
+    private static readonly Color RoadColor = new(0.52f, 0.52f, 0.52f);
     private static readonly Color ProcessorMarkerColor = new(0.86f, 0.90f, 0.93f);
     private static readonly Color SeedColor = new(0.98f, 0.84f, 0.46f);
     private static readonly Color[] GrowingColors =
@@ -35,6 +35,7 @@ public partial class WorldMap : Node2D
     private static readonly Color SelectedColor = new(0.95f, 0.76f, 0.31f);
     private static readonly Color EdgeColor = new(0.91f, 0.86f, 0.66f);
 
+    private readonly PlotVisual[] _visuals = new PlotVisual[MapSize * MapSize];
     private readonly MapChunk[] _chunks = new MapChunk[ChunksPerSide * ChunksPerSide];
     private FarmGame _game = null!;
     private SelectionOverlay _overlay = null!;
@@ -66,15 +67,25 @@ public partial class WorldMap : Node2D
 
     public void SyncFromGame()
     {
+        Array.Clear(_visuals);
+        foreach (BuildingSpaceSnapshot space in _game.GetBuildingSpaces())
+        {
+            PlotSnapshot plot = _game.GetPlot(space.AnchorCell);
+            foreach (Vector2I offset in space.Footprint.Offsets)
+            {
+                Vector2I cell = space.AnchorCell + offset;
+                _visuals[cell.Y * MapSize + cell.X] = PlotVisual.FromSnapshot(plot, cell == space.WorkCell);
+            }
+        }
         for (int row = 0; row < MapSize; row++)
         {
             for (int col = 0; col < MapSize; col++)
             {
-                PlotSnapshot plot = _game.GetPlot(new Vector2I(col, row));
                 MapChunk chunk = _chunks[(row / ChunkSize) * ChunksPerSide + col / ChunkSize];
-                chunk.SetVisual(col % ChunkSize, row % ChunkSize, PlotVisual.FromSnapshot(plot));
+                chunk.SetVisual(col % ChunkSize, row % ChunkSize, _visuals[row * MapSize + col]);
             }
         }
+        _overlay.QueueRedraw();
         foreach (MapChunk chunk in _chunks)
             chunk.RedrawIfVisible();
     }
@@ -146,27 +157,31 @@ public partial class WorldMap : Node2D
 
     public Vector2 GetCellWorldCenter(Vector2I cell) => ToGlobal(MapCoordinates.CellToLocalCenter(cell));
 
-    public Rect2 LocalBounds() => new(
-        new Vector2(-MapSize * HalfWidth, -HalfHeight),
-        new Vector2(MapSize * MapCoordinates.TileWidth, MapSize * MapCoordinates.TileHeight));
+    public Vector2 GetGridWorldPosition(Vector2 gridPosition) =>
+        ToGlobal(MapCoordinates.GridPositionToLocal(gridPosition));
+
+    public Rect2 LocalBounds() => MapCoordinates.GridRectangleBounds(Vector2I.Zero, MapSize, MapSize);
 
     public Vector2 ClampGlobalCameraCenter(Vector2 globalCenter) =>
         ToGlobal(MapCoordinates.ClampLocalCenter(ToLocal(globalCenter)));
 
-    private static Vector2[] Outline(Vector2 center) => new[]
+    private static Vector2[] Outline(Vector2I cell)
     {
-        center + new Vector2(0f, -HalfHeight - SeamOverlap),
-        center + new Vector2(HalfWidth + SeamOverlap, 0f),
-        center + new Vector2(0f, HalfHeight + SeamOverlap),
-        center + new Vector2(-HalfWidth - SeamOverlap, 0f),
-    };
+        Vector2[] corners = MapCoordinates.GridRectangleOutline(cell, 1, 1);
+        corners[0].Y -= SeamOverlap;
+        corners[1].X += SeamOverlap;
+        corners[2].Y += SeamOverlap;
+        corners[3].X -= SeamOverlap;
+        return corners;
+    }
 
-    private readonly record struct PlotVisual(BuildingKind Building, CropKind CropKind, CropStage Crop)
+    private readonly record struct PlotVisual(BuildingKind Building, CropKind CropKind, CropStage Crop, bool Marker)
     {
-        public static PlotVisual FromSnapshot(PlotSnapshot plot) => new(
+        public static PlotVisual FromSnapshot(PlotSnapshot plot, bool marker) => new(
             plot.Building,
             plot.Building == BuildingKind.Farm ? plot.CropKind : CropKind.Wheat,
-            plot.Building == BuildingKind.Farm ? plot.Crop : CropStage.None);
+            plot.Building == BuildingKind.Farm ? plot.Crop : CropStage.None,
+            marker);
     }
 
     private sealed partial class MapChunk : Node2D
@@ -186,11 +201,8 @@ public partial class WorldMap : Node2D
             _firstCol = firstCol;
             _firstRow = firstRow;
             Visible = false;
-            Bounds = new Rect2(
-                new Vector2((firstCol - (firstRow + ChunkSize - 1)) * HalfWidth - HalfWidth - SeamOverlap,
-                    (firstCol + firstRow) * HalfHeight - HalfHeight - SeamOverlap),
-                new Vector2(ChunkSize * MapCoordinates.TileWidth + SeamOverlap * 2f,
-                    ChunkSize * MapCoordinates.TileHeight + SeamOverlap * 2f));
+            Bounds = MapCoordinates.GridRectangleBounds(new Vector2I(firstCol, firstRow), ChunkSize, ChunkSize)
+                .Grow(SeamOverlap);
         }
 
         public void SetVisual(int col, int row, PlotVisual visual)
@@ -222,15 +234,15 @@ public partial class WorldMap : Node2D
                 {
                     int mapCol = _firstCol + col;
                     int mapRow = _firstRow + row;
-                    Vector2 center = MapCoordinates.CellToLocalCenter(new Vector2I(mapCol, mapRow));
                     PlotVisual plot = _plots[row * ChunkSize + col];
                     Color tileColor = plot.Building switch
                     {
                         BuildingKind.Farm => FarmColor,
                         BuildingKind.Processor => ProcessorColor,
+                        BuildingKind.Road => RoadColor,
                         _ => TileColor,
                     };
-                    AddQuad(vertices, colors, indices, Outline(center), tileColor);
+                    AddQuad(vertices, colors, indices, Outline(new Vector2I(mapCol, mapRow)), tileColor);
                 }
             }
             for (int row = 0; row < ChunkSize; row++)
@@ -241,6 +253,8 @@ public partial class WorldMap : Node2D
                     int mapRow = _firstRow + row;
                     Vector2 center = MapCoordinates.CellToLocalCenter(new Vector2I(mapCol, mapRow));
                     PlotVisual plot = _plots[row * ChunkSize + col];
+                    if (!plot.Marker)
+                        continue;
                     if (plot.Building == BuildingKind.Farm && plot.Crop == CropStage.None)
                         AddCircle(vertices, colors, indices, center, 4f, GrowingColors[(int)plot.CropKind]);
                     else if (plot.Crop == CropStage.Seeded)
@@ -301,21 +315,28 @@ public partial class WorldMap : Node2D
 
         public override void _Draw()
         {
-            DrawPolyline(new[]
-            {
-                new Vector2(0f, -HalfHeight),
-                new Vector2(MapSize * HalfWidth, (MapSize - 1) * HalfHeight),
-                new Vector2(0f, (MapSize * 2 - 1) * HalfHeight),
-                new Vector2(-MapSize * HalfWidth, (MapSize - 1) * HalfHeight),
-                new Vector2(0f, -HalfHeight),
-            }, EdgeColor, 3f);
+            Vector2[] edge = MapCoordinates.GridRectangleOutline(Vector2I.Zero, MapSize, MapSize);
+            DrawPolyline(new[] { edge[0], edge[1], edge[2], edge[3], edge[0] }, EdgeColor, 3f);
             if (_map._selectedCell.X < 0)
                 return;
-            Vector2I cell = _map._selectedCell;
-            Vector2 center = MapCoordinates.CellToLocalCenter(cell);
-            Vector2[] outline = Outline(center);
-            DrawPolyline(new[] { outline[0], outline[1], outline[2], outline[3], outline[0] },
-                SelectedColor, 3f);
+            Vector2I selected = _map._selectedCell;
+            BuildingSpaceSnapshot? space = _map._game.GetBuildingSpace(selected);
+            if (space == null)
+            {
+                Vector2[] outline = MapCoordinates.GridRectangleOutline(selected, 1, 1);
+                DrawPolyline(new[] { outline[0], outline[1], outline[2], outline[3], outline[0] }, SelectedColor, 3f);
+                return;
+            }
+            // 土地拥有固定占地偏移；只绘制外侧边，任一子格均得到同一完整选框。
+            var offsets = new HashSet<Vector2I>(space.Footprint.Offsets);
+            Vector2I[] neighbours = { new(0, -1), new(1, 0), new(0, 1), new(-1, 0) };
+            foreach (Vector2I offset in space.Footprint.Offsets)
+            {
+                Vector2[] outline = MapCoordinates.GridRectangleOutline(space.AnchorCell + offset, 1, 1);
+                for (int side = 0; side < 4; side++)
+                    if (!offsets.Contains(offset + neighbours[side]))
+                        DrawLine(outline[side], outline[(side + 1) % 4], SelectedColor, 3f);
+            }
         }
     }
 }

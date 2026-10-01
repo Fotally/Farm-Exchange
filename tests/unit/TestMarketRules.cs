@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Inventory;
 using FarmExchange.Market;
 
 public partial class TestMarketRules : Node
@@ -65,15 +66,18 @@ public partial class TestMarketRules : Node
             if (game.AdvanceTick().DayAdvanced || game.CurrentDay != 1)
                 return Fail("未跨过精确日界时提前进入下一天");
         if (!game.AdvanceTick().DayAdvanced || game.CurrentDay != 2 ||
-            game.DailyPriceChangePercent == 0.0)
-            return Fail("第 52 秒未进入下一天并更新价格");
-        foreach (CropDefinition crop in FarmGame.Crops)
-        {
-            int productPrice = (game.CurrentFlourPriceCents * crop.PricePercent + 50) / 100;
-            if (game.GetProductPriceCents(crop.Kind) != productPrice ||
-                game.GetRawPriceCents(crop.Kind) != (productPrice * crop.RawPricePercent + 50) / 100)
-                return Fail($"{crop.CropName}原料或加工品没有按当天价格计价");
-        }
+            game.CurrentFlourPriceCents != 500 || game.DailyPriceChangePercent != 0.0)
+            return Fail("第 52 秒未进入下一天，或非报价日价格变化");
+        while (game.Calendar.ElapsedSeconds < 720)
+            game.AdvanceTick();
+        var expected = new MarketQuotes(12345, 14);
+        foreach (var commodity in CommodityCatalog.All)
+            if (game.GetQuote(commodity.Id) != expected.GetQuote(commodity.Id))
+                return Fail("第 14 个经过日未使用正式独立商品报价");
+        if (game.CurrentFlourPriceCents != game.GetProductPriceCents(CropKind.Wheat) ||
+            game.DailyPriceChangePercent != (double)game.GetQuote(
+                new CommodityId(CropKind.Wheat, CommodityKind.Product)).ChangePercent)
+            return Fail("旧面粉查询没有委托本次正式报价");
         return true;
     }
 

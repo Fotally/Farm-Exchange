@@ -63,6 +63,18 @@ public partial class TestNpcPreview : Node
             SendKey(preview, Key.Q);
             if (!label.Text.Contains("npc_animation_023.png"))
                 return Fail("Q 键没有从第一位循环到最后一位");
+            character.ShowAt(new Vector2(10, 20), Vector2.Right, moving: true, paused: false);
+            if (sprite.Animation != "run_left" || !sprite.FlipH || !sprite.IsPlaying())
+                return Fail("外部位置模式未更新朝向和移动动画");
+            sprite.Frame = 2;
+            character.ShowAt(character.Position, Vector2.Up, moving: true, paused: true);
+            character._PhysicsProcess(1);
+            if (character.Position != new Vector2(10, 20) || sprite.Frame != 2 ||
+                sprite.Animation != "run_left" || sprite.IsPlaying() || character.IsPhysicsProcessing())
+                return Fail("外部位置模式继续物理移动或暂停未保留动画帧");
+            character.ShowAt(character.Position, Vector2.Up, moving: false, paused: false);
+            if (sprite.Animation != "run_up" || sprite.Frame != 0 || sprite.IsPlaying())
+                return Fail("外部模式停步未保留目标朝向的首帧");
             return true;
         }
         finally

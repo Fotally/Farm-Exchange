@@ -1,7 +1,10 @@
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Inventory;
 using FarmExchange.Land;
+using FarmExchange.Market;
 using FarmExchange.Time;
+using FarmExchange.Trading;
 using FarmExchange.World;
 using static FarmExchange.UI.UiElements;
 
@@ -13,6 +16,7 @@ public partial class Main : Node2D
     private WorldMap _worldMap = null!;
     private Control _uiRoot = null!;
     private Label _moneyLabel = null!;
+    private Label _workerLabel = null!;
     private Label _calendarLabel = null!;
     private Button _pauseButton = null!;
     private Label _messageLabel = null!;
@@ -27,12 +31,14 @@ public partial class Main : Node2D
     private PanelContainer _emptyDetails = null!;
     private FarmDetailsPanel _farmDetails = null!;
     private ProcessorDetailsPanel _processorDetails = null!;
+    private RoadDetailsPanel _roadDetails = null!;
     private Vector2I? _selectedCell;
     private Placement? _placement;
 
     private readonly record struct Placement(BuildingKind Kind, CropKind Crop)
     {
-        public string Name => Kind == BuildingKind.Farm ? "农田" : FarmGame.GetCrop(Crop).BuildingName;
+        public string Name => Kind == BuildingKind.Farm ? "农田" :
+            Kind == BuildingKind.Road ? "道路" : FarmGame.GetCrop(Crop).BuildingName;
     }
 
     internal FarmGame Game => _game;
@@ -41,6 +47,11 @@ public partial class Main : Node2D
     {
         _worldMap = GetNode<WorldMap>("WorldMap");
         _worldMap.SetGame(_game);
+        GetNode<Camera2D>("Camera2D").GlobalPosition = _worldMap.GetGridWorldPosition(
+            new Vector2((FarmGame.MapSize - 1) / 2f, (FarmGame.MapSize - 1) / 2f));
+        var workerPresentation = new WorkerPresentation();
+        _worldMap.AddChild(workerPresentation);
+        workerPresentation.SetGame(_game, _worldMap);
         _worldMap.SelectionChanged += OnSelectionChanged;
         _uiRoot = GetNode<Control>("CanvasLayer/UiRoot");
         BuildInterface();
@@ -52,7 +63,8 @@ public partial class Main : Node2D
     {
         if (inputEvent is not InputEventKey { Pressed: true, Keycode: Key.Escape })
             return;
-        if (_marketWindow.Visible) _marketWindow.Hide();
+        if (_placement is { Kind: BuildingKind.Road }) CancelPlacement();
+        else if (_marketWindow.Visible) _marketWindow.Hide();
         else if (_inventoryWindow.Visible) _inventoryWindow.Hide();
         else if (_cropWindow.Visible) _cropWindow.Hide();
         else if (_buildWindow.Visible) _buildWindow.Hide();
@@ -92,6 +104,9 @@ public partial class Main : Node2D
         _processorDetails = new ProcessorDetailsPanel();
         _processorDetails.RemoveRequested += RemoveSelected;
         detailContent.AddChild(_processorDetails);
+        _roadDetails = new RoadDetailsPanel();
+        _roadDetails.RemoveRequested += RemoveSelected;
+        detailContent.AddChild(_roadDetails);
 
         _buildWindow = new BuildCatalogWindow();
         _buildWindow.SelectionRequested += (kind, crop) => StartPlacement(new Placement(kind, crop));
@@ -108,6 +123,10 @@ public partial class Main : Node2D
         _marketWindow = new MarketWindow();
         _marketWindow.SellRawRequested += SellRaw;
         _marketWindow.SellAllRequested += SellAll;
+        _marketWindow.BuyRequested += (commodity, quantity) => Trade(commodity, quantity, buy: true);
+        _marketWindow.SellRequested += (commodity, quantity) => Trade(commodity, quantity, buy: false);
+        _marketWindow.SellCommodityAllRequested += SellCommodityAll;
+        _marketWindow.TradeInputRejected += message => _messageLabel.Text = message;
         _uiRoot.AddChild(_marketWindow);
     }
 
@@ -125,7 +144,8 @@ public partial class Main : Node2D
         gameTitle.CustomMinimumSize = new Vector2(160, 0);
         row.AddChild(gameTitle);
         row.AddChild(MakeStat("金币", out _moneyLabel));
-        row.AddChild(MakeStat("工人", out _, "1 · 自动照料"));
+        row.AddChild(MakeStat("工人", out _workerLabel));
+        _workerLabel.Name = "WorkerCountLabel";
         row.AddChild(MakeStat("日期", out _calendarLabel, width: 235));
         _pauseButton = MakeButton("暂停", Mid, 70, 44);
         _pauseButton.Name = "PauseButton";
@@ -206,7 +226,8 @@ public partial class Main : Node2D
                 return;
             }
             _messageLabel.Text = $"{placement.Name}已建造，花费 {FormatCoins(result.ChargedCents)} 金币";
-            _placement = null;
+            if (placement.Kind != BuildingKind.Road)
+                _placement = null;
             built = true;
         }
         _selectedCell = cell;
@@ -239,7 +260,8 @@ public partial class Main : Node2D
         _detailWindow.Hide();
         _buildWindow.Hide();
         _cropWindow.Hide();
-        _messageLabel.Text = $"选择地图空位摆放{placement.Name}，按 Esc 可取消";
+        _messageLabel.Text = placement.Kind == BuildingKind.Road ? "逐格点击空位铺设道路，按 Esc 可取消" :
+            $"点击空小格作为{placement.Name}的锚点，占地 3×3，按 Esc 可取消";
         RefreshFooter();
     }
 
@@ -322,17 +344,43 @@ public partial class Main : Node2D
     private void SellRaw(CropKind crop)
     {
         SaleResult sale = _game.SellRaw(crop);
-        _messageLabel.Text = $"卖出 {sale.Quantity} 份{FarmGame.GetCrop(crop).CropName}原料，获得 {FormatCoins(sale.RevenueCents)} 金币";
+        ShowMarketFeedback(sale.Success
+            ? $"卖出 {sale.Quantity} 份{FarmGame.GetCrop(crop).CropName}原料，获得 {FormatCoins(sale.RevenueCents)} 金币"
+            : sale.ErrorMessage!);
         RefreshAfterGameChange(worldChanged: false);
     }
 
     private void SellAll()
     {
         SaleResult sale = _game.SellAll();
-        _messageLabel.Text = sale.Quantity == 0
+        ShowMarketFeedback(!sale.Success ? sale.ErrorMessage! : sale.Quantity == 0
             ? "加工品库存为空"
-            : $"卖出 {sale.Quantity} 份加工品，获得 {FormatCoins(sale.RevenueCents)} 金币";
+            : $"卖出 {sale.Quantity} 份加工品，获得 {FormatCoins(sale.RevenueCents)} 金币");
         RefreshAfterGameChange(worldChanged: false);
+    }
+
+    private void Trade(CommodityId commodity, int quantity, bool buy)
+    {
+        TradeResult result = buy ? _game.Buy(commodity, quantity) : _game.Sell(commodity, quantity);
+        ShowTradeFeedback(commodity, result, buy);
+    }
+
+    private void SellCommodityAll(CommodityId commodity) =>
+        ShowTradeFeedback(commodity, _game.SellCommodityAll(commodity), buy: false);
+
+    private void ShowTradeFeedback(CommodityId commodity, TradeResult result, bool buy)
+    {
+        ShowMarketFeedback(result.Success
+            ? $"{(buy ? "买入" : "卖出")} {result.Quantity} 份{CommodityCatalog.Get(commodity).Name}，" +
+                $"{(buy ? "花费" : "获得")} {FormatCoins(result.TotalCents)} 金币"
+            : result.ErrorMessage!);
+        RefreshAfterGameChange(worldChanged: false);
+    }
+
+    private void ShowMarketFeedback(string message)
+    {
+        _messageLabel.Text = message;
+        _marketWindow.ShowFeedback(message);
     }
 
     private void OnTick()
@@ -355,6 +403,7 @@ public partial class Main : Node2D
     private void RefreshUi()
     {
         _moneyLabel.Text = FormatCoins(_game.MoneyCents);
+        _workerLabel.Text = $"{_game.GetWorkers().Count} · 自动照料";
         CalendarSnapshot calendar = _game.Calendar;
         string season = calendar.Season switch
         {
@@ -380,10 +429,17 @@ public partial class Main : Node2D
 
     private void RefreshFooter()
     {
-        _buildHint.Text = _placement is Placement placement
-            ? $"摆放中：{placement.Name} · 点击地图空位建造 · 费用 {FormatCoins(FarmGame.BuildingCostCents)} 金币"
-            : "选择建筑，再点击地图空位摆放";
-        _cancelPlacementButton.Visible = _placement != null;
+        if (_placement is not Placement placement)
+        {
+            _buildHint.Text = "选择建筑，再点击地图空位摆放";
+            _cancelPlacementButton.Hide();
+            return;
+        }
+        string cost = FormatCoins(FarmGame.GetBuildingCostCents(placement.Kind));
+        _buildHint.Text = placement.Kind == BuildingKind.Road
+            ? $"铺路中：道路 · 连续点击地图空位 · 每格 {cost} 金币"
+            : $"摆放中：{placement.Name} · 占地 3×3 · 点击空小格建造 · 费用 {cost} 金币";
+        _cancelPlacementButton.Show();
     }
 
     private void RefreshDetail()
@@ -394,10 +450,13 @@ public partial class Main : Node2D
             return;
         }
         PlotSnapshot plot = _game.GetPlot(cell);
-        _detailCell.Text = $"地块 ({cell.X}, {cell.Y})";
+        BuildingSpaceSnapshot? space = _game.GetBuildingSpace(cell);
+        _detailCell.Text = space == null ? $"地块 ({cell.X}, {cell.Y})" :
+            $"建筑锚点 ({space.AnchorCell.X}, {space.AnchorCell.Y}) · 占地 {space.Footprint.Offsets.Count} 格";
         _emptyDetails.Visible = plot.Building == BuildingKind.None;
         _farmDetails.Visible = plot.Building == BuildingKind.Farm;
         _processorDetails.Visible = plot.Building == BuildingKind.Processor;
+        _roadDetails.Visible = plot.Building == BuildingKind.Road;
         if (_farmDetails.Visible)
             _farmDetails.Refresh(_game.GetFarmDetails(cell));
         else if (_processorDetails.Visible)

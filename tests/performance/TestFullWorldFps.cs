@@ -7,6 +7,7 @@ using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.UI;
 using FarmExchange.World;
+using FarmExchange.Workers;
 
 public partial class TestFullWorldFps : Node
 {
@@ -14,6 +15,7 @@ public partial class TestFullWorldFps : Node
     private const ulong SampleUsec = 8_000_000;
 
     private Camera2D _camera = null!;
+    private Main _main = null!;
     private WorldMap _map = null!;
     private readonly List<double> _frameTimesMs = new();
     private ulong _readyAtUsec;
@@ -23,6 +25,7 @@ public partial class TestFullWorldFps : Node
     private int _ticks;
     private int _maxVisiblePlotCandidates;
     private int _startChunkRedraws;
+    private int _movingWorkersAtStart;
 
     public override void _Ready()
     {
@@ -34,7 +37,8 @@ public partial class TestFullWorldFps : Node
         }
 
         Main main = GetNode<Main>("Main");
-        main.Game.FillWorldForBenchmark();
+        _main = main;
+        main.Game.FillWorldForPresentationBenchmark();
         _map = main.GetNode<WorldMap>("WorldMap");
         _map.SyncFromGame();
         _camera = main.GetNode<Camera2D>("Camera2D");
@@ -43,7 +47,7 @@ public partial class TestFullWorldFps : Node
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Directory.CreateDirectory(Path.GetDirectoryName(ProjectSettings.GlobalizePath("res://coverage/performance.json"))!);
         _readyAtUsec = Time.GetTicksUsec();
-        GD.Print("满地图渲染性能测试：16,384 格实体，预热 2 秒，采样 8 秒");
+        GD.Print("满地图渲染性能测试：16,384 生产实例、147,456 占用子格，3 名移动工人，预热 2 秒，采样 8 秒");
     }
 
     public override void _Process(double delta)
@@ -53,8 +57,13 @@ public partial class TestFullWorldFps : Node
 
         ulong now = Time.GetTicksUsec();
         double seconds = (now - _readyAtUsec) / 1_000_000.0;
-        _camera.GlobalPosition = _map.ClampGlobalCameraCenter(new Vector2(
-            (float)(Math.Sin(seconds * 0.8) * 500.0), 2032f));
+        Vector2 workerCenter = Vector2.Zero;
+        var workers = _main.Game.GetWorkers();
+        foreach (WorkerSnapshot worker in workers)
+            workerCenter += worker.GridPosition;
+        workerCenter /= workers.Count;
+        _camera.GlobalPosition = _map.ClampGlobalCameraCenter(_map.GetGridWorldPosition(workerCenter) +
+            new Vector2((float)(Math.Sin(seconds * 0.8) * 200.0), 0));
         _maxVisiblePlotCandidates = Math.Max(_maxVisiblePlotCandidates, _map.LastVisiblePlotCount);
 
         if (now - _readyAtUsec < WarmupUsec)
@@ -67,6 +76,7 @@ public partial class TestFullWorldFps : Node
             _previousFrameUsec = now;
             _startFrames = Engine.GetFramesDrawn();
             _startChunkRedraws = _map.ChunkRedrawCount;
+            _movingWorkersAtStart = CountMovingWorkers();
             return;
         }
 
@@ -76,9 +86,11 @@ public partial class TestFullWorldFps : Node
             return;
 
         int renderedFrames = Engine.GetFramesDrawn() - _startFrames;
-        if (renderedFrames == 0 || _frameTimesMs.Count < 2 || _maxVisiblePlotCandidates == 0 || _ticks == 0)
+        int movingWorkersAtEnd = CountMovingWorkers();
+        if (renderedFrames == 0 || _frameTimesMs.Count < 2 || _maxVisiblePlotCandidates == 0 || _ticks == 0 ||
+            _movingWorkersAtStart != 3 || movingWorkersAtEnd != 3)
         {
-            GD.PushError("帧率性能测试没有取得有效的渲染帧、可见地块或经营 tick");
+            GD.PushError("帧率性能测试缺少有效渲染、可见地块、经营步进或采样前后三名移动工人");
             GetTree().Quit(1);
             return;
         }
@@ -90,10 +102,16 @@ public partial class TestFullWorldFps : Node
         string reportPath = ProjectSettings.GlobalizePath("res://coverage/performance.json");
         var report = new
         {
-            Scenario = "128x128 满地图，8,192 农田与 8,192 加工场地，六种作物，镜头水平往返移动",
-            EntityCount = FarmGame.MapSize * FarmGame.MapSize,
+            Scenario = "384x384 基础格满地图，8,192 农田与 8,192 加工场地，七种作物，三处远田空田触发三工人直线移动，镜头跟随平均经营位置并水平往返",
+            CameraPath = "三工人平均经营格位置转换后的全局中心 + (sin(经过秒×0.8)×200, 0)世界像素",
+            ComparisonNote = "镜头轨迹随3小格/秒调整，与旧±500固定中心轨迹不同，不作为同条件性能直接对比",
+            EntityCount = _main.Game.GetBuildingSpaces().Count,
+            OccupiedCellCount = FarmGame.MapSize * FarmGame.MapSize,
             FarmCount = 8192,
             ProcessorCount = 8192,
+            WorkerCount = _main.Game.GetWorkers().Count,
+            MovingWorkersAtStart = _movingWorkersAtStart,
+            MovingWorkersAtEnd = movingWorkersAtEnd,
             TickCount = _ticks,
             MaxVisiblePlotCandidates = _maxVisiblePlotCandidates,
             ChunkRedraws = _map.ChunkRedrawCount - _startChunkRedraws,
@@ -127,6 +145,14 @@ public partial class TestFullWorldFps : Node
             return;
         }
         GetTree().Quit(0);
+    }
+
+    private int CountMovingWorkers()
+    {
+        int moving = 0;
+        foreach (WorkerSnapshot worker in _main.Game.GetWorkers())
+            if (worker.Activity == WorkerActivity.Moving) moving++;
+        return moving;
     }
 
     private static double Percentile(List<double> sorted, double fraction)

@@ -1,7 +1,6 @@
 using Godot;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
-using FarmExchange.World;
 
 namespace FarmExchange.Land;
 
@@ -31,15 +30,13 @@ internal static class PlacementRules
     internal static PlacementCheck Check(Vector2I cell, BuildingKind building, CropKind crop,
         LandOccupancy occupancy, int balanceCents, int costCents)
     {
-        if (building is not (BuildingKind.Farm or BuildingKind.Processor))
+        if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
             return new PlacementCheck(LandFailure.InvalidBuilding, 0);
-        if (!CropCatalog.IsDefined(crop))
+        if (building != BuildingKind.Road && !CropCatalog.IsDefined(crop))
             return new PlacementCheck(LandFailure.InvalidCrop, 0);
-        if (!MapCoordinates.ContainsCell(cell))
-            return new PlacementCheck(LandFailure.OutOfBounds, 0);
-        int index = cell.Y * FarmGame.MapSize + cell.X;
-        if (occupancy.Get(index) != BuildingKind.None)
-            return new PlacementCheck(LandFailure.Occupied, 0);
+        LandFailure geometryFailure = occupancy.CheckFootprint(cell, building);
+        if (geometryFailure != LandFailure.None)
+            return new PlacementCheck(geometryFailure, 0);
         if (balanceCents < costCents)
             return new PlacementCheck(LandFailure.InsufficientFunds, 0);
         return new PlacementCheck(LandFailure.None, costCents);

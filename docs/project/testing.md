@@ -2,14 +2,14 @@
 
 ## 自动化测试与覆盖率
 
-测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的游戏状态、土地占用、农田与加工状态边界、作物定义、库存、钱包、市场、日历和地图坐标；`tests/integration/` 检查镜头输入、地图选择及 NPC 动画场景协作；`tests/e2e/` 检查主场景完整经营流程；`tests/performance/` 测满地图负载与可选图形 FPS。`tests/test_suite.tscn` 汇总各类可在 headless 模式运行的检查，任一失败都会返回非零退出码。满地图检查将 16,384 格全部放上现有实体（8,192 块农田、8,192 处加工场地，七种作物均覆盖），推进 50 个经营步进并打印总耗时与平均耗时。耗时是本机观测值，没有固定通过阈值。Windows 导出程序启动另作构建冒烟测试。
+测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的经营状态、土地、生产、资源、行情、日历与坐标；`tests/integration/` 检查镜头、选择、角色与地图绘制，`tests/e2e/` 检查主场景流程，`tests/performance/` 测负载和图形 FPS。`tests/test_suite.tscn` 汇总 headless 检查，任一失败返回非零。满地图在 384×384 基础格中平铺 8,192 农田与 8,192 加工场地，每座占 3×3：共 16,384 生产实例、147,456 占用格，七作物均覆盖。50 个经营步进检查角落实例只推进正常一秒，并打印总/平均耗时；耗时无固定阈值。实体数与占用格分开报告，不把子格当产能。Windows 导出程序启动另作构建冒烟测试。
 
 各文件都有独立的场景入口，排查时可用 `Godot控制台程序 --headless --path . 场景路径` 单独运行：
 
 | 类别 | 场景路径 |
 | --- | --- |
-| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
-| 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn` |
+| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_land_occupancy.tscn`、`tests/unit/test_worker_scheduler.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_market_quotes.tscn`、`tests/unit/test_trading_service.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
+| 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn`、`tests/integration/test_worker_presentation.tscn`、`tests/integration/test_road_map.tscn` |
 | 端到端测试 | `tests/e2e/test_core_loop.tscn` |
 | 满地图负载测试 | `tests/performance/test_full_world_load.tscn` |
 
@@ -95,6 +95,74 @@
 
 完整 headless 套件包含越季清理与成熟先结算、逐作物保留底线、稳定格序竞争、新建全场即时领取、投入物与公共库存守恒，以及编辑草稿/焦点/光标/滚动保持。新增实际布局检查在布局帧后断言七行标签单行、输入与按钮合理高度及最后一行可滚动完整显示，并在汇总套件和独立端到端场景均等待执行。最终满地图 50 步耗时 **65.23 ms**，平均 **1.305 ms/步**；实际库存界面截图 `coverage/inventory-reserve.png` 已检查。没有改变地图渲染或实体负载，本批不新增 FPS 基线。静态与格式检查、Debug/Release 编译、Windows Release 导出及实际导出程序退出码 0 均通过。
 
+2026-10-01 T07 / #40 与 #43 开局三人接入后的报告总体为 **1962/2069（94.83%）**；模块按文件与行号去重，12 个模块均达到 80%。
+
+| 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `economy` | 18 / 19 | 94.74% |
+| `farming` | 158 / 158 | 100.00% |
+| `gameplay` | 283 / 295 | 95.93% |
+| `inventory` | 44 / 45 | 97.78% |
+| `land` | 40 / 41 | 97.56% |
+| `market` | 38 / 38 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 21 / 21 | 100.00% |
+| `ui` | 749 / 814 | 92.01% |
+| `workers` | 86 / 90 | 95.56% |
+| `world` | 387 / 408 | 94.85% |
+
+完整套件验证三人实际参与、一田独占、目标版本失效、降雨取消人工供水、季末重验、暂停与确定性，以及单工人 8 田和三人 24 田的连续三轮生产。冷启动用例验证首轮 40/72 秒，另用确定夹具先建立真实认领再出现其余待工田，验证完整等工至供水的 45/81 秒上限；不依赖同批作物复种时偶然出现任务重叠。主场景接入、既有七作物精确时长、越季历史库存、保留底线与真实库存布局回归继续通过。满地图 50 步为 **116.34 ms**，平均 **2.327 ms/步**。
+
+同条件图形检查仍有 16,384 个实体（8,192 田、8,192 场地），通过三块远田改种触发三人 17～23 秒的直线移动；预热 2 秒、采样 8.000405 秒，起止移动人数均为 3。平均 **844.8 FPS**，P95 **1.55 ms**，窗口 1280×720、1.25 倍缩放、VSync 关闭；前后截图 `coverage/performance.png` 与 `coverage/performance-end.png` 已核对，三人采用既有 `npc_animation_001/002/005.png`。报告见 `coverage/performance.json`。静态/格式、Debug/Release 编译、Windows 导出及实际 EXE 启动退出码 0 均通过；已生成新脚本对应的 UID 伴随文件，并随本批提交纳入 Git。
+
+2026-10-01 T10 / #45 道路接入后的最终报告总体为 **2041/2133（95.69%）**；按文件与行号去重，12 个模块均达到 80%：
+
+| 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `economy` | 18 / 19 | 94.74% |
+| `farming` | 158 / 158 | 100.00% |
+| `gameplay` | 301 / 313 | 96.17% |
+| `inventory` | 44 / 45 | 97.78% |
+| `land` | 39 / 41 | 95.12% |
+| `market` | 38 / 38 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 21 / 21 | 100.00% |
+| `ui` | 803 / 858 | 93.59% |
+| `workers` | 86 / 90 | 95.56% |
+| `world` | 395 / 410 | 96.34% |
+
+完整套件覆盖三类占用互斥、100 分费用、执行重验、失败零修改、拆除不退款和生产隔离。经营测试逐秒比较无路、有路、断路 650 秒的工人及农田快照、库存和三轮产出；主场景验证连续铺设、Esc/取消退出、道路详情和固定控件。满地图 50 步 **113.18 ms**，平均 **2.264 ms/步**。
+
+道路地图专项在 headless 中验证跨块同步与平移后的选格；另用指定引擎有窗口运行 `tests/integration/test_road_map.tscn`，实际像素验证灰色、金色选框及拆除恢复绿色且相邻道路保留，退出码 0。`coverage/road-map-before.png` 和 `road-map-after.png` 已查看；真实主场景目录与详情截图也已检查，见[目录 Interface](../architecture/ui/build-catalog-window/interface-build-catalog-window.md)与[道路详情 Interface](../architecture/ui/road-details-panel/interface-road-details-panel.md)。
+
+同条件满地图图形测试仍保持 8,192 田、8,192 场地和 3 名移动工人；预热 2 秒、采样 8.000418 秒，平均 **920.8 FPS**、P95 **1.485 ms**，起止移动人数均为 3，前后截图已查看。集中只读审查无待修，静态/格式、Debug/Release 编译、Windows Release 导出与实际 EXE 启动退出码 0 均通过。两份新脚本 UID 随本批提交纳入 Git。
+
+2026-10-01 T09 / #71/#72/#73 完整接入后的最终 Cobertura 总体为 **2453/2545（96.39%）**。按文件与行号去重，新增 `trading` 后 13 个模块均达到 80%；总体与模块去重口径存在少量多类型行差异：
+
+| 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `economy` | 18 / 19 | 94.74% |
+| `farming` | 158 / 158 | 100.00% |
+| `gameplay` | 288 / 301 | 95.68% |
+| `inventory` | 62 / 62 | 100.00% |
+| `land` | 39 / 41 | 95.12% |
+| `market` | 224 / 224 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 25 / 25 | 100.00% |
+| `trading` | 71 / 72 | 98.61% |
+| `ui` | 947 / 1002 | 94.51% |
+| `workers` | 86 / 90 | 95.56% |
+| `world` | 396 / 410 | 96.59% |
+
+完整套件包含十四商品的因素独立复算、本期原料成本关系、半分取整/单次限幅、三事件及跨季持续、节日与前一日消息、跨年非漂移、暂停和最大模拟日期回放；交易覆盖整数容量失败零修改、公共库存守恒、整组全售预检、执行时价格、买后领取和暂停主动交易。旧七作物生产、季节、工人、底线、道路与镜头回归继续通过。
+
+初次运行真实市场布局发现反馈文字在首次极窄宽度下换行，造成临时 377 px 最小高度、窗口 780×849，表格全部容纳后无法正常滚动。按单行控件约束修复数量标题与短反馈，保留原窗口/末行断言；独立端到端场景由退出码 1 转为 0，集中复审后完整套件再次通过。两个真实主场景截图已查看：[数量买卖与末行](../architecture/ui/market-window/market-trading.png)、[报价前消息](../architecture/ui/market-window/market-news.png)。初始暂停买入 2 份萝卜花费 0.50；显式推进 669 秒到经过 13 日，1 月 14 日公告对应 1 月 15 日报价。不是靠延迟重设窗口尺寸、扩大视窗或放宽测试通过。
+
+最终满地图 50 步 **115.72 ms**，平均 **2.314 ms/步**。图形预热 2 秒、采样 8.000015 秒，8,192 田/8,192 场地及 3 名移动工人；平均 **925.0 FPS**、P95 **1.417 ms**，起止移动人数均为 3，前后截图已查看。静态、全仓格式、集中审查复查、指定引擎 Debug/Release 编译、Windows Release 导出及实际 EXE 退出码 0 均通过。十份新 C# UID 随本批提交纳入 Git。#74 细分图是另一个静态研究工件，不声称已运行新基础格或完成其点击/FPS 验收。
+
 2026-09-28 的 Cobertura 报告也包含分支数据。#63 新增的生产状态测试验证空状态、非法输入、重复操作、改种与加工时长边界；市场测试验证非法日期，作物定义测试验证非法标识。分支覆盖率用于定位未测到的决策路径，目前不设硬性门槛：
 
 | 范围 | 补测前 | 补测后 |
@@ -113,7 +181,9 @@
 ./tools/Run-Tests.ps1 -GodotConsole 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' -Performance
 ```
 
-这会先完成 Debug 编译、headless 场景测试和覆盖率检查，再在可见窗口运行 `tests/performance/test_full_world_fps.tscn`，写出 `coverage/performance.json`、`coverage/performance.png` 和 `coverage/performance-end.png`。图形阶段使用真实主场景的地图、镜头和一秒 tick：满地图预热 2 秒，采样 8 秒，镜头在中心附近持续水平移动。报告记录绘制帧数、平均 FPS、帧间隔中位数与 P95/P99、可见地图块覆盖的最多候选格数、地图块重建次数、窗口尺寸、缩放、VSync、CPU、GPU 和引擎版本。图形测试要求平均 FPS 至少 60、P95 帧间隔不超过 16.67 ms，并应核对采样前后截图中的建筑和作物标记。它测量 Godot 编辑器 Debug 构建中的移动镜头负载；`--headless` 不会得到有效渲染帧。测得的 FPS 随机器与图形环境变化，当前合格线只针对本机验收条件。
+这会先完成 Debug 编译、headless 场景测试和覆盖率检查，再在可见窗口运行 `tests/performance/test_full_world_fps.tscn`，写出 `coverage/performance.json`、`coverage/performance.png` 和 `coverage/performance-end.png`。图形阶段使用真实主场景与一秒经营步进：满地图预热 2 秒、采样 8 秒，镜头跟随三名工人的平均经营位置，叠加 `sin(经过秒×0.8)×200` 世界像素的水平往返，并受地图边界限制。轨迹记录在报告 `CameraPath`；它随 3 小格/秒而调整，与旧固定中心 ±500 路径不同，不能作同条件性能直接比较。
+
+报告区分生产实例数与占用格数，记录起止移动人数、帧数、平均 FPS、帧间隔中位数/P95/P99、块候选格数、重建次数、窗口/缩放/VSync、硬件与引擎。门槛仍为平均至少 60 FPS、P95 不超过 16.67 ms，且采样起止三人均移动；检查真实前后截图中的人物、建筑与单实例标记。此为本机有窗口 Debug 渲染负载，headless 不产生有效渲染帧，其他硬件和 Release 成品性能不能由该值推定。
 
 2026-09-24 本机优化前基线：AMD Ryzen 7 5800H、NVIDIA GeForce RTX 3060 Laptop GPU、Windows 10.0.26200、Godot 4.7.2 Mono Debug；1280×720、1.25 倍缩放、VSync 关闭、FPS 不限，镜头水平往返移动。满地图采样 8.06 秒、122 帧，平均 **15.14 FPS**，帧间隔中位数 64.64 ms、P95 为 76.42 ms、P99 为 80.71 ms；旧绘制循环每帧最多处理 1,600 个候选格。同期必跑的 50 tick 逻辑检查耗时 13.95 ms，平均 0.279 ms/tick。
 
@@ -128,3 +198,31 @@
 2026-09-27 T01/T02 窗口拆分后的本机 headless 检查：满地图 50 tick 耗时 39.66 ms，平均 0.793 ms/tick。新增的界面端到端断言覆盖目录避让、持续刷新时市场控件与滚动位置；未改地图绘制或镜头，图形性能沿用 T04B 的验收结果。
 
 2026-09-28 T05B 日历与七作物切换后的本机检查：满地图 50 步耗时 45.71 ms，平均 0.914 ms/步；完整 headless 套件与覆盖率通过，业务脚本行覆盖率 92.82%。图形采样平均 923.5 FPS、P95 帧间隔 1.55 ms，前后截图核对了顶部日期和萝卜红橙色标记。
+
+## 2026-10-01 T12 / #75 多格实例验收
+
+三组完成土地、经营生产和地图 UI 后，新建独立审查员检查完整改动；修复图形测试后再新开独立复查员，均无待修。指定引擎 Debug/Release 编译零警告、零错误；修后完整 headless 套件、Windows Release 导出与实际 EXE 启动退出码 0 通过。最终 50 步 **81.57 ms**、平均 **1.631 ms/步**，16,384 生产实例与 147,456 子格的角落推进、双向映射一致性通过。日志在 `coverage/test-t12-final.log`、`coverage/export-t12.log`。
+
+最新 Cobertura 总体 **2586/2690（96.13%）**，每模块按文件和行号去重，13 个模块均超过 80%；总体沿报告原计数，包含多类型同文件的重复行，不能机械用分表求和替代：
+
+| 模块 | 已覆盖 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `economy` | 18 / 19 | 94.74% |
+| `farming` | 166 / 166 | 100.00% |
+| `gameplay` | 314 / 340 | 92.35% |
+| `inventory` | 62 / 62 | 100.00% |
+| `land` | 100 / 101 | 99.01% |
+| `market` | 224 / 224 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 25 / 25 | 100.00% |
+| `trading` | 71 / 72 | 98.61% |
+| `ui` | 951 / 1006 | 94.53% |
+| `workers` | 91 / 95 | 95.79% |
+| `world` | 425 / 439 | 96.81% |
+
+真实有窗口道路/多格场景首次因原顶点像素取样失败（Exit 1）。独立探针证实四边中点及顶点邻域为金色，原顶点像素在线帽外；等待绘制和额外三帧结果不变。只修改测试为公开矩形几何四边各三个内部点，保留颜色容差，道路/生产设施均查 12 点；绘制代码未改。修后有窗口场景 Exit 0、错误日志为空，四张道路及跨四块生产设施的前后原始截图已检查，完整选框、单标记、整座拆除和邻居保持通过。
+
+图形预热 2 秒、采样 **8.001438 秒 / 5218 帧**，平均 **652.1 FPS**、P95 **2.073 ms**、P99 2.456 ms；起止三人均移动，10 次经营步进、最多 1536 个块候选格、33 次块重建。1280×720 / zoom 1.25 / VSync 关闭 / 不限帧；本机 R7 5800H 与 RTX 3060、Godot Debug。镜头跟随三人平均位置并水平 ±200 往返，与旧轨迹不同，不作同条件下降幅度推断。绘制代码在图形测量后未更改，沿用该次有效报告；性能前后图已核对。
+
+真实主场景通过停止计时器和暂停按钮生成六张截图，包含原尺寸三人、三类目录、道路详情与末端子格选整田，助手 Exit 0、错误日志为空。已归档[整座选框](../architecture/world/world-map/production-footprint.png)，并更新三人、道路目录和详情图片；研究示意图与运行截图明确分开。三份新增 C# UID 与土地测试场景一并交付。

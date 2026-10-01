@@ -22,13 +22,19 @@ public sealed class GameCalendar
         {
             uint elapsedDays = (uint)((ulong)_elapsedSeconds * GameTimeUnits.PerSecond /
                 GameTimeUnits.PerDay);
-            uint dayOfYear = elapsedDays % DaysPerYear;
-            int monthIndex = (int)(dayOfYear / DaysPerMonth);
+            GameDate date = GetDate(elapsedDays);
             return new CalendarSnapshot(
-                _elapsedSeconds, elapsedDays, (int)(elapsedDays / DaysPerYear) + 1,
-                monthIndex + 1, (int)(dayOfYear % DaysPerMonth) + 1,
-                (int)(elapsedDays % 7) + 1, (Season)(monthIndex / 3), IsPaused);
+                _elapsedSeconds, elapsedDays, date.Year, date.Month, date.Day,
+                (int)(elapsedDays % 7) + 1, date.Season, IsPaused);
         }
+    }
+
+    public static GameDate GetDate(uint elapsedDays)
+    {
+        uint dayOfYear = elapsedDays % DaysPerYear;
+        int monthIndex = (int)(dayOfYear / DaysPerMonth);
+        return new GameDate(elapsedDays, (int)(elapsedDays / DaysPerYear) + 1,
+            monthIndex + 1, (int)(dayOfYear % DaysPerMonth) + 1, (Season)(monthIndex / 3));
     }
 
     public void SetPaused(bool paused) => IsPaused = paused;

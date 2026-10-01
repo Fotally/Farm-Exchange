@@ -16,6 +16,7 @@ public partial class NpcCharacter : CharacterBody2D
     private AnimatedSprite2D _sprite = null!;
     private Vector2 _moveDirection;
     private Vector2 _facingDirection = Vector2.Down;
+    private bool _usesExternalPosition;
 
     public override void _Ready()
     {
@@ -26,7 +27,7 @@ public partial class NpcCharacter : CharacterBody2D
         AddDirection(frames, "run_left", 8);
         AddDirection(frames, "run_up", 9);
         _sprite.SpriteFrames = frames;
-        UpdateAnimation(Vector2.Zero);
+        UpdateAnimation(Vector2.Zero, moving: false);
     }
 
     public void SetCharacter(Texture2D sheet)
@@ -39,11 +40,26 @@ public partial class NpcCharacter : CharacterBody2D
     public void SetMoveDirection(Vector2 direction)
     {
         _moveDirection = direction.LimitLength();
-        UpdateAnimation(_moveDirection);
+        UpdateAnimation(_moveDirection, _moveDirection != Vector2.Zero);
+    }
+
+    public void ShowAt(Vector2 localPosition, Vector2 direction, bool moving, bool paused)
+    {
+        _usesExternalPosition = true;
+        SetPhysicsProcess(false);
+        CollisionLayer = 0;
+        CollisionMask = 0;
+        Position = localPosition;
+        if (paused)
+            _sprite.Pause();
+        else
+            UpdateAnimation(direction, moving);
     }
 
     public override void _PhysicsProcess(double delta)
     {
+        if (_usesExternalPosition)
+            return;
         Velocity = _moveDirection * MoveSpeed;
         MoveAndSlide();
     }
@@ -65,7 +81,7 @@ public partial class NpcCharacter : CharacterBody2D
         }
     }
 
-    private void UpdateAnimation(Vector2 direction)
+    private void UpdateAnimation(Vector2 direction, bool moving)
     {
         if (direction != Vector2.Zero)
             _facingDirection = direction;
@@ -82,7 +98,7 @@ public partial class NpcCharacter : CharacterBody2D
 
         if (_sprite.Animation != animation)
             _sprite.Play(animation);
-        if (direction == Vector2.Zero)
+        if (!moving)
         {
             _sprite.Pause();
             _sprite.Frame = 0;

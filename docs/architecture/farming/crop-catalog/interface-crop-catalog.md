@@ -8,4 +8,6 @@
 | `Get(crop)` | 返回指定作物定义；无效作物抛出 `ArgumentOutOfRangeException`。 |
 | `IsDefined(crop)` | 检查作物编号是否在当前定义范围内，供经营命令在修改状态前校验。 |
 
-作物名称、适宜季节、加工场地、生长天数、单次收获量、加工半天数和价格倍率以[作物表](../../../gameplay/production/crop-growth.md)为准。`GrowingSeasons` 标志随作物定义返回，由 `PlantingRules` 解释；`FarmGame.Crops` 和 `FarmGame.GetCrop` 保留查询入口并委托本模块。
+作物名称、适宜季节、加工场地、生长天数、单次收获量和加工半天数以[作物表](../../../gameplay/production/crop-growth.md)为准。`GrowingSeasons` 标志随作物定义返回，由 `PlantingRules` 解释；`FarmGame.Crops` 和 `FarmGame.GetCrop` 保留查询入口并委托本模块。
+
+`CropDefinition.PricePercent` 与 `RawPricePercent` 保留为旧定义兼容字段，不参与正式报价；独立商品初价由 `CommodityCatalog` 持有，生效定价见[商品行情](../../../gameplay/trading/market-quotes.md)。

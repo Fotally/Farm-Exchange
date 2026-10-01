@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using Godot;
 using FarmExchange.Economy;
 using FarmExchange.Farming;
+using FarmExchange.Inventory;
 using FarmExchange.Land;
 using FarmExchange.Market;
 using FarmExchange.Processing;
 using FarmExchange.Time;
+using FarmExchange.Trading;
 using FarmExchange.Workers;
 using FarmExchange.World;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
@@ -14,7 +16,7 @@ using GoodsInventory = FarmExchange.Inventory.Inventory;
 namespace FarmExchange.Gameplay;
 
 public enum CropStage { None, Seeded, Growing }
-public enum BuildingKind { None, Farm, Processor }
+public enum BuildingKind { None, Farm, Processor, Road }
 public enum CropKind { Wheat, Corn, Rice, Potato, Sunflower, Sugarcane, Radish }
 [Flags]
 public enum GrowingSeasons { Spring = 1, Summer = 2, Autumn = 4, Winter = 8 }
@@ -38,39 +40,47 @@ public readonly record struct FarmDetailsSnapshot(
 public readonly record struct ProcessorDetailsSnapshot(
     CropDefinition Crop, ProcessorStatus Status, int ProductPriceCents, int ProductStock);
 public readonly record struct TickResult(int Harvested, int Produced, bool WorkerActed, bool DayAdvanced);
-public readonly record struct SaleResult(int Quantity, int RevenueCents);
+public readonly record struct SaleResult(
+    int Quantity, int RevenueCents, TradeFailure Failure = TradeFailure.None)
+{
+    public bool Success => Failure == TradeFailure.None;
+    public string? ErrorMessage => new TradeResult(Failure, Quantity, RevenueCents).ErrorMessage;
+}
 
 public sealed class FarmGame
 {
-    public const int MapSize = 128;
+    public const int MapSize = 384;
     public const int BuildingCostCents = 1000;
     private const int CellCount = MapSize * MapSize;
 
     public static IReadOnlyList<CropDefinition> Crops => CropCatalog.Crops;
     private static readonly Vector2I[] InitialFarmCells =
     {
-        new(63, 63), new(64, 63), new(65, 63),
+        new(189, 189), new(192, 189), new(195, 189),
     };
     private static readonly Vector2I[] InitialProcessorCells =
     {
-        new(63, 64), new(64, 64),
+        new(189, 192), new(192, 192),
     };
 
     private readonly LandOccupancy _occupancy = new(CellCount);
     private readonly FarmingSystem _farming = new(CellCount);
     private readonly ProcessingSystem _processing = new(CellCount);
-    private readonly WorkerScheduler _workerScheduler = new();
+    private readonly WorkerScheduler _workerScheduler = new(
+        Array.ConvertAll(InitialFarmCells, cell => BuildingFootprint.WorkCell(cell, BuildingKind.Farm)));
     private readonly GoodsInventory _inventory = new();
     private readonly Wallet _wallet = new(5000);
-    private readonly MarketPriceCurve _marketPriceCurve;
+    private readonly MarketQuotes _market;
+    private readonly TradingService _trading;
     private readonly GameCalendar _calendar;
 
     public int MoneyCents => _wallet.BalanceCents;
     public int CurrentDay => (int)_calendar.Snapshot.ElapsedDays + 1;
     public CalendarSnapshot Calendar => _calendar.Snapshot;
     public bool IsPaused => _calendar.IsPaused;
-    public int CurrentFlourPriceCents { get; private set; }
-    public double DailyPriceChangePercent { get; private set; }
+    public int CurrentFlourPriceCents => GetProductPriceCents(CropKind.Wheat);
+    public double DailyPriceChangePercent =>
+        (double)GetQuote(new CommodityId(CropKind.Wheat, CommodityKind.Product)).ChangePercent;
 
     public FarmGame(int? marketSeed = null) : this(marketSeed, 0) { }
 
@@ -78,8 +88,8 @@ public sealed class FarmGame
     {
         _calendar = new GameCalendar(elapsedSeconds);
         int seed = marketSeed ?? Random.Shared.Next();
-        _marketPriceCurve = new MarketPriceCurve(seed);
-        CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
+        _market = new MarketQuotes(seed, _calendar.Snapshot.ElapsedDays);
+        _trading = new TradingService(_inventory, _wallet, _market);
         InitializeCenter(new Random(seed));
     }
 
@@ -103,6 +113,16 @@ public sealed class FarmGame
     }
 
     public static CropDefinition GetCrop(CropKind crop) => CropCatalog.Get(crop);
+    public static int GetBuildingCostCents(BuildingKind building) => building switch
+    {
+        BuildingKind.Farm or BuildingKind.Processor => BuildingCostCents,
+        BuildingKind.Road => 100,
+        _ => throw new ArgumentOutOfRangeException(nameof(building)),
+    };
+    public IReadOnlyList<WorkerSnapshot> GetWorkers() => _workerScheduler.GetSnapshots();
+    public IReadOnlyList<BuildingSpaceSnapshot> GetBuildingSpaces() => _occupancy.Instances;
+    public BuildingSpaceSnapshot? GetBuildingSpace(Vector2I cell) =>
+        MapCoordinates.ContainsCell(cell) ? _occupancy.GetSpace(IndexOf(cell)) : null;
     public int GetRawStock(CropKind crop) => _inventory.GetRaw(crop);
     public int GetRawReserve(CropKind crop) => _inventory.GetRawReserve(crop);
 
@@ -116,10 +136,13 @@ public sealed class FarmGame
         return RawReserveFailure.None;
     }
     public int GetProductStock(CropKind crop) => _inventory.GetProduct(crop);
+    public int GetStock(CommodityId commodity) => _inventory.Get(commodity);
+    public MarketQuoteSnapshot GetQuote(CommodityId commodity) => _market.GetQuote(commodity);
+    public MarketSnapshot GetMarketSnapshot() => _market.GetSnapshot();
     public int GetProductPriceCents(CropKind crop) =>
-        (CurrentFlourPriceCents * GetCrop(crop).PricePercent + 50) / 100;
+        GetQuote(new CommodityId(crop, CommodityKind.Product)).PriceCents;
     public int GetRawPriceCents(CropKind crop) =>
-        (GetProductPriceCents(crop) * GetCrop(crop).RawPricePercent + 50) / 100;
+        GetQuote(new CommodityId(crop, CommodityKind.Raw)).PriceCents;
 
     public PlotSnapshot GetPlot(Vector2I cell)
     {
@@ -135,11 +158,18 @@ public sealed class FarmGame
             plot = default;
             return LandFailure.OutOfBounds;
         }
-        int index = IndexOf(cell);
+        int cellIndex = IndexOf(cell);
+        int index = _occupancy.ResolveAnchorIndex(cellIndex);
+        if (index < 0)
+        {
+            plot = new PlotSnapshot(BuildingKind.None, default, CropStage.None, 0);
+            return LandFailure.None;
+        }
         plot = _occupancy.Get(index) switch
         {
             BuildingKind.Farm => FarmPlot(index),
             BuildingKind.Processor => ProcessorPlot(index),
+            BuildingKind.Road => new PlotSnapshot(BuildingKind.Road, default, CropStage.None, 0),
             _ => new PlotSnapshot(BuildingKind.None, default, CropStage.None, 0),
         };
         return LandFailure.None;
@@ -187,7 +217,7 @@ public sealed class FarmGame
         if (plot.Building != BuildingKind.Processor)
             throw new InvalidOperationException("该土地没有加工场地");
         CropDefinition crop = GetCrop(plot.CropKind);
-        ProcessorStatus status = _processing.GetStatus(IndexOf(cell), _inventory);
+        ProcessorStatus status = _processing.GetStatus(_occupancy.ResolveAnchorIndex(IndexOf(cell)), _inventory);
         return new ProcessorDetailsSnapshot(crop, status, GetProductPriceCents(crop.Kind),
             GetProductStock(crop.Kind));
     }
@@ -197,13 +227,13 @@ public sealed class FarmGame
         _occupancy.Clear();
         _farming.Clear();
         _processing.Clear();
-        for (int row = 0; row < MapSize; row++)
+        for (int row = 0; row < MapSize; row += 3)
         {
-            for (int col = 0; col < MapSize; col++)
+            for (int col = 0; col < MapSize; col += 3)
             {
                 int index = row * MapSize + col;
-                CropKind crop = (CropKind)((row * (MapSize / 2) + col / 2) % Crops.Count);
-                if (col % 2 == 0)
+                CropKind crop = (CropKind)(((row / 3) * (MapSize / 6) + col / 6) % Crops.Count);
+                if (col % 6 == 0)
                 {
                     _occupancy.Place(index, BuildingKind.Farm);
                     _farming.SetGrowingForBenchmark(index, crop);
@@ -217,23 +247,59 @@ public sealed class FarmGame
         }
     }
 
+    internal void FillWorldForPresentationBenchmark()
+    {
+        FillWorldForBenchmark();
+        foreach (Vector2I cell in new[] { new Vector2I(246, 162), new(252, 156), new(258, 150) })
+        {
+            int index = IndexOf(cell);
+            _farming.Remove(index);
+            _farming.Place(index, CropKind.Radish);
+        }
+        AdvanceTick();
+    }
+
     internal bool HasConsistentState()
     {
+        int expectedOccupiedCells = 0;
+        int previousAnchorIndex = -1;
+        foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
+        {
+            if (space.AnchorIndex <= previousAnchorIndex ||
+                space.AnchorIndex != IndexOf(space.AnchorCell))
+                return false;
+            previousAnchorIndex = space.AnchorIndex;
+            foreach (Vector2I offset in space.Footprint.Offsets)
+            {
+                Vector2I cell = space.AnchorCell + offset;
+                if (!MapCoordinates.ContainsCell(cell) || _occupancy.GetSpace(IndexOf(cell)) != space)
+                    return false;
+                expectedOccupiedCells++;
+            }
+        }
+        int occupiedCells = 0;
         for (int i = 0; i < CellCount; i++)
         {
             bool hasFarm = _farming.HasFarm(i);
             bool hasProcessor = _processing.HasProcessor(i);
             BuildingKind building = _occupancy.Get(i);
-            if (hasFarm != (building == BuildingKind.Farm) ||
-                hasProcessor != (building == BuildingKind.Processor))
+            if (building != BuildingKind.None)
+                occupiedCells++;
+            bool isAnchor = _occupancy.ResolveAnchorIndex(i) == i;
+            if (hasFarm != (isAnchor && building == BuildingKind.Farm) ||
+                hasProcessor != (isAnchor && building == BuildingKind.Processor))
                 return false;
         }
-        return true;
+        return occupiedCells == expectedOccupiedCells;
     }
 
-    public PlacementCheck CheckPlacement(Vector2I cell, BuildingKind building, CropKind crop) =>
-        PlacementRules.Check(cell, building, crop, _occupancy, _wallet.BalanceCents,
-            BuildingCostCents);
+    public PlacementCheck CheckPlacement(Vector2I cell, BuildingKind building, CropKind crop)
+    {
+        if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
+            return new PlacementCheck(LandFailure.InvalidBuilding, 0);
+        return PlacementRules.Check(cell, building, crop, _occupancy, _wallet.BalanceCents,
+            GetBuildingCostCents(building));
+    }
 
     public PlacementResult TryPlace(Vector2I cell, BuildingKind building, CropKind crop)
     {
@@ -244,13 +310,9 @@ public sealed class FarmGame
         int index = IndexOf(cell);
         if (!_wallet.TrySpend(check.CostCents))
             throw new InvalidOperationException("放置检查与扣费状态不一致");
-        if (building == BuildingKind.Farm)
-            PlaceFarm(index, crop);
-        else
-        {
-            PlaceProcessor(index, crop);
+        PlaceBuilding(index, building, crop);
+        if (building == BuildingKind.Processor)
             StartIdleProcessors();
-        }
         return new PlacementResult(LandFailure.None, check.CostCents);
     }
 
@@ -266,8 +328,8 @@ public sealed class FarmGame
             return PlacementRules.ErrorMessage(LandFailure.OutOfBounds);
         if (!CropCatalog.IsDefined(crop))
             return "无效作物";
-        int index = IndexOf(cell);
-        if (_occupancy.Get(index) != BuildingKind.Farm)
+        int index = _occupancy.ResolveAnchorIndex(IndexOf(cell));
+        if (index < 0 || _occupancy.Get(index) != BuildingKind.Farm)
             return "该土地没有农田";
         _farming.SetCrop(index, crop);
         return null;
@@ -277,14 +339,21 @@ public sealed class FarmGame
     {
         if (!MapCoordinates.ContainsCell(cell))
             return PlacementRules.ErrorMessage(LandFailure.OutOfBounds);
-        int index = IndexOf(cell);
-        BuildingKind building = _occupancy.Get(index);
-        if (building == BuildingKind.None)
+        int index = _occupancy.ResolveAnchorIndex(IndexOf(cell));
+        if (index < 0)
             return "该土地没有建筑";
-        if (building == BuildingKind.Farm)
-            _farming.Remove(index);
-        else
-            _processing.Remove(index);
+        BuildingKind building = _occupancy.Get(index);
+        switch (building)
+        {
+            case BuildingKind.Farm:
+                _farming.Remove(index);
+                break;
+            case BuildingKind.Processor:
+                _processing.Remove(index);
+                break;
+            case BuildingKind.Road:
+                break;
+        }
         _occupancy.Remove(index);
         return null;
     }
@@ -299,9 +368,10 @@ public sealed class FarmGame
             ApplyRain();
         int harvested = 0;
         int produced = 0;
-        for (int i = 0; i < CellCount; i++)
+        foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
         {
-            BuildingKind building = _occupancy.Get(i);
+            int i = space.AnchorIndex;
+            BuildingKind building = space.Building;
             if (building == BuildingKind.Farm && _farming.AdvanceGrowth(i, out CropKind harvestedCrop))
             {
                 int quantity = GetCrop(harvestedCrop).HarvestQuantity;
@@ -315,36 +385,21 @@ public sealed class FarmGame
             }
         }
         StartIdleProcessors();
-        bool workerActed = _workerScheduler.WorkOne(_farming, _calendar.Snapshot);
+        bool workerActed = _workerScheduler.AdvanceOneSecond(_farming, _calendar.Snapshot);
         bool dayAdvanced = AdvanceDay();
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
     }
 
-    public SaleResult SellAll()
-    {
-        long sold = 0;
-        long revenue = 0;
-        foreach (CropDefinition crop in Crops)
-        {
-            int quantity = _inventory.GetProduct(crop.Kind);
-            sold += quantity;
-            revenue += (long)quantity * GetProductPriceCents(crop.Kind);
-        }
-        int soldQuantity = checked((int)sold);
-        int revenueCents = checked((int)revenue);
-        _wallet.Credit(revenueCents);
-        _inventory.TakeAllProducts();
-        return new SaleResult(soldQuantity, revenueCents);
-    }
+    public TradeResult Buy(CommodityId commodity, int quantity) => _trading.Buy(commodity, quantity);
+    public TradeResult Sell(CommodityId commodity, int quantity) => _trading.Sell(commodity, quantity);
+    public TradeResult SellCommodityAll(CommodityId commodity) => _trading.SellAll(commodity);
 
-    public SaleResult SellRaw(CropKind crop)
-    {
-        int sold = _inventory.GetRaw(crop);
-        int revenueCents = checked((int)((long)sold * GetRawPriceCents(crop)));
-        _wallet.Credit(revenueCents);
-        _inventory.TakeAllRaw(crop);
-        return new SaleResult(sold, revenueCents);
-    }
+    public SaleResult SellAll() => LegacySale(_trading.SellAllProducts());
+    public SaleResult SellRaw(CropKind crop) =>
+        LegacySale(SellCommodityAll(new CommodityId(crop, CommodityKind.Raw)));
+
+    private static SaleResult LegacySale(TradeResult result) =>
+        new((int)result.Quantity, (int)result.TotalCents, result.Failure);
 
     private bool AdvanceDay()
     {
@@ -356,10 +411,7 @@ public sealed class FarmGame
             _farming.ClearDisallowedCrops(calendar.Season);
         if (calendar.ElapsedDays == previousCalendar.ElapsedDays)
             return false;
-        int previousPrice = CurrentFlourPriceCents;
-        CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
-        DailyPriceChangePercent =
-            (CurrentFlourPriceCents - previousPrice) * 100.0 / previousPrice;
+        _market.Advance(calendar);
         return true;
     }
 
@@ -367,9 +419,9 @@ public sealed class FarmGame
 
     private void ApplyRain()
     {
-        for (int i = 0; i < CellCount; i++)
-            if (_occupancy.Get(i) == BuildingKind.Farm)
-                _farming.SupplyWater(i);
+        foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
+            if (space.Building == BuildingKind.Farm)
+                _farming.SupplyWater(space.AnchorIndex);
     }
 
     private static string? PlacementError(PlacementResult result) =>
@@ -382,17 +434,14 @@ public sealed class FarmGame
         if (!check.Allowed)
             throw new InvalidOperationException("开局建筑放置无效");
         int index = IndexOf(cell);
-        if (building == BuildingKind.Farm)
-            PlaceFarm(index, crop);
-        else
-            PlaceProcessor(index, crop);
+        PlaceBuilding(index, building, crop);
     }
 
     private void StartIdleProcessors()
     {
-        for (int i = 0; i < CellCount; i++)
-            if (_occupancy.Get(i) == BuildingKind.Processor)
-                _processing.TryStart(i, _inventory);
+        foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
+            if (space.Building == BuildingKind.Processor)
+                _processing.TryStart(space.AnchorIndex, _inventory);
     }
 
     private void PlaceFarm(int index, CropKind crop)
@@ -405,6 +454,22 @@ public sealed class FarmGame
     {
         _processing.Place(index, crop);
         _occupancy.Place(index, BuildingKind.Processor);
+    }
+
+    private void PlaceBuilding(int index, BuildingKind building, CropKind crop)
+    {
+        switch (building)
+        {
+            case BuildingKind.Farm:
+                PlaceFarm(index, crop);
+                break;
+            case BuildingKind.Processor:
+                PlaceProcessor(index, crop);
+                break;
+            case BuildingKind.Road:
+                _occupancy.Place(index, BuildingKind.Road);
+                break;
+        }
     }
 
     private static int IndexOf(Vector2I cell)

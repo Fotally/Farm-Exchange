@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using FarmExchange.Gameplay;
 using FarmExchange.Time;
 
@@ -7,13 +8,25 @@ namespace FarmExchange.Farming;
 internal readonly record struct FarmSnapshot(
     CropKind CropKind, CropStage Stage, int RemainingSeconds, bool HasWater = false);
 
+internal enum FarmWorkKind { Sow, Water }
+
+internal readonly record struct FarmWorkRequest(int CellIndex, int Revision, FarmWorkKind Kind);
+
 internal sealed class FarmingSystem
 {
     private readonly FarmState?[] _farms;
+    private readonly int[] _farmRevisions;
+    private readonly List<int> _indices = new();
+    private IReadOnlyList<int>? _indicesSnapshot;
 
-    internal FarmingSystem(int cellCount) => _farms = new FarmState?[cellCount];
+    internal FarmingSystem(int cellCount)
+    {
+        _farms = new FarmState?[cellCount];
+        _farmRevisions = new int[cellCount];
+    }
 
     internal int CellCount => _farms.Length;
+    internal IReadOnlyList<int> Indices => _indicesSnapshot ??= Array.AsReadOnly(_indices.ToArray());
     internal bool HasFarm(int index) => _farms[index] != null;
 
     internal FarmSnapshot Get(int index)
@@ -29,14 +42,21 @@ internal sealed class FarmingSystem
             throw new ArgumentOutOfRangeException(nameof(crop));
         if (_farms[index] != null)
             throw new InvalidOperationException("土地已有农田状态");
+        _farmRevisions[index]++;
         _farms[index] = new FarmState(crop);
+        int insertion = _indices.BinarySearch(index);
+        _indices.Insert(~insertion, index);
+        _indicesSnapshot = null;
     }
 
     internal void Remove(int index)
     {
         if (_farms[index] == null)
             throw new InvalidOperationException("土地没有农田状态");
+        _farmRevisions[index]++;
         _farms[index] = null;
+        _indices.Remove(index);
+        _indicesSnapshot = null;
     }
 
     internal void SetCrop(int index, CropKind crop)
@@ -46,6 +66,7 @@ internal sealed class FarmingSystem
         FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
         if (farm.CropKind == crop)
             return;
+        _farmRevisions[index]++;
         farm.CropKind = crop;
         farm.Stage = CropStage.None;
         farm.RemainingTimeUnits = 0;
@@ -71,39 +92,57 @@ internal sealed class FarmingSystem
         farm.Stage = CropStage.None;
         farm.RemainingTimeUnits = 0;
         farm.HasWater = false;
+        _farmRevisions[index]++;
         harvestedCrop = farm.CropKind;
         return true;
     }
 
-    internal bool TryWork(int index, CalendarSnapshot calendar)
+    internal FarmWorkRequest? GetWorkNeed(int index, CalendarSnapshot calendar)
     {
         FarmState? farm = _farms[index];
         if (farm == null || farm.Stage == CropStage.Growing)
-            return false;
+            return null;
         if (farm.Stage == CropStage.None)
         {
             if (PlantingRules.Check(farm.CropKind, calendar, farm.HasWater) != PlantingFailure.None)
-                return false;
+                return null;
+            return new FarmWorkRequest(index, _farmRevisions[index], FarmWorkKind.Sow);
+        }
+        return new FarmWorkRequest(index, _farmRevisions[index], FarmWorkKind.Water);
+    }
+
+    internal bool TryCompleteWork(FarmWorkRequest request, CalendarSnapshot calendar)
+    {
+        if (GetWorkNeed(request.CellIndex, calendar) != request)
+            return false;
+        FarmState farm = _farms[request.CellIndex]!;
+        if (request.Kind == FarmWorkKind.Sow)
+        {
             farm.Stage = CropStage.Seeded;
             if (farm.HasWater)
                 StartGrowth(farm);
         }
         else
-            SupplyWater(index);
+            SupplyWater(request.CellIndex);
         return true;
     }
+
+    internal bool TryWork(int index, CalendarSnapshot calendar) =>
+        GetWorkNeed(index, calendar) is FarmWorkRequest work && TryCompleteWork(work, calendar);
 
     internal void ClearDisallowedCrops(Season season)
     {
         GrowingSeasons currentSeason = (GrowingSeasons)(1 << (int)season);
-        foreach (FarmState? farm in _farms)
+        foreach (int index in _indices)
         {
+            FarmState? farm = _farms[index];
             if (farm == null || farm.Stage == CropStage.None ||
                 (CropCatalog.Get(farm.CropKind).GrowingSeasons & currentSeason) != 0)
                 continue;
             farm.Stage = CropStage.None;
             farm.RemainingTimeUnits = 0;
             farm.HasWater = false;
+            _farmRevisions[index]++;
         }
     }
 
@@ -122,7 +161,14 @@ internal sealed class FarmingSystem
         farm.RemainingTimeUnits = CropCatalog.Get(crop).GrowthDays * GameTimeUnits.PerDay;
     }
 
-    internal void Clear() => Array.Clear(_farms);
+    internal void Clear()
+    {
+        foreach (int index in _indices)
+            _farmRevisions[index]++;
+        Array.Clear(_farms);
+        _indices.Clear();
+        _indicesSnapshot = null;
+    }
 
     private sealed class FarmState
     {

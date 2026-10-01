@@ -16,8 +16,37 @@ public partial class TestResources : Node
         GetTree().Quit(passed ? 0 : 1);
     }
 
-    public static bool RunChecks() => CheckCropDefinitions() && CheckInventory() &&
+    public static bool RunChecks() => CheckCropDefinitions() && CheckInventory() && CheckUnifiedInventory() &&
         CheckInventoryReserve() && CheckWallet();
+
+    private static bool CheckUnifiedInventory()
+    {
+        var stock = new GoodsInventory();
+        foreach (CropDefinition crop in FarmGame.Crops)
+        {
+            CommodityId raw = new(crop.Kind, CommodityKind.Raw);
+            CommodityId product = new(crop.Kind, CommodityKind.Product);
+            stock.Add(raw, 3);
+            stock.AddProduct(crop.Kind, 5);
+            stock.Remove(raw, 1);
+            stock.Remove(product, 2);
+            if (!raw.IsDefined || !product.IsDefined || stock.GetRaw(crop.Kind) != 2 ||
+                stock.Get(product) != 3 || stock.GetProduct(crop.Kind) != 3)
+                return Fail("统一商品与旧生产接口没有共享同一分类库存");
+            stock.Remove(raw, 0);
+            if (!Throws<ArgumentOutOfRangeException>(() => stock.Remove(raw, -1)) ||
+                !Throws<InvalidOperationException>(() => stock.Remove(product, 4)) ||
+                stock.Get(raw) != 2 || stock.Get(product) != 3)
+                return Fail("统一库存非法移出数量改变了库存");
+        }
+        CommodityId invalid = new(CropKind.Wheat, (CommodityKind)999);
+        if (invalid.IsDefined ||
+            !Throws<ArgumentOutOfRangeException>(() => stock.Get(invalid)) ||
+            !Throws<ArgumentOutOfRangeException>(() => stock.Add(invalid, 1)) ||
+            !Throws<ArgumentOutOfRangeException>(() => stock.Remove(invalid, 1)))
+            return Fail("非法商品类别未被统一库存拒绝");
+        return true;
+    }
 
     private static bool CheckCropDefinitions()
     {

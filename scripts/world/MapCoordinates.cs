@@ -19,8 +19,12 @@ public static class MapCoordinates
     {
         if (!ContainsCell(cell))
             throw new ArgumentOutOfRangeException(nameof(cell));
-        return new Vector2((cell.X - cell.Y) * HalfWidth, (cell.X + cell.Y) * HalfHeight);
+        return GridPositionToLocal((Vector2)cell);
     }
+
+    public static Vector2 GridPositionToLocal(Vector2 gridPosition) => new(
+        (gridPosition.X - gridPosition.Y) * HalfWidth,
+        (gridPosition.X + gridPosition.Y) * HalfHeight);
 
     public static Vector2I LocalPositionToCell(Vector2 localPosition)
     {
@@ -33,7 +37,26 @@ public static class MapCoordinates
         Vector2 grid = LocalPositionToGrid(localCenter);
         float col = Math.Clamp(grid.X, 0f, MapSize - 1f);
         float row = Math.Clamp(grid.Y, 0f, MapSize - 1f);
-        return new Vector2((col - row) * HalfWidth, (col + row) * HalfHeight);
+        return GridPositionToLocal(new Vector2(col, row));
+    }
+
+    public static Vector2[] GridRectangleOutline(Vector2I firstCell, int columns, int rows)
+    {
+        Vector2 firstCorner = (Vector2)firstCell - new Vector2(0.5f, 0.5f);
+        return new[]
+        {
+            GridPositionToLocal(firstCorner),
+            GridPositionToLocal(firstCorner + new Vector2(columns, 0)),
+            GridPositionToLocal(firstCorner + new Vector2(columns, rows)),
+            GridPositionToLocal(firstCorner + new Vector2(0, rows)),
+        };
+    }
+
+    public static Rect2 GridRectangleBounds(Vector2I firstCell, int columns, int rows)
+    {
+        Vector2[] outline = GridRectangleOutline(firstCell, columns, rows);
+        return new Rect2(new Vector2(outline[3].X, outline[0].Y),
+            new Vector2(outline[1].X - outline[3].X, outline[2].Y - outline[0].Y));
     }
 
     private static Vector2 LocalPositionToGrid(Vector2 localPosition)
