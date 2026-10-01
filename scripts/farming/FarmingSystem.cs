@@ -93,6 +93,20 @@ internal sealed class FarmingSystem
         return true;
     }
 
+    internal void ClearDisallowedCrops(Season season)
+    {
+        GrowingSeasons currentSeason = (GrowingSeasons)(1 << (int)season);
+        foreach (FarmState? farm in _farms)
+        {
+            if (farm == null || farm.Stage == CropStage.None ||
+                (CropCatalog.Get(farm.CropKind).GrowingSeasons & currentSeason) != 0)
+                continue;
+            farm.Stage = CropStage.None;
+            farm.RemainingTimeUnits = 0;
+            farm.HasWater = false;
+        }
+    }
+
     private static void StartGrowth(FarmState farm)
     {
         farm.Stage = CropStage.Growing;

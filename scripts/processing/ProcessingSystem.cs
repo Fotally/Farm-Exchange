@@ -1,6 +1,7 @@
 using System;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
+using FarmExchange.Inventory;
 using FarmExchange.Time;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
@@ -22,6 +23,19 @@ internal sealed class ProcessingSystem
             throw new InvalidOperationException("土地没有加工状态");
         return new ProcessorSnapshot(processor.CropKind,
             GameTimeUnits.RemainingSeconds(processor.RemainingTimeUnits));
+    }
+
+    internal ProcessorStatus GetStatus(int index, GoodsInventory inventory)
+    {
+        ProcessorSnapshot processor = Get(index);
+        if (processor.RemainingSeconds > 0)
+            return ProcessorStatus.Processing;
+        return inventory.GetProcessingAvailability(processor.CropKind) switch
+        {
+            RawProcessingAvailability.NoRaw => ProcessorStatus.WaitingForRaw,
+            RawProcessingAvailability.Reserved => ProcessorStatus.WaitingForReserve,
+            _ => ProcessorStatus.ReadyToProcess,
+        };
     }
 
     internal void Place(int index, CropKind crop)

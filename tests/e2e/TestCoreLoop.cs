@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Threading.Tasks;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.UI;
@@ -6,9 +7,9 @@ using FarmExchange.World;
 
 public partial class TestCoreLoop : Node
 {
-    public override void _Ready()
+    public override async void _Ready()
     {
-        bool passed = RunChecks(this);
+        bool passed = RunChecks(this) && await RunLayoutChecks(this);
         if (passed)
             GD.Print("主场景建造与窗口操作检查通过");
         GetTree().Quit(passed ? 0 : 1);
@@ -20,7 +21,46 @@ public partial class TestCoreLoop : Node
         parent.AddChild(main);
         bool passed = Check(main);
         main.QueueFree();
-        return passed && CheckRainUi(parent);
+        return passed && CheckRainUi(parent) && CheckReserveUi(parent);
+    }
+
+    public static async Task<bool> RunLayoutChecks(Node parent)
+    {
+        var window = new InventoryWindow();
+        parent.AddChild(window);
+        window.Refresh(new FarmGame(12345));
+        window.ShowRaised();
+        await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+        await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+        bool passed = true;
+        foreach (CropDefinition crop in FarmGame.Crops)
+        {
+            Label label = Find<Label>(window, $"RawReserve{crop.Kind}Label");
+            LineEdit input = Find<LineEdit>(window, $"RawReserve{crop.Kind}Input");
+            Button apply = Find<Button>(window, $"SetRawReserve{crop.Kind}Button");
+            Rect2 labelRect = label.GetGlobalRect();
+            Rect2 inputRect = input.GetGlobalRect();
+            Rect2 buttonRect = apply.GetGlobalRect();
+            if (label.GetLineCount() != 1 || input.Size.Y < 36 || input.Size.Y > 40 ||
+                apply.Size.Y < 36 || apply.Size.Y > 40 || labelRect.End.X > inputRect.Position.X ||
+                inputRect.End.X > buttonRect.Position.X)
+            {
+                passed = Fail($"{crop.CropName}保留底线布局发生换行、异常高度或重叠");
+                break;
+            }
+        }
+        ScrollContainer scroll = Find<ScrollContainer>(window, "InventoryScroll");
+        LineEdit lastInput = Find<LineEdit>(window, "RawReserveRadishInput");
+        scroll.EnsureControlVisible(lastInput);
+        await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+        await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+        Rect2 viewportRect = scroll.GetGlobalRect();
+        Rect2 lastRect = lastInput.GetGlobalRect();
+        if (scroll.ScrollVertical <= 0 || lastRect.Position.Y < viewportRect.Position.Y ||
+            lastRect.End.Y > viewportRect.End.Y)
+            passed = Fail("库存正常滚动无法完整显示最后一种作物的输入框");
+        window.QueueFree();
+        return passed;
     }
 
     private static bool CheckRainUi(Node parent)
@@ -39,6 +79,96 @@ public partial class TestCoreLoop : Node
             ContainsVisibleText(detail, "待播种 · 已有水分");
         main.QueueFree();
         return visible || Fail("雨后未播种农田的已湿润状态没有显示在详情中");
+    }
+
+    private static bool CheckReserveUi(Node parent)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        parent.AddChild(main);
+        bool passed = CheckReserveControls(main);
+        main.QueueFree();
+        return passed;
+    }
+
+    private static bool CheckReserveControls(Main main)
+    {
+        Vector2I[] initial = { new(63, 63), new(64, 63), new(65, 63), new(63, 64), new(64, 64) };
+        foreach (Vector2I cell in initial) main.Game.RemoveBuilding(cell);
+        Vector2I farm = new(4, 4);
+        Vector2I processor = new(5, 4);
+        main.Game.SetRawReserve(CropKind.Radish, 6);
+        main.Game.BuildFarm(farm);
+        main.Game.SetFarmCrop(farm, CropKind.Radish);
+        main.Game.AdvanceTick(isRaining: true);
+        for (int i = 0; i < 206; i++) main.Game.AdvanceTick();
+        main.Game.RemoveBuilding(farm);
+        main.Game.BuildProcessor(processor, CropKind.Radish);
+
+        var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
+        main.GetNode<WorldMap>("WorldMap").EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
+        var detail = Find<Control>(ui, "DetailWindow");
+        if (!ContainsVisibleText(detail, "等待原料超过保留底线"))
+            return Fail("加工详情未显示保留底线等待原因");
+        Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
+        var window = Find<Control>(ui, "InventoryWindow");
+        var input = Find<LineEdit>(window, "RawReserveRadishInput");
+        var apply = Find<Button>(window, "SetRawReserveRadishButton");
+        var scroll = Find<ScrollContainer>(window, "InventoryScroll");
+        var timer = main.GetNode<Timer>("TickTimer");
+        if (input.Text != "6")
+            return Fail("库存输入未显示经营模块的已提交底线");
+
+        input.GrabFocus();
+        EnterText(input, "123");
+        input.CaretColumn = 2;
+        scroll.ScrollVertical = 20;
+        int scrollPosition = scroll.ScrollVertical;
+        timer.EmitSignal(Timer.SignalName.Timeout);
+        if (input.Text != "123" || !input.HasFocus() || input.CaretColumn != 2 ||
+            scroll.ScrollVertical != scrollPosition ||
+            !object.ReferenceEquals(input, Find<LineEdit>(window, "RawReserveRadishInput")) ||
+            !object.ReferenceEquals(apply, Find<Button>(window, "SetRawReserveRadishButton")) ||
+            main.Game.GetRawReserve(CropKind.Radish) != 6)
+            return Fail("经营刷新丢失底线输入、光标、焦点、滚动或控件身份");
+        input.ReleaseFocus();
+        timer.EmitSignal(Timer.SignalName.Timeout);
+        Find<Button>(window, "CloseButton").EmitSignal(Button.SignalName.Pressed);
+        Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
+        if (input.Text != "123")
+            return Fail("输入失焦或窗口关闭重开丢失未提交草稿");
+
+        EnterText(input, "5");
+        apply.EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.GetRawReserve(CropKind.Radish) != 5 || main.Game.GetRawStock(CropKind.Radish) != 6 ||
+            main.Game.GetPlot(processor).RemainingSeconds != 0 ||
+            !ContainsVisibleText(detail, "待领取原料"))
+            return Fail("设置底线未提交或在领取阶段前启动了加工");
+        foreach (string invalid in new[] { "", "-1", "1.5", "2147483648" })
+        {
+            EnterText(input, invalid);
+            apply.EmitSignal(Button.SignalName.Pressed);
+            if (main.Game.GetRawReserve(CropKind.Radish) != 5 || main.Game.GetRawStock(CropKind.Radish) != 6 ||
+                input.Text != invalid || !ContainsVisibleText(window, "请输入 0 到 2147483647 之间的整数"))
+                return Fail("非法底线输入改变了经营状态或丢失错误提示/文本");
+        }
+        EnterText(input, "5");
+        input.EmitSignal(LineEdit.SignalName.TextSubmitted, input.Text);
+        timer.EmitSignal(Timer.SignalName.Timeout);
+        if (main.Game.GetRawStock(CropKind.Radish) != 5 || main.Game.GetPlot(processor).RemainingSeconds != 26 ||
+            !ContainsVisibleText(detail, "加工中"))
+            return Fail("回车提交后下次经营领取未正确启动加工");
+        EnterText(input, "99");
+        apply.EmitSignal(Button.SignalName.Pressed);
+        if (main.Game.GetRawReserve(CropKind.Radish) != 99 || main.Game.GetRawStock(CropKind.Radish) != 5 ||
+            main.Game.GetPlot(processor).RemainingSeconds != 26)
+            return Fail("界面提高底线退回了加工投入或重置进度");
+        return true;
+    }
+
+    private static void EnterText(LineEdit input, string text)
+    {
+        input.Text = text;
+        input.EmitSignal(LineEdit.SignalName.TextChanged, text);
     }
 
     private static bool Check(Main main)

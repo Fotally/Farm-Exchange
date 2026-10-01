@@ -10,6 +10,7 @@
 | `SupplyWater(index)` | 雨水与工人浇水共用的一次供水操作；空田留水、已播种作物开始生长，生长中重复调用不重置进度。 |
 | `AdvanceGrowth(index, out harvestedCrop)` | 每经营秒推进生长中的农田；成熟时清除本轮阶段和水分，并报告需入库的作物。收获数量由作物定义决定。 |
 | `TryWork(index, calendar)` | 有播种或浇水工作时执行一次受控阶段转换；空田播种先经 `PlantingRules` 检查，不通过时状态不变并返回未执行；湿润空田播种后直接开始生长，干燥已播种田通过 `SupplyWater` 浇水；生长中或无农田时返回未执行。 |
+| `ClearDisallowedCrops(season)` | 换季后检查全部现有农田；只清除新季节不适宜的待水或生长中作物，清零阶段、精确进度与水分，保留田块和所选作物。空田留水及适季作物保持不变；重复调用不会重复失败或产生收成。 |
 | `SetGrowingForBenchmark`、`Clear` | 仅供满地图 50 tick 夹具设置和重建。 |
 
-`WorkerScheduler` 只调用 `TryWork`，不取得可变农田状态。`FarmGame` 在步进开始时向全部现有农田传递显式降雨，再按固定相位把成熟结果交给 `Inventory`。移除农田删除其水分状态。播种检查见[PlantingRules 接口](../planting-rules/interface-planting-rules.md)；已播种作物的季节失败和 #40 移动耗时仍属于后续任务。
+`WorkerScheduler` 只调用 `TryWork`，不取得可变农田状态。`FarmGame` 在步进开始时向全部现有农田传递显式降雨，再按固定相位把成熟结果交给 `Inventory`，累计秒后发现季节变化时传入新季节完成整轮清理。调用方不逐字段清除农田，也不记录历史失败状态；收获发生在换季之前，已收获空田不会被越季清理。移除农田删除其水分状态。播种检查见[PlantingRules 接口](../planting-rules/interface-planting-rules.md)；#40 移动耗时仍属于后续任务。

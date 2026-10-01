@@ -23,7 +23,8 @@ public enum FarmStatus
     WaitingForWorker, WaitingForWorkerWithWater, WaitingForWater, Growing,
     WrongSeason, InsufficientTime,
 }
-public enum ProcessorStatus { WaitingForRaw, Processing }
+public enum ProcessorStatus { WaitingForRaw, Processing, WaitingForReserve, ReadyToProcess }
+public enum RawReserveFailure { None, InvalidCrop, InvalidQuantity }
 
 public readonly record struct CropDefinition(
     CropKind Kind, string CropName, string BuildingName, string ProductName,
@@ -103,6 +104,17 @@ public sealed class FarmGame
 
     public static CropDefinition GetCrop(CropKind crop) => CropCatalog.Get(crop);
     public int GetRawStock(CropKind crop) => _inventory.GetRaw(crop);
+    public int GetRawReserve(CropKind crop) => _inventory.GetRawReserve(crop);
+
+    public RawReserveFailure SetRawReserve(CropKind crop, int quantity)
+    {
+        if (!CropCatalog.IsDefined(crop))
+            return RawReserveFailure.InvalidCrop;
+        if (quantity < 0)
+            return RawReserveFailure.InvalidQuantity;
+        _inventory.SetRawReserve(crop, quantity);
+        return RawReserveFailure.None;
+    }
     public int GetProductStock(CropKind crop) => _inventory.GetProduct(crop);
     public int GetProductPriceCents(CropKind crop) =>
         (CurrentFlourPriceCents * GetCrop(crop).PricePercent + 50) / 100;
@@ -175,8 +187,7 @@ public sealed class FarmGame
         if (plot.Building != BuildingKind.Processor)
             throw new InvalidOperationException("该土地没有加工场地");
         CropDefinition crop = GetCrop(plot.CropKind);
-        ProcessorStatus status = plot.RemainingSeconds > 0
-            ? ProcessorStatus.Processing : ProcessorStatus.WaitingForRaw;
+        ProcessorStatus status = _processing.GetStatus(IndexOf(cell), _inventory);
         return new ProcessorDetailsSnapshot(crop, status, GetProductPriceCents(crop.Kind),
             GetProductStock(crop.Kind));
     }
@@ -337,10 +348,13 @@ public sealed class FarmGame
 
     private bool AdvanceDay()
     {
-        uint previousDays = _calendar.Snapshot.ElapsedDays;
+        CalendarSnapshot previousCalendar = _calendar.Snapshot;
         if (!_calendar.TryAdvanceSeconds(1))
             throw new InvalidOperationException("模拟时间已达到上限");
-        if (_calendar.Snapshot.ElapsedDays == previousDays)
+        CalendarSnapshot calendar = _calendar.Snapshot;
+        if (calendar.Season != previousCalendar.Season)
+            _farming.ClearDisallowedCrops(calendar.Season);
+        if (calendar.ElapsedDays == previousCalendar.ElapsedDays)
             return false;
         int previousPrice = CurrentFlourPriceCents;
         CurrentFlourPriceCents = _marketPriceCurve.GetPriceCents(CurrentDay);
