@@ -11,7 +11,7 @@ script = ExtResource("1_main")
 script = ExtResource("2_map")
 
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(0, 2032)
+position = Vector2(0, 6128)
 zoom = Vector2(1.25, 1.25)
 script = ExtResource("3_camera")
 

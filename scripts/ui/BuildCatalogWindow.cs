@@ -76,13 +76,13 @@ public partial class BuildCatalogWindow : DraggableWindow
         _search.Visible = _category == BuildingKind.Processor;
         _farmCard.Visible = _category == BuildingKind.Farm;
         _roadCard.Visible = _category == BuildingKind.Road;
-        _farmCard.Text = $"♧ 农田\n建造费 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Farm))} 金币";
-        _roadCard.Text = $"道路\n建造费 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Road))} 金币/格";
+        _farmCard.Text = $"♧ 农田 · 3×3\n建造费 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Farm))} 金币";
+        _roadCard.Text = $"道路 · 1×1\n建造费 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Road))} 金币/格";
         int count = 0;
         foreach (CropDefinition crop in FarmGame.Crops)
         {
             Button card = _processorCards[crop.Kind];
-            card.Text = $"{crop.BuildingName}\n{crop.CropName} → {crop.ProductName} · {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Processor))} 金币";
+            card.Text = $"{crop.BuildingName} · 3×3\n{crop.CropName} → {crop.ProductName} · {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Processor))} 金币";
             card.Visible = _category == BuildingKind.Processor &&
                 crop.BuildingName.Contains(_search.Text, StringComparison.OrdinalIgnoreCase);
             if (card.Visible)

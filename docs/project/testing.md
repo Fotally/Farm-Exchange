@@ -2,13 +2,13 @@
 
 ## 自动化测试与覆盖率
 
-测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的游戏状态、土地占用、农田与加工状态边界、作物定义、库存、钱包、市场、日历和地图坐标；`tests/integration/` 检查镜头输入、地图选择及 NPC 动画场景协作；`tests/e2e/` 检查主场景完整经营流程；`tests/performance/` 测满地图负载与可选图形 FPS。`tests/test_suite.tscn` 汇总各类可在 headless 模式运行的检查，任一失败都会返回非零退出码。满地图检查将 16,384 格全部放上现有实体（8,192 块农田、8,192 处加工场地，七种作物均覆盖），推进 50 个经营步进并打印总耗时与平均耗时。耗时是本机观测值，没有固定通过阈值。Windows 导出程序启动另作构建冒烟测试。
+测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的经营状态、土地、生产、资源、行情、日历与坐标；`tests/integration/` 检查镜头、选择、角色与地图绘制，`tests/e2e/` 检查主场景流程，`tests/performance/` 测负载和图形 FPS。`tests/test_suite.tscn` 汇总 headless 检查，任一失败返回非零。满地图在 384×384 基础格中平铺 8,192 农田与 8,192 加工场地，每座占 3×3：共 16,384 生产实例、147,456 占用格，七作物均覆盖。50 个经营步进检查角落实例只推进正常一秒，并打印总/平均耗时；耗时无固定阈值。实体数与占用格分开报告，不把子格当产能。Windows 导出程序启动另作构建冒烟测试。
 
 各文件都有独立的场景入口，排查时可用 `Godot控制台程序 --headless --path . 场景路径` 单独运行：
 
 | 类别 | 场景路径 |
 | --- | --- |
-| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_worker_scheduler.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_market_quotes.tscn`、`tests/unit/test_trading_service.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
+| 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_land_occupancy.tscn`、`tests/unit/test_worker_scheduler.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_market_quotes.tscn`、`tests/unit/test_trading_service.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
 | 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn`、`tests/integration/test_worker_presentation.tscn`、`tests/integration/test_road_map.tscn` |
 | 端到端测试 | `tests/e2e/test_core_loop.tscn` |
 | 满地图负载测试 | `tests/performance/test_full_world_load.tscn` |
@@ -181,7 +181,9 @@
 ./tools/Run-Tests.ps1 -GodotConsole 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' -Performance
 ```
 
-这会先完成 Debug 编译、headless 场景测试和覆盖率检查，再在可见窗口运行 `tests/performance/test_full_world_fps.tscn`，写出 `coverage/performance.json`、`coverage/performance.png` 和 `coverage/performance-end.png`。图形阶段使用真实主场景的地图、镜头和一秒 tick：满地图预热 2 秒，采样 8 秒，镜头在中心附近持续水平移动。报告记录绘制帧数、平均 FPS、帧间隔中位数与 P95/P99、可见地图块覆盖的最多候选格数、地图块重建次数、窗口尺寸、缩放、VSync、CPU、GPU 和引擎版本。图形测试要求平均 FPS 至少 60、P95 帧间隔不超过 16.67 ms，并应核对采样前后截图中的建筑和作物标记。它测量 Godot 编辑器 Debug 构建中的移动镜头负载；`--headless` 不会得到有效渲染帧。测得的 FPS 随机器与图形环境变化，当前合格线只针对本机验收条件。
+这会先完成 Debug 编译、headless 场景测试和覆盖率检查，再在可见窗口运行 `tests/performance/test_full_world_fps.tscn`，写出 `coverage/performance.json`、`coverage/performance.png` 和 `coverage/performance-end.png`。图形阶段使用真实主场景与一秒经营步进：满地图预热 2 秒、采样 8 秒，镜头跟随三名工人的平均经营位置，叠加 `sin(经过秒×0.8)×200` 世界像素的水平往返，并受地图边界限制。轨迹记录在报告 `CameraPath`；它随 3 小格/秒而调整，与旧固定中心 ±500 路径不同，不能作同条件性能直接比较。
+
+报告区分生产实例数与占用格数，记录起止移动人数、帧数、平均 FPS、帧间隔中位数/P95/P99、块候选格数、重建次数、窗口/缩放/VSync、硬件与引擎。门槛仍为平均至少 60 FPS、P95 不超过 16.67 ms，且采样起止三人均移动；检查真实前后截图中的人物、建筑与单实例标记。此为本机有窗口 Debug 渲染负载，headless 不产生有效渲染帧，其他硬件和 Release 成品性能不能由该值推定。
 
 2026-09-24 本机优化前基线：AMD Ryzen 7 5800H、NVIDIA GeForce RTX 3060 Laptop GPU、Windows 10.0.26200、Godot 4.7.2 Mono Debug；1280×720、1.25 倍缩放、VSync 关闭、FPS 不限，镜头水平往返移动。满地图采样 8.06 秒、122 帧，平均 **15.14 FPS**，帧间隔中位数 64.64 ms、P95 为 76.42 ms、P99 为 80.71 ms；旧绘制循环每帧最多处理 1,600 个候选格。同期必跑的 50 tick 逻辑检查耗时 13.95 ms，平均 0.279 ms/tick。
 
@@ -196,3 +198,31 @@
 2026-09-27 T01/T02 窗口拆分后的本机 headless 检查：满地图 50 tick 耗时 39.66 ms，平均 0.793 ms/tick。新增的界面端到端断言覆盖目录避让、持续刷新时市场控件与滚动位置；未改地图绘制或镜头，图形性能沿用 T04B 的验收结果。
 
 2026-09-28 T05B 日历与七作物切换后的本机检查：满地图 50 步耗时 45.71 ms，平均 0.914 ms/步；完整 headless 套件与覆盖率通过，业务脚本行覆盖率 92.82%。图形采样平均 923.5 FPS、P95 帧间隔 1.55 ms，前后截图核对了顶部日期和萝卜红橙色标记。
+
+## 2026-10-01 T12 / #75 多格实例验收
+
+三组完成土地、经营生产和地图 UI 后，新建独立审查员检查完整改动；修复图形测试后再新开独立复查员，均无待修。指定引擎 Debug/Release 编译零警告、零错误；修后完整 headless 套件、Windows Release 导出与实际 EXE 启动退出码 0 通过。最终 50 步 **81.57 ms**、平均 **1.631 ms/步**，16,384 生产实例与 147,456 子格的角落推进、双向映射一致性通过。日志在 `coverage/test-t12-final.log`、`coverage/export-t12.log`。
+
+最新 Cobertura 总体 **2586/2690（96.13%）**，每模块按文件和行号去重，13 个模块均超过 80%；总体沿报告原计数，包含多类型同文件的重复行，不能机械用分表求和替代：
+
+| 模块 | 已覆盖 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `economy` | 18 / 19 | 94.74% |
+| `farming` | 166 / 166 | 100.00% |
+| `gameplay` | 314 / 340 | 92.35% |
+| `inventory` | 62 / 62 | 100.00% |
+| `land` | 100 / 101 | 99.01% |
+| `market` | 224 / 224 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 25 / 25 | 100.00% |
+| `trading` | 71 / 72 | 98.61% |
+| `ui` | 951 / 1006 | 94.53% |
+| `workers` | 91 / 95 | 95.79% |
+| `world` | 425 / 439 | 96.81% |
+
+真实有窗口道路/多格场景首次因原顶点像素取样失败（Exit 1）。独立探针证实四边中点及顶点邻域为金色，原顶点像素在线帽外；等待绘制和额外三帧结果不变。只修改测试为公开矩形几何四边各三个内部点，保留颜色容差，道路/生产设施均查 12 点；绘制代码未改。修后有窗口场景 Exit 0、错误日志为空，四张道路及跨四块生产设施的前后原始截图已检查，完整选框、单标记、整座拆除和邻居保持通过。
+
+图形预热 2 秒、采样 **8.001438 秒 / 5218 帧**，平均 **652.1 FPS**、P95 **2.073 ms**、P99 2.456 ms；起止三人均移动，10 次经营步进、最多 1536 个块候选格、33 次块重建。1280×720 / zoom 1.25 / VSync 关闭 / 不限帧；本机 R7 5800H 与 RTX 3060、Godot Debug。镜头跟随三人平均位置并水平 ±200 往返，与旧轨迹不同，不作同条件下降幅度推断。绘制代码在图形测量后未更改，沿用该次有效报告；性能前后图已核对。
+
+真实主场景通过停止计时器和暂停按钮生成六张截图，包含原尺寸三人、三类目录、道路详情与末端子格选整田，助手 Exit 0、错误日志为空。已归档[整座选框](../architecture/world/world-map/production-footprint.png)，并更新三人、道路目录和详情图片；研究示意图与运行截图明确分开。三份新增 C# UID 与土地测试场景一并交付。

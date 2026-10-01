@@ -37,10 +37,10 @@
 ## 项目协作与依据
 
 - [系统规划](project/roadmap.md)、[构建与验收](project/build-and-validation.md)、[GitHub 协作](project/contribution-workflow.md)。
-- [独立行情与即时交易实施方案](project/market-proposal.md)：T09 的价格、事件、节日排期与交易规则已确认，正在实施。
+- [独立行情与即时交易实施方案](project/market-proposal.md)：T09 的价格、事件、节日排期与交易规则已确认并完成验收，等待 PR #70 人工合并。
 - [素材来源记录](project/asset-sources.md)：已纳入的第三方素材、出处与授权信息。
 - [macOS 构建与验收](project/macos-build.md)：Universal 2 导出、CI 和应用包启动。
 - [市场曲线调研](research/market-price-curve.md)、[测试分类调研](research/test-taxonomy.md)。
-- [基础格细分调研](research/grid-subdivision.md)：道路 1/4、1/9 面积的同尺度比较与多形状占用建议，尚未更改运行地图。
+- [基础格细分调研](research/grid-subdivision.md)：用户最终选择 64×32 基础格与 3×3（192×96）生产设施，保留各轮比例示例和最小空间 Interface；#75 已完成新地图实现与完整验收。
 - [EditorConfig 检查](static-checks/editorconfig.md)、[CI 静态检查](static-checks/ci.md)。
 - [规则加载与链接对应表](../.codex/rule-loading.md)。

@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using Godot;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
+using FarmExchange.Land;
 using FarmExchange.Time;
 
 namespace FarmExchange.Workers;
 
 internal sealed class WorkerScheduler
 {
+    private const float CellsPerSecond = 3f;
     private readonly WorkerState[] _workers;
     private readonly HashSet<int> _claimedCells = new();
     private int _nextFarmIndex;
@@ -84,9 +86,13 @@ internal sealed class WorkerScheduler
 
     private FarmWorkRequest? SelectNextWork(FarmingSystem farming, CalendarSnapshot calendar)
     {
-        for (int offset = 0; offset < farming.CellCount; offset++)
+        IReadOnlyList<int> indices = farming.Indices;
+        int start = 0;
+        while (start < indices.Count && indices[start] < _nextFarmIndex)
+            start++;
+        for (int offset = 0; offset < indices.Count; offset++)
         {
-            int index = (_nextFarmIndex + offset) % farming.CellCount;
+            int index = indices[(start + offset) % indices.Count];
             if (_claimedCells.Contains(index) || farming.GetWorkNeed(index, calendar) is not FarmWorkRequest work)
                 continue;
             _nextFarmIndex = (index + 1) % farming.CellCount;
@@ -101,8 +107,8 @@ internal sealed class WorkerScheduler
         worker.Work = work;
         Vector2 distance = (Vector2)CellOf(work.CellIndex) - worker.GridPosition;
         float gridDistance = Mathf.Max(Mathf.Abs(distance.X), Mathf.Abs(distance.Y));
-        worker.RemainingTravelSeconds = Mathf.CeilToInt(gridDistance);
-        worker.TravelPerSecond = gridDistance == 0f ? Vector2.Zero : distance / gridDistance;
+        worker.RemainingTravelSeconds = Mathf.CeilToInt(gridDistance / CellsPerSecond);
+        worker.TravelPerSecond = gridDistance == 0f ? Vector2.Zero : distance * (CellsPerSecond / gridDistance);
     }
 
     private static void AdvanceTravel(WorkerState worker)
@@ -121,7 +127,8 @@ internal sealed class WorkerScheduler
         worker.TravelPerSecond = Vector2.Zero;
     }
 
-    private static Vector2I CellOf(int index) => new(index % FarmGame.MapSize, index / FarmGame.MapSize);
+    private static Vector2I CellOf(int index) => BuildingFootprint.WorkCell(
+        new Vector2I(index % FarmGame.MapSize, index / FarmGame.MapSize), BuildingKind.Farm);
 
     private sealed class WorkerState
     {

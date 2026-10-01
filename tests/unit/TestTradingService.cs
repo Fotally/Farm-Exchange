@@ -197,12 +197,12 @@ public partial class TestTradingService : Node
     private static bool CheckGameplayPhases()
     {
         var game = new FarmGame(12345);
-        foreach (Vector2I cell in new[] { new Vector2I(63, 63), new(64, 63), new(65, 63), new(63, 64), new(64, 64) })
+        foreach (Vector2I cell in new[] { new Vector2I(189, 189), new(192, 189), new(195, 189), new(189, 192), new(192, 192) })
             game.RemoveBuilding(cell);
         CommodityId raw = new(CropKind.Radish, CommodityKind.Raw);
         CommodityId product = new(CropKind.Radish, CommodityKind.Product);
         Vector2I first = new(0, 0);
-        Vector2I second = new(1, 0);
+        Vector2I second = new(3, 0);
         game.BuildProcessor(first, CropKind.Radish);
         game.SetRawReserve(CropKind.Radish, 1);
         game.SetPaused(true);

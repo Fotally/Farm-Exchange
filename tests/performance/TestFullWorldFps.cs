@@ -38,13 +38,7 @@ public partial class TestFullWorldFps : Node
 
         Main main = GetNode<Main>("Main");
         _main = main;
-        main.Game.FillWorldForBenchmark();
-        Vector2I[] workerTargets = { new(82, 54), new(84, 52), new(86, 50) };
-        foreach (Vector2I target in workerTargets)
-        {
-            CropKind current = main.Game.GetPlot(target).CropKind;
-            main.Game.SetFarmCrop(target, current == CropKind.Wheat ? CropKind.Radish : CropKind.Wheat);
-        }
+        main.Game.FillWorldForPresentationBenchmark();
         _map = main.GetNode<WorldMap>("WorldMap");
         _map.SyncFromGame();
         _camera = main.GetNode<Camera2D>("Camera2D");
@@ -53,7 +47,7 @@ public partial class TestFullWorldFps : Node
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Directory.CreateDirectory(Path.GetDirectoryName(ProjectSettings.GlobalizePath("res://coverage/performance.json"))!);
         _readyAtUsec = Time.GetTicksUsec();
-        GD.Print("满地图渲染性能测试：16,384 格实体，3 名移动工人，预热 2 秒，采样 8 秒");
+        GD.Print("满地图渲染性能测试：16,384 生产实例、147,456 占用子格，3 名移动工人，预热 2 秒，采样 8 秒");
     }
 
     public override void _Process(double delta)
@@ -63,8 +57,13 @@ public partial class TestFullWorldFps : Node
 
         ulong now = Time.GetTicksUsec();
         double seconds = (now - _readyAtUsec) / 1_000_000.0;
-        _camera.GlobalPosition = _map.ClampGlobalCameraCenter(new Vector2(
-            (float)(Math.Sin(seconds * 0.8) * 500.0), 2032f));
+        Vector2 workerCenter = Vector2.Zero;
+        var workers = _main.Game.GetWorkers();
+        foreach (WorkerSnapshot worker in workers)
+            workerCenter += worker.GridPosition;
+        workerCenter /= workers.Count;
+        _camera.GlobalPosition = _map.ClampGlobalCameraCenter(_map.GetGridWorldPosition(workerCenter) +
+            new Vector2((float)(Math.Sin(seconds * 0.8) * 200.0), 0));
         _maxVisiblePlotCandidates = Math.Max(_maxVisiblePlotCandidates, _map.LastVisiblePlotCount);
 
         if (now - _readyAtUsec < WarmupUsec)
@@ -103,8 +102,11 @@ public partial class TestFullWorldFps : Node
         string reportPath = ProjectSettings.GlobalizePath("res://coverage/performance.json");
         var report = new
         {
-            Scenario = "128x128 满地图，8,192 农田与 8,192 加工场地，七种作物，三田改种触发三工人直线移动，镜头水平往返移动",
-            EntityCount = FarmGame.MapSize * FarmGame.MapSize,
+            Scenario = "384x384 基础格满地图，8,192 农田与 8,192 加工场地，七种作物，三处远田空田触发三工人直线移动，镜头跟随平均经营位置并水平往返",
+            CameraPath = "三工人平均经营格位置转换后的全局中心 + (sin(经过秒×0.8)×200, 0)世界像素",
+            ComparisonNote = "镜头轨迹随3小格/秒调整，与旧±500固定中心轨迹不同，不作为同条件性能直接对比",
+            EntityCount = _main.Game.GetBuildingSpaces().Count,
+            OccupiedCellCount = FarmGame.MapSize * FarmGame.MapSize,
             FarmCount = 8192,
             ProcessorCount = 8192,
             WorkerCount = _main.Game.GetWorkers().Count,

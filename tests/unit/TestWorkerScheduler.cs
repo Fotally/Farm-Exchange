@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
+using FarmExchange.Land;
 using FarmExchange.Time;
 using FarmExchange.Workers;
 
@@ -14,22 +15,59 @@ public partial class TestWorkerScheduler : Node
     public static bool RunChecks() => CheckMovementAndWorkSeconds() && CheckThreeWorkersAndClaims() &&
         CheckFarmWorkCredentials() && CheckInvalidClaimsReleasedFirst() && CheckRainAndFractionalPosition() &&
         CheckPlantingRevalidation() && CheckPauseAndDeterminism() && CheckUnequalAssignments() &&
-        CheckBudgetsAndContinuousProduction();
+        CheckBudgetsAndContinuousProduction() && CheckStableAnchorCursor();
+
+    private static bool CheckStableAnchorCursor()
+    {
+        var farms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        CalendarSnapshot spring = new GameCalendar().Snapshot;
+        int first = 5 * FarmGame.MapSize + 5;
+        int second = first + 6;
+        int insertedBefore = first - 4;
+        farms.Place(first, CropKind.Radish);
+        farms.Place(second, CropKind.Radish);
+        var originalIndices = farms.Indices;
+        var workers = new WorkerScheduler(new Vector2I(6, 6));
+        workers.AdvanceOneSecond(farms, spring);
+        workers.AdvanceOneSecond(farms, spring);
+        farms.Place(insertedBefore, CropKind.Radish);
+        farms.Remove(first);
+        if (!originalIndices.SequenceEqual(new[] { first, second }) ||
+            !farms.Indices.SequenceEqual(new[] { insertedBefore, second }) ||
+            workers.AdvanceOneSecond(farms, spring) ||
+            workers.GetSnapshots()[0].TargetCell != new Vector2I(12, 6) ||
+            workers.GetSnapshots()[0].GridPosition != new Vector2(9, 6))
+            return Fail("农田集合增删改变了锚点游标语义，或旧只读索引缓存改变");
+        workers.AdvanceOneSecond(farms, spring);
+        workers.AdvanceOneSecond(farms, spring);
+        workers.AdvanceOneSecond(farms, spring);
+        if (workers.AdvanceOneSecond(farms, spring) ||
+            workers.GetSnapshots()[0].TargetCell != new Vector2I(2, 6) ||
+            workers.GetSnapshots()[0].GridPosition != new Vector2(9, 6))
+            return Fail("锚点轮转没有在末尾回到新插入的前方农田");
+        for (int secondIndex = 0; secondIndex < 3; secondIndex++)
+            if (workers.AdvanceOneSecond(farms, spring))
+                return Fail("不足三小格的最后移动秒提前执行了播种");
+        if (workers.GetSnapshots()[0].GridPosition != new Vector2(2, 6) ||
+            farms.Get(insertedBefore).Stage != CropStage.None || !workers.AdvanceOneSecond(farms, spring))
+            return Fail("任意锚点的工作中心或向上取整移动时间错误");
+        return true;
+    }
 
     private static bool CheckMovementAndWorkSeconds()
     {
         Vector2I cell = new(2, 2);
         FarmingSystem farms = CreateFarms(new[] { cell });
-        var workers = new WorkerScheduler(Vector2I.Zero);
+        var workers = CreateWorkers(Vector2I.Zero);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         IReadOnlyList<WorkerSnapshot> initial = workers.GetSnapshots();
-        if (initial.Count != 1 || initial[0] != new WorkerSnapshot(1, Vector2.Zero, null, WorkerActivity.Idle))
+        if (initial.Count != 1 || initial[0] != new WorkerSnapshot(1, Vector2.One, null, WorkerActivity.Idle))
             return Fail("初始工人快照不是独立的空闲状态");
         if (workers.AdvanceOneSecond(farms, spring) ||
-            workers.GetSnapshots()[0] != new WorkerSnapshot(1, Vector2.One, cell, WorkerActivity.Moving))
-            return Fail("斜向移动速度不是每秒一格，或移动时提前执行工作");
+            workers.GetSnapshots()[0] != new WorkerSnapshot(1, new Vector2(4, 4), WorkCell(cell), WorkerActivity.Moving))
+            return Fail("斜向移动速度不是每秒三小格，或移动时提前执行工作");
         if (workers.AdvanceOneSecond(farms, spring) ||
-            workers.GetSnapshots()[0] != new WorkerSnapshot(1, new Vector2(2, 2), cell, WorkerActivity.Sowing) ||
+            workers.GetSnapshots()[0] != new WorkerSnapshot(1, new Vector2(7, 7), WorkCell(cell), WorkerActivity.Sowing) ||
             farms.Get(IndexOf(cell)).Stage != CropStage.None)
             return Fail("到达的同一秒额外完成了播种");
         if (!workers.AdvanceOneSecond(farms, spring) ||
@@ -37,7 +75,7 @@ public partial class TestWorkerScheduler : Node
             return Fail("播种没有独占一秒，或播种后没有保留本田浇水任务");
         if (!workers.AdvanceOneSecond(farms, spring) || farms.Get(IndexOf(cell)).Stage != CropStage.Growing ||
             workers.GetSnapshots()[0].Activity != WorkerActivity.Idle || workers.GetSnapshots()[0].TargetCell != null ||
-            initial[0].GridPosition != Vector2.Zero)
+            initial[0].GridPosition != Vector2.One)
             return Fail("浇水完成没有释放任务，或旧快照随经营状态改变");
         return true;
     }
@@ -46,13 +84,13 @@ public partial class TestWorkerScheduler : Node
     {
         Vector2I[] cells = { new(63, 63), new(64, 63), new(65, 63) };
         FarmingSystem farms = CreateFarms(cells);
-        var workers = new WorkerScheduler(cells);
+        var workers = CreateWorkers(cells);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         if (!workers.AdvanceOneSecond(farms, spring) || cells.Any(cell => farms.Get(IndexOf(cell)).Stage != CropStage.Seeded))
             return Fail("开局三人没有在各自格上真实参与播种");
         IReadOnlyList<WorkerSnapshot> sowed = workers.GetSnapshots();
         for (int i = 0; i < cells.Length; i++)
-            if (sowed[i].WorkerNumber != i + 1 || sowed[i].TargetCell != cells[i] || sowed[i].Activity != WorkerActivity.Watering)
+            if (sowed[i].WorkerNumber != i + 1 || sowed[i].TargetCell != WorkCell(cells[i]) || sowed[i].Activity != WorkerActivity.Watering)
                 return Fail("固定工人顺序或独占农田认领不一致");
         if (!workers.AdvanceOneSecond(farms, spring) || cells.Any(cell => farms.Get(IndexOf(cell)).Stage != CropStage.Growing) ||
             workers.GetSnapshots().Any(worker => worker.Activity != WorkerActivity.Idle))
@@ -60,10 +98,10 @@ public partial class TestWorkerScheduler : Node
 
         Vector2I oneCell = cells[0];
         farms = CreateFarms(new[] { oneCell });
-        workers = new WorkerScheduler(oneCell, oneCell, oneCell);
+        workers = CreateWorkers(oneCell, oneCell, oneCell);
         workers.AdvanceOneSecond(farms, spring);
         if (farms.Get(IndexOf(oneCell)).Stage != CropStage.Seeded ||
-            workers.GetSnapshots().Count(worker => worker.TargetCell == oneCell) != 1)
+            workers.GetSnapshots().Count(worker => worker.TargetCell == WorkCell(oneCell)) != 1)
             return Fail("多人面对同一田发生重复播种或同秒供水");
         workers.AdvanceOneSecond(farms, spring);
         return farms.Get(IndexOf(oneCell)).Stage == CropStage.Growing || Fail("单田认领者没有完成连续供水");
@@ -123,11 +161,11 @@ public partial class TestWorkerScheduler : Node
         FarmingSystem farms = CreateFarms(new[] { first, second });
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         farms.TryWork(IndexOf(first), spring);
-        var workers = new WorkerScheduler(Vector2I.Zero, new Vector2I(3, 0));
+        var workers = CreateWorkers(Vector2I.Zero, new Vector2I(3, 0));
         workers.AdvanceOneSecond(farms, spring);
         farms.Remove(IndexOf(first));
         farms.SetCrop(IndexOf(second), CropKind.Corn);
-        if (workers.AdvanceOneSecond(farms, spring) || workers.GetSnapshots()[0].TargetCell != second ||
+        if (workers.AdvanceOneSecond(farms, spring) || workers.GetSnapshots()[0].TargetCell != WorkCell(second) ||
             workers.GetSnapshots()[1].TargetCell != null || farms.Get(IndexOf(second)).Stage != CropStage.None)
             return Fail("没有先释放全体失效认领，或旧任务给改种田执行工作");
         return true;
@@ -139,17 +177,17 @@ public partial class TestWorkerScheduler : Node
         Vector2I cell = new(4, 0);
         FarmingSystem farms = CreateFarms(new[] { cell });
         farms.TryWork(IndexOf(cell), spring);
-        var workers = new WorkerScheduler(Vector2I.Zero);
+        var workers = CreateWorkers(Vector2I.Zero);
         workers.AdvanceOneSecond(farms, spring);
         farms.SupplyWater(IndexOf(cell));
         FarmSnapshot rainStarted = farms.Get(IndexOf(cell));
-        if (workers.AdvanceOneSecond(farms, spring) || workers.GetSnapshots()[0].GridPosition != new Vector2(1, 0) ||
+        if (workers.AdvanceOneSecond(farms, spring) || workers.GetSnapshots()[0].GridPosition != new Vector2(4, 1) ||
             workers.GetSnapshots()[0].Activity != WorkerActivity.Idle || farms.Get(IndexOf(cell)) != rainStarted)
             return Fail("雨水没有取消移动中的过期浇水任务，或取消发生瞬移");
 
         cell = new Vector2I(2, 0);
         farms = CreateFarms(new[] { cell });
-        workers = new WorkerScheduler(Vector2I.Zero);
+        workers = CreateWorkers(Vector2I.Zero);
         workers.AdvanceOneSecond(farms, spring);
         farms.SupplyWater(IndexOf(cell));
         workers.AdvanceOneSecond(farms, spring);
@@ -159,7 +197,7 @@ public partial class TestWorkerScheduler : Node
 
         cell = Vector2I.Zero;
         farms = CreateFarms(new[] { cell });
-        workers = new WorkerScheduler(cell);
+        workers = CreateWorkers(cell);
         workers.AdvanceOneSecond(farms, spring);
         farms.SupplyWater(IndexOf(cell));
         rainStarted = farms.Get(IndexOf(cell));
@@ -167,22 +205,23 @@ public partial class TestWorkerScheduler : Node
             farms.Get(IndexOf(cell)) != rainStarted)
             return Fail("浇水完成的最后一秒降雨仍执行了过期人工供水");
 
-        Vector2I removed = new(3, 1);
-        Vector2I replacement = new(1, 3);
-        farms = CreateFarms(new[] { removed });
-        workers = new WorkerScheduler(Vector2I.Zero);
+        int removed = 3 * FarmGame.MapSize + 8;
+        int replacement = 9 * FarmGame.MapSize + 3;
+        farms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        farms.Place(removed, CropKind.Radish);
+        workers = new WorkerScheduler(Vector2I.One);
         workers.AdvanceOneSecond(farms, spring);
-        if (!workers.GetSnapshots()[0].GridPosition.IsEqualApprox(new Vector2(1, 1f / 3f)))
+        if (!workers.GetSnapshots()[0].GridPosition.IsEqualApprox(new Vector2(4, 2.125f)))
             return Fail("非45度直线路线没有保留分数格位置");
-        farms.Remove(IndexOf(removed));
-        farms.Place(IndexOf(replacement), CropKind.Radish);
+        farms.Remove(removed);
+        farms.Place(replacement, CropKind.Radish);
         if (workers.AdvanceOneSecond(farms, spring) ||
-            !workers.GetSnapshots()[0].GridPosition.IsEqualApprox(new Vector2(1, 4f / 3f)))
-            return Fail("取消后新路线没有从实际分数位置以一格每秒继续");
+            !workers.GetSnapshots()[0].GridPosition.IsEqualApprox(new Vector2(4, 5.125f)))
+            return Fail("取消后新路线没有从实际分数位置以三小格每秒继续");
         workers.AdvanceOneSecond(farms, spring);
-        if (workers.AdvanceOneSecond(farms, spring) || workers.GetSnapshots()[0].GridPosition != (Vector2)replacement ||
-            farms.Get(IndexOf(replacement)).Stage != CropStage.None)
-            return Fail("最后不足一格的移动没有独占一秒，或抵达时抢先播种");
+        if (workers.AdvanceOneSecond(farms, spring) || workers.GetSnapshots()[0].GridPosition != new Vector2(4, 10) ||
+            farms.Get(replacement).Stage != CropStage.None)
+            return Fail("最后不足三小格的移动没有独占一秒，或抵达时抢先播种");
         return true;
     }
 
@@ -190,7 +229,7 @@ public partial class TestWorkerScheduler : Node
     {
         Vector2I cell = new(2, 0);
         FarmingSystem farms = CreateFarms(new[] { cell }, CropKind.Corn);
-        var workers = new WorkerScheduler(Vector2I.Zero);
+        var workers = CreateWorkers(Vector2I.Zero);
         var calendar = new GameCalendar(7608);
         FarmWorkRequest sow = farms.GetWorkNeed(IndexOf(cell), calendar.Snapshot)!.Value;
         for (int second = 0; second < 2; second++)
@@ -215,8 +254,8 @@ public partial class TestWorkerScheduler : Node
         Vector2I[] starts = { Vector2I.Zero, new(1, 0), new(2, 0) };
         FarmingSystem firstFarms = CreateFarms(cells);
         FarmingSystem secondFarms = CreateFarms(cells);
-        var first = new WorkerScheduler(starts);
-        var second = new WorkerScheduler(starts);
+        var first = CreateWorkers(starts);
+        var second = CreateWorkers(starts);
         var firstCalendar = new GameCalendar();
         var secondCalendar = new GameCalendar();
         first.AdvanceOneSecond(firstFarms, firstCalendar.Snapshot);
@@ -245,7 +284,7 @@ public partial class TestWorkerScheduler : Node
     {
         Vector2I[] cells = Enumerable.Range(0, 6).Select(x => new Vector2I(x, 0)).ToArray();
         FarmingSystem farms = CreateFarms(cells);
-        var workers = new WorkerScheduler(Vector2I.Zero, new Vector2I(1, 0), new Vector2I(7, 7));
+        var workers = CreateWorkers(Vector2I.Zero, new Vector2I(1, 0), new Vector2I(7, 7));
         var calendar = new GameCalendar();
         int[] completions = new int[3];
         int threeWorkersFinishedSeconds = 0;
@@ -265,7 +304,7 @@ public partial class TestWorkerScheduler : Node
             cells.Any(cell => farms.Get(IndexOf(cell)).Stage != CropStage.Growing))
             return Fail("异长路线没有让三人都参与，或测试未覆盖不均匀分配");
         farms = CreateFarms(cells);
-        workers = new WorkerScheduler(Vector2I.Zero);
+        workers = CreateWorkers(Vector2I.Zero);
         for (int second = 1; second <= threeWorkersFinishedSeconds; second++)
             workers.AdvanceOneSecond(farms, calendar.Snapshot);
         if (cells.All(cell => farms.Get(IndexOf(cell)).Stage == CropStage.Growing))
@@ -292,7 +331,7 @@ public partial class TestWorkerScheduler : Node
 
         Vector2I[] moreThanEight = Enumerable.Range(0, 9).Select(x => new Vector2I(x, 0)).ToArray();
         FarmingSystem farms = CreateFarms(moreThanEight);
-        var single = new WorkerScheduler(Vector2I.Zero);
+        var single = CreateWorkers(Vector2I.Zero);
         var calendar = new GameCalendar();
         for (int second = 0; second < 100; second++)
             AdvanceSimulation(farms, single, calendar, moreThanEight);
@@ -303,7 +342,7 @@ public partial class TestWorkerScheduler : Node
     private static bool CheckProductionBudget(Vector2I[] cells, Vector2I[] starts, int initialBoundSeconds, int boundSeconds)
     {
         FarmingSystem farms = CreateFarms(cells);
-        var workers = new WorkerScheduler(starts);
+        var workers = CreateWorkers(starts);
         var calendar = new GameCalendar();
         var readySeconds = new uint[cells.Length];
         var waiting = Enumerable.Repeat(true, cells.Length).ToArray();
@@ -342,7 +381,7 @@ public partial class TestWorkerScheduler : Node
     private static bool CheckExistingWorkBudget(Vector2I[] cells, Vector2I[] starts, int boundSeconds)
     {
         FarmingSystem farms = CreateFarms(cells.Take(starts.Length));
-        var workers = new WorkerScheduler(starts);
+        var workers = CreateWorkers(starts);
         var calendar = new GameCalendar();
         workers.AdvanceOneSecond(farms, calendar.Snapshot);
         calendar.TryAdvanceSeconds(1);
@@ -399,7 +438,14 @@ public partial class TestWorkerScheduler : Node
         calendar.TryAdvanceSeconds(1);
     }
 
-    private static int IndexOf(Vector2I cell) => cell.Y * FarmGame.MapSize + cell.X;
+    // 以下预算夹具以标准田跨度描述布局，再换算为基础格；原秒数上界保持。
+    private static int IndexOf(Vector2I cell) => cell.Y * 3 * FarmGame.MapSize + cell.X * 3;
+
+    private static Vector2I WorkCell(Vector2I cell) =>
+        BuildingFootprint.WorkCell(cell * 3, BuildingKind.Farm);
+
+    private static WorkerScheduler CreateWorkers(params Vector2I[] cells) =>
+        new(cells.Select(WorkCell).ToArray());
 
     private static bool Fail(string message)
     {

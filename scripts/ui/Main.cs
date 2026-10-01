@@ -47,6 +47,8 @@ public partial class Main : Node2D
     {
         _worldMap = GetNode<WorldMap>("WorldMap");
         _worldMap.SetGame(_game);
+        GetNode<Camera2D>("Camera2D").GlobalPosition = _worldMap.GetGridWorldPosition(
+            new Vector2((FarmGame.MapSize - 1) / 2f, (FarmGame.MapSize - 1) / 2f));
         var workerPresentation = new WorkerPresentation();
         _worldMap.AddChild(workerPresentation);
         workerPresentation.SetGame(_game, _worldMap);
@@ -259,7 +261,7 @@ public partial class Main : Node2D
         _buildWindow.Hide();
         _cropWindow.Hide();
         _messageLabel.Text = placement.Kind == BuildingKind.Road ? "逐格点击空位铺设道路，按 Esc 可取消" :
-            $"选择地图空位摆放{placement.Name}，按 Esc 可取消";
+            $"点击空小格作为{placement.Name}的锚点，占地 3×3，按 Esc 可取消";
         RefreshFooter();
     }
 
@@ -436,7 +438,7 @@ public partial class Main : Node2D
         string cost = FormatCoins(FarmGame.GetBuildingCostCents(placement.Kind));
         _buildHint.Text = placement.Kind == BuildingKind.Road
             ? $"铺路中：道路 · 连续点击地图空位 · 每格 {cost} 金币"
-            : $"摆放中：{placement.Name} · 点击地图空位建造 · 费用 {cost} 金币";
+            : $"摆放中：{placement.Name} · 占地 3×3 · 点击空小格建造 · 费用 {cost} 金币";
         _cancelPlacementButton.Show();
     }
 
@@ -448,7 +450,9 @@ public partial class Main : Node2D
             return;
         }
         PlotSnapshot plot = _game.GetPlot(cell);
-        _detailCell.Text = $"地块 ({cell.X}, {cell.Y})";
+        BuildingSpaceSnapshot? space = _game.GetBuildingSpace(cell);
+        _detailCell.Text = space == null ? $"地块 ({cell.X}, {cell.Y})" :
+            $"建筑锚点 ({space.AnchorCell.X}, {space.AnchorCell.Y}) · 占地 {space.Footprint.Offsets.Count} 格";
         _emptyDetails.Visible = plot.Building == BuildingKind.None;
         _farmDetails.Visible = plot.Building == BuildingKind.Farm;
         _processorDetails.Visible = plot.Building == BuildingKind.Processor;

@@ -21,7 +21,7 @@ public partial class TestProductionState : Node
 
     private static bool CheckLand()
     {
-        var land = new LandOccupancy(3);
+        var land = new LandOccupancy(FarmGame.MapSize * FarmGame.MapSize);
         if (land.Get(0) != BuildingKind.None ||
             !Throws<ArgumentOutOfRangeException>(() => land.Place(0, BuildingKind.None)) ||
             !Throws<ArgumentOutOfRangeException>(() => land.Place(0, (BuildingKind)999)) ||
@@ -30,19 +30,19 @@ public partial class TestProductionState : Node
             return Fail("非法建筑或空地拆除改变了占用状态");
 
         land.Place(0, BuildingKind.Farm);
-        land.Place(1, BuildingKind.Processor);
-        land.Place(2, BuildingKind.Road);
+        land.Place(3, BuildingKind.Processor);
+        land.Place(6, BuildingKind.Road);
         if (!Throws<InvalidOperationException>(() => land.Place(0, BuildingKind.Processor)) ||
-            !Throws<InvalidOperationException>(() => land.Place(2, BuildingKind.Farm)) ||
-            !Throws<InvalidOperationException>(() => land.Place(2, BuildingKind.Road)) ||
-            land.Get(0) != BuildingKind.Farm || land.Get(1) != BuildingKind.Processor ||
-            land.Get(2) != BuildingKind.Road)
+            !Throws<InvalidOperationException>(() => land.Place(6, BuildingKind.Farm)) ||
+            !Throws<InvalidOperationException>(() => land.Place(6, BuildingKind.Road)) ||
+            land.Get(0) != BuildingKind.Farm || land.Get(3) != BuildingKind.Processor ||
+            land.Get(6) != BuildingKind.Road)
             return Fail("重复放置覆盖了已有建筑");
         land.Remove(0);
-        land.Remove(1);
-        land.Remove(2);
-        if (land.Get(0) != BuildingKind.None || land.Get(1) != BuildingKind.None ||
-            land.Get(2) != BuildingKind.None)
+        land.Remove(3);
+        land.Remove(6);
+        if (land.Get(0) != BuildingKind.None || land.Get(3) != BuildingKind.None ||
+            land.Get(6) != BuildingKind.None)
             return Fail("拆除后建筑仍占用土地");
         return true;
     }

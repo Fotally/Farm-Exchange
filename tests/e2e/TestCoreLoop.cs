@@ -23,7 +23,7 @@ public partial class TestCoreLoop : Node
         parent.AddChild(main);
         bool passed = Check(main);
         main.QueueFree();
-        return passed && CheckRainUi(parent) && CheckReserveUi(parent) && CheckRoadUi(parent) &&
+        return passed && CheckFootprintUi(parent) && CheckRainUi(parent) && CheckReserveUi(parent) && CheckRoadUi(parent) &&
             CheckMarketUi(parent);
     }
 
@@ -223,14 +223,82 @@ public partial class TestCoreLoop : Node
         return main.Game.GetStock(product) == beforeStock || Fail("加工品未接入选中商品数量卖出");
     }
 
+    private static bool CheckFootprintUi(Node parent)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        parent.AddChild(main);
+        try
+        {
+            var game = main.Game;
+            var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
+            var map = main.GetNode<WorldMap>("WorldMap");
+            var detail = Find<Control>(ui, "DetailWindow");
+            Vector2I[] opening = { new(189, 189), new(192, 189), new(195, 189), new(189, 192), new(192, 192) };
+            if (game.GetBuildingSpaces().Count != opening.Length || game.MoneyCents != 5000)
+                return Fail("主场景开局设施数量或免费费用错误");
+            foreach (Vector2I anchor in opening)
+            {
+                var space = game.GetBuildingSpace(anchor);
+                if (space == null || space.AnchorCell != anchor || space.Footprint.Offsets.Count != 9)
+                    return Fail("主场景开局布局未按标准田跨度放置完整3×3设施");
+                foreach (Vector2I offset in space.Footprint.Offsets)
+                {
+                    map.EmitSignal(WorldMap.SignalName.SelectionChanged, anchor + offset);
+                    if (!ContainsVisibleText(detail, $"建筑锚点 ({anchor.X}, {anchor.Y}) · 占地 9 格") ||
+                        game.GetPlot(anchor + offset) != game.GetPlot(anchor))
+                        return Fail("主场景开局任一子格没有显示同一设施详情");
+                }
+            }
+            for (int i = 0; i < 3; i++)
+                if (game.GetWorkers()[i].GridPosition != (Vector2)(opening[i] + Vector2I.One))
+                    return Fail("主场景三工人未出生在各田中央小格");
+            Find<Button>(ui, "BuildButton").EmitSignal(Button.SignalName.Pressed);
+            var buildWindow = Find<Control>(ui, "BuildWindow");
+            if (!Find<Button>(buildWindow, "FarmCard").Text.Contains("3×3"))
+                return Fail("建造目录未说明生产设施占地");
+            Find<Button>(buildWindow, "FarmCard").EmitSignal(Button.SignalName.Pressed);
+            Vector2I farm = new(188, 198); // 任意小格锚点，无需按三格对齐。
+            map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+            if (game.MoneyCents != 4000 || game.GetBuildingSpace(farm)?.AnchorCell != farm)
+                return Fail("非三格对齐锚点未建造一次并只收一座费用");
+            map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm + new Vector2I(2, 1));
+            Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
+            Find<Button>(Find<Control>(ui, "CropWindow"), "CropCardRadish").EmitSignal(Button.SignalName.Pressed);
+            foreach (Vector2I offset in game.GetBuildingSpace(farm)!.Footprint.Offsets)
+            {
+                map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm + offset);
+                if (game.GetPlot(farm + offset).CropKind != CropKind.Radish ||
+                    !ContainsVisibleText(detail, "获得水后 4 天成熟") ||
+                    !ContainsVisibleText(detail, "建筑锚点 (188, 198) · 占地 9 格"))
+                    return Fail("子格改种后九格没有保持同一作物与详情");
+            }
+            Find<Button>(detail, "RemoveButton").EmitSignal(Button.SignalName.Pressed);
+            for (int row = 0; row < 3; row++)
+                for (int col = 0; col < 3; col++)
+                    if (game.GetPlot(farm + new Vector2I(col, row)).Building != BuildingKind.None)
+                        return Fail("末端子格拆除后仍残留同座设施");
+            if (game.MoneyCents != 4000 || !ContainsVisibleText(detail, "空地"))
+                return Fail("整座拆除退款或未恢复空地详情");
+            int redraws = map.ChunkRedrawCount;
+            Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
+            if (map.ChunkRedrawCount != redraws)
+                return Fail("只读打开库存重建了地块");
+            return true;
+        }
+        finally
+        {
+            main.QueueFree();
+        }
+    }
+
     private static bool CheckRainUi(Node parent)
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
         parent.AddChild(main);
-        main.Game.SetFarmCrop(new Vector2I(63, 63), CropKind.Radish);
-        main.Game.SetFarmCrop(new Vector2I(64, 63), CropKind.Radish);
-        main.Game.SetFarmCrop(new Vector2I(65, 63), CropKind.Radish);
-        Vector2I wetFarm = new(66, 63);
+        main.Game.SetFarmCrop(new Vector2I(189, 189), CropKind.Radish);
+        main.Game.SetFarmCrop(new Vector2I(192, 189), CropKind.Radish);
+        main.Game.SetFarmCrop(new Vector2I(195, 189), CropKind.Radish);
+        Vector2I wetFarm = new(198, 189);
         main.Game.BuildFarm(wetFarm);
         main.Game.SetFarmCrop(wetFarm, CropKind.Radish);
         main.Game.AdvanceTick(isRaining: true);
@@ -255,10 +323,9 @@ public partial class TestCoreLoop : Node
 
     private static bool CheckReserveControls(Main main)
     {
-        Vector2I[] initial = { new(63, 63), new(64, 63), new(65, 63), new(63, 64), new(64, 64) };
-        foreach (Vector2I cell in initial) main.Game.RemoveBuilding(cell);
-        Vector2I farm = new(63, 63);
-        Vector2I processor = new(5, 4);
+        foreach (var space in main.Game.GetBuildingSpaces()) main.Game.RemoveBuilding(space.AnchorCell);
+        Vector2I farm = new(189, 189);
+        Vector2I processor = new(15, 12);
         main.Game.SetRawReserve(CropKind.Radish, 6);
         main.Game.BuildFarm(farm);
         main.Game.SetFarmCrop(farm, CropKind.Radish);
@@ -383,8 +450,8 @@ public partial class TestCoreLoop : Node
         roadCard.EmitSignal(Button.SignalName.Pressed);
         if (window.Visible || !cancel.Visible || !footer.Text.Contains("每格 1.00 金币"))
             return Fail("道路选择没有进入连续铺设并显示统一费用");
-        Vector2I first = new(61, 64);
-        Vector2I second = new(60, 64);
+        Vector2I first = new(183, 192);
+        Vector2I second = new(180, 192);
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
         if (main.Game.GetPlot(first).Building != BuildingKind.Road || main.Game.MoneyCents != 4900 ||
             !cancel.Visible || detail.Visible || !message.Text.Contains("花费 1.00 金币"))
@@ -471,7 +538,7 @@ public partial class TestCoreLoop : Node
         if (buildWindow.Visible || !cancel.Visible)
             return Fail("选中农田后未进入摆放状态");
 
-        Vector2I farm = new(62, 64);
+        Vector2I farm = new(186, 192);
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
         if (main.Game.GetPlot(farm).Building != BuildingKind.Farm ||
             main.Game.MoneyCents != 4000 || !detail.Visible || cancel.Visible ||
@@ -533,7 +600,7 @@ public partial class TestCoreLoop : Node
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
         if (!cancel.Visible || main.Game.MoneyCents != 4000 || !message.Text.Contains("已有建筑"))
             return Fail("占用地块仍建造或扣费");
-        Vector2I processor = new(66, 64);
+        Vector2I processor = new(198, 192);
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
         if (main.Game.GetPlot(processor).Building != BuildingKind.Processor ||
             main.Game.MoneyCents != 3000 || cancel.Visible ||

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using FarmExchange.Gameplay;
 using FarmExchange.Time;
 
@@ -15,6 +16,8 @@ internal sealed class FarmingSystem
 {
     private readonly FarmState?[] _farms;
     private readonly int[] _farmRevisions;
+    private readonly List<int> _indices = new();
+    private IReadOnlyList<int>? _indicesSnapshot;
 
     internal FarmingSystem(int cellCount)
     {
@@ -23,6 +26,7 @@ internal sealed class FarmingSystem
     }
 
     internal int CellCount => _farms.Length;
+    internal IReadOnlyList<int> Indices => _indicesSnapshot ??= Array.AsReadOnly(_indices.ToArray());
     internal bool HasFarm(int index) => _farms[index] != null;
 
     internal FarmSnapshot Get(int index)
@@ -40,6 +44,9 @@ internal sealed class FarmingSystem
             throw new InvalidOperationException("土地已有农田状态");
         _farmRevisions[index]++;
         _farms[index] = new FarmState(crop);
+        int insertion = _indices.BinarySearch(index);
+        _indices.Insert(~insertion, index);
+        _indicesSnapshot = null;
     }
 
     internal void Remove(int index)
@@ -48,6 +55,8 @@ internal sealed class FarmingSystem
             throw new InvalidOperationException("土地没有农田状态");
         _farmRevisions[index]++;
         _farms[index] = null;
+        _indices.Remove(index);
+        _indicesSnapshot = null;
     }
 
     internal void SetCrop(int index, CropKind crop)
@@ -124,7 +133,7 @@ internal sealed class FarmingSystem
     internal void ClearDisallowedCrops(Season season)
     {
         GrowingSeasons currentSeason = (GrowingSeasons)(1 << (int)season);
-        for (int index = 0; index < _farms.Length; index++)
+        foreach (int index in _indices)
         {
             FarmState? farm = _farms[index];
             if (farm == null || farm.Stage == CropStage.None ||
@@ -154,10 +163,11 @@ internal sealed class FarmingSystem
 
     internal void Clear()
     {
-        for (int index = 0; index < _farms.Length; index++)
-            if (_farms[index] != null)
-                _farmRevisions[index]++;
+        foreach (int index in _indices)
+            _farmRevisions[index]++;
         Array.Clear(_farms);
+        _indices.Clear();
+        _indicesSnapshot = null;
     }
 
     private sealed class FarmState

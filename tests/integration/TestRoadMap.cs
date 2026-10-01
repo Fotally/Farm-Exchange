@@ -16,8 +16,7 @@ public partial class TestRoadMap : Node
     public static async Task<bool> RunChecksAsync(Node parent)
     {
         var game = new FarmGame(12345);
-        Vector2I[] initial = { new(63, 63), new(64, 63), new(65, 63), new(63, 64), new(64, 64) };
-        foreach (Vector2I cell in initial) game.RemoveBuilding(cell);
+        foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         var scope = new Node2D();
         parent.AddChild(scope);
         var map = new WorldMap { Position = new Vector2(113, -67) };
@@ -25,7 +24,7 @@ public partial class TestRoadMap : Node
         map.SetGame(game);
         var camera = new Camera2D
         {
-            Position = map.GetCellWorldCenter(new Vector2I(63, 63)),
+            Position = map.GetCellWorldCenter(new Vector2I(183, 183)),
             Zoom = new Vector2(1.25f, 1.25f),
         };
         scope.AddChild(camera);
@@ -34,8 +33,8 @@ public partial class TestRoadMap : Node
         {
             await LayoutFrames(parent);
             int initialRedraws = map.ChunkRedrawCount;
-            Vector2I firstRoad = new(63, 63);
-            Vector2I secondRoad = new(64, 63); // 分处相邻两个 8×8 块。
+            Vector2I firstRoad = new(183, 186);
+            Vector2I secondRoad = new(184, 186); // 分处相邻两个 8×8 块。
             if (!game.TryPlace(firstRoad, BuildingKind.Road, default).Success ||
                 !game.TryPlace(secondRoad, BuildingKind.Road, default).Success)
                 return Fail("道路地图夹具无法放置相邻道路");
@@ -59,10 +58,7 @@ public partial class TestRoadMap : Node
                 Image before = parent.GetViewport().GetTexture().GetImage();
                 if (!IsGray(PixelAt(before, map, firstRoad)) || !IsGray(PixelAt(before, map, secondRoad)))
                     return Fail("道路中心没有实际绘制为灰色路面，或被当作加工场地绘制");
-                Vector2 selectedEdge = map.GetGlobalTransformWithCanvas() *
-                    (MapCoordinates.CellToLocalCenter(firstRoad) + new Vector2(MapCoordinates.TileWidth / 2, 0));
-                Color outline = before.GetPixel(Mathf.RoundToInt(selectedEdge.X), Mathf.RoundToInt(selectedEdge.Y));
-                if (outline.R <= outline.G + 0.04f || outline.G <= outline.B + 0.1f)
+                if (!HasGoldenOutline(before, map, firstRoad, 1, 1))
                     return Fail("道路选中后没有实际绘制金色选框");
                 SaveScreenshot(before, "road-map-before.png");
             }
@@ -86,13 +82,99 @@ public partial class TestRoadMap : Node
             map.SelectAtScreenPosition(ScreenCenter(map, secondRoad));
             if (selected != secondRoad)
                 return Fail("道路移除后，相邻道路无法继续选择");
-            return true;
+            return await CheckProductionFootprints(parent, game, map);
+
         }
         finally
         {
             parent.RemoveChild(scope);
             scope.Free();
         }
+    }
+
+    private static async Task<bool> CheckProductionFootprints(Node parent, FarmGame game, WorldMap map)
+    {
+        Vector2I farm = new(183, 183); // 九格横纵均跨越184处的8×8块边界。
+        Vector2I processor = new(187, 183);
+        int beforeRedraws = map.ChunkRedrawCount;
+        if (!game.TryPlace(farm, BuildingKind.Farm, CropKind.Wheat).Success ||
+            !game.TryPlace(processor, BuildingKind.Processor, CropKind.Wheat).Success)
+            return Fail("多格地图夹具无法放置生产设施");
+        map.SyncFromGame();
+        await LayoutFrames(parent);
+        if (map.ChunkRedrawCount < beforeRedraws + 4)
+            return Fail("3×3农田跨四块建造未完整刷新");
+        int builtRedraws = map.ChunkRedrawCount;
+        Vector2I selected = new(-1, -1);
+        map.SelectionChanged += cell => selected = cell;
+        foreach (var space in new[] { game.GetBuildingSpace(farm)!, game.GetBuildingSpace(processor)! })
+            foreach (Vector2I offset in space.Footprint.Offsets)
+            {
+                Vector2I child = space.AnchorCell + offset;
+                map.SelectAtScreenPosition(ScreenCenter(map, child));
+                if (selected != child || game.GetBuildingSpace(selected) != space)
+                    return Fail("平移后的任一生产子格未关联同一整座设施");
+            }
+        map.SelectAtScreenPosition(ScreenCenter(map, farm + new Vector2I(2, 2)));
+        await LayoutFrames(parent);
+        if (map.ChunkRedrawCount != builtRedraws)
+            return Fail("多格设施选框重建了地图块");
+        bool graphical = DisplayServer.GetName() != "headless";
+        if (graphical)
+        {
+            Image image = parent.GetViewport().GetTexture().GetImage();
+            foreach (var space in new[] { game.GetBuildingSpace(farm)!, game.GetBuildingSpace(processor)! })
+                foreach (Vector2I offset in space.Footprint.Offsets)
+                {
+                    Vector2I child = space.AnchorCell + offset;
+                    Color pixel = PixelAt(image, map, child);
+                    if (child == space.WorkCell)
+                    {
+                        if (space.Building == BuildingKind.Farm ? pixel.G <= pixel.R + 0.2f : pixel.R < 0.8f)
+                            return Fail("生产实例工作中心缺少唯一作物/加工标记");
+                    }
+                    else if (space.Building == BuildingKind.Farm ? pixel.R <= pixel.G + 0.1f : pixel.B <= pixel.R + 0.1f)
+                        return Fail("生产子格出现重复标记或占地未完整着色");
+                }
+            if (!HasGoldenOutline(image, map, farm, 3, 3))
+                return Fail("点击末端子格未绘制完整3×3金色选框");
+            SaveScreenshot(image, "production-footprint-before.png");
+        }
+        if (game.SetFarmCrop(farm + new Vector2I(2, 1), CropKind.Radish) != null)
+            return Fail("末端子格改种失败");
+        map.SyncFromGame();
+        await LayoutFrames(parent);
+        if (graphical)
+        {
+            Color marker = PixelAt(parent.GetViewport().GetTexture().GetImage(), map, farm + Vector2I.One);
+            if (marker.R <= marker.G + 0.3f)
+                return Fail("子格改种没有更新唯一中心作物标记");
+        }
+        if (game.RemoveBuilding(farm + new Vector2I(2, 2)) != null)
+            return Fail("末端子格整座拆除失败");
+        map.SyncFromGame();
+        await LayoutFrames(parent);
+        for (int row = 0; row < 3; row++)
+            for (int col = 0; col < 3; col++)
+            {
+                Vector2I child = farm + new Vector2I(col, row);
+                if (game.GetPlot(child).Building != BuildingKind.None)
+                    return Fail("跨块整座拆除残留占用");
+                if (graphical)
+                {
+                    Color pixel = PixelAt(parent.GetViewport().GetTexture().GetImage(), map, child);
+                    if (pixel.G <= pixel.R + 0.05f)
+                        return Fail("跨块整座拆除残留棕色路面或标记");
+                }
+            }
+        if (graphical)
+        {
+            Image after = parent.GetViewport().GetTexture().GetImage();
+            if (PixelAt(after, map, processor + Vector2I.One).R < 0.8f)
+                return Fail("拆除农田清除了相邻加工场地标记");
+            SaveScreenshot(after, "production-footprint-after.png");
+        }
+        return true;
     }
 
     private static async Task LayoutFrames(Node parent)
@@ -108,6 +190,23 @@ public partial class TestRoadMap : Node
     {
         Vector2 center = ScreenCenter(map, cell);
         return image.GetPixel(Mathf.RoundToInt(center.X), Mathf.RoundToInt(center.Y));
+    }
+
+    private static bool HasGoldenOutline(Image image, WorldMap map, Vector2I anchorCell, int columns, int rows)
+    {
+        Vector2[] outline = MapCoordinates.GridRectangleOutline(anchorCell, columns, rows);
+        // 像素中心可能落在线段端点的线帽外；检查四条完整几何边的内部位置。
+        // 1/4、1/2、3/4也避开3×3选框内部各小格边段的连接点。
+        for (int side = 0; side < 4; side++)
+            for (int sample = 1; sample <= 3; sample++)
+            {
+                Vector2 local = outline[side].Lerp(outline[(side + 1) % 4], sample / 4f);
+                Vector2 screen = map.GetGlobalTransformWithCanvas() * local;
+                Color pixel = image.GetPixel(Mathf.RoundToInt(screen.X), Mathf.RoundToInt(screen.Y));
+                if (pixel.R <= pixel.G + 0.04f || pixel.G <= pixel.B + 0.1f)
+                    return false;
+            }
+        return true;
     }
 
     private static bool IsGray(Color color) =>

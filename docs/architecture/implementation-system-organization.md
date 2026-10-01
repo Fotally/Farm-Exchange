@@ -16,7 +16,9 @@ flowchart LR
     Camera[CameraController：输入] --> WorldMap
     WorldMap --> MapCoordinates[MapCoordinates：格与本地坐标]
     WorldMap --> FarmGame
-    FarmGame --> LandOccupancy[LandOccupancy：每格主要占用]
+    FarmGame --> LandOccupancy[LandOccupancy：实例与子格映射]
+    LandOccupancy --> Footprint[BuildingFootprint：固定占地与工作中心]
+    WorkerScheduler --> Footprint
     FarmGame --> PlacementRules[PlacementRules：放置预检与执行规则]
     PlacementRules --> LandOccupancy
     PlacementRules --> MapCoordinates
@@ -50,7 +52,8 @@ flowchart LR
 
 | 状态或计算 | 当前拥有者 | 其他模块的使用方式 |
 | --- | --- | --- |
-| 每格主要占用类别 | `LandOccupancy` | `FarmGame` 协调农田、加工场地与道路建造、拆除，并聚合地块快照；道路没有生产状态。 |
+| 实例锚点、类别与子格到实例映射 | `LandOccupancy` | 全占地几何检查、一次登记和整体移除；经营与地图读取同一空间快照，生产状态只在锚点保存一份。 |
+| 固定形状偏移与工作中心 | `BuildingFootprint` | 土地、工人和地图共享定义；当前农田/加工 3×3、道路 1×1，不在各调用方重复计算。 |
 | 建筑描述、范围、占用与余额的放置检查 | `PlacementRules` | `FarmGame` 预检和执行使用同一规则；执行时重新检查并返回实际扣费。 |
 | 农田选种、水分、阶段与剩余精确时长 | `FarmingSystem` | `FarmGame` 在步进开始传入显式降雨，协调按作物收获量入库；换季后通过完整清理操作处理禁生作物，`WorkerScheduler` 只通过受控工作操作照料。 |
 | 播种适宜季节与预计成熟判断 | `PlantingRules` | `FarmingSystem` 执行播种和 `FarmGame` 查询详情共用同一只读结果。 |

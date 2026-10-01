@@ -41,9 +41,8 @@ public partial class TestWorkerPresentation : Node
     private static FarmGame CreateGame()
     {
         var game = new FarmGame(12345);
-        Vector2I[] initial = { new(63, 63), new(64, 63), new(65, 63), new(63, 64), new(64, 64) };
-        foreach (Vector2I cell in initial) game.RemoveBuilding(cell);
-        Vector2I[] farms = { new(64, 64), new(67, 64), new(62, 65) };
+        foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
+        Vector2I[] farms = { new(192, 192), new(201, 192), new(186, 195) };
         foreach (Vector2I farm in farms) game.BuildFarm(farm);
         return game;
     }
@@ -77,7 +76,8 @@ public partial class TestWorkerPresentation : Node
                 NpcCharacter character = presentation.GetNode<NpcCharacter>($"Worker{i + 1}");
                 AnimatedSprite2D sprite = character.GetNode<AnimatedSprite2D>("AnimatedSprite2D");
                 if (character.CharacterSheet.ResourcePath != $"res://assets/gameplay/npc/{sheets[i]}" ||
-                    !sprite.IsPlaying())
+                    !sprite.IsPlaying() || sprite.Position != new Vector2(0, -20) ||
+                    ((AtlasTexture)sprite.SpriteFrames.GetFrameTexture("run_left", 0)).Region.Size != new Vector2(64, 64))
                     return Fail("三名工人未使用既有三张不同图集，或移动动画没有播放");
                 sprite.Frame = 3;
             }
@@ -158,7 +158,7 @@ public partial class TestWorkerPresentation : Node
                         return Fail("相同显示经过时间在不同帧率下产生不同位置");
                 }
             }
-            Vector2I[] farms = { new(64, 64), new(67, 64), new(62, 65) };
+            Vector2I[] farms = { new(192, 192), new(201, 192), new(186, 195) };
             foreach (Vector2I farm in farms)
                 if (slowGame.GetPlot(farm) != fastGame.GetPlot(farm) ||
                     slowGame.GetPlot(farm).Crop != CropStage.Growing)
