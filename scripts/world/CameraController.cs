@@ -11,6 +11,7 @@ public partial class CameraController : Camera2D
     private const float ClickDistance = 8f;
 
     private WorldMap _worldMap = null!;
+    private float _viewZoom;
     private bool _middleDragging;
     private bool _leftPressed;
     private bool _leftDragging;
@@ -19,6 +20,14 @@ public partial class CameraController : Camera2D
     public override void _Ready()
     {
         _worldMap = GetNode<WorldMap>("../WorldMap");
+        _viewZoom = Zoom.X;
+        GetViewport().SizeChanged += ApplyViewportScale;
+        ApplyViewportScale();
+    }
+
+    public override void _ExitTree()
+    {
+        GetViewport().SizeChanged -= ApplyViewportScale;
     }
 
     public override void _Process(double delta)
@@ -39,7 +48,7 @@ public partial class CameraController : Camera2D
             direction.Y += 1f;
         if (direction != Vector2.Zero)
         {
-            Position += direction.Normalized() * PanSpeed * (float)delta / Zoom.X;
+            Position += direction.Normalized() * PanSpeed * (float)delta / _viewZoom;
             ClampPosition();
         }
     }
@@ -72,12 +81,12 @@ public partial class CameraController : Camera2D
             }
             else if (mouse.Pressed && mouse.ButtonIndex == MouseButton.WheelUp)
             {
-                SetZoom(Zoom.X * 1.1f);
+                SetZoom(_viewZoom * 1.1f);
                 GetViewport().SetInputAsHandled();
             }
             else if (mouse.Pressed && mouse.ButtonIndex == MouseButton.WheelDown)
             {
-                SetZoom(Zoom.X / 1.1f);
+                SetZoom(_viewZoom / 1.1f);
                 GetViewport().SetInputAsHandled();
             }
         }
@@ -96,8 +105,14 @@ public partial class CameraController : Camera2D
 
     private void SetZoom(float value)
     {
-        float amount = Math.Clamp(value, MinZoom, MaxZoom);
-        Zoom = new Vector2(amount, amount);
+        _viewZoom = Math.Clamp(value, MinZoom, MaxZoom);
+        ApplyViewportScale();
+    }
+
+    private void ApplyViewportScale()
+    {
+        Vector2 stretch = GetViewport().GetStretchTransform().Scale;
+        Zoom = new Vector2(_viewZoom, _viewZoom) / stretch;
         ClampPosition();
     }
 

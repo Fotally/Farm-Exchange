@@ -26,6 +26,7 @@ public partial class TestSuite : Node
         bool worldMapPassed = TestWorldMap.RunChecks();
         GD.Print("集成测试：镜头输入与地图选择");
         bool cameraPassed = TestCameraInteraction.RunChecks(this);
+        cameraPassed = await TestCameraInteraction.RunResizeChecksAsync(this) && cameraPassed;
         GD.Print("集成测试：NPC 动画与角色切换");
         bool npcPassed = TestNpcPreview.RunChecks(this);
         GD.Print("端到端测试：主场景经营流程");

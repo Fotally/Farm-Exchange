@@ -28,7 +28,7 @@
 - `scripts/world/MapCoordinates.cs`：固定等距地图的格坐标与地图本地坐标换算入口，使用 `FarmGame.MapSize` 定义的同一地图范围；不读取节点或经营状态。
 - `scripts/world/WorldMap.cs`：地图表现模块。每空间实例读取一次生产快照，填入完整占地；按 8×8 基础格缓存网格，一个实例只在工作中心画一次标记。镜头只更新块可见性，外观变化时重建对应块；按固定偏移绘制完整设施外围选框，输入转为本地基础格并限制镜头。不维护经营规则。
 - `scripts/world/WorkerPresentation.cs`：读取工人编号、经营格位置、目标与活动快照，复用角色场景显示三人并按帧插值；位置换算复用地图接口，暂停保持画面，视觉帧率与动画不推进经营。
-- `scripts/world/CameraController.cs`：输入与镜头模块。区分左键点击、左键拖动，左键释放时结束拖动，并在释放事件被界面拦截时逐帧校正状态；处理缩放和键盘移动，通过 `WorldMap` 的接口选择格子及限制镜头。
+- `scripts/world/CameraController.cs`：输入与镜头模块。唯一保存玩家倍率，内部抵消视口拉伸；窗口和全屏扩大时增加地图视野，保持农田与人物像素大小、镜头中心和玩家倍率。订阅尺寸变化并在退出时取消；缩放限制与输入换算保持内部，UI 沿用原适配。区分左键点击与拖动，释放即结束拖动，释放被界面拦截时逐帧校正；通过 `WorldMap` 选择格子及限制镜头。
 - `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。持有摆放和所选格，分发窗口意图及计时器命令，显示真实工人数、季、年、月、日与暂停按钮，经营变化后统一刷新，并组装读取工人快照的表现；只在地块变化时同步地图。
 - `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs`、`RoadDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与范围、建造目录、固定的选种/库存/市场控件、三类详情及共用视觉元素。目录包含道路卡片并统一查询费用；道路连续铺设到 Esc/取消为止，详情仅发出拆除意图。库存窗口在刷新时保留草稿与焦点；加工详情实时区分领取等待原因。窗口不持有经营状态。
 - `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`：独立角色预览，接收 WASD/方向键移动、Q/E 切换 20 位角色并显示名称与跟随镜头；不接入主经营场景。
