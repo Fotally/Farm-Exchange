@@ -4,7 +4,7 @@
 
 - 成果：两种一次买单、一次卖单与持续策略，多组价格/库存/季节条件，原设单现金保留、资源冻结和 1% 成交费用；完成市场入口、订单管理、草稿保持及对应中文玩法与接口文档。
 - 审查与验收：基准 `fae7f1e66175cb1aebd779187636d6b2da36482b`；第五轮独立代码与提交范围复审无待修。指定 Godot 4.7.2 Mono Debug/Release 编译零警告零错误，完整 headless 套件、真实窗口场景、Windows Release 导出及实际 EXE 启动退出码 0。总体行覆盖率 3381/3488（96.93%），13 个模块均超过 80%，分表见[测试记录](testing.md#2026-10-02-36-委托与自动交易验收)。满地图 50 tick 92.83 ms，平均 1.857 ms/tick；[窗口原始截图](../architecture/ui/trade-orders-window/orders-window.png)已查看。静态、全仓格式和差异空白检查通过。日志与逐模块 JSON 位于本地 `build/issue36-validation/`，原始覆盖报告为 `coverage/coverage.cobertura.xml`，这些临时产物不入 Git。
-- 交付状态：已验收、待创建 dev → main PR；人工合并前不标记已合并。
+- 交付状态：已验收、待人工合并；[PR #81](https://github.com/Fotally/Farm-Exchange/pull/81)，`dev` → `main`，功能提交 `22fd19d`。人工合并前不标记已合并。
 
 # 后续功能计划
 
@@ -20,7 +20,7 @@ T00～T10 与追加 T12 的已确认范围均已完成，PR #70 已于北京时�
 | --- | --- | --- | --- |
 | 季节耕作表 | [#42](https://github.com/Fotally/Farm-Exchange/issues/42) | 独立选种、季节与预计成熟检查、自动复种、越季清理 | 玩家配置的季节计划与自动换种 |
 | 后续扩充人力 | [#43](https://github.com/Fotally/Farm-Exchange/issues/43) | 开局三人、移动与播种浇水、稳定轮转和实例独占 | 扩员方式、相关费用与玩家操作 |
-| 委托挂单、自动买卖与手续费 | [#36](https://github.com/Fotally/Farm-Exchange/issues/36) | 即时交易，以及本轮已验收的委托、自动策略、手续费与界面 | 等待 PR 交付及人工合并 |
+| 委托挂单、自动买卖与手续费 | [#36](https://github.com/Fotally/Farm-Exchange/issues/36) | 即时交易，以及本轮已验收的委托、自动策略、手续费与界面 | [PR #81](https://github.com/Fotally/Farm-Exchange/pull/81) 等待人工合并 |
 | 行情学习反馈 | [#44](https://github.com/Fotally/Farm-Exchange/issues/44) | 对应实际因素的公告、上次价、当前价与涨跌展示 | 用消息、实际行情与交易结果帮助学习的反馈功能 |
 
 存档、离线收益、天气生成、道路速度属性及其他建筑仍按[系统规划的待确认事项](roadmap.md#待用户确认)管理，不加入这四项计划。窗口与全屏显示策略另见[成熟作品显示缩放调研](../research/window-size-and-map-zoom.md)，也不包含在 T11 中。
