@@ -20,6 +20,10 @@ public partial class TestSuite : Node
         bool marketQuotesPassed = TestMarketQuotes.RunChecks();
         GD.Print("单元测试：即时交易、容量与公共库存守恒");
         bool tradingPassed = TestTradingService.RunChecks();
+        GD.Print("单元测试：多因素委托、费用、冻结与经营顺序");
+        bool tradeOrdersPassed = TestTradeOrders.RunChecks();
+        GD.Print("端到端测试：委托窗口实际命令、草稿与焦点");
+        bool tradeOrdersUiPassed = TestTradeOrdersWindow.RunChecks(this);
         GD.Print("单元测试：独立日历换算");
         bool calendarPassed = TestGameCalendar.RunChecks();
         GD.Print("单元测试：等距地图坐标");
@@ -35,12 +39,14 @@ public partial class TestSuite : Node
         bool loadPassed = TestFullWorldLoad.RunChecks();
         GD.Print("端到端测试：库存编辑真实布局与滚动");
         bool inventoryLayoutPassed = await TestCoreLoop.RunLayoutChecks(this);
+        GD.Print("端到端测试：委托窗口长列表、条件滚动与布局");
+        tradeOrdersUiPassed = await TestTradeOrdersWindow.RunLayoutChecks(this) && tradeOrdersUiPassed;
         GD.Print("集成测试：工人经营快照与主地图表现");
         bool workerPresentationPassed = await TestWorkerPresentation.RunChecksAsync(this);
         GD.Print("集成测试：道路灰色地图、分块缓存与选择");
         bool roadMapPassed = await TestRoadMap.RunChecksAsync(this);
         bool passed = farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed;
+            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");

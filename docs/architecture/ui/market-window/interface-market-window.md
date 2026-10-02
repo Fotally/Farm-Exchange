@@ -21,6 +21,8 @@
 
 数量买卖按钮保留可用，以便数量、资金或库存不足时由执行入口给出明确失败。点击执行时 Main 查询的生效报价用于成交，不能使用窗口上次刷新时的价格。暂停期间这些按钮仍可使用，主动交易不推进经营。
 
+#36 在报价日期行增加“委托与策略”按钮，事件 `OrdersRequested` 交由 Main 打开 [TradeOrdersWindow](../trade-orders-window/interface-trade-orders-window.md)，即时交易数量草稿保持原状。市场公共库存仍显示总量；存在单次卖单冻结时追加可用量，悬停说明总库存、可用库存、冻结库存。全售选中商品、原料快捷和全部加工品快捷均按 `GetAvailableStock` 判断可售量，冻结库存不能启用全售按钮；数量交易继续由经营入口给出资源不足原因。
+
 默认窗口位置 (250,78)、尺寸 780×520，避让底部建造区域；1280×720 基准视窗中窗口终点 Y=598，位于底部起点 Y=611 之前。消息滚动区高 60，十四行表格独立滚动；交易数量与三个操作共用一行，全部加工品按钮及反馈固定在底部。数量标题与交易反馈固定为单行；反馈在首次排版前不以零宽自动换行，避免临时最小高度撑大窗口且排版后仍保留超出视窗的尺寸。正文长消息仅在独立消息滚动区换行，不扩大窗口或挤出数量操作。实际布局 E2E 已通过，真实运行截图见本文前部。
 
 保留节点名 `MarketWindow`、`MarketRows`、`MarketScroll`、`SellRaw{作物}Button`、`SellButton`。新增 `MarketDates`、`MarketNewsScroll`、`MarketNews`、`MarketQuantityInput`、`SelectedCommodityLabel`、`Commodity{作物}{Raw/Product}Button`、`BuyCommodityButton`、`SellCommodityButton`、`SellCommodityAllButton`、`MarketFeedback`；单个报价字段为 `Quote{作物}{Raw/Product}{Price/Previous/Change/Stock}`。

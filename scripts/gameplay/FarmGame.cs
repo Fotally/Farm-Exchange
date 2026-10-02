@@ -72,9 +72,12 @@ public sealed class FarmGame
     private readonly Wallet _wallet = new(5000);
     private readonly MarketQuotes _market;
     private readonly TradingService _trading;
+    private readonly TradeOrderBook _tradeOrders;
     private readonly GameCalendar _calendar;
 
     public int MoneyCents => _wallet.BalanceCents;
+    public int AvailableMoneyCents => _wallet.AvailableCents;
+    public int FrozenMoneyCents => _wallet.FrozenCents;
     public int CurrentDay => (int)_calendar.Snapshot.ElapsedDays + 1;
     public CalendarSnapshot Calendar => _calendar.Snapshot;
     public bool IsPaused => _calendar.IsPaused;
@@ -90,6 +93,7 @@ public sealed class FarmGame
         int seed = marketSeed ?? Random.Shared.Next();
         _market = new MarketQuotes(seed, _calendar.Snapshot.ElapsedDays);
         _trading = new TradingService(_inventory, _wallet, _market);
+        _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
         InitializeCenter(new Random(seed));
     }
 
@@ -137,6 +141,8 @@ public sealed class FarmGame
     }
     public int GetProductStock(CropKind crop) => _inventory.GetProduct(crop);
     public int GetStock(CommodityId commodity) => _inventory.Get(commodity);
+    public int GetAvailableStock(CommodityId commodity) => _inventory.GetAvailable(commodity);
+    public int GetFrozenStock(CommodityId commodity) => _inventory.GetFrozen(commodity);
     public MarketQuoteSnapshot GetQuote(CommodityId commodity) => _market.GetQuote(commodity);
     public MarketSnapshot GetMarketSnapshot() => _market.GetSnapshot();
     public int GetProductPriceCents(CropKind crop) =>
@@ -297,7 +303,7 @@ public sealed class FarmGame
     {
         if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
             return new PlacementCheck(LandFailure.InvalidBuilding, 0);
-        return PlacementRules.Check(cell, building, crop, _occupancy, _wallet.BalanceCents,
+        return PlacementRules.Check(cell, building, crop, _occupancy, _wallet.AvailableCents,
             GetBuildingCostCents(building));
     }
 
@@ -387,12 +393,40 @@ public sealed class FarmGame
         StartIdleProcessors();
         bool workerActed = _workerScheduler.AdvanceOneSecond(_farming, _calendar.Snapshot);
         bool dayAdvanced = AdvanceDay();
+        _tradeOrders.Execute(_calendar.Snapshot);
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
     }
 
     public TradeResult Buy(CommodityId commodity, int quantity) => _trading.Buy(commodity, quantity);
     public TradeResult Sell(CommodityId commodity, int quantity) => _trading.Sell(commodity, quantity);
     public TradeResult SellCommodityAll(CommodityId commodity) => _trading.SellAll(commodity);
+
+    /** <summary>读取按建单顺序排列的独立只读委托快照。</summary>
+     * <returns>全部活动和已结束委托，查询不执行交易。</returns> */
+    public IReadOnlyList<TradeOrderSnapshot> GetTradeOrders() => _tradeOrders.GetSnapshots();
+
+    /** <summary>创建委托；一次单冻结资源，持续策略不冻结。</summary>
+     * <param name="request">商品、完整条件组、数量、预算和现金保留设置。</param>
+     * <returns>新委托 ID 或零修改的中文拒绝原因。</returns>
+     * <remarks>锁定当前现金基准，不立即执行；暂停时仍可提交。</remarks> */
+    public TradeOrderCommandResult CreateTradeOrder(TradeOrderRequest request) => _tradeOrders.Create(request);
+
+    /** <summary>完整替换活动委托并重验冻结，保持原 ID、顺序和现金基准。</summary>
+     * <param name="id">原活动委托 ID。</param>
+     * <param name="request">新的完整设置。</param>
+     * <returns>成功或零修改的正常拒绝。</returns> */
+    public TradeOrderCommandResult UpdateTradeOrder(int id, TradeOrderRequest request) => _tradeOrders.Update(id, request);
+
+    /** <summary>撤销活动委托并释放该单资源；结束记录仍保留。</summary>
+     * <param name="id">活动委托 ID。</param>
+     * <returns>成功或已经结束的正常拒绝。</returns> */
+    public TradeOrderCommandResult CancelTradeOrder(int id) => _tradeOrders.Cancel(id);
+
+    /** <summary>启用或停用持续策略，不推进经营。</summary>
+     * <param name="id">活动持续策略 ID。</param>
+     * <param name="enabled">是否启用。</param>
+     * <returns>成功或不支持该操作的正常拒绝。</returns> */
+    public TradeOrderCommandResult SetTradeOrderEnabled(int id, bool enabled) => _tradeOrders.SetEnabled(id, enabled);
 
     public SaleResult SellAll() => LegacySale(_trading.SellAllProducts());
     public SaleResult SellRaw(CropKind crop) =>

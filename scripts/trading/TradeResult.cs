@@ -5,11 +5,12 @@ namespace FarmExchange.Trading;
 public enum TradeFailure
 {
     None, InvalidCommodity, InvalidQuantity, InsufficientFunds, InsufficientStock,
-    InventoryCapacityExceeded, WalletCapacityExceeded,
+    InventoryCapacityExceeded, WalletCapacityExceeded, CashReserveNotMet,
 }
 
 public readonly record struct TradeResult(TradeFailure Failure, long Quantity, long TotalCents)
 {
+    public long FeeCents { get; init; }
     public bool Success => Failure == TradeFailure.None;
     public string? ErrorMessage => Failure switch
     {
@@ -20,6 +21,7 @@ public readonly record struct TradeResult(TradeFailure Failure, long Quantity, l
         TradeFailure.InsufficientStock => "公共库存不足，无法卖出",
         TradeFailure.InventoryCapacityExceeded => "商品库存容量不足",
         TradeFailure.WalletCapacityExceeded => "金币余额容量不足",
+        TradeFailure.CashReserveNotMet => "买入后现金低于委托保留金额",
         _ => throw new ArgumentOutOfRangeException(nameof(Failure)),
     };
 }

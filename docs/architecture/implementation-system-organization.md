@@ -39,6 +39,11 @@ flowchart LR
     Trading --> Inventory
     Trading --> Wallet
     Trading --> Market
+    FarmGame --> Orders[TradeOrderBook：条件、委托与执行状态]
+    Orders --> Trading
+    Orders --> Inventory
+    Orders --> Wallet
+    Orders --> GameCalendar
     Market --> CommodityCatalog[CommodityCatalog：十四商品初价]
     CommodityCatalog --> CropCatalog
     Market --> GameCalendar
@@ -67,6 +72,8 @@ flowchart LR
 | 金币余额 | `Wallet` | `FarmGame` 在建造和交易时扣款或入账；界面仍通过 `FarmGame.MoneyCents` 查询。 |
 | 商品名称与初价 | `CommodityCatalog` | 报价与UI共用十四商品目录，合法性复用 `CommodityId`。 |
 | 完整交易检查与结算 | `TradingService` | `FarmGame` 转发买卖和全部出售；先检查资源与容量再同步提交，失败零修改。 |
+| 委托配置、原现金基准、建单顺序与执行状态 | `TradeOrderBook` | `FarmGame` 统一管理并在行情更新后推进一次；条件、预算数量与生命周期留内部，UI 读取独立快照和发出完整命令。 |
+| 金币与商品的冻结总额 | `Wallet`、`Inventory` | 订单只记录每单归属量；建造、加工、即时交易读可用额度，成交使用本单额度并释放差额，撤销只释放本单冻结。 |
 | 历史面粉曲线 | `MarketPriceCurve` | 保留独立曲线验证，正式经营不调用。 |
 | 格坐标范围与等距本地坐标换算 | `MapCoordinates` | `WorldMap` 用于选格、绘制和镜头限制；地图格数引用 `FarmGame.MapSize`。 |
 | 地图块缓存、选中格和可见性 | `WorldMap` | `Main` 同步外观；`CameraController` 发起选格与限制镜头。 |
