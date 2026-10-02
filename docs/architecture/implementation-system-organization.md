@@ -1,6 +1,6 @@
 # 当前系统组织与状态归属
 
-本文记录已落地的模块关系，随实施任务更新；未来玩法和目标接口见[系统设计与执行计划](../farm-exchange-system-design-and-execution-plan.md)。
+本文记录已落地的模块关系，随实施任务更新；四项尚未实施功能见[后续功能计划](../project/deferred-features-plan.md)；已完成的设计与执行历史见[系统设计计划归档](../archive/farm-exchange-system-design-and-execution-plan.md)。
 
 ```mermaid
 flowchart LR

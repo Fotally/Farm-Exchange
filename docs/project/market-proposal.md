@@ -23,6 +23,6 @@
 
 ## 验收状态
 
-本批已完成集中审查与修复复查、指定引擎 Debug/Release 编译、完整场景测试、逐模块覆盖率、图形性能、Windows Release 导出及实际程序启动。真实市场截图已核对，完整数据见[测试验收](testing.md)与[执行计划前部记录](../farm-exchange-system-design-and-execution-plan.md)。整体交付于 PR #70，等待人工合并。
+本批已完成集中审查与修复复查、指定引擎 Debug/Release 编译、完整场景测试、逐模块覆盖率、图形性能、Windows Release 导出及实际程序启动。真实市场截图已核对，完整数据见[测试验收](testing.md)与[执行计划前部记录](../archive/farm-exchange-system-design-and-execution-plan.md)。整体交付已通过 [PR #70](https://github.com/Fotally/Farm-Exchange/pull/70) 于北京时间 2026-10-02 00:17 人工合并。
 
 基础格细分属于独立 [#74](https://github.com/Fotally/Farm-Exchange/issues/74) 调研，不改变本批报价和交易规则。天气、后续扩员、委托、复杂历史图与持仓成本模型继续留待后续。
