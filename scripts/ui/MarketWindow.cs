@@ -30,6 +30,7 @@ public partial class MarketWindow : DraggableWindow
     public event Action<CropKind>? SellRawRequested;
     public event Action? SellAllRequested;
     public event Action<string>? TradeInputRejected;
+    public event Action? OrdersRequested;
 
     public MarketWindow() : base("MarketWindow", "市场 · 即时买卖", new Vector2(250, 78),
         new Vector2(780, 520), avoidBottomBar: true)
@@ -38,7 +39,14 @@ public partial class MarketWindow : DraggableWindow
         _dates = MakeLabel("", 13, Ink);
         _dates.Name = "MarketDates";
         _dates.AutowrapMode = TextServer.AutowrapMode.Off;
-        Body.AddChild(_dates);
+        var datesRow = new HBoxContainer();
+        _dates.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        datesRow.AddChild(_dates);
+        Button orders = MakeButton("委托与策略", Mid, 120, 30);
+        orders.Name = "OpenTradeOrdersButton";
+        orders.Pressed += () => OrdersRequested?.Invoke();
+        datesRow.AddChild(orders);
+        Body.AddChild(datesRow);
         var newsScroll = new ScrollContainer
         {
             Name = "MarketNewsScroll",
@@ -163,15 +171,19 @@ public partial class MarketWindow : DraggableWindow
         {
             QuoteRow row = _rows[quote.Id];
             int stock = game.GetStock(quote.Id);
+            int available = game.GetAvailableStock(quote.Id);
+            int frozen = game.GetFrozenStock(quote.Id);
+            row.Available = available;
             row.Price.Text = FormatCoins(quote.PriceCents);
             row.Previous.Text = FormatCoins(quote.PreviousPriceCents);
             row.Change.Text = quote.ChangePercent.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture) + "%";
-            row.Stock.Text = stock.ToString(CultureInfo.InvariantCulture);
-            if (row.RawShortcut != null) row.RawShortcut.Disabled = stock == 0;
-            else hasProducts |= stock > 0;
+            row.Stock.Text = frozen == 0 ? stock.ToString(CultureInfo.InvariantCulture) : $"{stock}\n可用 {available}";
+            row.Stock.TooltipText = $"总库存 {stock}，可用 {available}，冻结 {frozen}";
+            if (row.RawShortcut != null) row.RawShortcut.Disabled = available == 0;
+            else hasProducts |= available > 0;
         }
         _sellButton.Disabled = !hasProducts;
-        _sellSelectedAllButton.Disabled = game.GetStock(_selected) == 0;
+        _sellSelectedAllButton.Disabled = game.GetAvailableStock(_selected) == 0;
     }
 
     public void ShowFeedback(string message) => _feedback.Text = message;
@@ -180,7 +192,7 @@ public partial class MarketWindow : DraggableWindow
     {
         _selected = commodity;
         _selectedLabel.Text = CommodityCatalog.Get(commodity).Name;
-        _sellSelectedAllButton.Disabled = _rows[commodity].Stock.Text == "0";
+        _sellSelectedAllButton.Disabled = _rows[commodity].Available == 0;
     }
 
     private void Submit(bool buy)
@@ -208,5 +220,8 @@ public partial class MarketWindow : DraggableWindow
 
     private static string FormatDate(GameDate date) => $"第 {date.Year} 年 {date.Month} 月 {date.Day} 日";
 
-    private sealed record QuoteRow(Label Price, Label Previous, Label Change, Label Stock, Button? RawShortcut);
+    private sealed record QuoteRow(Label Price, Label Previous, Label Change, Label Stock, Button? RawShortcut)
+    {
+        public int Available { get; set; }
+    }
 }

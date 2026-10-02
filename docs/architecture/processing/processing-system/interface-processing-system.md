@@ -6,7 +6,7 @@
 | --- | --- |
 | `Place(index, crop)`、`Remove(index)` | 在 `FarmGame` 的建造、拆除协调中创建或清理该锚点加工状态；拆除仍丢弃已投入原料。 |
 | `Get(index)` | 返回独立的只读 `ProcessorSnapshot`，含匹配作物和向上取整的剩余秒数。 |
-| `GetStatus(index, inventory)` | 只读返回加工中、缺少原料、受保留底线限制或待领取原料；进行中优先，其余原因从当前公共库存实时查询，不缓存旧失败结果。 |
+| `GetStatus(index, inventory)` | 只读返回加工中、无可用原料、受保留底线限制或待领取原料；进行中优先，其余原因从当前可用原料实时查询，不缓存旧失败结果。一次卖单全部冻结时与可用量为零同样返回等待原料，冻结不改变已开始批次。 |
 | `Advance(index, out productCrop)` | 推进进行中的批次；完成时报告需入库的加工品作物。 |
 | `TryStart(index, inventory)` | 空闲时通过库存唯一受底线限制的领取操作取一份匹配原料，并立即设定加工时长；无原料、受底线限制或正忙时不修改状态。 |
 | `SetProcessingForBenchmark`、`Clear` | 仅供满地图 50 tick 夹具设置和重建。 |

@@ -8,6 +8,8 @@
 | 状态查询 | GetPlot、TryGetPlot、GetStock、GetRawStock、GetRawReserve、GetProductStock、GetRawPriceCents、GetProductPriceCents | 任意占用子格解析到锚点，返回同一整座设施的只读生产快照、统一或分类公共库存、原料保留底线和两类当前报价；农田地块快照含 `HasWater`，`TryGetPlot` 对地图外返回 `OutOfBounds` |
 | 空间查询 | GetBuildingSpace(cell)、GetBuildingSpaces() | 任意子格返回同一只读空间，空地或地图外返回空；全空间列表为锚点索引升序的独立只读缓存，包含锚点、类型、固定 footprint 与工作中心 |
 | 行情查询 | GetQuote(CommodityId)、GetMarketSnapshot() | 委托 `MarketQuotes` 返回十四商品当前价、上次报价及实际涨跌；完整快照还含本次与下次实际报价日期和已公布消息。查询不推进时间或抽随机 |
+| 可用与冻结资源 | AvailableMoneyCents、FrozenMoneyCents、GetAvailableStock、GetFrozenStock | 钱包及库存总量仍包含冻结部分，可用查询扣除一次挂单冻结；建造、加工与即时交易只能使用可用部分，查询不释放冻结 |
+| 委托管理 | CreateTradeOrder、UpdateTradeOrder、CancelTradeOrder、SetTradeOrderEnabled、GetTradeOrders | 完整创建或同 ID 编辑，失败单据和资源零修改；取消释放冻结，仅持续策略可启停；独立只读快照按建单顺序保留活动及终态，包含原现金基准、保留线、冻结归属、等待原因和最近成交的实际商品、方向、费用与余额，编辑不会用新配置改写旧成交，规则见[委托玩法](../../../gameplay/trading/orders.md) |
 | 工人查询 | GetWorkers() | 按编号 1、2、3 返回独立只读 `WorkerSnapshot` 集合，包含分数格位置、可空目标格与空闲/移动/播种/浇水状态；查询不分配任务或推进时间 |
 | 详情查询 | GetFarmDetails、GetProcessorDetails | 分别返回现有农田的等待工人、已湿润待播种、待水、生长中、不适季或剩余时间不足状态，或加工场地的无原料等待、保留底线限制、待领取原料或加工中状态，同时附带对应周期、当日售价和公共库存；两类详情只服务农田/加工场地，类型不匹配属于调用错误 |
 | 原料保留设置 | SetRawReserve(crop, quantity) | 逐种设置非负整数底线，默认 0，允许高于现存库存；返回 `RawReserveFailure.None`、`InvalidCrop` 或 `InvalidQuantity`，失败零修改。设置不触发领取；下次经营领取阶段或新建场地的现有即时领取路径检查新值 |
@@ -28,6 +30,8 @@
 `FarmGame` 仍负责推进、建造与交易的业务顺序。建造通过 `PlacementRules` 检查后交 `Wallet` 扣款，占用与生产状态在同一调用内创建或清理；加工场地建成后立即按旧规则领取原料；道路只写 `LandOccupancy`，不创建生产状态、不触发领取，拆除只释放占用且不退款。收获和加工品进入 `Inventory`，买卖委托[TradingService](../../trading/trading-service/interface-trading-service.md)先检查数量、资金、库存与整数容量，再完整提交。买入原料不主动领取；下一经营领取阶段或随后新建场地的现有即时路径使用它。暂停时可交易但不推进行情或生产。生产建筑使用无效作物时，建造与选种命令返回失败原因，不修改地块和余额；道路忽略无生产含义的作物参数。`HasConsistentState` 是测试用内部检查，用于核对完整子格映射、稳定空间实例顺序和只有锚点持有对应生产状态。
 
 完整交易返回 `TradeResult`（数量和累计金额为 `long`）。旧出售入口返回补充 `Failure`、`Success`、`ErrorMessage` 的 `SaleResult`，原数量和收入仍为 `int`；容量失败时返回零，不抛出溢出异常。无效商品在交易命令中正常拒绝，只读查询中的无效标识属于调用错误。正式行情由 `MarketQuotes` 唯一维护，历史 `MarketPriceCurve` 不参与经营；内部初始时间夹具按对应经过日重放行情至一致状态。
+
+一次委托在创建时冻结相应资源；固定预算买单在执行时求出完整整数数量，限价数量买单按最高价冻结含费上限。一次目标数量在建单时确定，只编辑价格、条件或现金保留设置时保持原锁量；主动改变商品、方向或数量设置等数量意图时才重新完整检查。持续目标每秒读取实际总库存重新算差额。原现金基准与创建顺序在编辑时保持，修改保留参数仍使用原基准；不使用取消重建实现编辑。实际委托结算在日历与行情推进之后执行，后单读取前单执行后的资源，失败等待，暂停可管理单据但不自动执行。委托买入原料仍不追加本秒领取阶段，下一经营领取或新建场地既有路径使用它。
 
 时间顺序见[实现](implementation-tick-order.md)；开局布局见[实现](implementation-opening-layout.md)。玩家可观察的生产、交易、土地规则分别以 docs/gameplay/ 下的专题文档为准。
 

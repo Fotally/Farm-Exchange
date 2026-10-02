@@ -16,7 +16,8 @@ public partial class TestTradingService : Node
     }
 
     public static bool RunChecks() => CheckCommodityTrades() && CheckFailures() &&
-        CheckCapacities() && CheckAllProducts() && CheckCurrentQuote() && CheckGameplayPhases();
+        CheckCapacities() && CheckAllProducts() && CheckCurrentQuote() && CheckGameplayPhases() &&
+        CheckOrderFeesAndReserves() && CheckOrderFailuresAndCapacities();
 
     private static bool CheckCommodityTrades()
     {
@@ -29,11 +30,11 @@ public partial class TestTradingService : Node
             int before = wallet.BalanceCents;
             int price = market.GetQuote(commodity.Id).PriceCents;
             TradeResult buy = trading.Buy(commodity.Id, 3);
-            if (!buy.Success || buy.Quantity != 3 || buy.TotalCents != price * 3 ||
+            if (!buy.Success || buy.Quantity != 3 || buy.TotalCents != price * 3 || buy.FeeCents != 0 ||
                 inventory.Get(commodity.Id) != 3 || wallet.BalanceCents != before - price * 3)
                 return Fail("十四种商品未按同一当前报价买入公共库存");
             TradeResult sell = trading.Sell(commodity.Id, 1);
-            if (!sell.Success || sell.Quantity != 1 || sell.TotalCents != price ||
+            if (!sell.Success || sell.Quantity != 1 || sell.TotalCents != price || sell.FeeCents != 0 ||
                 inventory.Get(commodity.Id) != 2 || wallet.BalanceCents != before - price * 2)
                 return Fail("指定数量卖出不守恒");
             TradeResult all = trading.SellAll(commodity.Id);
@@ -237,7 +238,86 @@ public partial class TestTradingService : Node
     }
 
     private static bool Rejected(TradeResult result, TradeFailure failure) =>
-        !result.Success && result.Failure == failure && result.Quantity == 0 && result.TotalCents == 0;
+        !result.Success && result.Failure == failure && result.Quantity == 0 && result.TotalCents == 0 && result.FeeCents == 0;
+
+    private static bool CheckOrderFeesAndReserves()
+    {
+        CommodityId raw = new(CropKind.Radish, CommodityKind.Raw);
+        var inventory = new GoodsInventory();
+        var wallet = new Wallet(126);
+        var trading = new TradingService(inventory, wallet, new MarketQuotes(12345));
+        TradeResult buy = trading.BuyOrder(raw, 1, 100);
+        if (!buy.Success || buy.TotalCents != 25 || buy.FeeCents != 1 || buy.Quantity != 1 ||
+            inventory.Get(raw) != 1 || wallet.BalanceCents != 100)
+            return Fail("小额委托费用未向上取整到 1 分或精确保留现金买入错误");
+        TradeResult sell = trading.SellOrder(raw, 1);
+        if (!sell.Success || sell.TotalCents != 25 || sell.FeeCents != 1 || sell.Quantity != 1 ||
+            inventory.Get(raw) != 0 || wallet.BalanceCents != 124)
+            return Fail("委托卖出未从成交总额扣除费用或往返收支错误");
+        if (!Rejected(trading.BuyOrder(raw, 1, 99), TradeFailure.CashReserveNotMet) ||
+            inventory.Get(raw) != 0 || wallet.BalanceCents != 124)
+            return Fail("现金保留线缺 1 分仍然成交或拒绝后有资源修改");
+        wallet.TrySpend(98);
+        if (!trading.BuyOrder(raw, 1, 0).Success || wallet.BalanceCents != 0 || inventory.Get(raw) != 1)
+            return Fail("含费余额恰足未完整成交");
+        if (!trading.SellOrder(raw, 1).Success || wallet.BalanceCents != 24 ||
+            !Rejected(trading.BuyOrder(raw, 1, 0), TradeFailure.InsufficientFunds) ||
+            wallet.BalanceCents != 24 || inventory.Get(raw) != 0)
+            return Fail("含费余额不足时未零修改等待");
+        var exact = new TradingService(new GoodsInventory(), new Wallet(1000), new MarketQuotes(12345));
+        TradeResult hundred = exact.BuyOrder(raw, 4, 0);
+        TradeResult overHundred = exact.BuyOrder(raw, 5, 0);
+        if (hundred.TotalCents != 100 || hundred.FeeCents != 1 ||
+            overHundred.TotalCents != 125 || overHundred.FeeCents != 2)
+            return Fail("整百分金额或非整百分金额的委托手续费错误");
+        return true;
+    }
+
+    private static bool CheckOrderFailuresAndCapacities()
+    {
+        CommodityId raw = new(CropKind.Radish, CommodityKind.Raw);
+        CommodityId invalid = new(CropKind.Radish, (CommodityKind)999);
+        var inventory = new GoodsInventory();
+        var wallet = new Wallet(25);
+        var trading = new TradingService(inventory, wallet, new MarketQuotes(12345));
+        if (!Rejected(trading.BuyOrder(raw, 1, 0), TradeFailure.InsufficientFunds) ||
+            !Rejected(trading.BuyOrder(invalid, 1, 0), TradeFailure.InvalidCommodity) ||
+            !Rejected(trading.SellOrder(invalid, 1), TradeFailure.InvalidCommodity) ||
+            !Rejected(trading.BuyOrder(raw, 0, 0), TradeFailure.InvalidQuantity) ||
+            !Rejected(trading.SellOrder(raw, -1), TradeFailure.InvalidQuantity) ||
+            !Rejected(trading.SellOrder(raw, 1), TradeFailure.InsufficientStock) ||
+            wallet.BalanceCents != 25 || inventory.Get(raw) != 0)
+            return Fail("委托非法输入或含费余额缺 1 分未零修改拒绝");
+        try
+        {
+            trading.BuyOrder(raw, 1, -1);
+            return Fail("委托现金保留金额允许负数");
+        }
+        catch (ArgumentOutOfRangeException) { }
+        inventory.Add(raw, int.MaxValue - 1);
+        if (!Rejected(trading.BuyOrder(raw, 2, 0), TradeFailure.InventoryCapacityExceeded) ||
+            !Rejected(trading.SellOrder(raw, int.MaxValue - 1), TradeFailure.WalletCapacityExceeded) ||
+            wallet.BalanceCents != 25 || inventory.Get(raw) != int.MaxValue - 1)
+            return Fail("委托库存容量或巨大卖出收入未零修改拒绝");
+        var empty = new GoodsInventory();
+        var rich = new Wallet(int.MaxValue);
+        var huge = new TradingService(empty, rich, new MarketQuotes(12345));
+        if (!Rejected(huge.BuyOrder(raw, int.MaxValue, 0), TradeFailure.InsufficientFunds) ||
+            rich.BalanceCents != int.MaxValue || empty.Get(raw) != 0)
+            return Fail("巨大委托含费金额未用宽整数预检");
+        empty.Add(raw, 1);
+        var nearLimit = new Wallet(int.MaxValue - 24);
+        var limited = new TradingService(empty, nearLimit, new MarketQuotes(12345));
+        TradeResult exactSale = limited.SellOrder(raw, 1);
+        if (!exactSale.Success || exactSale.TotalCents != 25 || exactSale.FeeCents != 1 ||
+            nearLimit.BalanceCents != int.MaxValue || empty.Get(raw) != 0)
+            return Fail("委托卖出未按净收入检查钱包上限");
+        empty.Add(raw, 1);
+        if (!Rejected(limited.SellOrder(raw, 1), TradeFailure.WalletCapacityExceeded) ||
+            empty.Get(raw) != 1 || nearLimit.BalanceCents != int.MaxValue)
+            return Fail("满钱包委托卖出失败改变了资源");
+        return true;
+    }
 
     private static bool Fail(string message)
     {

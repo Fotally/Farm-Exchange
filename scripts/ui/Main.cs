@@ -27,6 +27,7 @@ public partial class Main : Node2D
     private CropSelectionWindow _cropWindow = null!;
     private InventoryWindow _inventoryWindow = null!;
     private MarketWindow _marketWindow = null!;
+    private TradeOrdersWindow _ordersWindow = null!;
     private Label _detailCell = null!;
     private PanelContainer _emptyDetails = null!;
     private FarmDetailsPanel _farmDetails = null!;
@@ -64,6 +65,7 @@ public partial class Main : Node2D
         if (inputEvent is not InputEventKey { Pressed: true, Keycode: Key.Escape })
             return;
         if (_placement is { Kind: BuildingKind.Road }) CancelPlacement();
+        else if (_ordersWindow.Visible) _ordersWindow.Hide();
         else if (_marketWindow.Visible) _marketWindow.Hide();
         else if (_inventoryWindow.Visible) _inventoryWindow.Hide();
         else if (_cropWindow.Visible) _cropWindow.Hide();
@@ -127,7 +129,15 @@ public partial class Main : Node2D
         _marketWindow.SellRequested += (commodity, quantity) => Trade(commodity, quantity, buy: false);
         _marketWindow.SellCommodityAllRequested += SellCommodityAll;
         _marketWindow.TradeInputRejected += message => _messageLabel.Text = message;
+        _marketWindow.OrdersRequested += OpenTradeOrders;
         _uiRoot.AddChild(_marketWindow);
+
+        _ordersWindow = new TradeOrdersWindow();
+        _ordersWindow.CreateRequested += request => ShowOrderResult(_game.CreateTradeOrder(request));
+        _ordersWindow.UpdateRequested += (id, request) => ShowOrderResult(_game.UpdateTradeOrder(id, request));
+        _ordersWindow.CancelRequested += id => ShowOrderResult(_game.CancelTradeOrder(id));
+        _ordersWindow.EnabledRequested += (id, enabled) => ShowOrderResult(_game.SetTradeOrderEnabled(id, enabled));
+        _uiRoot.AddChild(_ordersWindow);
     }
 
     private void BuildTopBar()
@@ -234,6 +244,7 @@ public partial class Main : Node2D
         _cropWindow.Hide();
         _inventoryWindow.Hide();
         _marketWindow.Hide();
+        _ordersWindow.Hide();
         if (built) RefreshAfterGameChange(worldChanged: true);
         else RefreshUi();
         _uiRoot.MoveChild(_detailWindow, _uiRoot.GetChildCount() - 1);
@@ -247,6 +258,7 @@ public partial class Main : Node2D
         _cropWindow.Hide();
         _inventoryWindow.Hide();
         _marketWindow.Hide();
+        _ordersWindow.Hide();
         _buildWindow.ShowRaised();
         _buildWindow.RefreshCards();
         RefreshFooter();
@@ -314,6 +326,7 @@ public partial class Main : Node2D
         _buildWindow.Hide();
         _cropWindow.Hide();
         _marketWindow.Hide();
+        _ordersWindow.Hide();
         _inventoryWindow.Refresh(_game);
         _inventoryWindow.ShowRaised();
     }
@@ -323,8 +336,23 @@ public partial class Main : Node2D
         _buildWindow.Hide();
         _cropWindow.Hide();
         _inventoryWindow.Hide();
+        _ordersWindow.Hide();
         _marketWindow.Refresh(_game);
         _marketWindow.ShowRaised();
+    }
+
+    private void OpenTradeOrders()
+    {
+        _marketWindow.Hide();
+        _ordersWindow.Refresh(_game);
+        _ordersWindow.ShowRaised();
+    }
+
+    private void ShowOrderResult(TradeOrderCommandResult result)
+    {
+        _ordersWindow.ShowCommandResult(result);
+        _messageLabel.Text = result.Success ? $"委托 #{result.Id} 操作成功" : result.ErrorMessage;
+        RefreshAfterGameChange(worldChanged: false);
     }
 
     private void SetRawReserve(CropKind crop, int quantity)
@@ -418,6 +446,7 @@ public partial class Main : Node2D
         RefreshDetail();
         if (_inventoryWindow.Visible) _inventoryWindow.Refresh(_game);
         if (_marketWindow.Visible) _marketWindow.Refresh(_game);
+        if (_ordersWindow.Visible) _ordersWindow.Refresh(_game);
         if (_cropWindow.Visible) _cropWindow.Refresh(_game);
     }
 

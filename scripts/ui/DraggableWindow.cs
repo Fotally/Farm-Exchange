@@ -35,6 +35,7 @@ public partial class DraggableWindow : PanelContainer
         var headerRow = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         headerMargin.AddChild(headerRow);
         Label titleLabel = MakeLabel(title, 19, Cream);
+        titleLabel.AutowrapMode = TextServer.AutowrapMode.Off;
         titleLabel.MouseFilter = MouseFilterEnum.Ignore;
         titleLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         headerRow.AddChild(titleLabel);

@@ -10,8 +10,10 @@
 | --- | --- |
 | 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_land_occupancy.tscn`、`tests/unit/test_worker_scheduler.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_market_quotes.tscn`、`tests/unit/test_trading_service.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
 | 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn`、`tests/integration/test_worker_presentation.tscn`、`tests/integration/test_road_map.tscn` |
-| 端到端测试 | `tests/e2e/test_core_loop.tscn` |
+| 端到端测试 | `tests/e2e/test_core_loop.tscn`、`tests/e2e/test_trade_orders_window.tscn` |
 | 满地图负载测试 | `tests/performance/test_full_world_load.tscn` |
+
+委托后端另由 `tests/unit/test_trade_orders.tscn` 验证条件、两种买单预算、冻结与释放、编辑失败零修改、原现金基准、1% 费用及经营相位；新单元和委托窗口端到端检查均接入根 `TestSuite`。有图形后端单独运行委托窗口场景时保存 `build/issue36-validation/orders-window.png`，用于检查真实中文布局；headless 检查不请求截图。
 
 在项目根目录执行完整测试：
 
@@ -261,3 +263,31 @@
 | 3840×2160 全屏 | 1.25 / 0.41666666 | 448.9 | 3.826 ms | 7680 |
 
 两者均达到平均至少 60 FPS、P95 不超过 16.67 ms。窗口与全屏使用不同可见范围，不把其 FPS 差异当作同负载回归。报告为 `coverage/performance-78-1280.json`、`coverage/performance-78-4k.json`，前后截图各以相同前缀命名。4K 中较小的引擎 Zoom 是内部拉伸补偿，玩家下限没有降到 0.41666666 或 1。
+
+## 2026-10-02 #36 委托与自动交易验收
+
+完整功能经独立只读审查与两处逻辑修复复查，标题布局修复及最终格式/提交范围隔离又分别由新的审查员复审，无待修问题。指定 Godot 4.7.2 Mono Debug/Release 编译均零警告、零错误；最终完整 headless 套件、Windows Release 导出及实际 `build/windows/FarmExchange.exe` 启动退出码 0。静态检查、`dotnet format --verify-no-changes --no-restore` 和差异空白检查通过。最终日志在本地 `build/issue36-validation/headless-tests-delivery.log`、`release-build-delivery.log`、`windows-export-delivery.log` 和 `windows-start-delivery.log`；它们不入 Git。
+
+委托检查覆盖两种买单预算、一次锁量与持续目标差额、AND/OR/季节条件、现金保留原基准、冻结隔离、编辑失败零修改、撤销释放、整数容量与 1% 向上取分费用。经营相位测试覆盖生产/加工/行情后按创建顺序执行、后单读取前单资源、暂停不执行，以及买入原料下次领取。真实主场景端到端检查创建/编辑/启停/撤销、实际收费与市场可用库存；多组条件成立不会重复成交。两项修复分别验证价格/条件编辑保留一次目标锁量、策略改商品或方向后最近成交仍保留原商品和实际方向，下一次成功成交才替换记录。
+
+总体 Cobertura **3381/3488（96.93%）**。以下各模块按文件与行号去重，同一行任一类型命中即记覆盖；去重总计 **3371/3478（96.92%）**。报告总体保留原计数，因同文件多类型存在少量重复行，不机械用分表求和替代。13 个模块均达到 80% 门槛；原始报告 `coverage/coverage.cobertura.xml`，逐模块核对结果 `build/issue36-validation/module-coverage.json`。
+
+| 模块 | 已覆盖 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `economy` | 31 / 35 | 88.57% |
+| `farming` | 166 / 166 | 100.00% |
+| `gameplay` | 325 / 351 | 92.59% |
+| `inventory` | 82 / 85 | 96.47% |
+| `land` | 100 / 101 | 99.01% |
+| `market` | 224 / 224 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 25 / 25 | 100.00% |
+| `trading` | 384 / 392 | 97.96% |
+| `ui` | 1367 / 1421 | 96.20% |
+| `workers` | 91 / 95 | 95.79% |
+| `world` | 444 / 449 | 98.89% |
+
+满地图 16,384 生产实例、147,456 占用子格，最终 50 tick **92.83 ms**，平均 **1.857 ms/tick**，角落实例与状态一致性通过。本项不修改地图绘制、镜头或实体负载，未追加 FPS 测量；图形性能适用范围沿用 #78 的记录，不把 headless 耗时当作渲染性能。
+
+真实有窗口委托场景已退出码 0，原始[委托窗口截图](../architecture/ui/trade-orders-window/orders-window.png)已查看：中文标题、条件行、固定按钮均可见，默认窗口 960×520 位于 (160,78)，避让 1280×720 顶部及底部栏。初次 headless 布局红灯证实共享标题零宽自动换行把窗口撑高；明确标题单行后保持原窗口边界断言，新委托和原市场均通过。删除条件组前先释放焦点；草稿、光标、焦点与滚动断言保留。截图来自功能场景，不是价格经济平衡或满地图 FPS 证据。
