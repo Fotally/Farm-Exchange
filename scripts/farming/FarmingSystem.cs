@@ -124,6 +124,32 @@ internal sealed class FarmingSystem
     }
 
     /**
+     * <summary>只读预测已开始生长的一轮实际结束时刻，包含正常成熟与禁生换季结局。</summary>
+     * <param name="index">现有农田的锚点索引。</param>
+     * <param name="now">完成本步推进后的累计精确时间单位。</param>
+     * <returns>实际经营 tick 对齐的结束时刻；空田或待水阶段返回 null。</returns>
+     * <remarks>禁生边界可能促熟或清理，预测不报告收成、不改变状态，也不猜测未来供水。</remarks>
+     */
+    internal long? GetExpectedRoundEndTimeUnits(int index, long now)
+    {
+        FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
+        if (farm.Stage != CropStage.Growing)
+            return null;
+        long normalEnd = now + (long)GameTimeUnits.RemainingSeconds(farm.RemainingTimeUnits) *
+            GameTimeUnits.PerSecond;
+        const int seasonUnits = 84 * GameTimeUnits.PerDay;
+        long seasonNumber = now / seasonUnits;
+        GrowingSeasons seasons = CropCatalog.Get(farm.CropKind).GrowingSeasons;
+        for (int offset = 1; offset <= 4; offset++)
+        {
+            Season next = (Season)((seasonNumber + offset) % 4);
+            if ((seasons & (GrowingSeasons)(1 << (int)next)) == 0)
+                return Math.Min(normalEnd, (seasonNumber + offset) * seasonUnits);
+        }
+        return normalEnd;
+    }
+
+    /**
      * <summary>禁生换季前促成接近完成的一轮成熟，并返回正常收获的作物。</summary>
      * <remarks>仅生长中且精确剩余时间严格小于完整周期的十分之一。入库仍由经营入口处理。</remarks>
      * <param name="index">农田锚点索引。</param>

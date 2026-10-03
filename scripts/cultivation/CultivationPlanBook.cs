@@ -154,9 +154,7 @@ internal sealed class CultivationPlanBook
             return;
         }
         Plan plan = _plans[binding.PlanId!.Value];
-        Occurrence? target = binding.Prepared is Occurrence prepared &&
-            prepared.Start + prepared.Entry.LengthDays * GameTimeUnits.PerDay > now
-            ? prepared : Locate(plan, now, binding.Executed);
+        Occurrence? target = Locate(plan, now, binding.Executed);
         // 工人相位仍使用步进开始的日历；计划目标只能在日历推进后的同步中启用。
         binding.Prepared = target;
         binding.Completion = now;
@@ -183,17 +181,23 @@ internal sealed class CultivationPlanBook
             Plan plan = _plans[binding.PlanId!.Value];
             PruneExecuted(binding, now);
             RecordSown(binding, farm);
-            if (binding.NextEvent is long due && due <= now &&
-                (plan.Mode == CultivationMode.Immediate || farm.Stage == CropStage.None))
+            if (binding.NextEvent is long due && due <= now)
             {
-                Activate(index, binding, Locate(plan, now, binding.Executed), now);
+                Occurrence? target = Locate(plan, now, binding.Executed);
+                if (farm.Stage == CropStage.None ||
+                    (plan.Mode == CultivationMode.Immediate && target is Occurrence current &&
+                        current.Start <= now && current.Entry.Crop != farm.CropKind))
+                    Activate(index, binding, target, now);
+                else
+                    // 空白与同种起点保留旧轮及其原条凭据，只有异种立即切换中断。
+                    binding.NextEvent = NextBoundary(plan, now);
                 farm = _farming.Get(index);
             }
             if (farm.Stage != CropStage.None)
             {
                 binding.InProgress = true;
                 _farming.SetSowingEnabled(index, false);
-                long? completion = farm.Stage == CropStage.Growing ? now + farm.RemainingTimeUnits : null;
+                long? completion = _farming.GetExpectedRoundEndTimeUnits(index, now);
                 if (binding.Completion != completion)
                 {
                     binding.Completion = completion;
@@ -206,10 +210,7 @@ internal sealed class CultivationPlanBook
             {
                 binding.InProgress = false;
                 // 被换季清除或当前轮结束后，只执行当前仍有效的位置，不补历史条。
-                Occurrence? target = binding.Completion is long completed && completed <= now &&
-                    binding.Prepared is Occurrence prepared &&
-                    prepared.Start + prepared.Entry.LengthDays * GameTimeUnits.PerDay > now
-                    ? prepared : Locate(plan, now, binding.Executed);
+                Occurrence? target = Locate(plan, now, binding.Executed);
                 Activate(index, binding, target, now);
             }
         }
@@ -219,7 +220,7 @@ internal sealed class CultivationPlanBook
     {
         FarmSnapshot farm = _farming.Get(index);
         binding.Active = null;
-        binding.Completion = farm.Stage == CropStage.Growing ? now + farm.RemainingTimeUnits : null;
+        binding.Completion = _farming.GetExpectedRoundEndTimeUnits(index, now);
         binding.InProgress = farm.Stage != CropStage.None;
         Plan plan = _plans[binding.PlanId!.Value];
         PruneExecuted(binding, now);
@@ -244,8 +245,7 @@ internal sealed class CultivationPlanBook
         }
         else
         {
-            // 到休耕日期先中断未收获一轮；水分依照立即改种规则保留。
-            _farming.RestartCrop(index, _farming.Get(index).CropKind);
+            // 空白只关闭新播种；已开始的一轮由供水、生长和换季规则结束。
             _farming.SetSowingEnabled(index, false);
         }
         binding.NextEvent = NextBoundary(plan, now);

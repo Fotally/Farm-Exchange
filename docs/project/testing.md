@@ -1,5 +1,36 @@
 # 自动化测试与性能测量
 
+## 2026-10-03 #86 本轮结束与休耕缓冲修复验收
+
+本次仅验收 #86 已确认的额外第2/3项，基准 `78e1d94ec12bf8148ba4ff21e177daaf08dfc1c0`。原七项界面问题及未确认的编号复用未修复。独立审查未发现待修问题；随后使用指定 Godot 4.7.2 Mono 完成 Debug/Release 编译、完整 headless 场景套件、Windows Release 导出及实际 EXE 启动（退出码 0、标准错误为空），静态、全仓格式及差异空白检查通过。本轮为经营规则修复，无图形绘制变更，未新增图形 FPS 测量。
+
+- 修复前的单元场景明确失败于“空白休耕未保留当前轮并停止复种”；修复后的同一检查及完整套件通过。
+- 两种模式下，完整四天萝卜单条在缓冲内收获 6 份，连续三条分别完成三轮、合计 18 份；末轮完成后空白不复种。
+- 甘蔗夏秋继续正常生长；秋冬提前促熟或无收成清理均正确预测结束并接续仍有效萝卜条，促熟入库 12 份、清理入库 0。未知供水无预测，正常成熟对齐实际 tick，恰在边界只结算一次。
+- 晚播导致当前轮延后时，下一异种条起点仍按立即中断或预备保留执行；手动立即改种、季节禁止播种与原有严格补救阈值回归通过。
+- 满地图 16,384 实例、147,456 占用子格；50 tick 96.83 ms，平均 1.937 ms/tick，角落实例及状态一致性检查通过。
+
+Cobertura 总体 **4407/4520（97.50%）**。各模块按文件和行号去重、合并同一行命中统计，全部达到 80%：
+
+| 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| characters | 73 / 75 | 97.33% |
+| cultivation | 251 / 256 | 98.05% |
+| economy | 31 / 35 | 88.57% |
+| farming | 213 / 214 | 99.53% |
+| gameplay | 384 / 411 | 93.43% |
+| inventory | 82 / 85 | 96.47% |
+| land | 100 / 101 | 99.01% |
+| market | 224 / 224 | 100.00% |
+| processing | 59 / 59 | 100.00% |
+| time | 25 / 25 | 100.00% |
+| trading | 384 / 392 | 97.96% |
+| ui | 1914 / 1967 | 97.31% |
+| workers | 91 / 95 | 95.79% |
+| world | 557 / 562 | 99.11% |
+
+本地证据在 `build/issue86-core-validation/`：修复前 `red-build.log`、`red-cultivation.log`，修复后 `full-tests.log`、`coverage.cobertura.xml`、`coverage-modules.json`、`release-build.log`、`windows-export.log`、`export-startup.json`、`static-checks.log` 与 `format.log`。临时报告不入 Git，交付状态见[主计划](deferred-features-plan.md)。
+
 ## 自动化测试与覆盖率
 
 建筑放置预览（#87，设计来源 #83）由 `tests/integration/test_placement_preview.tscn` 检查独立覆盖层、真实占用、局部冲突、越界、跨块、取消和镜头定位；`tests/unit/TestWorldMap.cs` 以 2×4 偏移数据验证同一几何的覆盖、阻塞与外围。`tests/e2e/test_build_placement.tscn` 使用主场景验证农田、七种加工场地和道路的逐次建造、统一取消、冻结资金与费用提示、暂停及原生鼠标跨界面输入。三组接入 `TestSuite`；独立有窗口运行摆放场景保存 `build/issue87-validation/valid.png`、`conflict.png`、`camera.png`、`edge.png`，地图预览场景另保存 `coverage/placement-*.png`。图像产物仅在有图形后端时生成。

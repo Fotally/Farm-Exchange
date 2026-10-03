@@ -17,8 +17,8 @@
 - `scripts/land/LandOccupancy.cs`：实例锚点、类别与基础格到实例映射的唯一拥有者。完整检查、登记及移除全部占地，返回稳定锚点顺序的只读实例快照缓存；不持有金币、作物或加工进度。
 - `scripts/land/BuildingFootprint.cs` 与 `BuildingSpaceSnapshot.cs`：固定形状偏移与工作中心的唯一定义，以及只读实例空间快照。农田/加工 3×3、道路 1×1；土地、工人和地图共享几何，不新增外部任意形状或永久 ID。
 - `scripts/land/PlacementRules.cs`：只读放置规则模块；统一验证建筑描述、格范围、占用与余额，为预检和实际执行返回稳定原因。道路与生产建筑互斥，`FarmGame.GetBuildingCostCents` 提供唯一类型费用，由经营入口重验后扣款；道路不创建生产状态。
-- `scripts/farming/FarmingSystem.cs`：每块农田所选作物、水分、播种与精确生长进度的唯一拥有者；统一季节检查，工人浇水与显式降雨共用供水操作，改种留水、收获与拆除清水。播种启停支持计划休耕，已播种仍可供水；重启同种也失效旧任务。禁生换季先按内部严格阈值促成临近成熟并走原收获入库流程，再清理其余待水或生长中的本轮作物与水分，保留农田和选种；修改该边界时读取 `docs/architecture/farming/farming-system/implementation-season-maturity.md`。
-- `scripts/cultivation/CultivationPlanBook.cs`、`CultivationPlanRequest.cs` 与 `CultivationPlanSnapshot.cs`：共享年度表、农田引用、逐条年度执行凭据、预备安排与日期事件的唯一拥有者。精确年度时间环绕，四季条每年重复，空白休耕、不同种至少间隔一天；编辑或重应用后仍保持每条每年一轮，错过不补种。两种表级模式封装切换与保留，应用编辑保留当前轮，手动指令解除本田引用；不拥有生长状态、库存或工人任务。
+- `scripts/farming/FarmingSystem.cs`：每块农田所选作物、水分、播种与精确生长进度的唯一拥有者；统一季节检查，工人浇水与显式降雨共用供水操作，改种留水、收获与拆除清水。播种启停支持计划休耕，已播种仍可供水和成熟；只读预测按实际步长及首次禁生边界给出本轮结束，不把清除预测为收获；重启同种也失效旧任务。禁生换季先按内部严格阈值促成临近成熟并走原收获入库流程，再清理其余待水或生长中的本轮作物与水分，保留农田和选种；修改该边界时读取 `docs/architecture/farming/farming-system/implementation-season-maturity.md`。
+- `scripts/cultivation/CultivationPlanBook.cs`、`CultivationPlanRequest.cs` 与 `CultivationPlanSnapshot.cs`：共享年度表、农田引用、逐条年度执行凭据、预备安排与日期事件的唯一拥有者。精确年度时间环绕，四季条每年重复，空白休耕、不同种至少间隔一天；编辑或重应用后仍保持每条每年一轮，错过不补种。两种表级模式封装切换与保留，空白和同种后续条保留当前轮且停止复种，每条独立播种；实际结束按当前日期重新定位，应用编辑保留当前轮，手动指令解除本田引用；不拥有生长状态、库存或工人任务。
 - `scripts/processing/ProcessingSystem.cs`：加工场地匹配作物与批次进度的唯一拥有者，负责按旧顺序从公共库存领取匹配原料。
 - `scripts/workers/WorkerScheduler.cs` 与 `WorkerSnapshot.cs`：工人位置、任务、按实例独占认领与稳定锚点轮转游标的唯一拥有者。三人每经营秒推进 3 小格，到农田定义的工作中心播种浇水，执行前重验版本凭据；外部只推进一秒或读快照，选择算法保持私有以便替换复杂调度。
 - `scripts/inventory/CommodityId.cs` 与 `Inventory.cs`：前者统一十四商品标识与合法性；后者唯一拥有两类公共库存、逐作物底线和冻结数量。总查询含冻结，可用量扣除一次卖单冻结，加工仅从可用原料领取超过底线的一份；买入与自产共用存储，主动出售不受加工底线限制但不能用冻结量。

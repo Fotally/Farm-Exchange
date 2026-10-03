@@ -1,5 +1,11 @@
 ## 最新完成记录
 
+### 2026-10-03 — 耕作执行规则修复（#86 已确认第2/3项）
+
+- 成果：本轮结束预测按实际生长步长及首个禁生边界定位，实际促熟或清理后重新选择有效安排；空白及同种后续条保留当前轮，逐条独立播种，休耕期间不复种。甘蔗夏秋正常继续、秋冬按具体禁生边界处理，异种下一起点继续遵守两种表级模式。
+- 审查与验收：基准 `78e1d94ec12bf8148ba4ff21e177daaf08dfc1c0`；独立审查未发现待修问题。指定 Godot 4.7.2 Mono Debug/Release 编译零警告零错误，完整 headless 套件、逐模块覆盖率、Windows Release 导出和实际 EXE 启动均通过。总体 4407/4520（97.50%），14 个模块均超过 80%；满地图 50 tick 96.83 ms，平均 1.937 ms/tick。详见[本次测试记录](testing.md#2026-10-03-86-本轮结束与休耕缓冲修复验收)，日志在本地 `build/issue86-core-validation/`。
+- 交付状态：该小单元已验收、待人工合并；随 [PR #84](https://github.com/Fotally/Farm-Exchange/pull/84) 交付。#86 保持开放，原七项界面问题及待确认的编号复用不计为本次已修复；#43、#44 继续暂缓。
+
 ### 2026-10-03 — 季节耕作表（#42）
 
 - 成果：开局可用的共享年度表、原生整条拖放与跨季折行、多田应用、两种表级模式、完成时间缓存和年度执行凭据；两种手动接管独立，适季时间不足仅提示风险，禁生边界成熟沿用原收获入库流程。代码、中文玩法、接口、实现、导航和根系统结构一致。
@@ -24,7 +30,7 @@ T00～T10 与追加 T12 的已确认范围均已完成，PR #70 已于北京时�
 
 | 后续功能 | 关联 issue | 已完成的基础 | 尚未实施 |
 | --- | --- | --- | --- |
-| 季节耕作表 | [#42](https://github.com/Fotally/Farm-Exchange/issues/42) | 共享年度时间表、整条拖放、两种执行方式、手动预备及播种/换季规则调整已验收 | 无待实施项；[PR #84](https://github.com/Fotally/Farm-Exchange/pull/84) 待人工合并，见顶部记录 |
+| 季节耕作表 | [#42](https://github.com/Fotally/Farm-Exchange/issues/42) | 共享年度时间表、整条拖放、两种执行方式、手动预备及播种/换季规则调整已验收；#86 的本轮结束与休耕缓冲小单元已修复验收 | [#86](https://github.com/Fotally/Farm-Exchange/issues/86) 原七项界面问题及待确认的额外问题仍开放；[PR #84](https://github.com/Fotally/Farm-Exchange/pull/84) 待人工合并 |
 | 后续扩充人力 | [#43](https://github.com/Fotally/Farm-Exchange/issues/43) | 开局三人、移动与播种浇水、稳定轮转和实例独占 | 扩员方式、相关费用与玩家操作 |
 | 委托挂单、自动买卖与手续费 | [#36](https://github.com/Fotally/Farm-Exchange/issues/36) | 即时交易，以及已验收并合并的委托、自动策略、手续费与界面 | 无；[PR #81](https://github.com/Fotally/Farm-Exchange/pull/81) 已人工合并 |
 | 行情学习反馈 | [#44](https://github.com/Fotally/Farm-Exchange/issues/44) | 对应实际因素的公告、上次价、当前价与涨跌展示 | 用消息、实际行情与交易结果帮助学习的反馈功能 |

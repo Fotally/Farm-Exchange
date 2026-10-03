@@ -9,7 +9,8 @@
 | `SetCrop(index, crop)` | 同品种无变化；改种时丢弃未收获进度并清零阶段与剩余时间，保留田块水分。 |
 | `RestartCrop(index, crop)` | 强制丢弃本轮，包括同品种；清零阶段和剩余时间，保留水分与当前播种启停。用于手动立即改种及计划切换。 |
 | `SetSowingEnabled(index, enabled)` | 控制空田是否可播种，默认允许；改变值使旧工作凭据失效。禁播不妨碍已播种一轮的供水与生长，恢复后必须重新获取凭据。 |
-| `Get(index)` | 返回独立只读 `FarmSnapshot`，含作物、阶段、向上取整的 `RemainingSeconds`、`HasWater`、精确 `RemainingTimeUnits` 和 `SowingEnabled`。计划按精确单位计算确定的成熟时刻，不反推取整秒数。 |
+| `Get(index)` | 返回独立只读 `FarmSnapshot`，含作物、阶段、向上取整的 `RemainingSeconds`、`HasWater`、精确 `RemainingTimeUnits` 和 `SowingEnabled`。生长进度仍唯一归属本模块。 |
+| `GetExpectedRoundEndTimeUnits(index, now)` | 只读预测本轮结束的累计比例单位：生长中按精确剩余量向上对齐实际经营 tick，再与首个禁生季起点取早；空田或待水返回空。`now` 为本步推进后的累计单位。适季跨季不截短；禁生边界可能促熟或清理，本结果不承诺收成、不修改农田、不猜测供水。计划直接读取本结果，不复制生长或季节结局规则。 |
 | `SupplyWater(index)` | 雨水与工人浇水共用的一次供水操作；空田留水、已播种作物开始生长，生长中重复调用不重置进度。 |
 | `AdvanceGrowth(index, out harvestedCrop)` | 每经营秒推进生长中的农田；成熟时清除本轮阶段和水分，并报告需入库的作物。收获数量由作物定义决定。 |
 | `TryMatureBeforeDisallowedSeason(index, season, out harvestedCrop)` | 仅由经营换季相位调用，当前生长中作物在传入季节禁生且精确剩余时间严格小于完整周期的 10% 时，共用正常收获终结并报告作物，入库仍由 `FarmGame` 处理。其他阶段、适季跨季及等于或超过阈值返回 `false` 且零修改；同轮不能重复报告收成。 |
