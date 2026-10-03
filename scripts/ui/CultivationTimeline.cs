@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Godot;
 using FarmExchange.Cultivation;
 using FarmExchange.Gameplay;
+using FarmExchange.Time;
 using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
@@ -14,6 +15,7 @@ public partial class CultivationTimeline : Control
 {
     private const float LabelWidth = 42;
     private const float RowHeight = 50;
+    private readonly Func<int, CropKind, int, bool> _checkDrop;
     private IReadOnlyList<CultivationEntry> _entries = Array.Empty<CultivationEntry>();
     private IReadOnlyList<int> _risks = Array.Empty<int>();
     private readonly List<(Rect2 Rect, CultivationEntry Entry)> _segments = new();
@@ -35,8 +37,13 @@ public partial class CultivationTimeline : Control
      */
     public float PixelsPerDay => (Size.X - LabelWidth - 8) / 84;
 
-    public CultivationTimeline()
+    /**
+     * <summary>构造时间图，候选排程由拥有草稿的窗口检查。</summary>
+     * <param name="checkDrop">收到原条编号、作物与年度起点，返回是否允许落位。</param>
+     */
+    public CultivationTimeline(Func<int, CropKind, int, bool> checkDrop)
     {
+        _checkDrop = checkDrop;
         Name = "CultivationTimeline";
         CustomMinimumSize = new Vector2(540, 4 * RowHeight + 22);
         SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -77,7 +84,12 @@ public partial class CultivationTimeline : Control
         {
             float y = 22 + row * RowHeight;
             DrawString(font, new Vector2(4, y + 24), seasons[row], fontSize: 15, modulate: Ink);
-            DrawRect(new Rect2(LabelWidth, y, width, 40), new Color(0.86f, 0.91f, 0.83f));
+            DrawStyleBox(Style(new Color(0.86f, 0.91f, 0.83f), 5), new Rect2(LabelWidth, y, width, 40));
+            for (int week = 1; week < 12; week++)
+            {
+                float x = LabelWidth + PixelsPerDay * week * 7;
+                DrawLine(new Vector2(x, y + 40), new Vector2(x, y + 45), Muted);
+            }
             for (int month = 0; month <= 3; month++)
             {
                 float x = LabelWidth + width * month / 3f;
@@ -99,14 +111,26 @@ public partial class CultivationTimeline : Control
                 var rect = new Rect2(LabelWidth + width * localDay / 84f,
                     24 + row * RowHeight - extra, width * count / 84f, 36);
                 Color color = new Color(0.24f + (int)entry.Crop * 0.055f, 0.48f, 0.32f);
-                DrawRect(rect, color);
                 bool risk = Contains(_risks, entry.Id);
+                StyleBoxFlat style = Style(color, 5);
                 if (risk || _selectedId == entry.Id)
-                    DrawRect(rect, risk ? new Color(0.82f, 0.25f, 0.18f) : Gold, false, 2);
-                string text = FarmGame.GetCrop(entry.Crop).CropName;
-                if (rect.Size.X > 24)
-                    DrawString(font, rect.Position + new Vector2(3, 24), text,
-                        width: Math.Max(0, rect.Size.X - 6), fontSize: 12, modulate: Cream);
+                {
+                    style.BorderColor = risk ? new Color(0.82f, 0.25f, 0.18f) : Gold;
+                    style.SetBorderWidthAll(2);
+                }
+                DrawStyleBox(style, rect);
+                string[] lines = EntryLines(entry);
+                if (Fits(rect, lines))
+                {
+                    DrawCentered(font, rect, lines[0], 14);
+                    DrawCentered(font, rect, lines[1], 30);
+                }
+                else
+                {
+                    string name = FarmGame.GetCrop(entry.Crop).CropName;
+                    if (font.GetStringSize(name, fontSize: 12).X + 4 <= rect.Size.X)
+                        DrawCentered(font, rect, name, 24);
+                }
                 _segments.Add((rect, entry));
                 remaining -= count;
                 day = (day + count) % 336;
@@ -117,6 +141,45 @@ public partial class CultivationTimeline : Control
         DrawLine(new Vector2(currentX, 22 + currentRow * RowHeight),
             new Vector2(currentX, 62 + currentRow * RowHeight), Gold, 2);
     }
+
+    public override string _GetTooltip(Vector2 atPosition)
+    {
+        foreach ((Rect2 rect, CultivationEntry entry) in _segments)
+            if (rect.HasPoint(atPosition) && !Fits(rect, EntryLines(entry)))
+            {
+                int end = entry.StartDay + entry.LengthDays;
+                return $"{FarmGame.GetCrop(entry.Crop).CropName} · 完整 {entry.LengthDays} 天\n" +
+                    $"开始：{FullDate(entry.StartDay)}\n结束：{(end >= 336 ? "次年 " : "")}{FullDate(end % 336)}" +
+                    (end > 336 ? "\n冬春跨年，同一轮" : entry.StartDay / 84 != (end - 1) / 84 ? "\n跨季，同一轮" : "");
+            }
+        return "";
+    }
+
+    private static string[] EntryLines(CultivationEntry entry)
+    {
+        int end = entry.StartDay + entry.LengthDays;
+        return new[] { $"{FarmGame.GetCrop(entry.Crop).CropName} · {entry.LengthDays}天",
+            $"{ShortDate(entry.StartDay)}→{(end >= 336 ? "次年" : "")}{ShortDate(end % 336)}" };
+    }
+
+    private static string ShortDate(int day)
+    {
+        GameDate date = GameCalendar.GetDate((uint)day);
+        return $"{date.Month}/{date.Day}";
+    }
+
+    private static string FullDate(int day)
+    {
+        GameDate date = GameCalendar.GetDate((uint)day);
+        return $"{date.Month}月{date.Day}日";
+    }
+    private static bool Fits(Rect2 rect, string[] lines) =>
+        ThemeDB.FallbackFont.GetStringSize(lines[0], fontSize: 12).X + 6 <= rect.Size.X &&
+        ThemeDB.FallbackFont.GetStringSize(lines[1], fontSize: 12).X + 6 <= rect.Size.X;
+
+    private void DrawCentered(Font font, Rect2 rect, string text, float baseline) =>
+        DrawString(font, rect.Position + new Vector2((rect.Size.X - font.GetStringSize(text, fontSize: 12).X) / 2,
+            baseline), text, fontSize: 12, modulate: Cream);
 
     public override void _GuiInput(InputEvent inputEvent)
     {
@@ -145,19 +208,30 @@ public partial class CultivationTimeline : Control
 
     public override bool _CanDropData(Vector2 atPosition, Variant data)
     {
-        bool canDrop = atPosition.X >= LabelWidth && atPosition.X <= Size.X - 8 &&
+        bool canDrop = atPosition.X >= LabelWidth && atPosition.X < Size.X - 8 &&
             atPosition.Y >= 22 && atPosition.Y < 22 + 4 * RowHeight && IsCropDrag(data);
-        return canDrop;
+        if (!canDrop) return false;
+        var values = data.AsGodotDictionary();
+        CropKind crop = (CropKind)values["crop"].AsInt32();
+        return _checkDrop(values["id"].AsInt32(), crop, DropDay(atPosition, crop));
     }
 
     public override void _DropData(Vector2 atPosition, Variant data)
     {
+        if (!_CanDropData(atPosition, data)) return;
         var values = data.AsGodotDictionary();
-        int row = Math.Clamp((int)((atPosition.Y - 22) / RowHeight), 0, 3);
-        int day = row * 84 + Math.Clamp((int)((atPosition.X - LabelWidth) /
-            (Size.X - LabelWidth - 8) * 84), 0, 83);
+        CropKind crop = (CropKind)values["crop"].AsInt32();
+        int day = DropDay(atPosition, crop);
         _landing = 0.18f;
         EntryDropped?.Invoke(values["id"].AsInt32(), (CropKind)values["crop"].AsInt32(), day);
+    }
+
+    private int DropDay(Vector2 atPosition, CropKind crop)
+    {
+        int row = (int)((atPosition.Y - 22) / RowHeight);
+        int day = row * 84 + (int)Math.Floor((atPosition.X - LabelWidth) / PixelsPerDay -
+            FarmGame.GetCrop(crop).GrowthDays / 2f);
+        return (day + 336) % 336;
     }
 
     internal static Godot.Collections.Dictionary DragData(CropKind crop, int id) =>
@@ -169,18 +243,26 @@ public partial class CultivationTimeline : Control
     internal static Control MakePreview(CropKind kind, float pixelsPerDay)
     {
         CropDefinition crop = FarmGame.GetCrop(kind);
-        var preview = new PanelContainer
+        var preview = new Control { MouseFilter = MouseFilterEnum.Ignore };
+        var bar = new PanelContainer
         {
-            CustomMinimumSize = new Vector2(crop.GrowthDays * pixelsPerDay, 40),
+            Size = new Vector2(crop.GrowthDays * pixelsPerDay, 40),
+            Position = new Vector2(-crop.GrowthDays * pixelsPerDay / 2, -20),
             Modulate = new Color(1, 1, 1, 0.86f),
         };
-        preview.AddThemeStyleboxOverride("panel", Style(Mid.Lightened(0.15f), 5));
-        Label text = MakeLabel($"{crop.CropName} · {crop.GrowthDays}天", 13, Cream);
+        preview.AddChild(bar);
+        bar.AddThemeStyleboxOverride("panel", Style(Mid.Lightened(0.15f), 5));
+        string caption = $"{crop.CropName} · {crop.GrowthDays}天";
+        float width = crop.GrowthDays * pixelsPerDay;
+        if (ThemeDB.FallbackFont.GetStringSize(caption, fontSize: 13).X + 4 > width)
+            caption = ThemeDB.FallbackFont.GetStringSize(crop.CropName, fontSize: 13).X + 4 <= width
+                ? crop.CropName : "";
+        Label text = MakeLabel(caption, 13, Cream);
         text.AutowrapMode = TextServer.AutowrapMode.Off;
-        text.ClipText = true;
         text.VerticalAlignment = VerticalAlignment.Center;
-        preview.AddChild(text);
-        preview.TreeEntered += () => preview.CreateTween().TweenProperty(preview, "modulate:a", 1f, 0.12);
+        text.HorizontalAlignment = HorizontalAlignment.Center;
+        bar.AddChild(text);
+        bar.TreeEntered += () => bar.CreateTween().TweenProperty(bar, "modulate:a", 1f, 0.12);
         return preview;
     }
 

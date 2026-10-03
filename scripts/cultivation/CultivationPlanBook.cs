@@ -35,9 +35,11 @@ internal sealed class CultivationPlanBook
             CropDefinition crop = CropCatalog.Get(entry.Crop);
             for (int day = 0; day < crop.GrowthDays; day++)
             {
-                Season season = (Season)(((entry.StartDay + day) % DaysPerYear) / 84);
+                Season season = GameCalendar.GetDate((uint)(entry.StartDay + day)).Season;
                 if ((crop.GrowingSeasons & (GrowingSeasons)(1 << (int)season)) == 0)
                 {
+                    if (day == 0)
+                        return new($"{crop.CropName}不能从不适宜季节开始安排", risks.AsReadOnly());
                     risks.Add(entry.Id);
                     break;
                 }

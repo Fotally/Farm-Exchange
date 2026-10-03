@@ -82,7 +82,7 @@ public partial class CultivationWindow : DraggableWindow
         config.AddChild(_mode);
         _name.TextChanged += _ => ValidateDraft();
         _mode.ItemSelected += _ => ValidateDraft();
-        _timeline = new CultivationTimeline();
+        _timeline = new CultivationTimeline(CheckDrop);
         var crops = new HBoxContainer();
         editor.AddChild(crops);
         foreach (CropDefinition crop in FarmGame.Crops) crops.AddChild(new CultivationCropCard(crop.Kind, _timeline));
@@ -227,18 +227,34 @@ public partial class CultivationWindow : DraggableWindow
 
     private void DropEntry(int id, CropKind crop, int day)
     {
-        if (id == 0)
-        {
-            id = _draft.Count == 0 ? 1 : _draft.Max(e => e.Id) + 1;
-            _draft.Add(new CultivationEntry(id, crop, day));
-        }
-        else
-        {
-            int index = _draft.FindIndex(e => e.Id == id);
-            _draft[index] = new CultivationEntry(id, crop, day);
-        }
+        if (!CheckDrop(id, crop, day)) return;
+        List<CultivationEntry> candidate = Candidate(id, crop, day);
+        id = id == 0 ? candidate[^1].Id : id;
+        _draft.Clear();
+        _draft.AddRange(candidate);
         SelectEntry(id);
         ValidateDraft();
+    }
+
+    private List<CultivationEntry> Candidate(int id, CropKind crop, int day)
+    {
+        var candidate = new List<CultivationEntry>(_draft);
+        if (id == 0)
+            candidate.Add(new CultivationEntry(_draft.Count == 0 ? 1 : _draft.Max(e => e.Id) + 1, crop, day));
+        else
+            candidate[candidate.FindIndex(e => e.Id == id)] = new CultivationEntry(id, crop, day);
+        return candidate;
+    }
+
+    private bool CheckDrop(int id, CropKind crop, int day)
+    {
+        if (_game == null) return false;
+        CultivationValidation validation = _game.CheckCultivationPlan(new CultivationPlanRequest(
+            _name.Text, (CultivationMode)_mode.Selected, Candidate(id, crop, day)));
+        _feedback.Text = validation.Error ?? (validation.RiskEntryIds.Count > 0
+            ? "可放置；红框作物条越过禁生边界，存在枯萎清除风险。"
+            : "可放置：同种可连续，不同作物至少留一天空白。");
+        return validation.Success;
     }
 
     private void RemoveEntry()

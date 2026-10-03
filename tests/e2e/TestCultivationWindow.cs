@@ -18,10 +18,48 @@ public partial class TestCultivationWindow : Node
 
     public static bool RunChecks(Node parent)
     {
+        if (!CheckPlacementBeforeMutation(parent)) return false;
         Main main = OpenMain(parent);
         bool passed = CheckEditing(main) && CheckManual(main);
         main.QueueFree();
         return passed && CheckRemovalWithCropWindow(parent) && CheckWinterSpringDate(parent);
+    }
+
+    private static bool CheckPlacementBeforeMutation(Node parent)
+    {
+        Main main = OpenMain(parent);
+        CultivationWindow window = Find<CultivationWindow>(main, "CultivationWindow");
+        CultivationTimeline timeline = Find<CultivationTimeline>(window, "CultivationTimeline");
+        Click(window, "NewCultivationPlanButton");
+        Find<LineEdit>(window, "CultivationPlanName").Text = "落位前完整排程";
+        Drop(timeline, CropKind.Wheat, 0);
+        Click(window, "SaveCultivationPlanButton");
+        int id = main.Game.GetCultivationPlans()[0].Entries[0].Id;
+        bool passed = true;
+        bool Reject(CropKind crop, int day, string reason, int movingId = 0)
+        {
+            Vector2 point = DropPoint(timeline, crop, day);
+            var data = CultivationTimeline.DragData(crop, movingId);
+            bool accepted = timeline._CanDropData(point, data);
+            if (accepted) return Fail("放置前没有拒绝：" + reason);
+            // 即使直接收到过期的落位回调，也不得先修改草稿。
+            timeline._DropData(point, data);
+            Click(window, "SaveCultivationPlanButton");
+            CultivationPlanSnapshot plan = main.Game.GetCultivationPlans()[0];
+            return plan.Entries.Count == 1 && plan.Entries[0].Id == id && plan.Entries[0].StartDay == 0 &&
+                !string.IsNullOrEmpty(Find<Label>(window, "CultivationFeedback").Text) ||
+                Fail("拒绝落位改变了原草稿或正式表：" + reason);
+        }
+        passed &= Reject(CropKind.Wheat, 0, "同格重叠");
+        passed &= Reject(CropKind.Wheat, 8, "部分覆盖");
+        passed &= Reject(CropKind.Radish, 16, "异种零日间隔");
+        passed &= Reject(CropKind.Corn, 252, "禁生季起点");
+        Drop(timeline, CropKind.Wheat, 1, id);
+        Click(window, "SaveCultivationPlanButton");
+        if (main.Game.GetCultivationPlans()[0].Entries[0].StartDay != 1)
+            passed = Fail("替换自身被错误判为重叠");
+        main.QueueFree();
+        return passed;
     }
 
     private static Main OpenMain(Node parent)
@@ -71,9 +109,14 @@ public partial class TestCultivationWindow : Node
         Click(window, "SaveCultivationPlanButton");
         if (game.GetCultivationPlans()[0].Entries.Count != 1 ||
             string.IsNullOrEmpty(Find<Label>(window, "CultivationFeedback").Text)) return Fail("冲突草稿被提交或未显示拒绝原因");
+        // 冲突从未落入草稿，保存仍保留原条。
+        Click(window, "SaveCultivationPlanButton");
+        if (game.GetCultivationPlans()[0].Entries.Count != 1) return Fail("拒绝冲突改变草稿");
         Click(window, "RemoveCultivationEntryButton");
         Click(window, "SaveCultivationPlanButton");
-        if (game.GetCultivationPlans()[0].Entries.Count != 1) return Fail("移除冲突条未更新草稿");
+        if (game.GetCultivationPlans()[0].Entries.Count != 0) return Fail("移除选中的原条未生效");
+        Drop(timeline, CropKind.Wheat, 82);
+        Click(window, "SaveCultivationPlanButton");
         Click(window, "NewCultivationPlanButton");
         Find<LineEdit>(window, "CultivationPlanName").Text = "夏末风险";
         Drop(timeline, CropKind.Corn, 166);
@@ -181,7 +224,7 @@ public partial class TestCultivationWindow : Node
         await Frames(parent);
         uint beforeDrag = main.Game.Calendar.ElapsedSeconds;
         bool holdingPreview = await Drag(parent, Find<Control>(window, "CultivationCropWheat").GetGlobalRect().GetCenter(),
-            TimelinePoint(timeline, 326), capturePreview: true);
+            timeline.GlobalPosition + DropPoint(timeline, CropKind.Wheat, 326), capturePreview: true);
         if (!holdingPreview || main.Game.Calendar.ElapsedSeconds != beforeDrag)
         { main.QueueFree(); return Fail("预览截帧时未保持原生拖动，或动效推进了经营日期"); }
         Click(window, "SaveCultivationPlanButton");
@@ -189,12 +232,12 @@ public partial class TestCultivationWindow : Node
             main.Game.GetCultivationPlans()[0].Entries[0].StartDay != 326)
         { main.QueueFree(); return Fail("原生作物拖入未建立冬春整条"); }
         int entryId = main.Game.GetCultivationPlans()[0].Entries[0].Id;
-        await Drag(parent, TimelinePoint(timeline, 2), TimelinePoint(timeline, 82));
+        await Drag(parent, TimelinePoint(timeline, 2), timeline.GlobalPosition + DropPoint(timeline, CropKind.Wheat, 82));
         Click(window, "SaveCultivationPlanButton");
         if (main.Game.GetCultivationPlans()[0].Entries[0].Id != entryId ||
             main.Game.GetCultivationPlans()[0].Entries[0].StartDay != 82)
         { main.QueueFree(); return Fail("冬春条的春季片段没有拖动整条"); }
-        await Drag(parent, TimelinePoint(timeline, 90), TimelinePoint(timeline, 326));
+        await Drag(parent, TimelinePoint(timeline, 90), timeline.GlobalPosition + DropPoint(timeline, CropKind.Wheat, 326));
         Click(window, "SaveCultivationPlanButton");
         if (main.Game.GetCultivationPlans()[0].Entries[0].StartDay != 326)
         { main.QueueFree(); return Fail("春夏条的夏季片段没有拖动整条"); }
@@ -252,13 +295,131 @@ public partial class TestCultivationWindow : Node
         await Frames(parent);
         if (DisplayServer.GetName() != "headless")
         {
-            string directory = ProjectSettings.GlobalizePath("res://build/issue42-validation");
+            string directory = ProjectSettings.GlobalizePath("res://build/issue86-ui-validation");
             DirAccess.MakeDirRecursiveAbsolute(directory);
             parent.GetViewport().GetTexture().GetImage().SavePng(directory + "/cultivation-window.png");
         }
         main.QueueFree();
         await Frames(parent);
-        return await CheckPausedSaveMap(parent) && passed;
+        return await CheckPausedSaveMap(parent) && await CheckNativePlacement(parent) && passed;
+    }
+
+    private static async Task<bool> CheckNativePlacement(Node parent)
+    {
+        Main main = OpenMain(parent);
+        CultivationWindow window = Find<CultivationWindow>(main, "CultivationWindow");
+        CultivationTimeline timeline = Find<CultivationTimeline>(window, "CultivationTimeline");
+        Click(window, "NewCultivationPlanButton");
+        Find<LineEdit>(window, "CultivationPlanName").Text = "原生放置拒绝";
+        await Frames(parent);
+        Drop(timeline, CropKind.Wheat, 0);
+        Click(window, "SaveCultivationPlanButton");
+        int dropped = 0;
+        timeline.EntryDropped += (_, _, _) => dropped++;
+        bool passed = true;
+        foreach ((CropKind crop, int day) in new[] { (CropKind.Wheat, 0), (CropKind.Wheat, 8),
+            (CropKind.Radish, 16), (CropKind.Corn, 252) })
+        {
+            await Drag(parent, Find<Control>(window, $"CultivationCrop{crop}").GetGlobalRect().GetCenter(),
+                timeline.GlobalPosition + DropPoint(timeline, crop, day));
+            if (dropped != 0 || string.IsNullOrEmpty(Find<Label>(window, "CultivationFeedback").Text))
+                passed = Fail("原生非法拖放没有在落位前拒绝：" + crop + "/" + day);
+            Click(window, "SaveCultivationPlanButton");
+            if (main.Game.GetCultivationPlans()[0].Entries.Count != 1 ||
+                main.Game.GetCultivationPlans()[0].Entries[0].StartDay != 0)
+                passed = Fail("原生拒绝改变草稿或正式表");
+        }
+        int id = main.Game.GetCultivationPlans()[0].Entries[0].Id;
+        await Drag(parent, TimelinePoint(timeline, 4), timeline.GlobalPosition + DropPoint(timeline, CropKind.Wheat, 326));
+        Click(window, "SaveCultivationPlanButton");
+        if (dropped != 1 || main.Game.GetCultivationPlans()[0].Entries[0].Id != id ||
+            main.Game.GetCultivationPlans()[0].Entries[0].StartDay != 326)
+            passed = Fail("原生移动整条被误判与自身冲突");
+        // 年度首尾：原条覆盖春初至日6，异种日6无缓冲、日7有一天缓冲。
+        if (timeline._CanDropData(DropPoint(timeline, CropKind.Radish, 5), CultivationTimeline.DragData(CropKind.Radish, 0)) ||
+            timeline._CanDropData(DropPoint(timeline, CropKind.Radish, 6), CultivationTimeline.DragData(CropKind.Radish, 0)) ||
+            !timeline._CanDropData(DropPoint(timeline, CropKind.Radish, 7), CultivationTimeline.DragData(CropKind.Radish, 0)) ||
+            !timeline._CanDropData(DropPoint(timeline, CropKind.Wheat, 6), CultivationTimeline.DragData(CropKind.Wheat, 0)))
+            passed = Fail("冬春首尾的重叠或间隔预检不一致");
+        Drop(timeline, CropKind.Radish, 20);
+        Drop(timeline, CropKind.Wheat, 40);
+        await Frames(parent);
+        if (timeline._GetTooltip(TimelinePoint(timeline, 45) - timeline.GlobalPosition) != "")
+            passed = Fail("能放下完整信息的条仍使用悬浮提示");
+        if (DisplayServer.GetName() != "headless")
+        {
+            passed = await CheckNativeTooltip(parent, timeline, 21, "完整 4 天", "1月21日", "1月25日", "short-radish-tooltip.png") && passed;
+            passed = await CheckNativeTooltip(parent, timeline, 2, "完整 16 天", "12月19日", "次年 1月7日", "winter-spring-tooltip.png") && passed;
+        }
+        Click(window, "NewCultivationPlanButton");
+        Find<LineEdit>(window, "CultivationPlanName").Text = "合法跨禁生风险";
+        await Drag(parent, Find<Control>(window, "CultivationCropCorn").GetGlobalRect().GetCenter(),
+            timeline.GlobalPosition + DropPoint(timeline, CropKind.Corn, 166));
+        Drop(timeline, CropKind.Sunflower, 120);
+        if (!Find<Label>(window, "CultivationFeedback").Text.Contains("风险"))
+            passed = Fail("原生适季起点跨禁生条没有保留风险提示");
+        Click(window, "SaveCultivationPlanButton");
+        if (main.Game.GetCultivationPlans().Count != 2 ||
+            !main.Game.GetCultivationPlans()[1].Entries.Any(e => e.Crop == CropKind.Corn && e.StartDay == 166) ||
+            !main.Game.GetCultivationPlans()[1].Entries.Any(e => e.Crop == CropKind.Sunflower && e.StartDay == 120))
+            passed = Fail("跨禁生风险或奇数周期中心落位日期未正确保存");
+        await Frames(parent);
+        if (main.Game.Calendar.ElapsedSeconds != 0) passed = Fail("原生拖放或悬浮提示推进了暂停的经营");
+        if (DisplayServer.GetName() != "headless")
+        {
+            await parent.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+            parent.GetViewport().GetTexture().GetImage().SavePng(
+                ProjectSettings.GlobalizePath("res://build/issue86-ui-validation/risk-outline.png"));
+        }
+        main.QueueFree();
+        await Frames(parent);
+        return passed;
+    }
+
+    private static async Task<bool> CheckNativeTooltip(Node parent, CultivationTimeline timeline, int day,
+        string cycle, string start, string end, string screenshot)
+    {
+        Vector2I original = DisplayServer.MouseGetPosition();
+        Viewport viewport = parent.GetViewport();
+        bool passed = true;
+        string expected = timeline._GetTooltip(TimelinePoint(timeline, day) - timeline.GlobalPosition);
+        if (!expected.Contains(cycle) || !expected.Contains(start) || !expected.Contains(end))
+            return Fail("窄片段悬浮内容未包含完整原条日期与周期");
+        void Move(Vector2 point)
+        {
+            Vector2 actual = viewport.GetFinalTransform() * point;
+            Input.WarpMouse(actual);
+            Input.ParseInputEvent(new InputEventMouseMotion { Position = actual, GlobalPosition = actual });
+        }
+        Label? VisibleTooltip() => Descendants(parent.GetTree().Root).OfType<Label>()
+            .FirstOrDefault(label => label.Text == expected && label.IsVisibleInTree());
+        try
+        {
+            Move(TimelinePoint(timeline, day));
+            double delay = ProjectSettings.GetSetting("gui/timers/tooltip_delay_sec", 0.5).AsDouble();
+            await parent.ToSignal(parent.GetTree().CreateTimer(delay + 0.15), SceneTreeTimer.SignalName.Timeout);
+            await Frames(parent);
+            Label? tooltip = VisibleTooltip();
+            if (tooltip == null) passed = Fail("真实鼠标悬停后没有出现完整提示");
+            else
+            {
+                Rect2 tooltipRect = tooltip.GetGlobalRect();
+                Window? tooltipWindow = tooltip.GetWindow();
+                Rect2 rect = tooltipWindow == parent.GetWindow() ? tooltipRect :
+                    new Rect2(tooltipWindow.Position, tooltipWindow.Size);
+                if (!new Rect2(Vector2.Zero, parent.GetWindow().Size).Encloses(rect))
+                    passed = Fail("原生悬浮信息超出游戏窗口");
+                await parent.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+                string directory = ProjectSettings.GlobalizePath("res://build/issue86-ui-validation");
+                DirAccess.MakeDirRecursiveAbsolute(directory);
+                viewport.GetTexture().GetImage().SavePng(directory + "/" + screenshot);
+            }
+            Move(timeline.GlobalPosition + new Vector2(10, 35));
+            await Frames(parent);
+            if (VisibleTooltip() != null) passed = Fail("鼠标移开后悬浮提示没有消失");
+        }
+        finally { Input.WarpMouse(original - parent.GetWindow().Position); }
+        return passed;
     }
 
     private static async Task<bool> CheckPausedSaveMap(Node parent)
@@ -307,10 +468,16 @@ public partial class TestCultivationWindow : Node
 
     private static void Drop(CultivationTimeline timeline, CropKind crop, int day, int id = 0)
     {
-        Vector2 point = new(42 + (timeline.Size.X - 50) * ((day % 84) + 0.1f) / 84,
-            24 + (day / 84) * 50);
+        Vector2 point = DropPoint(timeline, crop, day);
         var data = CultivationTimeline.DragData(crop, id);
         if (timeline._CanDropData(point, data)) timeline._DropData(point, data);
+    }
+
+    private static Vector2 DropPoint(CultivationTimeline timeline, CropKind crop, int day)
+    {
+        float centerDay = (day + FarmGame.GetCrop(crop).GrowthDays / 2f) % 336;
+        return new Vector2(42 + timeline.PixelsPerDay * (centerDay % 84 + 0.1f),
+            40 + (int)(centerDay / 84) * 50);
     }
 
     private static void SetMode(Node parent, int index)
@@ -366,13 +533,21 @@ public partial class TestCultivationWindow : Node
             });
             await Frames(parent);
             bool holdingPreview = !capturePreview || viewport.GuiIsDragging();
+            if (capturePreview)
+            {
+                Label? previewLabel = Descendants(parent.GetTree().Root).OfType<Label>()
+                    .FirstOrDefault(node => node.Text == "小麦 · 16天" && node.GetParent() is PanelContainer);
+                if (previewLabel?.GetParent() is not PanelContainer preview ||
+                    (preview.GetGlobalRect().GetCenter() - viewport.GetMousePosition()).Length() > 1.5f)
+                    holdingPreview = Fail("原生拖动预览没有以完整条中心跟随鼠标");
+            }
             if (capturePreview && DisplayServer.GetName() != "headless")
             {
                 await parent.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
                 holdingPreview = holdingPreview && viewport.GuiIsDragging();
                 if (holdingPreview)
                 {
-                    string directory = ProjectSettings.GlobalizePath("res://build/issue42-validation");
+                    string directory = ProjectSettings.GlobalizePath("res://build/issue86-ui-validation");
                     DirAccess.MakeDirRecursiveAbsolute(directory);
                     viewport.GetTexture().GetImage().SavePng(directory + "/cultivation-drag-preview.png");
                 }
@@ -398,6 +573,15 @@ public partial class TestCultivationWindow : Node
     {
         await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
         await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    private static System.Collections.Generic.IEnumerable<Node> Descendants(Node parent)
+    {
+        foreach (Node child in parent.GetChildren(includeInternal: true))
+        {
+            yield return child;
+            foreach (Node descendant in Descendants(child)) yield return descendant;
+        }
     }
 
     private static void Click(Node parent, string name) => Find<Button>(parent, name).EmitSignal(Button.SignalName.Pressed);

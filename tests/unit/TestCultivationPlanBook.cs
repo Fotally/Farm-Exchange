@@ -9,7 +9,7 @@ public partial class TestCultivationPlanBook : Node
 {
     public override void _Ready() => GetTree().Quit(RunChecks() ? 0 : 1);
 
-    public static bool RunChecks() => CheckValidation() && CheckSharedPlans() &&
+    public static bool RunChecks() => CheckValidation() && CheckStartSeasonValidation() && CheckSharedPlans() &&
         CheckModesAndCache() && CheckOneRoundAndYearWrap() && CheckManualAndFacade() &&
         CheckSeasonRescue() && CheckHarvestPlanDateActivation() && CheckRescueWithinPlanBar() &&
         CheckExecutedEntriesAfterEdit() && CheckPreservedRoundDoesNotConsumeEntry() &&
@@ -42,6 +42,47 @@ public partial class TestCultivationPlanBook : Node
             CultivationPlanBook.Validate(safe).RiskEntryIds.Count != 0 ||
             !CultivationPlanBook.Validate(request with { Entries = Array.Empty<CultivationEntry>() }).Success)
             return Fail("同种连续、冬春冲突、禁生风险或全年度休耕错误");
+        return true;
+    }
+
+    private static bool CheckStartSeasonValidation()
+    {
+        foreach (CropDefinition crop in CropCatalog.Crops)
+            foreach (Season season in Enum.GetValues<Season>())
+            {
+                var request = new CultivationPlanRequest("季节起点", CultivationMode.PrepareNext,
+                    new[] { new CultivationEntry(1, crop.Kind, (int)season * 84) });
+                bool allowed = (crop.GrowingSeasons & (GrowingSeasons)(1 << (int)season)) != 0;
+                CultivationValidation check = CultivationPlanBook.Validate(request);
+                if (check.Success != allowed || (!allowed &&
+                    (check.Error == null || !check.Error.Contains(crop.CropName) || !check.Error.Contains("不适宜季节"))))
+                    return Fail("作物条起点未按作物适季定义校验或未说明禁止原因");
+            }
+        var game = new FarmGame(12345);
+        Vector2I farm = new(189, 189);
+        int id = game.CreateCultivationPlan(Request()).Id;
+        game.ApplyCultivationPlan(id, new[] { farm });
+        CultivationPlanSnapshot before = game.GetCultivationPlans()[0];
+        FarmCultivationSnapshot binding = game.GetFarmCultivation(farm);
+        PlotSnapshot plot = game.GetPlot(farm);
+        var wrongStart = new CultivationPlanRequest("冬季玉米", CultivationMode.Immediate,
+            new[] { new CultivationEntry(1, CropKind.Corn, 252) });
+        if (game.CheckCultivationPlan(wrongStart).Success || game.CreateCultivationPlan(wrongStart).Success ||
+            game.UpdateCultivationPlan(id, wrongStart).Success || game.GetCultivationPlans().Count != 1 ||
+            game.GetCultivationPlans()[0].Name != before.Name ||
+            game.GetCultivationPlans()[0].Entries[0] != before.Entries[0] ||
+            game.GetCultivationPlans()[0].Entries.Count != before.Entries.Count ||
+            game.GetFarmCultivation(farm) != binding || game.GetPlot(farm) != plot)
+            return Fail("不适季起点预检、创建或编辑未拒绝，或失败修改了表与农田");
+        foreach (var entry in new[] { new CultivationEntry(1, CropKind.Corn, 167),
+            new CultivationEntry(2, CropKind.Wheat, 83), new CultivationEntry(3, CropKind.Wheat, 335) })
+        {
+            CultivationValidation check = game.CheckCultivationPlan(wrongStart with { Entries = new[] { entry } });
+            bool risk = entry.StartDay != 335;
+            if (!check.Success || check.RiskEntryIds.Count != (risk ? 1 : 0) ||
+                (risk && check.RiskEntryIds[0] != entry.Id))
+                return Fail("合法起点跨禁生季风险或冬春适季连续被误拒绝");
+        }
         return true;
     }
 
@@ -206,7 +247,10 @@ public partial class TestCultivationPlanBook : Node
         {
             foreach (CropKind target in new[] { CropKind.Wheat, CropKind.Corn })
             {
-                // 旧轮干田萝卜恰在春夏边界正常成熟；新计划条从夏季起点开始。
+                // 春末风险小麦只能在预备模式保留旧轮；夏季玉米两种模式均适用。
+                if (target == CropKind.Wheat && mode == CultivationMode.Immediate)
+                    continue;
+                // 旧轮干田萝卜恰在春夏边界成熟；目标为春末风险条或夏季适宜条。
                 var game = new FarmGame(12345, 4112);
                 foreach (var space in game.GetBuildingSpaces())
                     game.RemoveBuilding(space.AnchorCell);
@@ -215,14 +259,15 @@ public partial class TestCultivationPlanBook : Node
                 game.SetFarmCrop(farm, CropKind.Radish);
                 game.AdvanceTick();
                 game.AdvanceTick();
+                int targetDay = target == CropKind.Wheat ? 83 : 84;
                 var request = new CultivationPlanRequest("夏季目标", mode,
-                    new[] { new CultivationEntry(1, target, 84) });
+                    new[] { new CultivationEntry(1, target, targetDay) });
                 CultivationValidation validation = game.CheckCultivationPlan(request);
                 if (!validation.Success || validation.RiskEntryIds.Count != (target == CropKind.Wheat ? 1 : 0))
-                    return Fail("夏季禁生目标未允许以风险条保存");
+                    return Fail("春末风险目标或夏季适宜目标未允许保存");
                 int id = game.CreateCultivationPlan(request).Id;
                 if (game.ApplyCultivationPlan(id, new[] { farm }) != null ||
-                    game.GetFarmCultivation(farm).PreparedTimeUnits != 84 * 360)
+                    game.GetFarmCultivation(farm).PreparedTimeUnits != targetDay * 360)
                     return Fail("春末当前轮未缓存夏季生效目标");
                 int totalHarvested = 0;
                 while (game.Calendar.ElapsedSeconds < 4319)
@@ -403,11 +448,14 @@ public partial class TestCultivationPlanBook : Node
             int applyDay = crossesAllowedSeason ? 166 : 250;
             while ((long)game.Calendar.ElapsedSeconds * GameTimeUnits.PerSecond < applyDay * GameTimeUnits.PerDay)
                 game.AdvanceTick();
-            int radishDay = crossesAllowedSeason ? 166 : 249;
+            int radishDay = 249;
             int wheatDay = crossesAllowedSeason ? 171 : 260;
+            CultivationEntry[] entries = crossesAllowedSeason
+                ? new[] { new CultivationEntry(2, CropKind.Wheat, wheatDay) }
+                : new[] { new CultivationEntry(1, CropKind.Radish, radishDay),
+                    new CultivationEntry(2, CropKind.Wheat, wheatDay) };
             int id = game.CreateCultivationPlan(new("季节结局缓存", CultivationMode.PrepareNext,
-                new[] { new CultivationEntry(1, CropKind.Radish, radishDay),
-                    new CultivationEntry(2, CropKind.Wheat, wheatDay) })).Id;
+                entries)).Id;
             game.ApplyCultivationPlan(id, new[] { farm });
             CropKind expected = crossesAllowedSeason ? CropKind.Wheat : CropKind.Radish;
             int expectedDay = crossesAllowedSeason ? wheatDay : radishDay;
