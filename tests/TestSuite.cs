@@ -51,8 +51,12 @@ public partial class TestSuite : Node
         bool workerPresentationPassed = await TestWorkerPresentation.RunChecksAsync(this);
         GD.Print("集成测试：道路灰色地图、分块缓存与选择");
         bool roadMapPassed = await TestRoadMap.RunChecksAsync(this);
+        GD.Print("集成测试：动态占地预览、局部冲突与独立覆盖层");
+        bool placementPreviewPassed = await TestPlacementPreview.RunChecksAsync(this);
+        GD.Print("端到端测试：连续摆放、统一取消、界面与镜头输入");
+        bool buildPlacementPassed = await TestBuildPlacement.RunChecksAsync(this);
         bool passed = farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationUiPassed;
+            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");

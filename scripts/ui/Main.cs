@@ -15,6 +15,7 @@ public partial class Main : Node2D
 {
     private readonly FarmGame _game = new();
     private WorldMap _worldMap = null!;
+    private CameraController _camera = null!;
     private Control _uiRoot = null!;
     private Label _moneyLabel = null!;
     private Label _workerLabel = null!;
@@ -22,6 +23,7 @@ public partial class Main : Node2D
     private Button _pauseButton = null!;
     private Label _messageLabel = null!;
     private Label _buildHint = null!;
+    private Label _buildCost = null!;
     private Button _cancelPlacementButton = null!;
     private DraggableWindow _detailWindow = null!;
     private BuildCatalogWindow _buildWindow = null!;
@@ -37,6 +39,8 @@ public partial class Main : Node2D
     private RoadDetailsPanel _roadDetails = null!;
     private Vector2I? _selectedCell;
     private Placement? _placement;
+    private Vector2I? _placementCell;
+    private LandFailure _placementFailure;
 
     private readonly record struct Placement(BuildingKind Kind, CropKind Crop)
     {
@@ -49,6 +53,8 @@ public partial class Main : Node2D
     public override void _Ready()
     {
         _worldMap = GetNode<WorldMap>("WorldMap");
+        _camera = GetNode<CameraController>("Camera2D");
+        ProcessPriority = 1;
         _worldMap.SetGame(_game);
         GetNode<Camera2D>("Camera2D").GlobalPosition = _worldMap.GetGridWorldPosition(
             new Vector2((FarmGame.MapSize - 1) / 2f, (FarmGame.MapSize - 1) / 2f));
@@ -62,18 +68,78 @@ public partial class Main : Node2D
         RefreshUi();
     }
 
+    public override void _Process(double delta) => RefreshPlacementPreview();
+
+    public override void _Input(InputEvent inputEvent)
+    {
+        if (_placement == null) return;
+        if (inputEvent is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } ||
+            inputEvent is InputEventKey { Pressed: true, Keycode: Key.Escape })
+        {
+            CancelPlacement();
+            GetViewport().SetInputAsHandled();
+        }
+        else if (inputEvent is InputEventMouseMotion motion)
+            RefreshPlacementPreview(motion.Position);
+        else if (inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false } mouse)
+            RefreshPlacementPreview(mouse.Position);
+    }
+
+    private void ClearPlacementPreview()
+    {
+        _placementCell = null;
+        _placementFailure = LandFailure.None;
+        _worldMap.ClearPlacementPreview();
+    }
+
+    private void RefreshPlacementPreview(Vector2? screenPosition = null)
+    {
+        if (_placement is not Placement placement)
+        {
+            ClearPlacementPreview();
+            return;
+        }
+        Vector2 mousePosition = screenPosition ?? GetViewport().GetMousePosition();
+        bool overUi = false;
+        foreach (Node child in _uiRoot.GetChildren())
+        {
+            if (child is Control control && control.IsVisibleInTree() &&
+                control.MouseFilter != Control.MouseFilterEnum.Ignore &&
+                control.GetGlobalRect().HasPoint(mousePosition))
+            {
+                overUi = true;
+                break;
+            }
+        }
+        if (!_camera.IsMouseInsideWindow || _camera.IsDragging ||
+            !GetViewport().GetVisibleRect().HasPoint(mousePosition) || overUi)
+        {
+            ClearPlacementPreview();
+            RefreshFooter();
+            return;
+        }
+        SetPlacementCandidate(_worldMap.ScreenToCell(mousePosition), placement);
+    }
+
+    private void SetPlacementCandidate(Vector2I cell, Placement placement)
+    {
+        _placementCell = cell;
+        _worldMap.UpdatePlacementPreview(placement.Kind, placement.Crop, cell);
+        _placementFailure = _game.CheckPlacement(_placementCell.Value, placement.Kind, placement.Crop).Failure;
+        RefreshFooter();
+    }
+
     public override void _UnhandledInput(InputEvent inputEvent)
     {
         if (inputEvent is not InputEventKey { Pressed: true, Keycode: Key.Escape })
             return;
-        if (_placement is { Kind: BuildingKind.Road }) CancelPlacement();
+        if (_placement != null) CancelPlacement();
         else if (_cultivationWindow.Visible) _cultivationWindow.Hide();
         else if (_ordersWindow.Visible) _ordersWindow.Hide();
         else if (_marketWindow.Visible) _marketWindow.Hide();
         else if (_inventoryWindow.Visible) _inventoryWindow.Hide();
         else if (_cropWindow.Visible) _cropWindow.Hide();
         else if (_buildWindow.Visible) _buildWindow.Hide();
-        else if (_placement != null) CancelPlacement();
         else if (_detailWindow.Visible) CloseDetail();
         else return;
         GetViewport().SetInputAsHandled();
@@ -231,8 +297,15 @@ public partial class Main : Node2D
         row.AddChild(cultivation);
         _buildHint = MakeLabel("选择建筑，再点击地图空位摆放", 15, Cream);
         _buildHint.Name = "BuildHint";
+        _buildHint.AutowrapMode = TextServer.AutowrapMode.Off;
         _buildHint.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(_buildHint);
+        _buildCost = MakeLabel("", 15, Cream);
+        _buildCost.Name = "BuildCost";
+        _buildCost.AutowrapMode = TextServer.AutowrapMode.Off;
+        _buildCost.CustomMinimumSize = new Vector2(160, 0);
+        _buildCost.Hide();
+        row.AddChild(_buildCost);
         _cancelPlacementButton = MakeButton("取消摆放 Esc", Mid, 128, 44);
         _cancelPlacementButton.Name = "CancelPlacementButton";
         _cancelPlacementButton.Pressed += CancelPlacement;
@@ -253,20 +326,22 @@ public partial class Main : Node2D
 
     private void OnSelectionChanged(Vector2I cell)
     {
-        bool built = false;
         if (_placement is Placement placement)
         {
+            SetPlacementCandidate(cell, placement);
             PlacementResult result = _game.TryPlace(cell, placement.Kind, placement.Crop);
             if (!result.Success)
             {
                 _messageLabel.Text = result.ErrorMessage;
                 _worldMap.ClearSelection();
+                RefreshPlacementPreview();
                 return;
             }
             _messageLabel.Text = $"{placement.Name}已建造，花费 {FormatCoins(result.ChargedCents)} 金币";
-            if (placement.Kind != BuildingKind.Road)
-                _placement = null;
-            built = true;
+            _worldMap.ClearSelection();
+            RefreshAfterGameChange(worldChanged: true);
+            RefreshPlacementPreview();
+            return;
         }
         _selectedCell = cell;
         _cultivationWindow.Hide();
@@ -274,15 +349,14 @@ public partial class Main : Node2D
         _inventoryWindow.Hide();
         _marketWindow.Hide();
         _ordersWindow.Hide();
-        if (built) RefreshAfterGameChange(worldChanged: true);
-        else RefreshUi();
+        RefreshUi();
         _uiRoot.MoveChild(_detailWindow, _uiRoot.GetChildCount() - 1);
     }
 
     private void OpenBuild()
     {
         _cultivationWindow.Hide();
-        _placement = null;
+        CancelPlacement();
         _cancelPlacementButton.Hide();
         _detailWindow.Hide();
         _cropWindow.Hide();
@@ -297,19 +371,20 @@ public partial class Main : Node2D
     private void StartPlacement(Placement placement)
     {
         _placement = placement;
+        ClearPlacementPreview();
         _selectedCell = null;
         _worldMap.ClearSelection();
         _detailWindow.Hide();
         _buildWindow.Hide();
         _cropWindow.Hide();
-        _messageLabel.Text = placement.Kind == BuildingKind.Road ? "逐格点击空位铺设道路，按 Esc 可取消" :
-            $"点击空小格作为{placement.Name}的锚点，占地 3×3，按 Esc 可取消";
-        RefreshFooter();
+        _messageLabel.Text = $"移动鼠标预览{placement.Name}，左键短按建造，拖动平移；右键或 Esc 取消";
+        RefreshPlacementPreview();
     }
 
     private void CancelPlacement()
     {
         _placement = null;
+        ClearPlacementPreview();
         _messageLabel.Text = "已取消摆放";
         RefreshFooter();
     }
@@ -387,7 +462,7 @@ public partial class Main : Node2D
 
     private void OpenCultivation()
     {
-        _placement = null;
+        CancelPlacement();
         _buildWindow.Hide();
         _cropWindow.Hide();
         _inventoryWindow.Hide();
@@ -520,13 +595,23 @@ public partial class Main : Node2D
         if (_placement is not Placement placement)
         {
             _buildHint.Text = "选择建筑，再点击地图空位摆放";
+            _buildCost.Hide();
             _cancelPlacementButton.Hide();
             return;
         }
-        string cost = FormatCoins(FarmGame.GetBuildingCostCents(placement.Kind));
-        _buildHint.Text = placement.Kind == BuildingKind.Road
-            ? $"铺路中：道路 · 连续点击地图空位 · 每格 {cost} 金币"
-            : $"摆放中：{placement.Name} · 占地 3×3 · 点击空小格建造 · 费用 {cost} 金币";
+        int costCents = FarmGame.GetBuildingCostCents(placement.Kind);
+        bool insufficient = _game.AvailableMoneyCents < costCents;
+        _buildHint.Text = $"{placement.Name} · 占地 {BuildingFootprint.Get(placement.Kind).Offsets.Count} 格\n" +
+            "左键建造 · 拖动平移 · 右键 / Esc 取消" +
+            (_placementFailure == LandFailure.None ? "" :
+                $"\n无法建造：{new PlacementResult(_placementFailure, 0).ErrorMessage}");
+        _buildCost.Text = insufficient
+            ? $"费用 {FormatCoins(costCents)} 金币\n可用 {FormatCoins(_game.AvailableMoneyCents)}"
+            : $"费用 {FormatCoins(costCents)} 金币";
+        Color costColor = insufficient ? new Color(1f, 0.42f, 0.38f) : Cream;
+        if (_buildCost.GetThemeColor("font_color") != costColor)
+            _buildCost.AddThemeColorOverride("font_color", costColor);
+        _buildCost.Show();
         _cancelPlacementButton.Show();
     }
 

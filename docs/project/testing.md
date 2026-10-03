@@ -2,6 +2,10 @@
 
 ## 自动化测试与覆盖率
 
+建筑放置预览（#87，设计来源 #83）由 `tests/integration/test_placement_preview.tscn` 检查独立覆盖层、真实占用、局部冲突、越界、跨块、取消和镜头定位；`tests/unit/TestWorldMap.cs` 以 2×4 偏移数据验证同一几何的覆盖、阻塞与外围。`tests/e2e/test_build_placement.tscn` 使用主场景验证农田、七种加工场地和道路的逐次建造、统一取消、冻结资金与费用提示、暂停及原生鼠标跨界面输入。三组接入 `TestSuite`；独立有窗口运行摆放场景保存 `build/issue87-validation/valid.png`、`conflict.png`、`camera.png`、`edge.png`，地图预览场景另保存 `coverage/placement-*.png`。图像产物仅在有图形后端时生成。
+
+满地图性能场景保留原夹具；追加 `-- --placement-preview` 用户参数时启用随当前镜头移动的候选预览负载，写入 `coverage/performance-placement.json` 和同前缀的前后截图。先运行普通场景进行同条件比较，再运行预览负载；两者均须满足平均至少 60 FPS、P95 帧间隔不超过 16.67 ms。预览不得增加地图块重建。
+
 测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的经营状态、土地、生产、资源、行情、日历与坐标；`tests/integration/` 检查镜头、选择、角色与地图绘制，`tests/e2e/` 检查主场景流程，`tests/performance/` 测负载和图形 FPS。`tests/test_suite.tscn` 汇总 headless 检查，任一失败返回非零。满地图在 384×384 基础格中平铺 8,192 农田与 8,192 加工场地，每座占 3×3：共 16,384 生产实例、147,456 占用格，七作物均覆盖。50 个经营步进检查角落实例只推进正常一秒，并打印总/平均耗时；耗时无固定阈值。实体数与占用格分开报告，不把子格当产能。Windows 导出程序启动另作构建冒烟测试。
 
 各文件都有独立的场景入口，排查时可用 `Godot控制台程序 --headless --path . 场景路径` 单独运行：
@@ -9,8 +13,8 @@
 | 类别 | 场景路径 |
 | --- | --- |
 | 单元测试 | `tests/unit/test_farm_game.tscn`、`tests/unit/test_resources.tscn`、`tests/unit/test_production_state.tscn`、`tests/unit/test_land_occupancy.tscn`、`tests/unit/test_worker_scheduler.tscn`、`tests/unit/test_market_rules.tscn`、`tests/unit/test_market_quotes.tscn`、`tests/unit/test_trading_service.tscn`、`tests/unit/test_game_calendar.tscn`、`tests/unit/test_world_map.tscn` |
-| 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn`、`tests/integration/test_worker_presentation.tscn`、`tests/integration/test_road_map.tscn` |
-| 端到端测试 | `tests/e2e/test_core_loop.tscn`、`tests/e2e/test_trade_orders_window.tscn` |
+| 集成测试 | `tests/integration/test_camera_interaction.tscn`、`tests/integration/test_npc_preview.tscn`、`tests/integration/test_worker_presentation.tscn`、`tests/integration/test_road_map.tscn`、`tests/integration/test_placement_preview.tscn` |
+| 端到端测试 | `tests/e2e/test_core_loop.tscn`、`tests/e2e/test_trade_orders_window.tscn`、`tests/e2e/test_build_placement.tscn` |
 | 满地图负载测试 | `tests/performance/test_full_world_load.tscn` |
 
 委托后端另由 `tests/unit/test_trade_orders.tscn` 验证条件、两种买单预算、冻结与释放、编辑失败零修改、原现金基准、1% 费用及经营相位；新单元和委托窗口端到端检查均接入根 `TestSuite`。有图形后端单独运行委托窗口场景时保存 `build/issue36-validation/orders-window.png`，用于检查真实中文布局；headless 检查不请求截图。
@@ -324,3 +328,42 @@
 耕作表独立场景在清除诊断输出后，headless 与真实窗口均退出码 0。实际查看[拖动直条预览](../architecture/ui/cultivation-window/cultivation-drag-preview.png)和[落位分段窗口](../architecture/ui/cultivation-window/cultivation-window.png)：四季折行、冬春同一条、共享三田、所有固定按钮均可见。原生拖动、任一片段移动整条、草稿焦点保持和暂停日期不变通过；暂停保存还检查地图块重建和工作中心实际像素变化。日志为 `cultivation-headless-final.log` 与 `cultivation-graphical-final.log`，均位于 `build/issue42-validation/`。
 
 初次真实窗口拖放失败时，测量证实系统鼠标位置覆盖了合成输入，释放点落在时间轴外。只修正测试：每次图形移动前同步系统鼠标，拖动结束恢复原屏幕位置；保留原生拖放、原窗口边界、日期与实际条目断言。headless 的坐标变换沿用真实视口矩阵，不硬编码缩放或偏移；产品规则与拖放实现不因测试修复而改变。
+
+## 2026-10-03 #87 建筑放置预览验收
+
+设计来源 #83；变更基准 `61f8f1c1fccf0eb75c7438d7f253796401697e4f`。完整实现经多轮独立只读审查、修复及复查；最后一处可空字段警告修正与交付记录提交前集中复核。指定 Godot 4.7.2 Mono Debug/Release 编译最终均零警告、零错误，完整 headless 套件、Windows Release 中间导出及实际 EXE 启动均通过；启动实际退出码 0，标准错误为空。静态、全仓格式及差异空白检查通过。日志在本地 `build/issue87-validation/`：`full-tests.log`、`release-build.log`、`windows-export.log`、`windows-start.log`；临时产物不入 Git。
+
+覆盖率原始报告 `coverage/coverage.cobertura.xml` 总体 **4394/4506（97.51%）**。逐模块按文件与行号去重，同一行任一类型命中即记覆盖，14 个模块均达到 80%；总体保留报告原计数。逐模块 JSON 为本地 `build/issue87-validation/module-coverage.json`。
+
+| 模块 | 已覆盖 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `cultivation` | 253 / 258 | 98.06% |
+| `economy` | 31 / 35 | 88.57% |
+| `farming` | 198 / 198 | 100.00% |
+| `gameplay` | 384 / 411 | 93.43% |
+| `inventory` | 82 / 85 | 96.47% |
+| `land` | 100 / 101 | 99.01% |
+| `market` | 224 / 224 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 25 / 25 | 100.00% |
+| `trading` | 384 / 392 | 97.96% |
+| `ui` | 1914 / 1967 | 97.31% |
+| `workers` | 91 / 95 | 95.79% |
+| `world` | 557 / 562 | 99.11% |
+
+满地图 16,384 个生产实例、147,456 个占用子格，最终 50 tick **134.70 ms**、平均 **2.694 ms/tick**，角落实例推进及状态一致性通过。图形仍为 1280×720、倍率 1.25、关闭 VSync、不限帧，三名工人起止均移动，预热 2 秒、采样约 8 秒；报告与前后截图均已查看：
+
+| 负载 | 平均 FPS | P95 帧间隔 | 块重建 |
+| --- | ---: | ---: | ---: |
+| 实施前普通满地图 | 129.1 | 6.952 ms | 33 |
+| 实施后普通满地图 | 665.1 | 2.113 ms | 33 |
+| 实施后满地图加候选预览 | 481.6 | 3.297 ms | 33 |
+
+三组均达到平均至少 60 FPS、P95 不超过 16.67 ms，预览未增加块重建。本机为 R7 5800H / RTX 3060、Godot Debug；不同采样的负载时序和后台状态不同，表中 FPS 不用于宣称性能提升比例，也不推定其他硬件或 Release 性能。实施前报告在 `build/issue83-baseline/`，最终报告在 `build/issue87-validation/performance.json`、`performance-placement.json`，同目录保存各自前后截图。
+
+2×4 非当前规格偏移验证 8 个覆盖格、4 个越界格、1 个实际占用格及 12 条外围边，实际绘制与测试使用同一几何。全建筑的连续建造、三种取消、可用资金与冻结隔离、标准费用、暂停、界面遮挡与跨界面点击、左/中键拖动、缩放、键盘和窗口变化均通过。单纯预览与取消不修改资源或生产。
+
+独立有窗口摆放场景退出码 0；真实[正常预览](../architecture/ui/main/building-placement-valid.png)、[局部冲突](../architecture/ui/main/building-placement-conflict.png)、[地图边缘](../architecture/ui/main/building-placement-edge.png)已检查。底栏费用与操作提示显式换行且费用保留最小宽度，布局断言核对视口边界、文字宽高及控件不重叠。headless 夹具在全组开始时设置实际窗口 1280×720 并在结束恢复，避免引擎默认 64×64 窗口经地图拉伸补偿后将测试格移出视口。原生输入使用真实视口变换与实际鼠标位置，图形结束恢复原鼠标；不硬编码显示倍率。
+
+同帧回归在主场景挂树前连接地图真实选择信号，观察员先于经营回调核对候选、原余额和未建地块；鼠标移动、按下和释放不等待新帧，另核对系统取整后仍小于 8 像素的跨格短按。输入和确认先同步同一候选，再重验建造；建成只扣一次费用，保持摆放且不弹详情。

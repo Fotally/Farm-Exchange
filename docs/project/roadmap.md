@@ -31,6 +31,10 @@
 
 2026-10-02 用户在[成熟作品调研](../research/window-size-and-map-zoom.md)后选择先实现“全屏显示更多地图、农田保持大小”，关联 [#78](https://github.com/Fotally/Farm-Exchange/issues/78)。同显示器、同系统 DPI 下，镜头自动抵消地图画布拉伸，窗口扩大时增加地图视野并保持对象大小、镜头中心与玩家倍率；UI 继续沿用既有窗口适配。开局与滚轮范围仍为 1.25 和 1.25～2，未调整至 1；具体玩家行为见[地图与镜头](../gameplay/world/map-and-camera.md)。这是显示策略选择，不是缺陷修复。
 
+## 已确认放置预览设计与实施授权
+
+2026-10-03 用户在 [#83](https://github.com/Fotally/Farm-Exchange/issues/83) 完成放置预览的交互对齐，随后明确授权由 [#87](https://github.com/Fotally/Farm-Exchange/issues/87) 承接开发、验收与 PR：跟随鼠标、沿用锚点、点击即建并保持摆放；占地由建筑属性动态生成，冲突仅标红对应格；所有建筑共用右键、Esc、按钮取消入口，道路继续逐次点击。摆放期间不弹详情，保留左键拖镜头，界面遮挡时隐藏预览并拦截建造，暂停状态保持。视觉参数按参考案例设计并通过画面检查调整。完整约定及验收见[设计方案](build-placement-preview-proposal.md)，证据见[案例调研](../research/build-placement-preview.md)。已完成本地验收，逐模块覆盖率、真实图形及 Windows 导出启动结果见[测试记录](testing.md#2026-10-03-87-建筑放置预览验收)。交付使用 [PR #84](https://github.com/Fotally/Farm-Exchange/pull/84)，合并状态以该 PR 为准。
+
 ## 待用户确认
 
 - 农田、七种配套加工场地与道路以外的建筑类型与建造规则。

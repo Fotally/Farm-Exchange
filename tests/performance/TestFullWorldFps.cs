@@ -26,6 +26,8 @@ public partial class TestFullWorldFps : Node
     private int _maxVisiblePlotCandidates;
     private int _startChunkRedraws;
     private int _movingWorkersAtStart;
+    private bool _placementPreview;
+    private string ReportName => _placementPreview ? "performance-placement" : "performance";
 
     public override void _Ready()
     {
@@ -37,6 +39,9 @@ public partial class TestFullWorldFps : Node
         }
 
         Main main = GetNode<Main>("Main");
+        _placementPreview = Array.IndexOf(OS.GetCmdlineUserArgs(), "--placement-preview") >= 0;
+        // 在 Main 的候选生命周期刷新之后运行，仅本夹具持续提供表现快照。
+        ProcessPriority = 2;
         _main = main;
         main.Game.FillWorldForPresentationBenchmark();
         _map = main.GetNode<WorldMap>("WorldMap");
@@ -47,7 +52,7 @@ public partial class TestFullWorldFps : Node
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Directory.CreateDirectory(Path.GetDirectoryName(ProjectSettings.GlobalizePath("res://coverage/performance.json"))!);
         _readyAtUsec = Time.GetTicksUsec();
-        GD.Print("满地图渲染性能测试：16,384 生产实例、147,456 占用子格，3 名移动工人，预热 2 秒，采样 8 秒");
+        GD.Print($"满地图渲染性能测试：16,384 生产实例、147,456 占用子格，3 名移动工人，预热 2 秒，采样 8 秒；候选预览={_placementPreview}");
     }
 
     public override void _Process(double delta)
@@ -64,13 +69,19 @@ public partial class TestFullWorldFps : Node
         workerCenter /= workers.Count;
         _camera.GlobalPosition = _map.ClampGlobalCameraCenter(_map.GetGridWorldPosition(workerCenter) +
             new Vector2((float)(Math.Sin(seconds * 0.8) * 200.0), 0));
+        if (_placementPreview)
+        {
+            Vector2I anchor = new(Mathf.FloorToInt(workerCenter.X + (float)Math.Sin(seconds * 1.7) * 3f),
+                Mathf.FloorToInt(workerCenter.Y + (float)Math.Cos(seconds * 1.3) * 3f));
+            _map.UpdatePlacementPreview(BuildingKind.Farm, CropKind.Wheat, anchor);
+        }
         _maxVisiblePlotCandidates = Math.Max(_maxVisiblePlotCandidates, _map.LastVisiblePlotCount);
 
         if (now - _readyAtUsec < WarmupUsec)
             return;
         if (_sampleStartUsec == 0)
         {
-            string screenshotPath = ProjectSettings.GlobalizePath("res://coverage/performance.png");
+            string screenshotPath = ProjectSettings.GlobalizePath($"res://coverage/{ReportName}.png");
             GetViewport().GetTexture().GetImage().SavePng(screenshotPath);
             _sampleStartUsec = now;
             _previousFrameUsec = now;
@@ -99,12 +110,14 @@ public partial class TestFullWorldFps : Node
         _frameTimesMs.Sort();
         double fps = renderedFrames / duration;
         double p95 = Percentile(_frameTimesMs, 0.95);
-        string reportPath = ProjectSettings.GlobalizePath("res://coverage/performance.json");
+        string reportPath = ProjectSettings.GlobalizePath($"res://coverage/{ReportName}.json");
         var report = new
         {
             Scenario = "384x384 基础格满地图，8,192 农田与 8,192 加工场地，七种作物，三处远田空田触发三工人直线移动，镜头跟随平均经营位置并水平往返",
             CameraPath = "三工人平均经营格位置转换后的全局中心 + (sin(经过秒×0.8)×200, 0)世界像素",
             ComparisonNote = "镜头轨迹随3小格/秒调整，与旧±500固定中心轨迹不同，不作为同条件性能直接对比",
+            PlacementPreview = _placementPreview,
+            PreviewPath = _placementPreview ? "平均工人格位置 + (sin(经过秒×1.7)×3, cos(经过秒×1.3)×3)，每帧刷新候选占地" : "无",
             EntityCount = _main.Game.GetBuildingSpaces().Count,
             OccupiedCellCount = FarmGame.MapSize * FarmGame.MapSize,
             FarmCount = 8192,
@@ -134,7 +147,7 @@ public partial class TestFullWorldFps : Node
         };
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
         File.WriteAllText(reportPath, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
-        GetViewport().GetTexture().GetImage().SavePng(ProjectSettings.GlobalizePath("res://coverage/performance-end.png"));
+        GetViewport().GetTexture().GetImage().SavePng(ProjectSettings.GlobalizePath($"res://coverage/{ReportName}-end.png"));
         GD.Print(string.Format(CultureInfo.InvariantCulture,
             "满地图性能：平均 {0:F1} FPS，P95 帧间隔 {1:F2} ms，最多可见候选格 {2}，报告 {3}",
             fps, p95, _maxVisiblePlotCandidates, reportPath));

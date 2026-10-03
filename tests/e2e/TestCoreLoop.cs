@@ -261,6 +261,7 @@ public partial class TestCoreLoop : Node
             map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
             if (game.MoneyCents != 4000 || game.GetBuildingSpace(farm)?.AnchorCell != farm)
                 return Fail("非三格对齐锚点未建造一次并只收一座费用");
+            Find<Button>(ui, "CancelPlacementButton").EmitSignal(Button.SignalName.Pressed);
             map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm + new Vector2I(2, 1));
             Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
             Find<Button>(Find<Control>(ui, "CropWindow"), "CropCardRadish").EmitSignal(Button.SignalName.Pressed);
@@ -448,7 +449,7 @@ public partial class TestCoreLoop : Node
         if (!object.ReferenceEquals(roadCard, Find<Button>(window, "RoadCard")))
             return Fail("目录切换重新创建了道路卡片");
         roadCard.EmitSignal(Button.SignalName.Pressed);
-        if (window.Visible || !cancel.Visible || !footer.Text.Contains("每格 1.00 金币"))
+        if (window.Visible || !cancel.Visible || !Find<Label>(ui, "BuildCost").Text.Contains("1.00 金币"))
             return Fail("道路选择没有进入连续铺设并显示统一费用");
         Vector2I first = new(183, 192);
         Vector2I second = new(180, 192);
@@ -458,7 +459,7 @@ public partial class TestCoreLoop : Node
             return Fail("道路首格没有扣实际100分，或铺设后退出了连续模式");
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, second);
         if (main.Game.GetPlot(second).Building != BuildingKind.Road || main.Game.MoneyCents != 4800 ||
-            !cancel.Visible || !footer.Text.Contains("每格 1.00 金币"))
+            !cancel.Visible || !Find<Label>(ui, "BuildCost").Text.Contains("1.00 金币"))
             return Fail("道路第二格未连续铺设或实际扣费错误");
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
         if (main.Game.MoneyCents != 4800 || main.Game.GetPlot(first).Building != BuildingKind.Road ||
@@ -540,6 +541,10 @@ public partial class TestCoreLoop : Node
 
         Vector2I farm = new(186, 192);
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        if (!cancel.Visible || detail.Visible)
+            return Fail("农田成功后没有保持摆放或弹出详情");
+        cancel.EmitSignal(Button.SignalName.Pressed);
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
         if (main.Game.GetPlot(farm).Building != BuildingKind.Farm ||
             main.Game.MoneyCents != 4000 || !detail.Visible || cancel.Visible ||
             !ContainsVisibleText(detail, "原料当前报价：2.50 金币") ||
@@ -601,6 +606,10 @@ public partial class TestCoreLoop : Node
         if (!cancel.Visible || main.Game.MoneyCents != 4000 || !message.Text.Contains("已有建筑"))
             return Fail("占用地块仍建造或扣费");
         Vector2I processor = new(198, 192);
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
+        if (!cancel.Visible || detail.Visible)
+            return Fail("加工场地成功后没有保持摆放或弹出详情");
+        cancel.EmitSignal(Button.SignalName.Pressed);
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
         if (main.Game.GetPlot(processor).Building != BuildingKind.Processor ||
             main.Game.MoneyCents != 3000 || cancel.Visible ||
