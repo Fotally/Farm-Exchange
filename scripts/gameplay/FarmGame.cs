@@ -386,7 +386,14 @@ public sealed class FarmGame
      */
     public IReadOnlyList<CultivationPlanSnapshot> GetCultivationPlans() => _cultivation.GetSnapshots();
     /**
-     * <summary>检查完整草稿的年度排程冲突与禁生季风险。</summary>
+     * <summary>只读检查作物条年度排程，允许在未命名草稿中编辑。</summary>
+     * <param name="entries">完整候选年度作物条。</param>
+     * <returns>正常拒绝或风险条编号，不要求耕作表名称。</returns>
+     */
+    public CultivationValidation CheckCultivationEntries(IReadOnlyList<CultivationEntry> entries) =>
+        CultivationPlanBook.ValidateEntries(entries);
+    /**
+     * <summary>检查提交草稿的名称、执行方式与完整年度排程。</summary>
      * <param name="request">名称、表级模式和年度作物条。</param>
      * <returns>正常拒绝或风险条编号。</returns>
      */

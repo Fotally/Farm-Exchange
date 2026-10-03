@@ -28,6 +28,7 @@ public partial class CultivationWindow : DraggableWindow
     private FarmGame? _game;
     private int? _planId;
     private int? _selectedEntry;
+    private int _nextEntryId = 1;
 
     /**
      * <summary>请求创建或编辑一份完整共享表；空编号表示新建。</summary>
@@ -130,7 +131,11 @@ public partial class CultivationWindow : DraggableWindow
             CultivationPlanSnapshot plan = _snapshots[index];
             _plans.SetItemText(index, $"{plan.Name} · {plan.ReferencingFarms}田");
             _plans.SetItemTooltip(index, $"{plan.Name} · 引用 {plan.ReferencingFarms} 块农田");
-            if (plan.Id == _planId) selection = index;
+            if (plan.Id == _planId)
+            {
+                selection = index;
+                _nextEntryId = Math.Max(_nextEntryId, plan.NextEntryId);
+            }
         }
         if (selection >= 0) _plans.Select(selection);
         _impact.Text = _planId == null ? "新表尚未关联农田" :
@@ -157,7 +162,9 @@ public partial class CultivationWindow : DraggableWindow
                     SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 };
                 check.AddThemeFontSizeOverride("font_size", 12);
-                check.AddThemeColorOverride("font_color", Ink);
+                foreach (string themeColorName in new[] { "font_color", "font_hover_color", "font_pressed_color",
+                    "font_hover_pressed_color", "font_focus_color" })
+                    check.AddThemeColorOverride(themeColorName, Ink);
                 _farmChecks.Add(cell, check);
                 _farms.AddChild(check);
             }
@@ -191,6 +198,7 @@ public partial class CultivationWindow : DraggableWindow
     {
         _planId = null;
         _selectedEntry = null;
+        _nextEntryId = 1;
         _draft.Clear();
         _name.Text = "新年度表";
         _mode.Select(0);
@@ -205,6 +213,7 @@ public partial class CultivationWindow : DraggableWindow
         _planId = plan.Id;
         _draft.Clear();
         _draft.AddRange(plan.Entries);
+        _nextEntryId = plan.NextEntryId;
         _selectedEntry = null;
         _name.Text = plan.Name;
         _mode.Select((int)plan.Mode);
@@ -229,7 +238,11 @@ public partial class CultivationWindow : DraggableWindow
     {
         if (!CheckDrop(id, crop, day)) return;
         List<CultivationEntry> candidate = Candidate(id, crop, day);
-        id = id == 0 ? candidate[^1].Id : id;
+        if (id == 0)
+        {
+            id = candidate[^1].Id;
+            _nextEntryId++;
+        }
         _draft.Clear();
         _draft.AddRange(candidate);
         SelectEntry(id);
@@ -240,7 +253,7 @@ public partial class CultivationWindow : DraggableWindow
     {
         var candidate = new List<CultivationEntry>(_draft);
         if (id == 0)
-            candidate.Add(new CultivationEntry(_draft.Count == 0 ? 1 : _draft.Max(e => e.Id) + 1, crop, day));
+            candidate.Add(new CultivationEntry(_nextEntryId, crop, day));
         else
             candidate[candidate.FindIndex(e => e.Id == id)] = new CultivationEntry(id, crop, day);
         return candidate;
@@ -249,8 +262,7 @@ public partial class CultivationWindow : DraggableWindow
     private bool CheckDrop(int id, CropKind crop, int day)
     {
         if (_game == null) return false;
-        CultivationValidation validation = _game.CheckCultivationPlan(new CultivationPlanRequest(
-            _name.Text, (CultivationMode)_mode.Selected, Candidate(id, crop, day)));
+        CultivationValidation validation = _game.CheckCultivationEntries(Candidate(id, crop, day));
         _feedback.Text = validation.Error ?? (validation.RiskEntryIds.Count > 0
             ? "可放置；红框作物条越过禁生边界，存在枯萎清除风险。"
             : "可放置：同种可连续，不同作物至少留一天空白。");
@@ -285,17 +297,18 @@ public partial class CultivationWindow : DraggableWindow
     private void ValidateDraft()
     {
         if (_game == null) return;
-        CultivationValidation validation = _game.CheckCultivationPlan(Request());
+        CultivationValidation validation = _game.CheckCultivationEntries(_draft);
+        string saving = string.IsNullOrWhiteSpace(_name.Text) ? "填写名称后才能保存。" : "可保存。";
         _feedback.Text = validation.Error ?? (validation.RiskEntryIds.Count > 0
-            ? "红框作物条越过禁生边界：存在枯萎清除风险，仍可保存。"
-            : "排程可保存：同种可连续，不同作物至少留一天空白。");
+            ? "红框作物条越过禁生边界：存在枯萎清除风险，" + saving
+            : "排程有效：同种可连续，不同作物至少留一天空白；" + saving);
         RefreshTimeline(validation);
     }
 
     private void RefreshTimeline(CultivationValidation? validation = null)
     {
         if (_game == null) return;
-        validation ??= _game.CheckCultivationPlan(Request());
+        validation ??= _game.CheckCultivationEntries(_draft);
         _timeline.Refresh(_draft, validation.RiskEntryIds, _selectedEntry, _game.Calendar.ElapsedDays);
     }
 

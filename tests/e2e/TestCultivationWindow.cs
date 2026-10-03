@@ -6,6 +6,7 @@ using FarmExchange.Cultivation;
 using FarmExchange.Gameplay;
 using FarmExchange.UI;
 using FarmExchange.World;
+using FarmExchange.Time;
 
 public partial class TestCultivationWindow : Node
 {
@@ -216,6 +217,8 @@ public partial class TestCultivationWindow : Node
 
     public static async Task<bool> RunLayoutChecks(Node parent)
     {
+        bool freshPassed = await CheckFreshUnnamedEditing(parent);
+        bool identityPassed = CheckEntryIdentityAfterDeletion(parent);
         Main main = OpenMain(parent);
         CultivationWindow window = Find<CultivationWindow>(main, "CultivationWindow");
         Click(window, "NewCultivationPlanButton");
@@ -301,7 +304,150 @@ public partial class TestCultivationWindow : Node
         }
         main.QueueFree();
         await Frames(parent);
-        return await CheckPausedSaveMap(parent) && await CheckNativePlacement(parent) && passed;
+        return await CheckPausedSaveMap(parent) && await CheckNativePlacement(parent) && passed && freshPassed && identityPassed;
+    }
+
+    private static bool CheckEntryIdentityAfterDeletion(Node parent)
+    {
+        Main main = OpenMain(parent);
+        FarmGame game = main.Game;
+        CultivationWindow window = Find<CultivationWindow>(main, "CultivationWindow");
+        CultivationTimeline timeline = Find<CultivationTimeline>(window, "CultivationTimeline");
+        Vector2I cell = game.GetBuildingSpaces().First(s => s.Building == BuildingKind.Farm).AnchorCell;
+        game.SetRawReserve(CropKind.Radish, 1000);
+        game.SetFarmCrop(cell, CropKind.Radish);
+        Click(window, "NewCultivationPlanButton");
+        Find<LineEdit>(window, "CultivationPlanName").Text = "删除后独立新轮";
+        SetMode(window, 1);
+        Drop(timeline, CropKind.Radish, 0);
+        Click(window, "SaveCultivationPlanButton");
+        int oldId = game.GetCultivationPlans()[0].Entries[0].Id;
+        Find<CheckBox>(window, $"CultivationFarm{cell.X}_{cell.Y}").ButtonPressed = true;
+        Click(window, "ApplyCultivationPlanButton");
+        game.SetPaused(false);
+        while (game.Calendar.ElapsedDays < 6) game.AdvanceTick(isRaining: true);
+        game.SetPaused(true);
+        bool passed = game.GetRawStock(CropKind.Radish) >= 6 || Fail("编号回归夹具未完成首轮萝卜");
+        Click(window, "RemoveCultivationEntryButton");
+        Click(window, "SaveCultivationPlanButton");
+        window.Refresh(game);
+        ItemList plans = Find<ItemList>(window, "CultivationPlanList");
+        plans.Select(0);
+        plans.EmitSignal(ItemList.SignalName.ItemSelected, 0L);
+        Drop(timeline, CropKind.Radish, 10);
+        Click(window, "SaveCultivationPlanButton");
+        CultivationEntry replacement = game.GetCultivationPlans()[0].Entries[0];
+        if (replacement.Id <= oldId) passed = Fail("保存空表并重选后新增复用了旧条编号");
+        if (game.GetFarmCultivation(cell).PreparedTimeUnits != 10L * GameTimeUnits.PerDay)
+            passed = Fail("已执行旧条删除后日10新条错误地跳到明年");
+        main.QueueFree();
+        return passed;
+    }
+
+    private static async Task<bool> CheckFreshUnnamedEditing(Node parent)
+    {
+        Main main = OpenMain(parent);
+        CultivationWindow window = Find<CultivationWindow>(main, "CultivationWindow");
+        CultivationTimeline timeline = Find<CultivationTimeline>(window, "CultivationTimeline");
+        LineEdit name = Find<LineEdit>(window, "CultivationPlanName");
+        await Frames(parent);
+        bool passed = true;
+        if (name.Text.Length != 0) passed = Fail("首次无名草稿被替换为默认名称");
+        int dropped = 0;
+        timeline.EntryDropped += (_, _, _) => dropped++;
+        await Drag(parent, Find<Control>(window, "CultivationCropPotato").GetGlobalRect().GetCenter(),
+            timeline.GlobalPosition + DropPoint(timeline, CropKind.Potato, 10));
+        if (dropped != 1) passed = Fail("首次未输入名称的合法原生马铃薯拖放被拒绝");
+        Click(window, "SaveCultivationPlanButton");
+        if (main.Game.GetCultivationPlans().Count != 0 ||
+            !Find<Label>(window, "CultivationFeedback").Text.Contains("名称"))
+            passed = Fail("无名草稿保存未明确拒绝");
+        CheckBox farm = Descendants(window).OfType<CheckBox>().First();
+        farm.ButtonPressed = true;
+        farm.GrabFocus();
+        foreach (string state in new[] { "font_color", "font_hover_color", "font_pressed_color",
+            "font_hover_pressed_color", "font_focus_color" })
+        {
+            Color color = farm.GetThemeColor(state);
+            double contrast = Contrast(color, UiElements.Cream);
+            if (contrast < 4.5) passed = Fail($"农田勾选文字状态 {state} 对比不足：{contrast:F2}");
+        }
+        if (DisplayServer.GetName() != "headless")
+        {
+            passed = await CheckCheckedFarmAppearance(parent, farm) && passed;
+        }
+        name.Text = "先排程后命名";
+        Click(window, "SaveCultivationPlanButton");
+        if (main.Game.GetCultivationPlans().Count != 1 || main.Game.GetCultivationPlans()[0].Entries.Count != 1)
+            passed = Fail("命名后首次原生草稿未保存");
+        else
+        {
+            name.Text = "";
+            int entryId = main.Game.GetCultivationPlans()[0].Entries[0].Id;
+            Drop(timeline, CropKind.Potato, 20, entryId);
+            Drop(timeline, CropKind.Radish, 40);
+            if (dropped != 3) passed = Fail("清空已保存表名称后不能移动或新增条");
+            Click(window, "SaveCultivationPlanButton");
+            if (main.Game.GetCultivationPlans()[0].Entries.Count != 1 ||
+                main.Game.GetCultivationPlans()[0].Entries[0].StartDay != 10)
+                passed = Fail("清空名称后保存改变了正式表");
+            if (timeline._CanDropData(DropPoint(timeline, CropKind.Radish, 20), CultivationTimeline.DragData(CropKind.Radish, 0)) ||
+                timeline._CanDropData(DropPoint(timeline, CropKind.Radish, 34), CultivationTimeline.DragData(CropKind.Radish, 0)) ||
+                timeline._CanDropData(DropPoint(timeline, CropKind.Corn, 252), CultivationTimeline.DragData(CropKind.Corn, 0)))
+                passed = Fail("无名草稿跳过了真实排程约束");
+            name.Text = "重新命名";
+            Click(window, "SaveCultivationPlanButton");
+            if (main.Game.GetCultivationPlans()[0].Entries.Count != 2 ||
+                main.Game.GetCultivationPlans()[0].Entries.First(e => e.Id == entryId).StartDay != 20)
+                passed = Fail("重新命名后未保留新增和移动的草稿");
+        }
+        main.QueueFree();
+        await Frames(parent);
+        return passed;
+    }
+
+    private static async Task<bool> CheckCheckedFarmAppearance(Node parent, CheckBox farm)
+    {
+        Window window = parent.GetWindow();
+        Vector2I originalSize = window.Size;
+        Vector2I originalMouse = DisplayServer.MouseGetPosition();
+        string directory = ProjectSettings.GlobalizePath("res://build/issue86-followup-validation");
+        DirAccess.MakeDirRecursiveAbsolute(directory);
+        bool passed = true;
+        try
+        {
+            foreach ((Vector2I size, string file) in new[] {
+                (new Vector2I(1280, 720), "fresh-unnamed-checked.png"),
+                (new Vector2I(1600, 900), "enlarged-checked.png") })
+            {
+                window.Size = size;
+                await Frames(parent);
+                Vector2 position = parent.GetViewport().GetFinalTransform() * farm.GetGlobalRect().GetCenter();
+                Input.WarpMouse(position);
+                Input.ParseInputEvent(new InputEventMouseMotion { Position = position, GlobalPosition = position });
+                await Frames(parent);
+                if (farm.GetDrawMode() != BaseButton.DrawMode.HoverPressed || !farm.HasFocus())
+                    passed = Fail("真实悬停勾选田未进入已选/悬停/焦点状态");
+                await parent.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+                parent.GetViewport().GetTexture().GetImage().SavePng(directory + "/" + file);
+            }
+        }
+        finally
+        {
+            window.Size = originalSize;
+            Input.WarpMouse(originalMouse - window.Position);
+        }
+        await Frames(parent);
+        return passed;
+    }
+
+    private static double Contrast(Color foreground, Color background)
+    {
+        static double Linear(float channel) => channel <= 0.04045f ? channel / 12.92 : Math.Pow((channel + 0.055) / 1.055, 2.4);
+        static double Luminance(Color color) => 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
+        double front = Luminance(foreground);
+        double back = Luminance(background);
+        return (Math.Max(front, back) + 0.05) / (Math.Min(front, back) + 0.05);
     }
 
     private static async Task<bool> CheckNativePlacement(Node parent)

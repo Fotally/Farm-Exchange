@@ -9,7 +9,8 @@ public partial class TestCultivationPlanBook : Node
 {
     public override void _Ready() => GetTree().Quit(RunChecks() ? 0 : 1);
 
-    public static bool RunChecks() => CheckValidation() && CheckStartSeasonValidation() && CheckSharedPlans() &&
+    public static bool RunChecks() => CheckDraftSchedule() && CheckEntryIdentityLifetime() &&
+        CheckValidation() && CheckStartSeasonValidation() && CheckSharedPlans() &&
         CheckModesAndCache() && CheckOneRoundAndYearWrap() && CheckManualAndFacade() &&
         CheckSeasonRescue() && CheckHarvestPlanDateActivation() && CheckRescueWithinPlanBar() &&
         CheckExecutedEntriesAfterEdit() && CheckPreservedRoundDoesNotConsumeEntry() &&
@@ -18,6 +19,98 @@ public partial class TestCultivationPlanBook : Node
 
     private static CultivationPlanRequest Request(CultivationMode mode = CultivationMode.PrepareNext) =>
         new("春季轮作", mode, new[] { new CultivationEntry(1, CropKind.Radish, 0), new CultivationEntry(2, CropKind.Wheat, 5) });
+
+    private static bool CheckDraftSchedule()
+    {
+        var game = new FarmGame(12345);
+        var request = Request() with { Name = " " };
+        PlotSnapshot plot = game.GetPlot(new Vector2I(189, 189));
+        CultivationValidation check = game.CheckCultivationEntries(request.Entries);
+        if (!check.Success || game.CheckCultivationPlan(request).Success ||
+            game.CreateCultivationPlan(request).Success || game.GetCultivationPlans().Count != 0)
+            return Fail("未命名合法条目不可编辑，或未命名共享表仍能保存");
+        CultivationEntry[][] invalid =
+        {
+            new[] { new CultivationEntry(0, CropKind.Radish, 0) },
+            new[] { new CultivationEntry(1, CropKind.Radish, -1) },
+            new[] { new CultivationEntry(1, CropKind.Radish, 336) },
+            new[] { new CultivationEntry(1, (CropKind)99, 0) },
+            new[] { new CultivationEntry(1, CropKind.Corn, 252) },
+            new[] { new CultivationEntry(1, CropKind.Radish, 0), new CultivationEntry(1, CropKind.Radish, 4) },
+            new[] { new CultivationEntry(1, CropKind.Radish, 0), new CultivationEntry(2, CropKind.Radish, 3) },
+            new[] { new CultivationEntry(1, CropKind.Radish, 0), new CultivationEntry(2, CropKind.Wheat, 4) },
+            new[] { new CultivationEntry(1, CropKind.Wheat, 330), new CultivationEntry(2, CropKind.Radish, 0) },
+        };
+        foreach (CultivationEntry[] entries in invalid)
+            if (game.CheckCultivationEntries(entries).Success)
+                return Fail("未命名条目检查遗漏原编号、日期、季节、重叠或异种间距规则");
+        CultivationValidation risk = game.CheckCultivationEntries(new[] { new CultivationEntry(7, CropKind.Corn, 167) });
+        if (!game.CheckCultivationEntries(Array.Empty<CultivationEntry>()).Success ||
+            !game.CheckCultivationEntries(new[] { new CultivationEntry(1, CropKind.Radish, 0),
+                new CultivationEntry(2, CropKind.Radish, 4) }).Success ||
+            !risk.Success || risk.RiskEntryIds.Count != 1 || risk.RiskEntryIds[0] != 7 ||
+            game.GetPlot(new Vector2I(189, 189)) != plot || game.Calendar.ElapsedSeconds != 0)
+            return Fail("只读条目检查改变经营，或合法空白、同种相邻与跨季风险被拒绝");
+        int id = game.CreateCultivationPlan(Request()).Id;
+        if (game.UpdateCultivationPlan(id, request).Success || game.GetCultivationPlans()[0].Name != Request().Name)
+            return Fail("已保存共享表可被更新为空名称");
+        return true;
+    }
+
+    private static bool CheckEntryIdentityLifetime()
+    {
+        var game = new FarmGame(12345);
+        foreach (var space in game.GetBuildingSpaces())
+            game.RemoveBuilding(space.AnchorCell);
+        Vector2I farm = new(189, 189);
+        game.BuildFarm(farm);
+        var request = new CultivationPlanRequest("独立条编号", CultivationMode.PrepareNext,
+            new[] { new CultivationEntry(1, CropKind.Radish, 0) });
+        int id = game.CreateCultivationPlan(request).Id;
+        CultivationPlanSnapshot initial = game.GetCultivationPlans()[0];
+        if (initial.NextEntryId != 2)
+            return Fail("共享表未提供下一可用条编号");
+        game.ApplyCultivationPlan(id, new[] { farm });
+        while (game.GetRawStock(CropKind.Radish) == 0 && game.Calendar.ElapsedSeconds < 300)
+            game.AdvanceTick(isRaining: true);
+        if (game.GetRawStock(CropKind.Radish) != 6)
+            return Fail("条编号回归未真实完成旧条");
+        var moved = request with { Entries = new[] { new CultivationEntry(1, CropKind.Radish, 10) } };
+        if (!game.UpdateCultivationPlan(id, moved).Success ||
+            game.GetFarmCultivation(farm).PreparedTimeUnits != (336 + 10) * GameTimeUnits.PerDay)
+            return Fail("移动旧条丢失年度执行凭据而在当年重播");
+        if (!game.UpdateCultivationPlan(id, request with { Entries = Array.Empty<CultivationEntry>() }).Success)
+            return Fail("保存空表失败");
+        CultivationPlanSnapshot empty = game.GetCultivationPlans()[0];
+        if (empty.NextEntryId != 2 || initial.Entries.Count != 1 || initial.NextEntryId != 2)
+            return Fail("保存空表使生命周期条编号退回，或查询快照被后续编辑改变");
+        FarmCultivationSnapshot binding = game.GetFarmCultivation(farm);
+        var invalid = request with { Entries = new[] { new CultivationEntry(100, CropKind.Corn, 252) } };
+        if (game.UpdateCultivationPlan(id, invalid).Success || game.GetCultivationPlans()[0].NextEntryId != 2)
+            return Fail("失败更新仍消耗条编号");
+        if (game.UpdateCultivationPlan(id, moved).Success || game.GetCultivationPlans()[0].Entries.Count != 0 ||
+            game.GetFarmCultivation(farm) != binding)
+            return Fail("已删除条编号被作为新条复用，或拒绝复用仍修改共享表");
+        var newEntry = request with { Entries = new[] { new CultivationEntry(empty.NextEntryId, CropKind.Radish, 10) } };
+        if (!game.UpdateCultivationPlan(id, newEntry).Success ||
+            game.GetCultivationPlans()[0].NextEntryId != 3 ||
+            game.GetFarmCultivation(farm).PreparedTimeUnits != 10 * GameTimeUnits.PerDay)
+            return Fail("删除后新条没有在本年定位");
+        while ((long)game.Calendar.ElapsedSeconds * GameTimeUnits.PerSecond < 16 * GameTimeUnits.PerDay)
+            game.AdvanceTick(isRaining: true);
+        if (game.GetRawStock(CropKind.Radish) != 12)
+            return Fail("新条本年没有实际播种收获一轮，或旧条被重新执行");
+        if (!game.UpdateCultivationPlan(id, request with { Entries = Array.Empty<CultivationEntry>() }).Success ||
+            game.GetCultivationPlans()[0].NextEntryId != 3)
+            return Fail("再次保存空表退回已分配条编号");
+        int emptyId = game.CreateCultivationPlan(request with { Entries = Array.Empty<CultivationEntry>() }).Id;
+        int sparseId = game.CreateCultivationPlan(request with { Entries = new[] { new CultivationEntry(7, CropKind.Radish, 0) } }).Id;
+        foreach (CultivationPlanSnapshot snapshot in game.GetCultivationPlans())
+            if ((snapshot.Id == emptyId && snapshot.NextEntryId != 1) ||
+                (snapshot.Id == sparseId && snapshot.NextEntryId != 8))
+                return Fail("独立表、空表或非连续编号的下一可用编号错误");
+        return true;
+    }
 
     private static bool CheckValidation()
     {

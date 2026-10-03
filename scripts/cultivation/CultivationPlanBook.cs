@@ -20,13 +20,18 @@ internal sealed class CultivationPlanBook
 
     internal static CultivationValidation Validate(CultivationPlanRequest request)
     {
-        var risks = new List<int>();
         if (string.IsNullOrWhiteSpace(request.Name))
-            return new("请输入耕作表名称", risks.AsReadOnly());
+            return new("请输入耕作表名称", Array.Empty<int>());
         if (!Enum.IsDefined(request.Mode))
-            return new("无效执行方式", risks.AsReadOnly());
+            return new("无效执行方式", Array.Empty<int>());
+        return ValidateEntries(request.Entries);
+    }
+
+    internal static CultivationValidation ValidateEntries(IReadOnlyList<CultivationEntry> entries)
+    {
+        var risks = new List<int>();
         var ids = new HashSet<int>();
-        foreach (CultivationEntry entry in request.Entries)
+        foreach (CultivationEntry entry in entries)
         {
             if (entry.Id <= 0 || !ids.Add(entry.Id))
                 return new("作物条编号必须为正数且不能重复", risks.AsReadOnly());
@@ -45,7 +50,7 @@ internal sealed class CultivationPlanBook
                 }
             }
         }
-        CultivationEntry[] sorted = request.Entries.OrderBy(entry => entry.StartDay).ToArray();
+        CultivationEntry[] sorted = entries.OrderBy(entry => entry.StartDay).ToArray();
         for (int i = 0; i < sorted.Length; i++)
         {
             CultivationEntry current = sorted[i];
@@ -66,18 +71,21 @@ internal sealed class CultivationPlanBook
         if (!check.Success)
             return new(0, check.Error);
         int id = _nextId++;
-        _plans.Add(id, new Plan(id, request));
+        _plans.Add(id, new Plan(id, request, 1));
         return new(id, null);
     }
 
     internal CultivationCommandResult Update(int id, CultivationPlanRequest request, long now)
     {
-        if (!_plans.ContainsKey(id))
+        if (!_plans.TryGetValue(id, out Plan? previous))
             return new(id, "耕作表不存在");
         CultivationValidation check = Validate(request);
         if (!check.Success)
             return new(id, check.Error);
-        _plans[id] = new Plan(id, request);
+        if (request.Entries.Any(entry => entry.Id < previous.NextEntryId &&
+            !previous.Entries.Any(old => old.Id == entry.Id)))
+            return new(id, "新作物条不能复用历史编号");
+        _plans[id] = new Plan(id, request, previous.NextEntryId);
         foreach ((int index, Binding binding) in _bindings)
             if (binding.PlanId == id)
                 ResetArrangement(index, binding, now);
@@ -89,7 +97,7 @@ internal sealed class CultivationPlanBook
     internal IReadOnlyList<CultivationPlanSnapshot> GetSnapshots() => Array.AsReadOnly(
         _plans.Values.Select(plan => new CultivationPlanSnapshot(plan.Id, plan.Name, plan.Mode,
             Array.AsReadOnly((CultivationEntry[])plan.Entries.Clone()),
-            _bindings.Values.Count(binding => binding.PlanId == plan.Id))).ToArray());
+            _bindings.Values.Count(binding => binding.PlanId == plan.Id), plan.NextEntryId)).ToArray());
 
     internal FarmCultivationSnapshot GetFarm(int index)
     {
@@ -326,12 +334,14 @@ internal sealed class CultivationPlanBook
         internal readonly string Name;
         internal readonly CultivationMode Mode;
         internal readonly CultivationEntry[] Entries;
-        internal Plan(int id, CultivationPlanRequest request)
+        internal readonly int NextEntryId;
+        internal Plan(int id, CultivationPlanRequest request, int nextEntryId)
         {
             Id = id;
             Name = request.Name.Trim();
             Mode = request.Mode;
             Entries = request.Entries.OrderBy(entry => entry.StartDay).ToArray();
+            NextEntryId = Math.Max(nextEntryId, Entries.Select(entry => entry.Id).DefaultIfEmpty(0).Max() + 1);
         }
     }
 }
