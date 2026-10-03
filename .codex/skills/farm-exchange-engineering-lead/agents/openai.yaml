@@ -1,0 +1,3 @@
+interface:
+  display_name: "Farm Exchange 工程统筹"
+  short_description: "统筹游戏计划与 issue，协调最多三名开发 Agent，独立审查并验收交付"
