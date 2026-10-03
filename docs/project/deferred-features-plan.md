@@ -4,7 +4,7 @@
 
 - 成果：开局可用的共享年度表、原生整条拖放与跨季折行、多田应用、两种表级模式、完成时间缓存和年度执行凭据；两种手动接管独立，适季时间不足仅提示风险，禁生边界成熟沿用原收获入库流程。代码、中文玩法、接口、实现、导航和根系统结构一致。
 - 审查与验收：基准 `1baa79b991818a2e025dd2986b53099c9e973786`；完整 issue 及验收修改分别经新建独立审查员复查，无待修。指定 Godot 4.7.2 Mono Debug/Release 编译零警告零错误，完整 headless 套件、真实窗口原生拖放、Windows Release 导出和实际 EXE 启动退出码 0。总体行覆盖率 4207/4320（97.38%），14 个模块均超过 80%；满地图 50 tick 89.64 ms，平均 1.793 ms/tick，图形平均 667.6 FPS、P95 1.848 ms。分表及日志路径见[测试记录](testing.md#2026-10-03-42-年度耕作表验收)，[直条预览](../architecture/ui/cultivation-window/cultivation-drag-preview.png)与[落位分段截图](../architecture/ui/cultivation-window/cultivation-window.png)均已查看。静态、格式与差异空白检查通过；临时报告位于本地 `build/issue42-validation/`，不入 Git。
-- 交付状态：已验收、待创建 PR；最终提交 `dev → main`，等待人工合并。#43、#44 继续暂缓。
+- 交付状态：已验收、待人工合并；[PR #84](https://github.com/Fotally/Farm-Exchange/pull/84)，`dev → main`，功能提交 `12c78cc`。#43、#44 继续暂缓。
 
 ### 2026-10-02 — 委托挂单、自动买卖与手续费（#36）
 
@@ -24,7 +24,7 @@ T00～T10 与追加 T12 的已确认范围均已完成，PR #70 已于北京时�
 
 | 后续功能 | 关联 issue | 已完成的基础 | 尚未实施 |
 | --- | --- | --- | --- |
-| 季节耕作表 | [#42](https://github.com/Fotally/Farm-Exchange/issues/42) | 共享年度时间表、整条拖放、两种执行方式、手动预备及播种/换季规则调整已验收 | 无待实施项；待提交 PR 并人工合并，见顶部记录 |
+| 季节耕作表 | [#42](https://github.com/Fotally/Farm-Exchange/issues/42) | 共享年度时间表、整条拖放、两种执行方式、手动预备及播种/换季规则调整已验收 | 无待实施项；[PR #84](https://github.com/Fotally/Farm-Exchange/pull/84) 待人工合并，见顶部记录 |
 | 后续扩充人力 | [#43](https://github.com/Fotally/Farm-Exchange/issues/43) | 开局三人、移动与播种浇水、稳定轮转和实例独占 | 扩员方式、相关费用与玩家操作 |
 | 委托挂单、自动买卖与手续费 | [#36](https://github.com/Fotally/Farm-Exchange/issues/36) | 即时交易，以及已验收并合并的委托、自动策略、手续费与界面 | 无；[PR #81](https://github.com/Fotally/Farm-Exchange/pull/81) 已人工合并 |
 | 行情学习反馈 | [#44](https://github.com/Fotally/Farm-Exchange/issues/44) | 对应实际因素的公告、上次价、当前价与涨跌展示 | 用消息、实际行情与交易结果帮助学习的反馈功能 |

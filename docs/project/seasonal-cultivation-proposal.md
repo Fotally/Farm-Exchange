@@ -2,7 +2,7 @@
 
 关联 [#42](https://github.com/Fotally/Farm-Exchange/issues/42)，主计划为[后续功能计划](deferred-features-plan.md)。确认日期：2026-10-02。
 
-**状态：2026-10-03 已按授权完成实现与完整验收，待提交 PR。** 本文保留已确认目标规则；范围和验收标准已同步到 #42。完整验收与交付状态由[主计划](deferred-features-plan.md)维护，生效规则由[作物与选种](../gameplay/production/crop-growth.md)和对应玩法专题维护。
+**状态：2026-10-03 已按授权完成实现与完整验收，[PR #84](https://github.com/Fotally/Farm-Exchange/pull/84) 待人工合并。** 本文保留已确认目标规则；范围和验收标准已同步到 #42。完整验收与交付状态由[主计划](deferred-features-plan.md)维护，生效规则由[作物与选种](../gameplay/production/crop-growth.md)和对应玩法专题维护。
 
 ## 目标与范围
 
