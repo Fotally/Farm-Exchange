@@ -50,8 +50,11 @@ public partial class CropSelectionWindow : DraggableWindow
         }
     }
 
-    /** <summary>在选作物前明确手动接管方式和本田损失。</summary>
-     * <param name="prepareNext">是否保留当前轮并预备下一轮。</param><param name="farmCell">用于统一播种提示的农田子格。</param> */
+    /**
+     * <summary>在选作物前明确手动接管方式和本田损失。</summary>
+     * <param name="prepareNext">是否保留当前轮并预备下一轮。</param>
+     * <param name="farmCell">用于统一播种提示的农田子格。</param>
+     */
     public void SetManualMode(bool prepareNext, Vector2I? farmCell = null)
     {
         _prepareNext = prepareNext;

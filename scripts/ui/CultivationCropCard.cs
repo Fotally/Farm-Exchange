@@ -4,7 +4,9 @@ using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
 
-/** <summary>从作物区拖出一轮完整生长周期，不发出播种命令。</summary> */
+/**
+ * <summary>从作物区拖出一轮完整生长周期，不发出播种命令。</summary>
+ */
 public partial class CultivationCropCard : Button
 {
     private readonly CropKind _crop;

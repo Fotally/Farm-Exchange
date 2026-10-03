@@ -128,8 +128,10 @@ internal sealed class CultivationPlanBook
     internal void RemoveFarm(int index) => _bindings.Remove(index);
     internal void Clear() => _bindings.Clear();
 
-    /** <summary>在换日清理之前记录工人已经完成的实际计划播种。</summary>
-     * <remarks>只登记执行凭据，不查询安排、不启用目标或推进经营。</remarks> */
+    /**
+     * <summary>在换日清理之前记录工人已经完成的实际计划播种。</summary>
+     * <remarks>只登记执行凭据，不查询安排、不启用目标或推进经营。</remarks>
+     */
     internal void RecordSownCrops()
     {
         foreach ((int index, Binding binding) in _bindings)

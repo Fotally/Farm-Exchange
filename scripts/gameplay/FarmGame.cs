@@ -346,10 +346,13 @@ public sealed class FarmGame
         return null;
     }
 
-    /** <summary>设置本田的手动下一轮目标并解除共享耕作表关联。</summary>
+    /**
+     * <summary>设置本田的手动下一轮目标并解除共享耕作表关联。</summary>
      * <remarks>保留已播种或生长中的本轮；空田立即设置目标。命令不推进经营。</remarks>
-     * <param name="cell">任一农田子格。</param><param name="crop">合法作物品种。</param>
-     * <returns>成功为空，正常拒绝为中文原因。</returns> */
+     * <param name="cell">任一农田子格。</param>
+     * <param name="crop">合法作物品种。</param>
+     * <returns>成功为空，正常拒绝为中文原因。</returns>
+     */
     public string? PrepareFarmCrop(Vector2I cell, CropKind crop)
     {
         if (!MapCoordinates.ContainsCell(cell))
@@ -363,9 +366,12 @@ public sealed class FarmGame
         return null;
     }
 
-    /** <summary>查询选种的当前适季性及预计成熟风险，不执行选种。</summary>
-     * <param name="cell">任一农田子格。</param><param name="crop">合法作物品种。</param>
-     * <returns>不适季、预计时间不足提示或无风险；时间不足不阻止播种。</returns> */
+    /**
+     * <summary>查询选种的当前适季性及预计成熟风险，不执行选种。</summary>
+     * <param name="cell">任一农田子格。</param>
+     * <param name="crop">合法作物品种。</param>
+     * <returns>不适季、预计时间不足提示或无风险；时间不足不阻止播种。</returns>
+     */
     public PlantingFailure GetPlantingCheck(Vector2I cell, CropKind crop)
     {
         PlotSnapshot plot = GetPlot(cell);
@@ -374,22 +380,37 @@ public sealed class FarmGame
         return PlantingRules.Check(crop, Calendar, plot.HasWater);
     }
 
-    /** <summary>只读查询共享年度表及引用数量。</summary><returns>独立只读快照。</returns> */
+    /**
+     * <summary>只读查询共享年度表及引用数量。</summary>
+     * <returns>独立只读快照。</returns>
+     */
     public IReadOnlyList<CultivationPlanSnapshot> GetCultivationPlans() => _cultivation.GetSnapshots();
-    /** <summary>检查完整草稿的年度排程冲突与禁生季风险。</summary>
-     * <param name="request">名称、表级模式和年度作物条。</param><returns>正常拒绝或风险条编号。</returns> */
+    /**
+     * <summary>检查完整草稿的年度排程冲突与禁生季风险。</summary>
+     * <param name="request">名称、表级模式和年度作物条。</param>
+     * <returns>正常拒绝或风险条编号。</returns>
+     */
     public CultivationValidation CheckCultivationPlan(CultivationPlanRequest request) => CultivationPlanBook.Validate(request);
-    /** <summary>创建共享年度耕作表，不推进经营。</summary>
-     * <param name="request">完整表设置。</param><returns>新表编号或正常拒绝。</returns> */
+    /**
+     * <summary>创建共享年度耕作表，不推进经营。</summary>
+     * <param name="request">完整表设置。</param>
+     * <returns>新表编号或正常拒绝。</returns>
+     */
     public CultivationCommandResult CreateCultivationPlan(CultivationPlanRequest request) => _cultivation.Create(request);
-    /** <summary>完整更新共享表，保留全部引用田的当前轮并重算安排。</summary>
-     * <param name="id">共享表编号。</param><param name="request">完整表设置。</param>
-     * <returns>同一编号或零修改的正常拒绝。</returns> */
+    /**
+     * <summary>完整更新共享表，保留全部引用田的当前轮并重算安排。</summary>
+     * <param name="id">共享表编号。</param>
+     * <param name="request">完整表设置。</param>
+     * <returns>同一编号或零修改的正常拒绝。</returns>
+     */
     public CultivationCommandResult UpdateCultivationPlan(int id, CultivationPlanRequest request) =>
         _cultivation.Update(id, request, (long)Calendar.ElapsedSeconds * GameTimeUnits.PerSecond);
-    /** <summary>对选定农田原子应用同一共享表，保留正在种植的本轮。</summary>
-     * <param name="id">共享表编号。</param><param name="cells">农田任意子格列表，重复引用同一实例仅应用一次。</param>
-     * <returns>成功为空；任一目标无效时全部不修改。</returns> */
+    /**
+     * <summary>对选定农田原子应用同一共享表，保留正在种植的本轮。</summary>
+     * <param name="id">共享表编号。</param>
+     * <param name="cells">农田任意子格列表，重复引用同一实例仅应用一次。</param>
+     * <returns>成功为空；任一目标无效时全部不修改。</returns>
+     */
     public string? ApplyCultivationPlan(int id, IReadOnlyList<Vector2I> cells)
     {
         if (!_cultivation.Contains(id))
@@ -409,8 +430,11 @@ public sealed class FarmGame
         _cultivation.Apply(id, new List<int>(indices), (long)Calendar.ElapsedSeconds * GameTimeUnits.PerSecond);
         return null;
     }
-    /** <summary>只读查询本田共享引用和已缓存的下一轮安排。</summary>
-     * <param name="cell">任一农田子格。</param><returns>只读安排；非农田属于调用错误。</returns> */
+    /**
+     * <summary>只读查询本田共享引用和已缓存的下一轮安排。</summary>
+     * <param name="cell">任一农田子格。</param>
+     * <returns>只读安排；非农田属于调用错误。</returns>
+     */
     public FarmCultivationSnapshot GetFarmCultivation(Vector2I cell)
     {
         if (GetPlot(cell).Building != BuildingKind.Farm)
@@ -493,31 +517,41 @@ public sealed class FarmGame
     public TradeResult Sell(CommodityId commodity, int quantity) => _trading.Sell(commodity, quantity);
     public TradeResult SellCommodityAll(CommodityId commodity) => _trading.SellAll(commodity);
 
-    /** <summary>读取按建单顺序排列的独立只读委托快照。</summary>
-     * <returns>全部活动和已结束委托，查询不执行交易。</returns> */
+    /**
+     * <summary>读取按建单顺序排列的独立只读委托快照。</summary>
+     * <returns>全部活动和已结束委托，查询不执行交易。</returns>
+     */
     public IReadOnlyList<TradeOrderSnapshot> GetTradeOrders() => _tradeOrders.GetSnapshots();
 
-    /** <summary>创建委托；一次单冻结资源，持续策略不冻结。</summary>
+    /**
+     * <summary>创建委托；一次单冻结资源，持续策略不冻结。</summary>
      * <param name="request">商品、完整条件组、数量、预算和现金保留设置。</param>
      * <returns>新委托 ID 或零修改的中文拒绝原因。</returns>
-     * <remarks>锁定当前现金基准，不立即执行；暂停时仍可提交。</remarks> */
+     * <remarks>锁定当前现金基准，不立即执行；暂停时仍可提交。</remarks>
+     */
     public TradeOrderCommandResult CreateTradeOrder(TradeOrderRequest request) => _tradeOrders.Create(request);
 
-    /** <summary>完整替换活动委托并重验冻结，保持原 ID、顺序和现金基准。</summary>
+    /**
+     * <summary>完整替换活动委托并重验冻结，保持原 ID、顺序和现金基准。</summary>
      * <param name="id">原活动委托 ID。</param>
      * <param name="request">新的完整设置。</param>
-     * <returns>成功或零修改的正常拒绝。</returns> */
+     * <returns>成功或零修改的正常拒绝。</returns>
+     */
     public TradeOrderCommandResult UpdateTradeOrder(int id, TradeOrderRequest request) => _tradeOrders.Update(id, request);
 
-    /** <summary>撤销活动委托并释放该单资源；结束记录仍保留。</summary>
+    /**
+     * <summary>撤销活动委托并释放该单资源；结束记录仍保留。</summary>
      * <param name="id">活动委托 ID。</param>
-     * <returns>成功或已经结束的正常拒绝。</returns> */
+     * <returns>成功或已经结束的正常拒绝。</returns>
+     */
     public TradeOrderCommandResult CancelTradeOrder(int id) => _tradeOrders.Cancel(id);
 
-    /** <summary>启用或停用持续策略，不推进经营。</summary>
+    /**
+     * <summary>启用或停用持续策略，不推进经营。</summary>
      * <param name="id">活动持续策略 ID。</param>
      * <param name="enabled">是否启用。</param>
-     * <returns>成功或不支持该操作的正常拒绝。</returns> */
+     * <returns>成功或不支持该操作的正常拒绝。</returns>
+     */
     public TradeOrderCommandResult SetTradeOrderEnabled(int id, bool enabled) => _tradeOrders.SetEnabled(id, enabled);
 
     public SaleResult SellAll() => LegacySale(_trading.SellAllProducts());

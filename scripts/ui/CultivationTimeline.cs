@@ -7,7 +7,9 @@ using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
 
-/** <summary>把一份年度草稿画成四季折行时间轴，拖动只报告整条的新日期。</summary> */
+/**
+ * <summary>把一份年度草稿画成四季折行时间轴，拖动只报告整条的新日期。</summary>
+ */
 public partial class CultivationTimeline : Control
 {
     private const float LabelWidth = 42;
@@ -19,12 +21,18 @@ public partial class CultivationTimeline : Control
     private float _landing;
     private int _currentDay;
 
-    /** <summary>报告选中的原始作物条编号，所有显示片段共用编号。</summary> */
+    /**
+     * <summary>报告选中的原始作物条编号，所有显示片段共用编号。</summary>
+     */
     public event Action<int>? EntrySelected;
-    /** <summary>报告整条落位；新条编号为零，日期为年度整数日。</summary> */
+    /**
+     * <summary>报告整条落位；新条编号为零，日期为年度整数日。</summary>
+     */
     public event Action<int, CropKind, int>? EntryDropped;
 
-    /** <summary>当前图中一个游戏日的画面宽度。</summary> */
+    /**
+     * <summary>当前图中一个游戏日的画面宽度。</summary>
+     */
     public float PixelsPerDay => (Size.X - LabelWidth - 8) / 84;
 
     public CultivationTimeline()
@@ -35,9 +43,13 @@ public partial class CultivationTimeline : Control
         MouseFilter = MouseFilterEnum.Stop;
     }
 
-    /** <summary>只显示草稿、风险和当前日期，不提交经营命令。</summary>
-     * <param name="entries">本地草稿的完整作物条。</param><param name="risks">经营验证返回的风险条编号。</param>
-     * <param name="selectedId">当前选中的原条编号。</param><param name="elapsedDays">已过去的游戏日。</param> */
+    /**
+     * <summary>只显示草稿、风险和当前日期，不提交经营命令。</summary>
+     * <param name="entries">本地草稿的完整作物条。</param>
+     * <param name="risks">经营验证返回的风险条编号。</param>
+     * <param name="selectedId">当前选中的原条编号。</param>
+     * <param name="elapsedDays">已过去的游戏日。</param>
+     */
     public void Refresh(IReadOnlyList<CultivationEntry> entries, IReadOnlyList<int> risks,
         int? selectedId, uint elapsedDays)
     {

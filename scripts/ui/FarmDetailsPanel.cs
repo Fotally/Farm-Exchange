@@ -64,8 +64,11 @@ public partial class FarmDetailsPanel : VBoxContainer
         _stock.Text = $"{details.Crop.CropName}原料库存：{details.RawStock}";
     }
 
-    /** <summary>分别展示本田共享引用、实际剩余天数与预备日期。</summary>
-     * <param name="game">只读经营入口。</param><param name="cell">本田的任一子格。</param> */
+    /**
+     * <summary>分别展示本田共享引用、实际剩余天数与预备日期。</summary>
+     * <param name="game">只读经营入口。</param>
+     * <param name="cell">本田的任一子格。</param>
+     */
     public void RefreshCultivation(FarmGame game, Godot.Vector2I cell)
     {
         var state = game.GetFarmCultivation(cell);

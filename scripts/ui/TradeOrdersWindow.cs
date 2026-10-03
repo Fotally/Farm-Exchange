@@ -11,8 +11,10 @@ using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
 
-/** <summary>显示委托快照并编辑玩家的交易条件。</summary>
- * <remarks>只解析输入与发出命令意图；刷新不覆盖未提交草稿或推进经营。</remarks> */
+/**
+ * <summary>显示委托快照并编辑玩家的交易条件。</summary>
+ * <remarks>只解析输入与发出命令意图；刷新不覆盖未提交草稿或推进经营。</remarks>
+ */
 public partial class TradeOrdersWindow : DraggableWindow
 {
     private readonly Label _resources;
@@ -47,13 +49,21 @@ public partial class TradeOrdersWindow : DraggableWindow
     private int _nextGroup;
     private int _nextCondition;
 
-    /** <summary>发出创建完整委托的意图。</summary> */
+    /**
+     * <summary>发出创建完整委托的意图。</summary>
+     */
     public event Action<TradeOrderRequest>? CreateRequested;
-    /** <summary>发出编辑原委托的意图，保留原设单现金基准。</summary> */
+    /**
+     * <summary>发出编辑原委托的意图，保留原设单现金基准。</summary>
+     */
     public event Action<int, TradeOrderRequest>? UpdateRequested;
-    /** <summary>发出撤销所选委托的意图。</summary> */
+    /**
+     * <summary>发出撤销所选委托的意图。</summary>
+     */
     public event Action<int>? CancelRequested;
-    /** <summary>发出停用或恢复持续策略的意图。</summary> */
+    /**
+     * <summary>发出停用或恢复持续策略的意图。</summary>
+     */
     public event Action<int, bool>? EnabledRequested;
 
     public TradeOrdersWindow() : base("TradeOrdersWindow", "委托与自动交易", new Vector2(160, 78),
@@ -167,9 +177,11 @@ public partial class TradeOrdersWindow : DraggableWindow
         UpdateActions();
     }
 
-    /** <summary>刷新余额、委托列表和所选委托的真实执行结果。</summary>
+    /**
+     * <summary>刷新余额、委托列表和所选委托的真实执行结果。</summary>
      * <remarks>不重新加载编辑器，保留条件草稿、节点、焦点、光标和滚动。</remarks>
-     * <param name="game">本局经营状态，只读取公开快照。</param> */
+     * <param name="game">本局经营状态，只读取公开快照。</param>
+     */
     public void Refresh(FarmGame game)
     {
         _moneyResources = $"金币 总 {FormatCoins(game.MoneyCents)} / 可用 {FormatCoins(game.AvailableMoneyCents)} / 冻结 {FormatCoins(game.FrozenMoneyCents)}";
@@ -194,8 +206,10 @@ public partial class TradeOrdersWindow : DraggableWindow
         UpdateActions();
     }
 
-    /** <summary>显示经营入口接受或拒绝编辑的结果。</summary>
-     * <param name="result">真实委托命令结果。</param> */
+    /**
+     * <summary>显示经营入口接受或拒绝编辑的结果。</summary>
+     * <param name="result">真实委托命令结果。</param>
+     */
     public void ShowCommandResult(TradeOrderCommandResult result)
     {
         _feedback.Text = result.Success ? $"委托 #{result.Id} 已更新" : result.ErrorMessage;

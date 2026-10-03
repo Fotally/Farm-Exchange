@@ -9,7 +9,9 @@ using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
 
-/** <summary>编辑具名共享年度表并向经营入口提交保存、批量应用意图。</summary> */
+/**
+ * <summary>编辑具名共享年度表并向经营入口提交保存、批量应用意图。</summary>
+ */
 public partial class CultivationWindow : DraggableWindow
 {
     private readonly ItemList _plans;
@@ -27,9 +29,13 @@ public partial class CultivationWindow : DraggableWindow
     private int? _planId;
     private int? _selectedEntry;
 
-    /** <summary>请求创建或编辑一份完整共享表；空编号表示新建。</summary> */
+    /**
+     * <summary>请求创建或编辑一份完整共享表；空编号表示新建。</summary>
+     */
     public event Action<int?, CultivationPlanRequest>? SaveRequested;
-    /** <summary>请求把已保存表应用到所勾选农田的锚点列表。</summary> */
+    /**
+     * <summary>请求把已保存表应用到所勾选农田的锚点列表。</summary>
+     */
     public event Action<int, IReadOnlyList<Vector2I>>? ApplyRequested;
 
     public CultivationWindow() : base("CultivationWindow", "年度耕作表", new Vector2(130, 82),
@@ -105,8 +111,10 @@ public partial class CultivationWindow : DraggableWindow
         Body.AddChild(Text("图上日期是安排，实际播种、浇水与进度以农田详情为准；应用和保存保留当前轮。"));
     }
 
-    /** <summary>更新真实引用与日期，保留本地草稿、焦点和勾选。</summary>
-     * <param name="game">只读查询的经营入口。</param> */
+    /**
+     * <summary>更新真实引用与日期，保留本地草稿、焦点和勾选。</summary>
+     * <param name="game">只读查询的经营入口。</param>
+     */
     public void Refresh(FarmGame game)
     {
         _game = game;
@@ -161,15 +169,20 @@ public partial class CultivationWindow : DraggableWindow
         RefreshTimeline();
     }
 
-    /** <summary>显示保存结果，成功时记住经营入口分配的共享表编号。</summary>
-     * <param name="result">创建或编辑的真实结果。</param> */
+    /**
+     * <summary>显示保存结果，成功时记住经营入口分配的共享表编号。</summary>
+     * <param name="result">创建或编辑的真实结果。</param>
+     */
     public void ShowCommandResult(CultivationCommandResult result)
     {
         if (result.Success) _planId = result.Id;
         _feedback.Text = result.Error ?? "共享表已保存；所有引用田的后续安排已更新";
     }
 
-    /** <summary>显示批量应用的真实结果。</summary><param name="error">空值表示成功。</param> */
+    /**
+     * <summary>显示批量应用的真实结果。</summary>
+     * <param name="error">空值表示成功。</param>
+     */
     public void ShowApplyResult(string? error) => _feedback.Text = error ?? "已应用共享表，当前轮保留";
 
     private CultivationPlanRequest Request() => new(_name.Text, (CultivationMode)_mode.Selected, _draft.ToArray());
