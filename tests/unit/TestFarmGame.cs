@@ -477,9 +477,11 @@ public partial class TestFarmGame : Node
         boundary.BuildFarm(farm);
         boundary.SetFarmCrop(farm, CropKind.Radish);
         if (boundary.GetFarmDetails(farm).Status != FarmStatus.InsufficientTime ||
-            boundary.AdvanceTick(isRaining: true).WorkerActed != true ||
+            boundary.AdvanceTick().WorkerActed != true ||
+            boundary.GetPlot(farm).Crop != CropStage.Seeded ||
+            boundary.AdvanceTick(isRaining: true).WorkerActed != false ||
             boundary.GetPlot(farm).Crop != CropStage.Growing)
-            return Fail("季末干田时间不足后，雨水留存没有使播种恢复");
+            return Fail("季末预计时间不足没有作为风险提示允许播种，或降雨重复触发浇水");
         return true;
     }
 

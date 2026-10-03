@@ -6,6 +6,8 @@ public partial class TestSuite : Node
     {
         GD.Print("单元测试：农田、加工与交易");
         bool farmGamePassed = TestFarmGame.RunChecks();
+        GD.Print("单元测试：共享年度耕作表、日期事件与手动接管");
+        bool cultivationPassed = TestCultivationPlanBook.RunChecks();
         GD.Print("单元测试：资源与作物定义");
         bool resourcesPassed = TestResources.RunChecks();
         GD.Print("单元测试：土地、农田与加工状态边界");
@@ -24,6 +26,8 @@ public partial class TestSuite : Node
         bool tradeOrdersPassed = TestTradeOrders.RunChecks();
         GD.Print("端到端测试：委托窗口实际命令、草稿与焦点");
         bool tradeOrdersUiPassed = TestTradeOrdersWindow.RunChecks(this);
+        GD.Print("端到端测试：年度耕作表拖动、批量应用与手动指令");
+        bool cultivationUiPassed = TestCultivationWindow.RunChecks(this);
         GD.Print("单元测试：独立日历换算");
         bool calendarPassed = TestGameCalendar.RunChecks();
         GD.Print("单元测试：等距地图坐标");
@@ -41,12 +45,14 @@ public partial class TestSuite : Node
         bool inventoryLayoutPassed = await TestCoreLoop.RunLayoutChecks(this);
         GD.Print("端到端测试：委托窗口长列表、条件滚动与布局");
         tradeOrdersUiPassed = await TestTradeOrdersWindow.RunLayoutChecks(this) && tradeOrdersUiPassed;
+        GD.Print("端到端测试：耕作表时间轴、草稿与窗口布局");
+        cultivationUiPassed = await TestCultivationWindow.RunLayoutChecks(this) && cultivationUiPassed;
         GD.Print("集成测试：工人经营快照与主地图表现");
         bool workerPresentationPassed = await TestWorkerPresentation.RunChecksAsync(this);
         GD.Print("集成测试：道路灰色地图、分块缓存与选择");
         bool roadMapPassed = await TestRoadMap.RunChecksAsync(this);
         bool passed = farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed;
+            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationUiPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");

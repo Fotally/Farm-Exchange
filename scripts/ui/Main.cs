@@ -1,5 +1,6 @@
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Cultivation;
 using FarmExchange.Inventory;
 using FarmExchange.Land;
 using FarmExchange.Market;
@@ -28,6 +29,7 @@ public partial class Main : Node2D
     private InventoryWindow _inventoryWindow = null!;
     private MarketWindow _marketWindow = null!;
     private TradeOrdersWindow _ordersWindow = null!;
+    private CultivationWindow _cultivationWindow = null!;
     private Label _detailCell = null!;
     private PanelContainer _emptyDetails = null!;
     private FarmDetailsPanel _farmDetails = null!;
@@ -65,6 +67,7 @@ public partial class Main : Node2D
         if (inputEvent is not InputEventKey { Pressed: true, Keycode: Key.Escape })
             return;
         if (_placement is { Kind: BuildingKind.Road }) CancelPlacement();
+        else if (_cultivationWindow.Visible) _cultivationWindow.Hide();
         else if (_ordersWindow.Visible) _ordersWindow.Hide();
         else if (_marketWindow.Visible) _marketWindow.Hide();
         else if (_inventoryWindow.Visible) _inventoryWindow.Hide();
@@ -100,7 +103,9 @@ public partial class Main : Node2D
         _emptyDetails = MakeInfoCard("空地\n点击底部“建造”选择建筑，再点击地图空位摆放。");
         detailContent.AddChild(_emptyDetails);
         _farmDetails = new FarmDetailsPanel();
-        _farmDetails.ChangeCropRequested += OpenCrop;
+        _farmDetails.ChangeCropRequested += () => OpenCrop(prepareNext: false);
+        _farmDetails.PrepareCropRequested += () => OpenCrop(prepareNext: true);
+        _farmDetails.CultivationRequested += OpenCultivation;
         _farmDetails.RemoveRequested += RemoveSelected;
         detailContent.AddChild(_farmDetails);
         _processorDetails = new ProcessorDetailsPanel();
@@ -116,6 +121,7 @@ public partial class Main : Node2D
 
         _cropWindow = new CropSelectionWindow();
         _cropWindow.CropRequested += SetCrop;
+        _cropWindow.NextCropRequested += PrepareCrop;
         _uiRoot.AddChild(_cropWindow);
 
         _inventoryWindow = new InventoryWindow();
@@ -138,6 +144,24 @@ public partial class Main : Node2D
         _ordersWindow.CancelRequested += id => ShowOrderResult(_game.CancelTradeOrder(id));
         _ordersWindow.EnabledRequested += (id, enabled) => ShowOrderResult(_game.SetTradeOrderEnabled(id, enabled));
         _uiRoot.AddChild(_ordersWindow);
+
+        _cultivationWindow = new CultivationWindow();
+        _cultivationWindow.SaveRequested += (id, request) =>
+        {
+            CultivationCommandResult result = id is int existingId
+                ? _game.UpdateCultivationPlan(existingId, request) : _game.CreateCultivationPlan(request);
+            _cultivationWindow.ShowCommandResult(result);
+            _messageLabel.Text = result.Error ?? "共享年度表已保存";
+            RefreshAfterGameChange(worldChanged: result.Success);
+        };
+        _cultivationWindow.ApplyRequested += (id, cells) =>
+        {
+            string? error = _game.ApplyCultivationPlan(id, cells);
+            _cultivationWindow.ShowApplyResult(error);
+            _messageLabel.Text = error ?? "共享表已应用到勾选农田，当前轮保留";
+            RefreshAfterGameChange(worldChanged: true);
+        };
+        _uiRoot.AddChild(_cultivationWindow);
     }
 
     private void BuildTopBar()
@@ -201,6 +225,10 @@ public partial class Main : Node2D
         build.Name = "BuildButton";
         build.Pressed += OpenBuild;
         row.AddChild(build);
+        Button cultivation = MakeButton("年度耕作表", Mid, 142, 60);
+        cultivation.Name = "CultivationButton";
+        cultivation.Pressed += OpenCultivation;
+        row.AddChild(cultivation);
         _buildHint = MakeLabel("选择建筑，再点击地图空位摆放", 15, Cream);
         _buildHint.Name = "BuildHint";
         _buildHint.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -241,6 +269,7 @@ public partial class Main : Node2D
             built = true;
         }
         _selectedCell = cell;
+        _cultivationWindow.Hide();
         _cropWindow.Hide();
         _inventoryWindow.Hide();
         _marketWindow.Hide();
@@ -252,6 +281,7 @@ public partial class Main : Node2D
 
     private void OpenBuild()
     {
+        _cultivationWindow.Hide();
         _placement = null;
         _cancelPlacementButton.Hide();
         _detailWindow.Hide();
@@ -292,11 +322,12 @@ public partial class Main : Node2D
         _worldMap.ClearSelection();
     }
 
-    private void OpenCrop()
+    private void OpenCrop(bool prepareNext)
     {
         if (_selectedCell is not Vector2I cell || _game.GetPlot(cell).Building != BuildingKind.Farm)
             return;
         _buildWindow.Hide();
+        _cropWindow.SetManualMode(prepareNext, cell);
         _cropWindow.Refresh(_game);
         _cropWindow.ShowRaised();
     }
@@ -318,11 +349,14 @@ public partial class Main : Node2D
             return;
         string? error = _game.RemoveBuilding(cell);
         _messageLabel.Text = error ?? "建筑已移除；不退还建造费";
+        if (error == null)
+            _cropWindow.Hide();
         RefreshAfterGameChange(worldChanged: true);
     }
 
     private void OpenInventory()
     {
+        _cultivationWindow.Hide();
         _buildWindow.Hide();
         _cropWindow.Hide();
         _marketWindow.Hide();
@@ -333,12 +367,36 @@ public partial class Main : Node2D
 
     private void OpenMarket()
     {
+        _cultivationWindow.Hide();
         _buildWindow.Hide();
         _cropWindow.Hide();
         _inventoryWindow.Hide();
         _ordersWindow.Hide();
         _marketWindow.Refresh(_game);
         _marketWindow.ShowRaised();
+    }
+
+    private void PrepareCrop(CropKind crop)
+    {
+        if (_selectedCell is not Vector2I cell) return;
+        string? error = _game.PrepareFarmCrop(cell, crop);
+        _messageLabel.Text = error ?? $"下一轮已预备{FarmGame.GetCrop(crop).CropName}，本田已转为手动";
+        if (error == null) _cropWindow.Hide();
+        RefreshAfterGameChange(worldChanged: true);
+    }
+
+    private void OpenCultivation()
+    {
+        _placement = null;
+        _buildWindow.Hide();
+        _cropWindow.Hide();
+        _inventoryWindow.Hide();
+        _marketWindow.Hide();
+        _ordersWindow.Hide();
+        _detailWindow.Hide();
+        _cultivationWindow.Refresh(_game);
+        _cultivationWindow.ShowRaised();
+        RefreshFooter();
     }
 
     private void OpenTradeOrders()
@@ -448,6 +506,7 @@ public partial class Main : Node2D
         if (_marketWindow.Visible) _marketWindow.Refresh(_game);
         if (_ordersWindow.Visible) _ordersWindow.Refresh(_game);
         if (_cropWindow.Visible) _cropWindow.Refresh(_game);
+        if (_cultivationWindow.Visible) _cultivationWindow.Refresh(_game);
     }
 
     private void TogglePause()
@@ -473,7 +532,7 @@ public partial class Main : Node2D
 
     private void RefreshDetail()
     {
-        if (_selectedCell is not Vector2I cell || _placement != null)
+        if (_selectedCell is not Vector2I cell || _placement != null || _cultivationWindow.Visible)
         {
             _detailWindow.Hide();
             return;
@@ -487,7 +546,10 @@ public partial class Main : Node2D
         _processorDetails.Visible = plot.Building == BuildingKind.Processor;
         _roadDetails.Visible = plot.Building == BuildingKind.Road;
         if (_farmDetails.Visible)
+        {
             _farmDetails.Refresh(_game.GetFarmDetails(cell));
+            _farmDetails.RefreshCultivation(_game, cell);
+        }
         else if (_processorDetails.Visible)
             _processorDetails.Refresh(_game.GetProcessorDetails(cell));
         _detailWindow.Show();

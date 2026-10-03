@@ -15,6 +15,8 @@
 
 委托后端另由 `tests/unit/test_trade_orders.tscn` 验证条件、两种买单预算、冻结与释放、编辑失败零修改、原现金基准、1% 费用及经营相位；新单元和委托窗口端到端检查均接入根 `TestSuite`。有图形后端单独运行委托窗口场景时保存 `build/issue36-validation/orders-window.png`，用于检查真实中文布局；headless 检查不请求截图。
 
+季节耕作表由 `tests/unit/test_cultivation_plan_book.tscn` 验证共享年度配置、首尾环绕、两种模式、完成时间缓存、同条一轮、手动接管和实际换季入库；农田状态测试另外覆盖禁生边界的精确阈值与防重复收获。`tests/e2e/test_cultivation_window.tscn` 使用真实主场景与原生输入验证作物拖入、跨季片段移动、批量引用、冲突与风险、草稿焦点和滚动布局。两组接入根 `TestSuite`；有图形后端运行窗口场景时保存 `build/issue42-validation/cultivation-window.png`，用于查看四季条和中文操作布局，headless 不请求截图。完整实施与验收状态见[主计划](deferred-features-plan.md)。
+
 在项目根目录执行完整测试：
 
 ```powershell
@@ -291,3 +293,34 @@
 满地图 16,384 生产实例、147,456 占用子格，最终 50 tick **92.83 ms**，平均 **1.857 ms/tick**，角落实例与状态一致性通过。本项不修改地图绘制、镜头或实体负载，未追加 FPS 测量；图形性能适用范围沿用 #78 的记录，不把 headless 耗时当作渲染性能。
 
 真实有窗口委托场景已退出码 0，原始[委托窗口截图](../architecture/ui/trade-orders-window/orders-window.png)已查看：中文标题、条件行、固定按钮均可见，默认窗口 960×520 位于 (160,78)，避让 1280×720 顶部及底部栏。初次 headless 布局红灯证实共享标题零宽自动换行把窗口撑高；明确标题单行后保持原窗口边界断言，新委托和原市场均通过。删除条件组前先释放焦点；草稿、光标、焦点与滚动断言保留。截图来自功能场景，不是价格经济平衡或满地图 FPS 证据。
+
+## 2026-10-03 #42 年度耕作表验收
+
+基准 `1baa79b991818a2e025dd2986b53099c9e973786`。完整 issue 经独立审查、修复和新审查员复查，无待修问题；窗口布局与原生鼠标验收修改各由新的独立审查员检查。指定 Godot 4.7.2 Mono Debug/Release 编译均零警告、零错误；Windows Release 中间导出及实际 `build/windows/FarmExchange.exe` 启动退出码 0。日志分别为 `build/issue42-validation/debug-build-final.log`、`release-build-final.log`、`windows-export-final.log`、`windows-start-final.log`，启动标准错误为空。全仓格式、规则链接和静态文档检查通过。
+
+完整 headless 套件与满地图图形性能阶段通过。验证覆盖共享年度表与独立农田、完整周期与间距、年度首尾和每条一次、两种表级模式、完成时间缓存、休耕与跳过、手动接管、季末实际播种凭据，以及统一播种风险与禁生边界促熟。促熟分别检查严格小于、等于、大于 10%，待水不促熟、仍适季不促熟、成熟恰逢边界和原收获入库流程不重复结算。两种模式均检查已执行条移动到本年未来不重播、下一年正常执行。
+
+总体 Cobertura **4207/4320（97.38%）**。下表按文件与行号去重，同一行任一类型命中即记覆盖；14 个模块均达到 80% 门槛。总体保留报告原计数，不机械用分表求和替代。原始报告 `coverage/coverage.cobertura.xml`，逐模块核对 `build/issue42-validation/coverage-modules-final.json`，完整日志 `build/issue42-validation/test-final.log`；临时验收产物不入 Git。
+
+| 模块 | 已覆盖 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| `characters` | 73 / 75 | 97.33% |
+| `cultivation` | 253 / 258 | 98.06% |
+| `economy` | 31 / 35 | 88.57% |
+| `farming` | 198 / 198 | 100.00% |
+| `gameplay` | 384 / 411 | 93.43% |
+| `inventory` | 82 / 85 | 96.47% |
+| `land` | 100 / 101 | 99.01% |
+| `market` | 224 / 224 | 100.00% |
+| `processing` | 59 / 59 | 100.00% |
+| `time` | 25 / 25 | 100.00% |
+| `trading` | 384 / 392 | 97.96% |
+| `ui` | 1840 / 1894 | 97.15% |
+| `workers` | 91 / 95 | 95.79% |
+| `world` | 444 / 449 | 98.89% |
+
+满地图 16,384 生产实例、147,456 占用子格，50 tick **89.64 ms**，平均 **1.793 ms/tick**；角落实例推进与状态一致性通过。图形预热 2 秒、采样 **8.000071 秒 / 5341 帧**，平均 **667.6 FPS**、P95 **1.848 ms**、P99 2.119 ms；起止三人均移动，最多 1600 个块候选格、33 次块重建。1280×720 / zoom 1.25 / VSync 关闭 / 不限帧，Godot Debug、本机 R7 5800H 与 RTX 3060。前后原始截图均已查看，人物、完整建筑与单实例标记正常；达到平均至少 60 FPS、P95 不超过 16.67 ms。报告为 `build/issue42-validation/performance.json`，截图为 `coverage/performance.png`、`coverage/performance-end.png`；不由本机 Debug 测量推定其他硬件或 Release 性能。
+
+耕作表独立场景在清除诊断输出后，headless 与真实窗口均退出码 0。实际查看[拖动直条预览](../architecture/ui/cultivation-window/cultivation-drag-preview.png)和[落位分段窗口](../architecture/ui/cultivation-window/cultivation-window.png)：四季折行、冬春同一条、共享三田、所有固定按钮均可见。原生拖动、任一片段移动整条、草稿焦点保持和暂停日期不变通过；暂停保存还检查地图块重建和工作中心实际像素变化。日志为 `cultivation-headless-final.log` 与 `cultivation-graphical-final.log`，均位于 `build/issue42-validation/`。
+
+初次真实窗口拖放失败时，测量证实系统鼠标位置覆盖了合成输入，释放点落在时间轴外。只修正测试：每次图形移动前同步系统鼠标，拖动结束恢复原屏幕位置；保留原生拖放、原窗口边界、日期与实际条目断言。headless 的坐标变换沿用真实视口矩阵，不硬编码缩放或偏移；产品规则与拖放实现不因测试修复而改变。

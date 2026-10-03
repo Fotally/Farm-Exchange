@@ -239,9 +239,21 @@ public partial class TestWorkerScheduler : Node
             calendar.TryAdvanceSeconds(1);
         }
         if (workers.GetSnapshots()[0].Activity != WorkerActivity.Sowing ||
-            workers.AdvanceOneSecond(farms, calendar.Snapshot) || farms.TryCompleteWork(sow, calendar.Snapshot) ||
+            !workers.AdvanceOneSecond(farms, calendar.Snapshot) || farms.TryCompleteWork(sow, calendar.Snapshot) ||
+            farms.Get(IndexOf(cell)).Stage != CropStage.Seeded)
+            return Fail("当前适季但预计时间不足仍拒绝播种，或旧播种请求重复执行");
+        farms = CreateFarms(new[] { cell }, CropKind.Corn);
+        workers = CreateWorkers(Vector2I.Zero);
+        calendar = new GameCalendar(8638);
+        sow = farms.GetWorkNeed(IndexOf(cell), calendar.Snapshot)!.Value;
+        for (int second = 0; second < 2; second++)
+        {
+            workers.AdvanceOneSecond(farms, calendar.Snapshot);
+            calendar.TryAdvanceSeconds(1);
+        }
+        if (workers.AdvanceOneSecond(farms, calendar.Snapshot) || farms.TryCompleteWork(sow, calendar.Snapshot) ||
             farms.Get(IndexOf(cell)).Stage != CropStage.None || workers.GetSnapshots()[0].Activity != WorkerActivity.Idle)
-            return Fail("分配时允许但完成时时间不足的播种没有重验拒绝");
+            return Fail("分配时适季但到达时进入禁生季节的播种未被执行重验拒绝");
         calendar = new GameCalendar(8640);
         if (workers.AdvanceOneSecond(farms, calendar.Snapshot) || farms.GetWorkNeed(IndexOf(cell), calendar.Snapshot) != null)
             return Fail("不适季田仍被选成工作需求");
