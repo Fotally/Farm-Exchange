@@ -39,12 +39,19 @@ public partial class WorldMap : Node2D
     private readonly MapChunk[] _chunks = new MapChunk[ChunksPerSide * ChunksPerSide];
     private FarmGame _game = null!;
     private SelectionOverlay _overlay = null!;
+    private PlacementOverlay _placementOverlay = null!;
+    private PlacementVisual? _placement;
     private Vector2I _selectedCell = new(-1, -1);
     private Transform2D _lastCanvasTransform;
     private Vector2 _lastViewportSize;
 
     internal int LastVisiblePlotCount { get; private set; }
     internal int ChunkRedrawCount { get; private set; }
+
+    /**
+     * <summary>查询当前实际显示的候选锚点，隐藏预览时为空。</summary>
+     */
+    public Vector2I? PlacementPreviewAnchor => _placement?.AnchorCell;
 
     public void SetGame(FarmGame game)
     {
@@ -61,6 +68,8 @@ public partial class WorldMap : Node2D
         }
         _overlay = new SelectionOverlay(this);
         AddChild(_overlay);
+        _placementOverlay = new PlacementOverlay(this);
+        AddChild(_placementOverlay);
         SyncFromGame();
         UpdateVisibleChunks();
     }
@@ -139,14 +148,57 @@ public partial class WorldMap : Node2D
 
     public void SelectAtScreenPosition(Vector2 screenPosition)
     {
-        Vector2 localPosition = GetGlobalTransformWithCanvas().AffineInverse() * screenPosition;
-        Vector2I cell = MapCoordinates.LocalPositionToCell(localPosition);
+        Vector2I cell = ScreenToCell(screenPosition);
         if (!MapCoordinates.ContainsCell(cell))
             return;
 
         _selectedCell = cell;
         EmitSignal(SignalName.SelectionChanged, cell);
         _overlay.QueueRedraw();
+    }
+
+    /**
+     * <summary>将逻辑视口位置转换为鼠标指向的基础格。</summary>
+     * <param name="screenPosition">逻辑视口坐标，单位为像素。</param>
+     * <returns>未经地图范围限制的格坐标，供边缘候选展示。</returns>
+     */
+    public Vector2I ScreenToCell(Vector2 screenPosition) =>
+        MapCoordinates.LocalPositionToCell(GetGlobalTransformWithCanvas().AffineInverse() * screenPosition);
+
+    /**
+     * <summary>只读刷新一座候选建筑的占地预览。</summary>
+     * <param name="building">当前可摆放建筑类型。</param>
+     * <param name="crop">当前选定作物，用于农田或加工类型标记。</param>
+     * <param name="anchorCell">鼠标指向的候选锚点，可在地图范围外。</param>
+     * <remarks>只检查当前占地的越界与实际占用，不登记建筑、不改金币，不同步地图块。</remarks>
+     */
+    public void UpdatePlacementPreview(BuildingKind building, CropKind crop, Vector2I anchorCell)
+    {
+        BuildingFootprint footprint = BuildingFootprint.Get(building);
+        PlacementPreviewGeometry.PreviewCell[] cells = PlacementPreviewGeometry.GetCells(anchorCell, footprint.Offsets, _game);
+        bool changed = _placement == null || _placement.Building != building ||
+            _placement.Crop != crop || _placement.AnchorCell != anchorCell;
+        for (int index = 0; index < cells.Length; index++)
+        {
+            if (!changed && _placement!.Cells[index] != cells[index])
+                changed = true;
+        }
+        if (!changed)
+            return;
+        _placement = new PlacementVisual(building, crop, anchorCell, cells);
+        _placementOverlay.QueueRedraw();
+    }
+
+    /**
+     * <summary>移除候选建筑的地图预览。</summary>
+     * <remarks>不改变当前建造类型或经营资源，生命周期由场景协调入口持有。</remarks>
+     */
+    public void ClearPlacementPreview()
+    {
+        if (_placement == null)
+            return;
+        _placement = null;
+        _placementOverlay.QueueRedraw();
     }
 
     public void ClearSelection()
@@ -182,6 +234,61 @@ public partial class WorldMap : Node2D
             plot.Building == BuildingKind.Farm ? plot.CropKind : CropKind.Wheat,
             plot.Building == BuildingKind.Farm ? plot.Crop : CropStage.None,
             marker);
+    }
+
+    private sealed record PlacementVisual(BuildingKind Building, CropKind Crop, Vector2I AnchorCell,
+        PlacementPreviewGeometry.PreviewCell[] Cells);
+
+    private sealed partial class PlacementOverlay : Node2D
+    {
+        private static readonly Color FreeFill = new(0.35f, 0.93f, 0.57f, 0.34f);
+        private static readonly Color BlockedFill = new(1f, 0.22f, 0.20f, 0.48f);
+        private static readonly Color FreeLine = new(0.65f, 1f, 0.74f, 0.8f);
+        private static readonly Color BlockedLine = new(1f, 0.39f, 0.32f, 0.9f);
+        private readonly WorldMap _map;
+
+        public PlacementOverlay(WorldMap map) => _map = map;
+
+        public override void _Draw()
+        {
+            PlacementVisual? preview = _map._placement;
+            if (preview == null)
+                return;
+            BuildingFootprint footprint = BuildingFootprint.Get(preview.Building);
+            for (int index = 0; index < footprint.Offsets.Count; index++)
+            {
+                Vector2I cell = preview.Cells[index].Cell;
+                Vector2[] corners = MapCoordinates.GridRectangleOutline(cell, 1, 1);
+                Color fill = preview.Cells[index].Blocked ? BlockedFill : FreeFill;
+                Color line = preview.Cells[index].Blocked ? BlockedLine : FreeLine;
+                DrawColoredPolygon(corners, fill);
+                DrawPolyline(new[] { corners[0], corners[1], corners[2], corners[3], corners[0] }, line, 1f);
+            }
+            // 外围边从占地定义生成，各段沿用所属格的颜色，不将整座冲突染红。
+            var offsets = new HashSet<Vector2I>(footprint.Offsets);
+            for (int index = 0; index < footprint.Offsets.Count; index++)
+            {
+                Vector2I offset = footprint.Offsets[index];
+                Color color = preview.Cells[index].Blocked ? BlockedLine : FreeLine;
+                foreach ((Vector2 start, Vector2 end) in PlacementPreviewGeometry.GetCellOuterEdges(preview.AnchorCell, offset, offsets))
+                    DrawLine(start, end, color, 2f);
+            }
+            Vector2 center = MapCoordinates.GridPositionToLocal((Vector2)(preview.AnchorCell + footprint.WorkOffset));
+            Color marker = preview.Building switch
+            {
+                BuildingKind.Farm => new Color(GrowingColors[(int)preview.Crop], 0.65f),
+                BuildingKind.Processor => new Color(ProcessorMarkerColor, 0.65f),
+                _ => new Color(RoadColor, 0.65f),
+            };
+            if (preview.Building == BuildingKind.Farm)
+                DrawCircle(center, 6f, marker);
+            else if (preview.Building == BuildingKind.Processor)
+                DrawRect(new Rect2(center - new Vector2(6f, 6f), new Vector2(12f, 12f)), marker);
+            else
+                DrawLine(center - new Vector2(9f, 0f), center + new Vector2(9f, 0f), marker, 4f);
+            Vector2 anchor = MapCoordinates.GridPositionToLocal((Vector2)preview.AnchorCell);
+            DrawArc(anchor, 4f, 0f, MathF.Tau, 16, new Color(1f, 1f, 0.87f, 0.9f), 1.5f);
+        }
     }
 
     private sealed partial class MapChunk : Node2D

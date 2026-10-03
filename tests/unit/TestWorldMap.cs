@@ -1,4 +1,7 @@
 using Godot;
+using System.Collections.Generic;
+using System.Linq;
+using FarmExchange.Gameplay;
 using FarmExchange.World;
 
 public partial class TestWorldMap : Node
@@ -73,6 +76,64 @@ public partial class TestWorldMap : Node
         {
             GD.PushError("基础格、3×3设施尺寸或地图边缘错误");
             return false;
+        }
+        return CheckPreviewEdges();
+    }
+
+    private static bool CheckPreviewEdges()
+    {
+        // 使用当前规格之外的 2×4 占地验证外围几何，没有新增可建建筑类型。
+        var offsets = new HashSet<Vector2I>();
+        for (int row = 0; row < 4; row++)
+            for (int col = 0; col < 2; col++)
+                offsets.Add(new Vector2I(col, row));
+        var anchor = new Vector2I(7, 382);
+        var game = new FarmGame(12345);
+        Vector2I conflict = anchor + new Vector2I(0, 1);
+        if (!game.TryPlace(conflict, BuildingKind.Road, default).Success)
+        {
+            GD.PushError("非当前规格占地的冲突夹具无法建造道路");
+            return false;
+        }
+        var cells = PlacementPreviewGeometry.GetCells(anchor, offsets.ToArray(), game);
+        if (cells.Length != 8 || cells.Select(cell => cell.Cell).Distinct().Count() != 8 ||
+            cells.Count(cell => cell.Blocked) != 5 ||
+            cells.Any(cell => !offsets.Contains(cell.Cell - anchor) ||
+                cell.Blocked != (cell.Cell == conflict || !MapCoordinates.ContainsCell(cell.Cell))))
+        {
+            GD.PushError("2×4 占地的覆盖、数量或逐格冲突/越界反馈未读取实际偏移");
+            return false;
+        }
+        var edges = new HashSet<(Vector2, Vector2)>();
+        foreach (Vector2I offset in offsets)
+            foreach (var edge in PlacementPreviewGeometry.GetCellOuterEdges(anchor, offset, offsets))
+                if (!edges.Add(edge))
+                {
+                    GD.PushError("不同占地规格的预览外围出现重复边");
+                    return false;
+                }
+        Vector2[] outline = MapCoordinates.GridRectangleOutline(anchor, 2, 4);
+        if (edges.Count != 12)
+        {
+            GD.PushError("2×4 占地外围未从实际偏移生成12条外边");
+            return false;
+        }
+        foreach (var (start, end) in edges)
+        {
+            bool onOuterEdge = false;
+            for (int side = 0; side < outline.Length; side++)
+            {
+                Vector2 from = outline[side];
+                Vector2 to = outline[(side + 1) % outline.Length];
+                if (Geometry2D.GetClosestPointToSegment(start, from, to).IsEqualApprox(start) &&
+                    Geometry2D.GetClosestPointToSegment(end, from, to).IsEqualApprox(end))
+                    onOuterEdge = true;
+            }
+            if (!onOuterEdge)
+            {
+                GD.PushError("预览外围绘制了内部边或限制了越界边的位置");
+                return false;
+            }
         }
         return true;
     }

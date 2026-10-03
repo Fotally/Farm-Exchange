@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using FarmExchange.Cultivation;
 using FarmExchange.Economy;
 using FarmExchange.Farming;
 using FarmExchange.Inventory;
@@ -23,7 +24,7 @@ public enum GrowingSeasons { Spring = 1, Summer = 2, Autumn = 4, Winter = 8 }
 public enum FarmStatus
 {
     WaitingForWorker, WaitingForWorkerWithWater, WaitingForWater, Growing,
-    WrongSeason, InsufficientTime,
+    WrongSeason, InsufficientTime, Resting,
 }
 public enum ProcessorStatus { WaitingForRaw, Processing, WaitingForReserve, ReadyToProcess }
 public enum RawReserveFailure { None, InvalidCrop, InvalidQuantity }
@@ -74,6 +75,7 @@ public sealed class FarmGame
     private readonly TradingService _trading;
     private readonly TradeOrderBook _tradeOrders;
     private readonly GameCalendar _calendar;
+    private readonly CultivationPlanBook _cultivation;
 
     public int MoneyCents => _wallet.BalanceCents;
     public int AvailableMoneyCents => _wallet.AvailableCents;
@@ -90,6 +92,7 @@ public sealed class FarmGame
     internal FarmGame(int? marketSeed, uint elapsedSeconds)
     {
         _calendar = new GameCalendar(elapsedSeconds);
+        _cultivation = new CultivationPlanBook(_farming);
         int seed = marketSeed ?? Random.Shared.Next();
         _market = new MarketQuotes(seed, _calendar.Snapshot.ElapsedDays);
         _trading = new TradingService(_inventory, _wallet, _market);
@@ -208,6 +211,7 @@ public sealed class FarmGame
         {
             CropStage.Seeded => FarmStatus.WaitingForWater,
             CropStage.Growing => FarmStatus.Growing,
+            _ when !_farming.Get(_occupancy.ResolveAnchorIndex(IndexOf(cell))).SowingEnabled => FarmStatus.Resting,
             _ when plantingFailure == PlantingFailure.WrongSeason => FarmStatus.WrongSeason,
             _ when plantingFailure == PlantingFailure.InsufficientTime => FarmStatus.InsufficientTime,
             _ when plot.HasWater => FarmStatus.WaitingForWorkerWithWater,
@@ -230,6 +234,7 @@ public sealed class FarmGame
 
     internal void FillWorldForBenchmark()
     {
+        _cultivation.Clear();
         _occupancy.Clear();
         _farming.Clear();
         _processing.Clear();
@@ -337,8 +342,111 @@ public sealed class FarmGame
         int index = _occupancy.ResolveAnchorIndex(IndexOf(cell));
         if (index < 0 || _occupancy.Get(index) != BuildingKind.Farm)
             return "该土地没有农田";
-        _farming.SetCrop(index, crop);
+        _cultivation.TakeManualControl(index, crop, preserveCurrent: false);
         return null;
+    }
+
+    /**
+     * <summary>设置本田的手动下一轮目标并解除共享耕作表关联。</summary>
+     * <remarks>保留已播种或生长中的本轮；空田立即设置目标。命令不推进经营。</remarks>
+     * <param name="cell">任一农田子格。</param>
+     * <param name="crop">合法作物品种。</param>
+     * <returns>成功为空，正常拒绝为中文原因。</returns>
+     */
+    public string? PrepareFarmCrop(Vector2I cell, CropKind crop)
+    {
+        if (!MapCoordinates.ContainsCell(cell))
+            return PlacementRules.ErrorMessage(LandFailure.OutOfBounds);
+        if (!CropCatalog.IsDefined(crop))
+            return "无效作物";
+        int index = _occupancy.ResolveAnchorIndex(IndexOf(cell));
+        if (index < 0 || _occupancy.Get(index) != BuildingKind.Farm)
+            return "该土地没有农田";
+        _cultivation.TakeManualControl(index, crop, preserveCurrent: true);
+        return null;
+    }
+
+    /**
+     * <summary>查询选种的当前适季性及预计成熟风险，不执行选种。</summary>
+     * <param name="cell">任一农田子格。</param>
+     * <param name="crop">合法作物品种。</param>
+     * <returns>不适季、预计时间不足提示或无风险；时间不足不阻止播种。</returns>
+     */
+    public PlantingFailure GetPlantingCheck(Vector2I cell, CropKind crop)
+    {
+        PlotSnapshot plot = GetPlot(cell);
+        if (plot.Building != BuildingKind.Farm)
+            throw new InvalidOperationException("该土地没有农田");
+        return PlantingRules.Check(crop, Calendar, plot.HasWater);
+    }
+
+    /**
+     * <summary>只读查询共享年度表及引用数量。</summary>
+     * <returns>独立只读快照。</returns>
+     */
+    public IReadOnlyList<CultivationPlanSnapshot> GetCultivationPlans() => _cultivation.GetSnapshots();
+    /**
+     * <summary>只读检查作物条年度排程，允许在未命名草稿中编辑。</summary>
+     * <param name="entries">完整候选年度作物条。</param>
+     * <returns>正常拒绝或风险条编号，不要求耕作表名称。</returns>
+     */
+    public CultivationValidation CheckCultivationEntries(IReadOnlyList<CultivationEntry> entries) =>
+        CultivationPlanBook.ValidateEntries(entries);
+    /**
+     * <summary>检查提交草稿的名称、执行方式与完整年度排程。</summary>
+     * <param name="request">名称、表级模式和年度作物条。</param>
+     * <returns>正常拒绝或风险条编号。</returns>
+     */
+    public CultivationValidation CheckCultivationPlan(CultivationPlanRequest request) => CultivationPlanBook.Validate(request);
+    /**
+     * <summary>创建共享年度耕作表，不推进经营。</summary>
+     * <param name="request">完整表设置。</param>
+     * <returns>新表编号或正常拒绝。</returns>
+     */
+    public CultivationCommandResult CreateCultivationPlan(CultivationPlanRequest request) => _cultivation.Create(request);
+    /**
+     * <summary>完整更新共享表，保留全部引用田的当前轮并重算安排。</summary>
+     * <param name="id">共享表编号。</param>
+     * <param name="request">完整表设置。</param>
+     * <returns>同一编号或零修改的正常拒绝。</returns>
+     */
+    public CultivationCommandResult UpdateCultivationPlan(int id, CultivationPlanRequest request) =>
+        _cultivation.Update(id, request, (long)Calendar.ElapsedSeconds * GameTimeUnits.PerSecond);
+    /**
+     * <summary>对选定农田原子应用同一共享表，保留正在种植的本轮。</summary>
+     * <param name="id">共享表编号。</param>
+     * <param name="cells">农田任意子格列表，重复引用同一实例仅应用一次。</param>
+     * <returns>成功为空；任一目标无效时全部不修改。</returns>
+     */
+    public string? ApplyCultivationPlan(int id, IReadOnlyList<Vector2I> cells)
+    {
+        if (!_cultivation.Contains(id))
+            return "耕作表不存在";
+        if (cells.Count == 0)
+            return "请先选择农田";
+        var indices = new SortedSet<int>();
+        foreach (Vector2I cell in cells)
+        {
+            if (!MapCoordinates.ContainsCell(cell))
+                return PlacementRules.ErrorMessage(LandFailure.OutOfBounds);
+            int index = _occupancy.ResolveAnchorIndex(IndexOf(cell));
+            if (index < 0 || _occupancy.Get(index) != BuildingKind.Farm)
+                return "所选土地没有农田";
+            indices.Add(index);
+        }
+        _cultivation.Apply(id, new List<int>(indices), (long)Calendar.ElapsedSeconds * GameTimeUnits.PerSecond);
+        return null;
+    }
+    /**
+     * <summary>只读查询本田共享引用和已缓存的下一轮安排。</summary>
+     * <param name="cell">任一农田子格。</param>
+     * <returns>只读安排；非农田属于调用错误。</returns>
+     */
+    public FarmCultivationSnapshot GetFarmCultivation(Vector2I cell)
+    {
+        if (GetPlot(cell).Building != BuildingKind.Farm)
+            throw new InvalidOperationException("该土地没有农田");
+        return _cultivation.GetFarm(_occupancy.ResolveAnchorIndex(IndexOf(cell)));
     }
 
     public string? RemoveBuilding(Vector2I cell)
@@ -352,6 +460,7 @@ public sealed class FarmGame
         switch (building)
         {
             case BuildingKind.Farm:
+                _cultivation.RemoveFarm(index);
                 _farming.Remove(index);
                 break;
             case BuildingKind.Processor:
@@ -374,15 +483,14 @@ public sealed class FarmGame
             ApplyRain();
         int harvested = 0;
         int produced = 0;
+        long nextTimeUnits = ((long)_calendar.Snapshot.ElapsedSeconds + 1) * GameTimeUnits.PerSecond;
         foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
         {
             int i = space.AnchorIndex;
             BuildingKind building = space.Building;
             if (building == BuildingKind.Farm && _farming.AdvanceGrowth(i, out CropKind harvestedCrop))
             {
-                int quantity = GetCrop(harvestedCrop).HarvestQuantity;
-                _inventory.AddRaw(harvestedCrop, quantity);
-                harvested += quantity;
+                harvested += CollectHarvest(i, harvestedCrop, nextTimeUnits);
             }
             else if (building == BuildingKind.Processor && _processing.Advance(i, out CropKind productCrop))
             {
@@ -390,42 +498,67 @@ public sealed class FarmGame
                 produced++;
             }
         }
+        Season nextSeason = GameCalendar.GetDate((uint)(nextTimeUnits / GameTimeUnits.PerDay)).Season;
+        if (nextSeason != _calendar.Snapshot.Season)
+            foreach (int index in _farming.Indices)
+                if (_farming.TryMatureBeforeDisallowedSeason(index, nextSeason, out CropKind rescuedCrop))
+                    harvested += CollectHarvest(index, rescuedCrop, nextTimeUnits);
         StartIdleProcessors();
         bool workerActed = _workerScheduler.AdvanceOneSecond(_farming, _calendar.Snapshot);
+        _cultivation.RecordSownCrops();
         bool dayAdvanced = AdvanceDay();
+        _cultivation.Synchronize(nextTimeUnits);
         _tradeOrders.Execute(_calendar.Snapshot);
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
+    }
+
+    private int CollectHarvest(int index, CropKind crop, long nextTimeUnits)
+    {
+        int quantity = GetCrop(crop).HarvestQuantity;
+        _inventory.AddRaw(crop, quantity);
+        _cultivation.Harvested(index, nextTimeUnits);
+        return quantity;
     }
 
     public TradeResult Buy(CommodityId commodity, int quantity) => _trading.Buy(commodity, quantity);
     public TradeResult Sell(CommodityId commodity, int quantity) => _trading.Sell(commodity, quantity);
     public TradeResult SellCommodityAll(CommodityId commodity) => _trading.SellAll(commodity);
 
-    /** <summary>读取按建单顺序排列的独立只读委托快照。</summary>
-     * <returns>全部活动和已结束委托，查询不执行交易。</returns> */
+    /**
+     * <summary>读取按建单顺序排列的独立只读委托快照。</summary>
+     * <returns>全部活动和已结束委托，查询不执行交易。</returns>
+     */
     public IReadOnlyList<TradeOrderSnapshot> GetTradeOrders() => _tradeOrders.GetSnapshots();
 
-    /** <summary>创建委托；一次单冻结资源，持续策略不冻结。</summary>
+    /**
+     * <summary>创建委托；一次单冻结资源，持续策略不冻结。</summary>
      * <param name="request">商品、完整条件组、数量、预算和现金保留设置。</param>
      * <returns>新委托 ID 或零修改的中文拒绝原因。</returns>
-     * <remarks>锁定当前现金基准，不立即执行；暂停时仍可提交。</remarks> */
+     * <remarks>锁定当前现金基准，不立即执行；暂停时仍可提交。</remarks>
+     */
     public TradeOrderCommandResult CreateTradeOrder(TradeOrderRequest request) => _tradeOrders.Create(request);
 
-    /** <summary>完整替换活动委托并重验冻结，保持原 ID、顺序和现金基准。</summary>
+    /**
+     * <summary>完整替换活动委托并重验冻结，保持原 ID、顺序和现金基准。</summary>
      * <param name="id">原活动委托 ID。</param>
      * <param name="request">新的完整设置。</param>
-     * <returns>成功或零修改的正常拒绝。</returns> */
+     * <returns>成功或零修改的正常拒绝。</returns>
+     */
     public TradeOrderCommandResult UpdateTradeOrder(int id, TradeOrderRequest request) => _tradeOrders.Update(id, request);
 
-    /** <summary>撤销活动委托并释放该单资源；结束记录仍保留。</summary>
+    /**
+     * <summary>撤销活动委托并释放该单资源；结束记录仍保留。</summary>
      * <param name="id">活动委托 ID。</param>
-     * <returns>成功或已经结束的正常拒绝。</returns> */
+     * <returns>成功或已经结束的正常拒绝。</returns>
+     */
     public TradeOrderCommandResult CancelTradeOrder(int id) => _tradeOrders.Cancel(id);
 
-    /** <summary>启用或停用持续策略，不推进经营。</summary>
+    /**
+     * <summary>启用或停用持续策略，不推进经营。</summary>
      * <param name="id">活动持续策略 ID。</param>
      * <param name="enabled">是否启用。</param>
-     * <returns>成功或不支持该操作的正常拒绝。</returns> */
+     * <returns>成功或不支持该操作的正常拒绝。</returns>
+     */
     public TradeOrderCommandResult SetTradeOrderEnabled(int id, bool enabled) => _tradeOrders.SetEnabled(id, enabled);
 
     public SaleResult SellAll() => LegacySale(_trading.SellAllProducts());

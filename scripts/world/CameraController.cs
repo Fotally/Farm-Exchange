@@ -17,17 +17,31 @@ public partial class CameraController : Camera2D
     private bool _leftDragging;
     private Vector2 _leftPressPosition;
 
+    /**
+     * <summary>查询左键或中键是否正在平移镜头。</summary>
+     */
+    public bool IsDragging => _leftDragging || _middleDragging;
+
+    /**
+     * <summary>查询鼠标是否仍在游戏窗口内。</summary>
+     */
+    public bool IsMouseInsideWindow { get; private set; } = true;
+
     public override void _Ready()
     {
         _worldMap = GetNode<WorldMap>("../WorldMap");
         _viewZoom = Zoom.X;
         GetViewport().SizeChanged += ApplyViewportScale;
+        GetWindow().MouseEntered += OnMouseEntered;
+        GetWindow().MouseExited += OnMouseExited;
         ApplyViewportScale();
     }
 
     public override void _ExitTree()
     {
         GetViewport().SizeChanged -= ApplyViewportScale;
+        GetWindow().MouseEntered -= OnMouseEntered;
+        GetWindow().MouseExited -= OnMouseExited;
     }
 
     public override void _Process(double delta)
@@ -37,6 +51,8 @@ public partial class CameraController : Camera2D
             _leftPressed = false;
             _leftDragging = false;
         }
+        if (_middleDragging && !Input.IsMouseButtonPressed(MouseButton.Middle))
+            _middleDragging = false;
         Vector2 direction = Vector2.Zero;
         if (Input.IsKeyPressed(Key.A) || Input.IsKeyPressed(Key.Left))
             direction.X -= 1f;
@@ -51,6 +67,31 @@ public partial class CameraController : Camera2D
             Position += direction.Normalized() * PanSpeed * (float)delta / _viewZoom;
             ClampPosition();
         }
+    }
+
+    public override void _Input(InputEvent inputEvent)
+    {
+        if (inputEvent is not InputEventMouseButton mouse)
+            return;
+        if (mouse.ButtonIndex == MouseButton.Left &&
+            (mouse.Pressed || GetViewport().GuiGetHoveredControl() != null))
+        {
+            // 每次原始按下先清旧意图，只有未被界面接收的按下才能由 _UnhandledInput 重新登记。
+            _leftPressed = false;
+            _leftDragging = false;
+        }
+        if (mouse.ButtonIndex == MouseButton.Middle && !mouse.Pressed)
+            _middleDragging = false;
+    }
+
+    private void OnMouseEntered() => IsMouseInsideWindow = true;
+
+    private void OnMouseExited()
+    {
+        IsMouseInsideWindow = false;
+        _leftPressed = false;
+        _leftDragging = false;
+        _middleDragging = false;
     }
 
     public override void _UnhandledInput(InputEvent inputEvent)

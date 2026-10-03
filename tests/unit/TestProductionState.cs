@@ -17,6 +17,7 @@ public partial class TestProductionState : Node
 
     public static bool RunChecks() => CheckLand() && CheckPlacementMessages() &&
         CheckFarming() && CheckWater() && CheckPlantingRules() && CheckSeasonFailure() &&
+        CheckSowingControl() && CheckSeasonMaturity() && CheckExpectedRoundEnd() &&
         CheckProcessing() && CheckProcessingReserve();
 
     private static bool CheckLand()
@@ -182,7 +183,7 @@ public partial class TestProductionState : Node
         farms.SupplyWater(0);
         if (farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.None, 0, true) ||
             !farms.TryWork(0, spring) ||
-            farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.Growing, 823, true))
+            farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.Growing, 823, true, 5760))
             return Fail("空田留水后播种没有直接开始生长");
 
         farms.AdvanceGrowth(0, out _);
@@ -281,6 +282,150 @@ public partial class TestProductionState : Node
                 }
             }
         }
+        return true;
+    }
+
+    private static bool CheckSowingControl()
+    {
+        var farms = new FarmingSystem(1);
+        CalendarSnapshot spring = new GameCalendar().Snapshot;
+        farms.Place(0, CropKind.Radish);
+        FarmWorkRequest oldSow = farms.GetWorkNeed(0, spring)!.Value;
+        farms.SetSowingEnabled(0, false);
+        if (farms.Get(0).SowingEnabled || farms.GetWorkNeed(0, spring) != null ||
+            farms.TryCompleteWork(oldSow, spring))
+            return Fail("休耕未禁播或接受了旧播种凭据");
+        farms.SupplyWater(0);
+        farms.SetSowingEnabled(0, true);
+        if (farms.TryCompleteWork(oldSow, spring) || !farms.TryWork(0, spring))
+            return Fail("恢复播种复活旧任务或未保留空田水分");
+        farms.RestartCrop(0, CropKind.Radish);
+        if (farms.Get(0).Stage != CropStage.None || !farms.Get(0).HasWater ||
+            farms.Get(0).RemainingTimeUnits != 0 || !farms.TryWork(0, spring))
+            return Fail("同种立即改种未中断本轮或丢失水分");
+        farms.RestartCrop(0, CropKind.Corn);
+        if (farms.Get(0).CropKind != CropKind.Corn || farms.Get(0).Stage != CropStage.None ||
+            !Throws<ArgumentOutOfRangeException>(() => farms.RestartCrop(0, (CropKind)999)))
+            return Fail("立即改种未设置新作物或接受非法品种");
+
+        farms.Remove(0);
+        farms.Place(0, CropKind.Radish);
+        farms.TryWork(0, spring);
+        FarmWorkRequest oldWater = farms.GetWorkNeed(0, spring)!.Value;
+        farms.SetSowingEnabled(0, false);
+        FarmWorkRequest water = farms.GetWorkNeed(0, spring)!.Value;
+        if (water.Kind != FarmWorkKind.Water || farms.TryCompleteWork(oldWater, spring) ||
+            !farms.TryCompleteWork(water, spring) || farms.Get(0).Stage != CropStage.Growing)
+            return Fail("禁播影响了待水本轮或旧工作凭据没有失效");
+        farms.SetSowingEnabled(0, false);
+        for (int second = 0; second < 206; second++)
+            farms.AdvanceGrowth(0, out _);
+        if (farms.GetWorkNeed(0, spring) != null || farms.Get(0).HasWater)
+            return Fail("禁播田收获后自动复种或遗留水分");
+
+        CalendarSnapshot riskySpring = new GameCalendar(4319).Snapshot;
+        farms.SetSowingEnabled(0, true);
+        if (PlantingRules.Check(CropKind.Radish, riskySpring, false) != PlantingFailure.InsufficientTime ||
+            !PlantingRules.CanSow(CropKind.Radish, riskySpring, false) || !farms.TryWork(0, riskySpring) ||
+            PlantingRules.CanSow(CropKind.Radish, new GameCalendar(4320).Snapshot, false))
+            return Fail("预计时间不足仍拒绝播种或禁生季允许播种");
+        return true;
+    }
+
+    private static bool CheckSeasonMaturity()
+    {
+        var farms = new FarmingSystem(6);
+        CalendarSnapshot spring = new GameCalendar().Snapshot;
+        // 马铃薯完整周期 5040 单位，648 次正常推进后剩 504，恰好十分之一。
+        for (int index = 0; index < 4; index++)
+        {
+            farms.Place(index, CropKind.Potato);
+            farms.TryWork(index, spring);
+            if (index < 3)
+            {
+                farms.SupplyWater(index);
+                for (int second = 0; second < 647 + index; second++)
+                    if (farms.AdvanceGrowth(index, out _))
+                        return Fail("禁生补救测试在建立阈值状态时已提前成熟");
+            }
+        }
+        farms.Place(4, CropKind.Potato);
+        farms.SupplyWater(4);
+        FarmSnapshot nearMaturity = farms.Get(2);
+        if (farms.Get(0).RemainingTimeUnits != 511 || farms.Get(1).RemainingTimeUnits != 504 ||
+            nearMaturity.RemainingTimeUnits != 497 ||
+            farms.TryMatureBeforeDisallowedSeason(2, Season.Autumn, out _) || farms.Get(2) != nearMaturity)
+            return Fail("精确剩余时间错误或适宜换季错误触发成熟补救");
+        if (farms.TryMatureBeforeDisallowedSeason(0, Season.Summer, out _) ||
+            farms.TryMatureBeforeDisallowedSeason(1, Season.Summer, out _) ||
+            farms.TryMatureBeforeDisallowedSeason(3, Season.Summer, out _) ||
+            farms.TryMatureBeforeDisallowedSeason(4, Season.Summer, out _) ||
+            farms.TryMatureBeforeDisallowedSeason(5, Season.Summer, out _) ||
+            !farms.TryMatureBeforeDisallowedSeason(2, Season.Summer, out CropKind harvested) ||
+            harvested != CropKind.Potato || farms.Get(2) != new FarmSnapshot(CropKind.Potato, CropStage.None, 0) ||
+            farms.TryMatureBeforeDisallowedSeason(2, Season.Summer, out _) || farms.AdvanceGrowth(2, out _))
+            return Fail("禁生阈值未严格小于十分之一，待水被补救，或收获重复发生");
+        farms.ClearDisallowedCrops(Season.Summer);
+        for (int index = 0; index < 4; index++)
+            if (farms.Get(index) != new FarmSnapshot(CropKind.Potato, CropStage.None, 0))
+                return Fail("未补救作物换季清理后遗留状态");
+        if (!farms.Get(4).HasWater)
+            return Fail("补救与清理影响了空田留水");
+
+        farms.Remove(0);
+        farms.Place(0, CropKind.Radish);
+        farms.SupplyWater(0);
+        farms.TryWork(0, spring);
+        for (int second = 0; second < 205; second++)
+            farms.AdvanceGrowth(0, out _);
+        if (!farms.AdvanceGrowth(0, out harvested) || harvested != CropKind.Radish ||
+            farms.TryMatureBeforeDisallowedSeason(0, Season.Summer, out _) || farms.AdvanceGrowth(0, out _))
+            return Fail("正常边界收获后补救重复报告收成");
+        return true;
+    }
+
+    private static bool CheckExpectedRoundEnd()
+    {
+        var farms = new FarmingSystem(1);
+        farms.Place(0, CropKind.Radish);
+        CalendarSnapshot spring = new GameCalendar().Snapshot;
+        if (farms.GetExpectedRoundEndTimeUnits(0, 0) != null || !farms.TryWork(0, spring) ||
+            farms.GetExpectedRoundEndTimeUnits(0, 7) != null)
+            return Fail("空田或未知供水阶段虚构了本轮结束日期");
+        farms.SupplyWater(0);
+        FarmSnapshot growing = farms.Get(0);
+        long expected = 14 + 206 * GameTimeUnits.PerSecond;
+        if (farms.GetExpectedRoundEndTimeUnits(0, 14) != expected || farms.Get(0) != growing)
+            return Fail("自然成熟预测未对齐实际 tick，或只读预测修改了生长状态");
+        farms.AdvanceGrowth(0, out _);
+        if (farms.GetExpectedRoundEndTimeUnits(0, 21) != expected)
+            return Fail("正常推进使同一轮结束缓存每日漂移");
+
+        farms.RestartCrop(0, CropKind.Sugarcane);
+        CalendarSnapshot summer = new GameCalendar(8000).Snapshot;
+        farms.TryWork(0, summer);
+        growing = farms.Get(0);
+        if (farms.GetExpectedRoundEndTimeUnits(0, 8000 * 7) != 8000 * 7 + 2058 * 7 ||
+            farms.Get(0) != growing)
+            return Fail("甘蔗夏秋适季跨季被错误截短，或查询重置了进度");
+        if (farms.GetExpectedRoundEndTimeUnits(0, 88004) != 252 * GameTimeUnits.PerDay)
+            return Fail("甘蔗秋冬未成熟清理结局未纳入结束日期");
+        for (int tick = 0; tick < 2000; tick++)
+            farms.AdvanceGrowth(0, out _);
+        growing = farms.Get(0);
+        if (farms.GetExpectedRoundEndTimeUnits(0, 12905 * 7) != 252 * GameTimeUnits.PerDay ||
+            farms.Get(0) != growing || !farms.TryMatureBeforeDisallowedSeason(0, Season.Winter, out _))
+            return Fail("甘蔗临近成熟的禁生补救结局与只读预测不一致");
+
+        farms.RestartCrop(0, CropKind.Radish);
+        farms.SupplyWater(0);
+        farms.TryWork(0, spring);
+        for (int tick = 0; tick < 205; tick++)
+            farms.AdvanceGrowth(0, out _);
+        if (farms.GetExpectedRoundEndTimeUnits(0, 4319 * 7) != 4320 * 7 ||
+            !farms.AdvanceGrowth(0, out _) || farms.GetExpectedRoundEndTimeUnits(0, 4320 * 7) != null ||
+            farms.TryMatureBeforeDisallowedSeason(0, Season.Summer, out _))
+            return Fail("正常成熟恰在禁生边界时预测错误或重复补救收获");
         return true;
     }
 

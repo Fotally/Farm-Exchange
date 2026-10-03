@@ -14,14 +14,16 @@
 | 详情查询 | GetFarmDetails、GetProcessorDetails | 分别返回现有农田的等待工人、已湿润待播种、待水、生长中、不适季或剩余时间不足状态，或加工场地的无原料等待、保留底线限制、待领取原料或加工中状态，同时附带对应周期、当日售价和公共库存；两类详情只服务农田/加工场地，类型不匹配属于调用错误 |
 | 原料保留设置 | SetRawReserve(crop, quantity) | 逐种设置非负整数底线，默认 0，允许高于现存库存；返回 `RawReserveFailure.None`、`InvalidCrop` 或 `InvalidQuantity`，失败零修改。设置不触发领取；下次经营领取阶段或新建场地的现有即时领取路径检查新值 |
 | 放置 | CheckPlacement、TryPlace | 共用[放置规则](../../land/placement-rules/interface-placement-rules.md)；生产建筑完整 3×3、道路 1×1 的几何与余额预检只读，执行时重新检查并返回实际扣费或稳定失败原因；道路使用 `BuildingKind.Road`，作物参数不参与道路语义。非法建筑描述先正常返回 `InvalidBuilding`，不会调用价格查询抛异常 |
-| 旧命令与编辑 | BuildFarm、BuildProcessor、SetFarmCrop、RemoveBuilding | 旧建造命令转发 `TryPlace`；成功返回 null，失败返回给玩家的原因；任一占用子格改种、拆除同一整座设施；拆除释放全部 footprint 且不退款；对地图外都返回“地图外地块” |
-| 时间与降雨 | AdvanceTick(bool isRaining = false)、Calendar、IsPaused、SetPaused | 每次未暂停步进推进一模拟秒并返回 `TickResult`；显式降雨在步进开始时供水，默认无雨；生产后让三名工人各推进完整一秒，`WorkerActed` 只表示本秒至少一人完成播种或供水，单纯移动为 false；之后推进日期，跨季时自动清理禁生作物；`Calendar` 为只读日期快照，暂停期间不推进降雨、生产、工人、日期或行情 |
+| 旧命令与编辑 | BuildFarm、BuildProcessor、SetFarmCrop、PrepareFarmCrop、RemoveBuilding | 旧建造命令转发 `TryPlace`；成功返回 null，失败返回给玩家的原因；立即改种强制丢弃当前轮并保水，预备下一轮保留当前轮，两者都只解除本田耕作表；任一占用子格操作同一整座设施；拆除释放全部 footprint、计划引用且不退款；对地图外都返回“地图外地块” |
+| 年度耕作表 | CheckCultivationEntries、CheckCultivationPlan、CreateCultivationPlan、UpdateCultivationPlan、ApplyCultivationPlan、GetCultivationPlans、GetFarmCultivation | 条目检查允许未命名草稿编辑；完整提交检查及创建/更新仍要求名称和有效模式，复用同一年度排程判断。快照含每表生命周期下一条编号 `NextEntryId`，保存空表不回退；更新拒绝新条复用历史编号，移动原条保留年度凭据。批量重验全列表且子格去重，失败全部不修改。应用/编辑保留当前轮；计划收获先关闭播种并缓存目标，日历推进后才重验启用，不能借旧季工人相位提前执行。工人完成后、换季清理前先登记实际计划播种，季末播后即清除也计为该条已执行。快照分开计划日期和真实生产，规则与缓存约定见[计划 Interface](../../cultivation/interface-cultivation-plan-book.md) |
+| 选种风险 | GetPlantingCheck(cell,crop) | 只读查询 `PlantingFailure`；`InsufficientTime` 是可播种风险提示，`WrongSeason` 才禁止实际播种。手动目标仍可选任一合法作物，不通过查询执行或清理 |
+| 时间与降雨 | AdvanceTick(bool isRaining = false)、Calendar、IsPaused、SetPaused | 每次未暂停步进推进一模拟秒并返回 `TickResult`；显式降雨在步进开始时供水，默认无雨；正常成熟与换季内部促熟走原入库，再让三名工人各推进完整一秒；之后推进日期、清理其余禁生作物、更新缓存计划事件并检查委托。`WorkerActed` 仅表示实际播种或供水，移动不计；暂停不执行任何经营相位 |
 | 交易 | Buy、Sell、SellCommodityAll、SellRaw、SellAll | `Buy/Sell(CommodityId, int quantity)` 按当前报价买卖指定数量；`SellCommodityAll` 卖出单商品全部，旧 `SellRaw` 卖出该种原料，`SellAll` 一次卖出全部成品。统一委托完整交易检查，失败零修改；空库存全售成功返回零，显式零数量交易拒绝。原料底线不限制主动出售，不出售已投入物 |
 | 只读状态 | MoneyCents、BuildingCostCents、CurrentDay、CurrentFlourPriceCents、DailyPriceChangePercent | 余额由 `Wallet` 持有并委托查询，金额以分保存；`BuildingCostCents` 保留原生产建筑 1000 分常量，按类型查询统一用 `GetBuildingCostCents`；`CurrentDay` 从日历已过天数换算，`CurrentFlourPriceCents` 为当前面粉报价，兼容名 `DailyPriceChangePercent` 为本次面粉相对上次报价的实际涨跌，不表示每天变化 |
 
 地图为 384×384 基础格。农田与加工场地各占 3×3，每座一份生产状态；道路为 1×1。`GetPlot` 从 `LandOccupancy`、`FarmingSystem`、`ProcessingSystem` 聚合 `PlotSnapshot`，不泄露可变内部状态；空地与道路快照的作物字段没有经营含义；道路显式返回 `BuildingKind.Road`、零剩余秒与无水，不查询农田或加工状态。`TryGetPlot` 返回 `None` 或 `OutOfBounds`，无效时输出默认快照；既有 `GetPlot` 保留“调用方已确认有效格”的便利形式，越界抛 `ArgumentOutOfRangeException`。WorldMap 按 `GetBuildingSpaces` 遍历空间，在锚点调用 `GetPlot` 获取一次外观并覆盖整个 footprint；它不能驱动 AdvanceTick，也不修改库存。Main 接收玩家操作、调用经营命令并在状态变化后通知地图同步。
 
-`FarmDetailsSnapshot` 与 `ProcessorDetailsSnapshot` 是只读值，包含作物定义、稳定状态原因、对应当日售价和库存。`Main` 先用 `GetPlot` 分派详情面板，再向对应查询索取语义快照；UI 只负责中文文案和控件更新。雨后空田由 `WaitingForWorkerWithWater` 表示；空田的 `WrongSeason` 与 `InsufficientTime` 直接复用[PlantingRules](../../farming/planting-rules/interface-planting-rules.md)的判断。越季失败清理后立即查询当前空田原因，不增加历史失败状态或工人清理动作；清理不操作库存和钱包。内部测试构造器可指定初始累计秒，公开游戏构造器从零时刻开始。
+`FarmDetailsSnapshot` 与 `ProcessorDetailsSnapshot` 是只读值，包含作物定义、稳定状态原因、对应当日售价和库存。`Main` 先用 `GetPlot` 分派详情面板，再向对应查询索取语义快照；UI 只负责中文文案和控件更新。雨后空田由 `WaitingForWorkerWithWater` 表示；计划空白或本条已执行的空田显示 `Resting`；空田的 `WrongSeason` 与可播风险 `InsufficientTime` 直接复用[PlantingRules](../../farming/planting-rules/interface-planting-rules.md)的判断。越季失败清理后立即查询当前空田原因，不增加历史失败状态或工人清理动作；清理不操作库存和钱包。内部测试构造器可指定初始累计秒，公开游戏构造器从零时刻开始。
 
 加工详情复用 `ProcessingSystem.GetStatus` 的只读状态：进行中优先；空闲时由库存模块给出没有原料、受底线限制或可领取的原因。设置降低底线后，下一领取阶段之前可返回 `ReadyToProcess`，查询不会开始加工或扣库存。
 

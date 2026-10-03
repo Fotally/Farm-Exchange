@@ -6,6 +6,7 @@
 
 - [作物与选种](gameplay/production/crop-growth.md)：七种作物、适宜季节、播种前检查、越季失败与恢复、收获数量和切换规则。
 - [农田供水与降雨](gameplay/production/water-and-rain.md)：留水、雨中播种、改种与收获后的水分处理。
+- [季节耕作表](gameplay/production/seasonal-cultivation.md)及[窗口操作](gameplay/production/seasonal-cultivation-ui.md)：共享年度安排、两种执行方式、休耕与手动接管，四季圆角时间图、周刻度、居中拖动、未命名草稿编辑、落位前校验、短条悬浮与清楚的农田勾选文字。
 - [加工](gameplay/production/processing.md)：对应场地、加工时间、原料保留底线、领取顺序、场地详情与投入损失。
 - [独立报价与消息](gameplay/trading/market-quotes.md)：十四商品初价、供需与成本因素、双周行情、节日改期和真实公告。
 - [即时买卖与出售](gameplay/trading/sales.md)：同价买卖、公共库存、完整结算与失败原因。
@@ -20,6 +21,9 @@
 - [FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)及[推进顺序](architecture/game-state/farm-game/implementation-tick-order.md)。
 - [CropCatalog 接口](architecture/farming/crop-catalog/interface-crop-catalog.md)、[Inventory 接口](architecture/inventory/inventory/interface-inventory.md)与[Wallet 接口](architecture/economy/wallet/interface-wallet.md)：作物定义、分类库存和余额的唯一拥有者。
 - [LandOccupancy 接口](architecture/land/land-occupancy/interface-land-occupancy.md)、[PlacementRules 接口](architecture/land/placement-rules/interface-placement-rules.md)、[FarmingSystem 接口](architecture/farming/farming-system/interface-farming-system.md)、[PlantingRules 接口](architecture/farming/planting-rules/interface-planting-rules.md)、[ProcessingSystem 接口](architecture/processing/processing-system/interface-processing-system.md)和[WorkerScheduler 接口](architecture/workers/worker-scheduler/interface-worker-scheduler.md)：地块占用、放置与播种检查、生产状态和三人工人调度。
+- [内部换季成熟实现](architecture/farming/farming-system/implementation-season-maturity.md)：禁生边界的精确比较、本轮结束预测、共同收获终结与原入库路径。
+- [耕作表接口](architecture/cultivation/interface-cultivation-plan-book.md)及[年度事件实现](architecture/cultivation/implementation-annual-events.md)：共享配置、独立草稿排程与完整保存检查、生命周期条编号、逐田引用与预备缓存、年度环绕、休耕缓冲及逐轮执行重验。
+- [耕作表窗口接口](architecture/ui/cultivation-window/interface-cultivation-window.md)及[年度时间图实现](architecture/ui/cultivation-window/implementation-annual-timeline.md)：草稿、共享应用、整条居中拖动、跨季片段与候选完整排程预检；可读条内信息及短片段悬浮提示。
 - [三人工人移动与调度实施方案](architecture/workers/worker-scheduler/implementation-movement-proposal.md)：已确认初始速度、工作耗时、独占认领、布局保证与稳定接口。
 - [商品目录接口](architecture/market/commodity-catalog/interface-commodity-catalog.md)、[报价接口](architecture/market/market-quotes/interface-market-quotes.md)与[报价实现](architecture/market/market-quotes/implementation-quote-cycle.md)：十四商品、实际排期和真实因素消息。
 - [完整交易接口](architecture/trading/trading-service/interface-trading-service.md)：一次命令封装资源检查、执行时价格与原子结算。
@@ -40,7 +44,8 @@
 ## 项目协作与依据
 
 - [系统规划](project/roadmap.md)、[构建与验收](project/build-and-validation.md)、[GitHub 协作](project/contribution-workflow.md)。
-- [后续功能计划](project/deferred-features-plan.md)：原 T11 的四项后续功能；#36 高级交易已实现并通过本地验收，其余三项继续暂缓。
+- [后续功能计划](project/deferred-features-plan.md)：原 T11 的四项后续功能；#36 高级交易已验收并人工合并，#42 季节耕作表已实现并验收，其余两项继续暂缓。
+- [季节耕作表方案](project/seasonal-cultivation-proposal.md)：#42 的共享年度时间图、拖动编辑、两种表级模式与手动指令、预备安排、统一播种及内部换季成熟补救的已确认范围。
 - [多因素委托与自动交易实施方案](project/advanced-trading-proposal.md)：#36 已确认的条件组合、两种买单预算、冻结、现金保留、执行与 1% 成交费用。
 - [已完成系统设计与执行计划归档](archive/farm-exchange-system-design-and-execution-plan.md)：T00～T10 与 T12 的设计、实施和验收历史，PR #70 已人工合并。
 - [独立行情与即时交易实施方案](project/market-proposal.md)：T09 的价格、事件、节日排期与交易规则已确认并完成验收，PR #70 已人工合并。
@@ -49,5 +54,6 @@
 - [市场曲线调研](research/market-price-curve.md)、[测试分类调研](research/test-taxonomy.md)。
 - [基础格细分调研](research/grid-subdivision.md)：用户最终选择 64×32 基础格与 3×3（192×96）生产设施，保留各轮比例示例和最小空间 Interface；#75 已完成新地图实现与完整验收。
 - [成熟作品的窗口、地图与 UI 缩放调研](research/window-size-and-map-zoom.md)：以一手资料区分窗口变大、分辨率、地图镜头与界面缩放，记录证实行为和证据边界；用于显示策略讨论。
-- [EditorConfig 检查](static-checks/editorconfig.md)、[CI 静态检查](static-checks/ci.md)。
+- [地图内容放置预览调研](research/build-placement-preview.md)与[设计方案](project/build-placement-preview-proposal.md)：#83 的设计来源与 #87 的实施：占地属性驱动预览、逐格冲突反馈、通用取消及镜头交互。
+- [EditorConfig 检查](static-checks/editorconfig.md)、[CI 静态检查](static-checks/ci.md)、[接口注释格式](static-checks/interface-comments.md)。
 - [规则加载与链接对应表](../.codex/rule-loading.md)。

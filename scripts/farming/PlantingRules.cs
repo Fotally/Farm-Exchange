@@ -3,7 +3,7 @@ using FarmExchange.Time;
 
 namespace FarmExchange.Farming;
 
-internal enum PlantingFailure { None, WrongSeason, InsufficientTime }
+public enum PlantingFailure { None, WrongSeason, InsufficientTime }
 
 internal static class PlantingRules
 {
@@ -30,6 +30,13 @@ internal static class PlantingRules
         return earliestMaturity <= secondsAvailable
             ? PlantingFailure.None : PlantingFailure.InsufficientTime;
     }
+
+    /**
+     * <summary>按当前季节判断能否播种，预计成熟风险不阻止播种。</summary>
+     * <returns>当前适季返回 true，禁生季节返回 false。</returns>
+     */
+    internal static bool CanSow(CropKind kind, CalendarSnapshot calendar, bool hasWater) =>
+        Check(kind, calendar, hasWater) != PlantingFailure.WrongSeason;
 
     private static bool Allows(GrowingSeasons seasons, Season season) =>
         (seasons & (GrowingSeasons)(1 << (int)season)) != 0;

@@ -38,8 +38,10 @@ internal sealed class TradeOrderBook
         _trading = trading;
     }
 
-    /** <summary>读取独立只读委托快照；查询不求值或执行交易。</summary>
-     * <returns>按原建单顺序排列的全部委托，包括成交及撤销记录。</returns> */
+    /**
+     * <summary>读取独立只读委托快照；查询不求值或执行交易。</summary>
+     * <returns>按原建单顺序排列的全部委托，包括成交及撤销记录。</returns>
+     */
     internal IReadOnlyList<TradeOrderSnapshot> GetSnapshots()
     {
         var snapshots = new TradeOrderSnapshot[_orders.Count];
@@ -54,10 +56,12 @@ internal sealed class TradeOrderBook
         return Array.AsReadOnly(snapshots);
     }
 
-    /** <summary>创建完整委托，并为一次单冻结资源。</summary>
+    /**
+     * <summary>创建完整委托，并为一次单冻结资源。</summary>
      * <param name="request">完整配置，金额为分，数量为份，比例为整数百分比。</param>
      * <returns>新 ID 或中文拒绝原因；失败不修改单据与资源。</returns>
-     * <remarks>以设单时总现金锁定保留基准；提交本身不执行。</remarks> */
+     * <remarks>以设单时总现金锁定保留基准；提交本身不执行。</remarks>
+     */
     internal TradeOrderCommandResult Create(TradeOrderRequest request)
     {
         int basis = _wallet.BalanceCents;
@@ -82,10 +86,12 @@ internal sealed class TradeOrderBook
         return new TradeOrderCommandResult(true, order.Id, null);
     }
 
-    /** <summary>同 ID 整体替换活动委托，保留原现金基准和创建顺序。</summary>
+    /**
+     * <summary>同 ID 整体替换活动委托，保留原现金基准和创建顺序。</summary>
      * <param name="id">已有活动委托 ID。</param>
      * <param name="request">替换后的完整配置。</param>
-     * <returns>成功结果或中文拒绝原因；失败保留原配置、结果与冻结额度。</returns> */
+     * <returns>成功结果或中文拒绝原因；失败保留原配置、结果与冻结额度。</returns>
+     */
     internal TradeOrderCommandResult Update(int id, TradeOrderRequest request)
     {
         Order? order = Find(id);
@@ -114,9 +120,11 @@ internal sealed class TradeOrderBook
         return new TradeOrderCommandResult(true, id, null);
     }
 
-    /** <summary>撤销活动委托并释放该单全部冻结资源，记录仍可查询。</summary>
+    /**
+     * <summary>撤销活动委托并释放该单全部冻结资源，记录仍可查询。</summary>
      * <param name="id">活动委托 ID。</param>
-     * <returns>成功或委托已结束的正常拒绝。</returns> */
+     * <returns>成功或委托已结束的正常拒绝。</returns>
+     */
     internal TradeOrderCommandResult Cancel(int id)
     {
         Order? order = Find(id);
@@ -128,10 +136,12 @@ internal sealed class TradeOrderBook
         return new TradeOrderCommandResult(true, id, null);
     }
 
-    /** <summary>启用或停用持续策略；一次单通过撤销结束。</summary>
+    /**
+     * <summary>启用或停用持续策略；一次单通过撤销结束。</summary>
      * <param name="id">未结束的持续策略 ID。</param>
      * <param name="enabled">是否在后续经营秒执行。</param>
-     * <returns>成功或不支持启停的正常拒绝。</returns> */
+     * <returns>成功或不支持启停的正常拒绝。</returns>
+     */
     internal TradeOrderCommandResult SetEnabled(int id, bool enabled)
     {
         Order? order = Find(id);
@@ -142,9 +152,11 @@ internal sealed class TradeOrderBook
         return new TradeOrderCommandResult(true, id, null);
     }
 
-    /** <summary>按建单顺序执行一个未暂停经营秒的委托检查。</summary>
+    /**
+     * <summary>按建单顺序执行一个未暂停经营秒的委托检查。</summary>
      * <param name="calendar">生产、领取、工人与行情推进后的日历快照。</param>
-     * <remarks>每单最多成交一次，后单读取前单成交后的库存和现金；失败不改变资源。</remarks> */
+     * <remarks>每单最多成交一次，后单读取前单成交后的库存和现金；失败不改变资源。</remarks>
+     */
     internal void Execute(CalendarSnapshot calendar)
     {
         if (calendar.IsPaused)

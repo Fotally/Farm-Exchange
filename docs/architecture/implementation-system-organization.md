@@ -1,6 +1,6 @@
 # 当前系统组织与状态归属
 
-本文记录已落地的模块关系，随实施任务更新；四项尚未实施功能见[后续功能计划](../project/deferred-features-plan.md)；已完成的设计与执行历史见[系统设计计划归档](../archive/farm-exchange-system-design-and-execution-plan.md)。
+本文记录已落地的模块关系，随实施任务更新；后续功能的范围与验收状态见[后续功能计划](../project/deferred-features-plan.md)；已完成的设计与执行历史见[系统设计计划归档](../archive/farm-exchange-system-design-and-execution-plan.md)。
 
 ```mermaid
 flowchart LR
@@ -15,6 +15,7 @@ flowchart LR
     WorkerPresentation --> NpcCharacter[NpcCharacter：角色动画]
     Camera[CameraController：输入] --> WorldMap
     WorldMap --> MapCoordinates[MapCoordinates：格与本地坐标]
+    WorldMap --> Footprint
     WorldMap --> FarmGame
     FarmGame --> LandOccupancy[LandOccupancy：实例与子格映射]
     LandOccupancy --> Footprint[BuildingFootprint：固定占地与工作中心]
@@ -23,6 +24,10 @@ flowchart LR
     PlacementRules --> LandOccupancy
     PlacementRules --> MapCoordinates
     FarmGame --> FarmingSystem[FarmingSystem：农田状态]
+    FarmGame --> Cultivation[CultivationPlanBook：共享年度表与执行安排]
+    Cultivation --> FarmingSystem
+    Cultivation --> CropCatalog
+    Cultivation --> GameTimeUnits
     FarmGame --> PlantingRules[PlantingRules：播种季节与预计成熟]
     FarmGame --> ProcessingSystem[ProcessingSystem：加工状态]
     FarmGame --> WorkerScheduler[WorkerScheduler：三人工人调度]
@@ -58,10 +63,12 @@ flowchart LR
 | 状态或计算 | 当前拥有者 | 其他模块的使用方式 |
 | --- | --- | --- |
 | 实例锚点、类别与子格到实例映射 | `LandOccupancy` | 全占地几何检查、一次登记和整体移除；经营与地图读取同一空间快照，生产状态只在锚点保存一份。 |
+| 当前摆放类型与候选锚点 | `Main` | 每帧在镜头输入后重新定位，界面遮挡、离窗或拖动时隐藏；所有类型逐次建造后保持摆放，右键、Esc、按钮共用取消。`WorldMap` 只保留候选绘制数据，不登记经营占用。 |
 | 固定形状偏移与工作中心 | `BuildingFootprint` | 土地、工人和地图共享定义；当前农田/加工 3×3、道路 1×1，不在各调用方重复计算。 |
 | 建筑描述、范围、占用与余额的放置检查 | `PlacementRules` | `FarmGame` 预检和执行使用同一规则；执行时重新检查并返回实际扣费。 |
-| 农田选种、水分、阶段与剩余精确时长 | `FarmingSystem` | `FarmGame` 在步进开始传入显式降雨，协调按作物收获量入库；换季后通过完整清理操作处理禁生作物，`WorkerScheduler` 只通过受控工作操作照料。 |
-| 播种适宜季节与预计成熟判断 | `PlantingRules` | `FarmingSystem` 执行播种和 `FarmGame` 查询详情共用同一只读结果。 |
+| 农田选种、水分、阶段与剩余精确时长 | `FarmingSystem` | `FarmGame` 在步进开始传入显式降雨，协调按作物收获量入库；禁生换季先促成符合内部阈值的成熟，再完整清理未成熟作物。播种启停支持计划休耕，`WorkerScheduler` 只通过受控工作操作照料。 |
+| 共享年度表、农田引用、逐条年度执行凭据、预备安排与下一日期事件 | `CultivationPlanBook` | `FarmGame` 封装计划及手动命令，传入实际农田状态与日历推进；配置与执行缓存集中在计划 Module，UI 只维护未提交草稿。应用和修改保留本轮，编辑及重应用保留本年已执行条的凭据，日期事件区分两种表模式，同条不重复、过期不补种。 |
+| 播种适宜季节与预计成熟判断 | `PlantingRules` | `FarmingSystem` 执行播种和 `FarmGame` 查询详情共用同一只读结果；仅当前禁生季节禁止播种，预计时间不足为风险提示。 |
 | 加工场地配对与进行中批次 | `ProcessingSystem` | `FarmGame` 协调完工入库与领取相位；模块从 `Inventory` 领取原料。 |
 | 工人位置、当前任务、独占认领与候选游标 | `WorkerScheduler` | `FarmGame` 只推进一秒并提供只读快照；三人按编号推进，当前选择算法留在私有方法，外部不读取或修改游标及认领表。 |
 | 累计模拟秒、日历和暂停 | `GameCalendar` | `FarmGame` 每次经营步进推进一秒；主界面读取日期并设置暂停。 |
@@ -96,6 +103,7 @@ flowchart LR
 | 原料保留底线与加工竞争 | `Inventory`、`ProcessingSystem`、`FarmGame` | 下次经营领取、新建全场即时领取、稳定格序、手动出售与库存输入刷新。 |
 | 道路收费、占用、铺设或外观 | `FarmGame.GetBuildingCostCents`、`LandOccupancy`、`PlacementRules`、`BuildCatalogWindow`、`Main`、`WorldMap` | 道路仅占格、不触发加工领取；UI 显式分派道路详情，未来移动属性只接内部计时。 |
 | 日期边界与生产时间 | `GameCalendar`、`GameTimeUnits` | 同步核对 `FarmGame` 相位、生产模块和日历测试。 |
+| 共享耕作表、预备安排或手动接管 | `CultivationPlanBook`、`FarmGame`、`FarmingSystem` | 年度环绕、日期事件与精确完成时间、每条一轮、过期跳过、应用编辑保留当前轮；UI 草稿不能推进经营。 |
 | 窗口交互 | `Main`、`DraggableWindow`、对应具体窗口 | 玩家操作、固定控件刷新、场景节点名和端到端测试。 |
 | NPC 动画、角色图集或预览输入 | `NpcCharacter`、`NpcPreview` | 角色场景、20 张素材和预览集成测试；不要用动画回调推进经营。 |
 
@@ -108,3 +116,5 @@ T07 将真实工人状态收在 `WorkerScheduler`，农田 Interface 负责与�
 T10 将道路接入既有占用和放置命令，费用查询由 `FarmGame` 统一提供。道路不创建生产状态；目录和场景协调连续铺设，独立道路详情只发出移除意图，地图复用现有块网格绘制灰色路面。未来确认移动属性后，从只读土地查询接入工人内部计时，不修改当前 UI 和经营推进 Interface。
 
 T09 把正式行情放入 `MarketQuotes`，日历的纯日期查询统一未来报价日换算，公告携带实际参与下期价格的因素。商品标识贯穿目录、报价、唯一公共库存及交易；`TradingService` 在一次命令中预检全部资源与整数容量，再同步提交。`Main` 只转发市场窗口意图，窗口固定十四行和一个数量输入，刷新不重建控件、不覆盖编辑草稿。旧出售查询委托相同报价和结算路径，旧面粉曲线仅保留为历史独立模块。
+
+#42 将共享年度配置与逐田执行安排收在 `CultivationPlanBook`。农田继续拥有当前作物和精确进度，计划仅缓存完成时间对应的后续目标及下一日期事件。手动立即改种、预备下一轮均解除本田引用；播种启停阻止休耕或已执行时间条再次播种，已播种供水不受影响。禁生边界处理和正常成熟共用农田收获终结，经营入口沿原路径入库，不由计划发放库存。四季拖动图与批量选择通过经营 Interface 管理真实表，动效和草稿不修改模拟日期。
