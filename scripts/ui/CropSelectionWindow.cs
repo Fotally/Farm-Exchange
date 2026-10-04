@@ -18,9 +18,10 @@ public partial class CropSelectionWindow : DraggableWindow
     public event Action<CropKind>? CropRequested;
     public event Action<CropKind>? NextCropRequested;
 
-    public CropSelectionWindow() : base("CropWindow", "选择作物", new Vector2(455, 140),
-        new Vector2(430, 390), avoidBottomBar: true)
+    public CropSelectionWindow() : base("CropWindow", "选择作物", new Vector2(455, 108),
+        new Vector2(470, 480))
     {
+        Body.AddChild(MakeLabel("选择本田要种植的作物", 17, Ink));
         _manualNotice = MakeLabel(ImmediateNotice, 12, Ink);
         _manualNotice.Name = "ManualCultivationNotice";
         _manualNotice.AutowrapMode = TextServer.AutowrapMode.Off;
@@ -28,8 +29,10 @@ public partial class CropSelectionWindow : DraggableWindow
         var scroll = new ScrollContainer
         {
             Name = "CropScroll",
+            CustomMinimumSize = new Vector2(0, 225),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
         };
         Body.AddChild(scroll);
         var cards = new VBoxContainer { Name = "CropCards", SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -38,7 +41,8 @@ public partial class CropSelectionWindow : DraggableWindow
         foreach (CropDefinition crop in FarmGame.Crops)
         {
             CropKind kind = crop.Kind;
-            Button option = MakeButton("", Mid, 390, 57);
+            Button option = MakeSecondaryButton("", 410, 112);
+            option.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             option.Name = $"CropCard{kind}";
             option.Pressed += () =>
             {
@@ -73,9 +77,25 @@ public partial class CropSelectionWindow : DraggableWindow
                 _ => "当前季节可播种",
             } : "";
             _options[(int)crop.Kind].Text =
-                $"{crop.CropName} · 原料当前报价：{FormatCoins(game.GetRawPriceCents(crop.Kind))} 金币\n" +
-                $"原料库存 {game.GetRawStock(crop.Kind)}\n{planting}";
+                $"{crop.CropName} · 获水后 {crop.GrowthDays} 天 · 每轮 {crop.HarvestQuantity} 份\n" +
+                $"适宜：{FormatSeasons(crop.GrowingSeasons)}\n" +
+                $"原料报价 {FormatCoins(game.GetRawPriceCents(crop.Kind))} 金币 · 库存 {game.GetRawStock(crop.Kind)}\n{planting}";
             _options[(int)crop.Kind].TooltipText = planting;
         }
+    }
+
+    private static string FormatSeasons(GrowingSeasons seasons)
+    {
+        string result = "";
+        foreach (var (flag, name) in new[]
+        {
+            (GrowingSeasons.Spring, "春"), (GrowingSeasons.Summer, "夏"),
+            (GrowingSeasons.Autumn, "秋"), (GrowingSeasons.Winter, "冬"),
+        })
+        {
+            if ((seasons & flag) != 0)
+                result += result.Length == 0 ? name : $" / {name}";
+        }
+        return result;
     }
 }

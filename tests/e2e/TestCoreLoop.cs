@@ -4,6 +4,7 @@ using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
 using FarmExchange.Market;
+using FarmExchange.Trading;
 using FarmExchange.UI;
 using FarmExchange.World;
 
@@ -31,7 +32,14 @@ public partial class TestCoreLoop : Node
     {
         var window = new InventoryWindow();
         parent.AddChild(window);
-        window.Refresh(new FarmGame(12345));
+        var game = new FarmGame(12345);
+        CommodityId radish = new(CropKind.Radish, CommodityKind.Raw);
+        if (!game.Buy(radish, 2).Success || !game.CreateTradeOrder(new TradeOrderRequest(radish,
+            TradeOrderSide.Sell, TradeOrderFrequency.Once, TradeOrderQuantityMode.Fixed, 1,
+            TradeOrderBudgetMode.None, 0, 0, CashReserveMode.Amount, 0,
+            new[] { new[] { new TradeOrderCondition(TradeConditionFactor.Price, TradeConditionComparison.Greater, 10000) } })).Success)
+        { window.QueueFree(); return Fail("库存筛选准备冻结库存失败"); }
+        window.Refresh(game);
         window.ShowRaised();
         await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
         await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -62,6 +70,37 @@ public partial class TestCoreLoop : Node
         if (scroll.ScrollVertical <= 0 || lastRect.Position.Y < viewportRect.Position.Y ||
             lastRect.End.Y > viewportRect.End.Y)
             passed = Fail("库存正常滚动无法完整显示最后一种作物的输入框");
+        if (Find<Label>(window, "InventoryRadishRawStock").Text != "总 2   可用 1   冻结 1")
+            passed = Fail("库存总量、可用和冻结没有读取真实卖单资源");
+        if (Find<Label>(window, "InventoryRadishRawStock").GetGlobalRect().End.X >
+            scroll.GetGlobalRect().End.X - scroll.GetVScrollBar().Size.X)
+            passed = Fail("库存数量文字被纵向滚动条遮挡");
+        EnterText(lastInput, "123");
+        var search = Find<LineEdit>(window, "InventorySearchInput");
+        EnterText(search, "萝卜");
+        Find<Button>(window, "InventoryFilter1Button").EmitSignal(Button.SignalName.Pressed);
+        if (!Find<Control>(window, "InventoryRadishRawRow").IsVisibleInTree() ||
+            Find<Control>(window, "InventoryRadishProductRow").IsVisibleInTree() ||
+            Find<Control>(window, "InventoryWheatRawRow").IsVisibleInTree())
+            passed = Fail("库存名称搜索和原料筛选未共同生效");
+        Find<Button>(window, "InventoryFilter2Button").EmitSignal(Button.SignalName.Pressed);
+        EnterText(search, "腌萝卜");
+        if (!Find<Control>(window, "InventoryRadishProductRow").IsVisibleInTree() || lastInput.IsVisibleInTree())
+            passed = Fail("库存加工品筛选未按商品名称展示");
+        search.GrabFocus();
+        search.CaretColumn = 2;
+        window.Refresh(game);
+        await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+        if (search.Text != "腌萝卜" || !search.HasFocus() || search.CaretColumn != 2 || lastInput.Text != "123")
+            passed = Fail("库存筛选刷新丢失搜索焦点、光标或隐藏底线草稿");
+        search.ReleaseFocus();
+        EnterText(search, "不存在的商品");
+        if (!Find<Label>(window, "InventoryEmptyMessage").IsVisibleInTree())
+            passed = Fail("库存无匹配商品没有反馈");
+        EnterText(search, "");
+        Find<Button>(window, "InventoryFilter0Button").EmitSignal(Button.SignalName.Pressed);
+        if (!lastInput.IsVisibleInTree() || lastInput.Text != "123")
+            passed = Fail("库存恢复全部商品丢失原料底线草稿");
         window.QueueFree();
         return passed && await CheckMarketLayout(parent);
     }
@@ -79,7 +118,7 @@ public partial class TestCoreLoop : Node
         bool passed = true;
         Rect2 windowRect = window.GetGlobalRect();
         Rect2 viewport = parent.GetViewport().GetVisibleRect();
-        if (windowRect.Position.Y < 70 || windowRect.End.Y > viewport.End.Y - 109 ||
+        if (windowRect.Position.Y < 94 || windowRect.End.Y > viewport.End.Y - 90 ||
             windowRect.Position.X < 0 || windowRect.End.X > viewport.End.X)
             passed = Fail("市场窗口溢出1280×720可用区域或覆盖顶部/底部操作");
         var scroll = Find<ScrollContainer>(window, "MarketScroll");
@@ -429,9 +468,9 @@ public partial class TestCoreLoop : Node
         Find<Button>(window, "RoadTab").EmitSignal(Button.SignalName.Pressed);
         var roadStyle = (StyleBoxFlat)roadCard.GetThemeStylebox("normal");
         if (!roadCard.IsVisibleInTree() || farmCard.IsVisibleInTree() ||
-            !roadCard.Text.Contains("1.00 金币/格") || roadStyle.BgColor.R != roadStyle.BgColor.G ||
-            roadStyle.BgColor.G != roadStyle.BgColor.B)
-            return Fail("道路目录未显示独立灰色卡片与每格1.00金币价格");
+            !roadCard.Text.Contains("1.00 金币/格") || roadStyle.BgColor.Luminance < 0.45f ||
+            roadCard.GetThemeColor("font_color") != UiElements.Ink)
+            return Fail("道路目录未显示可读的纸面卡片与每格1.00金币价格");
         Find<Button>(window, "ProcessorTab").EmitSignal(Button.SignalName.Pressed);
         LineEdit search = Find<LineEdit>(window, "BuildSearch");
         EnterText(search, "腌制坊");
@@ -442,6 +481,9 @@ public partial class TestCoreLoop : Node
             !object.ReferenceEquals(processorCard, Find<Button>(window, "ProcessorCardRadish")))
             return Fail("目录分类或经营刷新丢失加工搜索、焦点或固定卡片");
         Find<Button>(window, "FarmTab").EmitSignal(Button.SignalName.Pressed);
+        if (farmCard.IsVisibleInTree() || search.Text != "腌制坊")
+            return Fail("目录切换没有保留搜索或过滤结果");
+        EnterText(search, "");
         if (!farmCard.IsVisibleInTree() || !farmCard.Text.Contains("10.00 金币") ||
             !object.ReferenceEquals(farmCard, Find<Button>(window, "FarmCard")))
             return Fail("道路接入改变农田目录价格或卡片身份");
@@ -532,7 +574,7 @@ public partial class TestCoreLoop : Node
         build.EmitSignal(Button.SignalName.Pressed);
         Vector2 viewportSize = main.GetViewport().GetVisibleRect().Size;
         if (buildWindow.Position.X + buildWindow.Size.X > viewportSize.X - 8f ||
-            buildWindow.Position.Y + buildWindow.Size.Y > viewportSize.Y - 111f - 8f)
+            buildWindow.Position.Y < 94f || buildWindow.Position.Y + buildWindow.Size.Y > viewportSize.Y - 90f)
             return Fail("建造目录超出视窗或遮挡底栏");
         buildWindow.Position = new Vector2(30, 252);
         Find<Button>(buildWindow, "FarmCard").EmitSignal(Button.SignalName.Pressed);
@@ -623,7 +665,12 @@ public partial class TestCoreLoop : Node
             return Fail("加工场地摆放与收费错误");
 
         Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
-        if (!inventoryWindow.Visible || !ContainsVisibleText(inventoryWindow, "玉米原料"))
+        Control cornRawRow = Find<Control>(inventoryWindow, "InventoryCornRawRow");
+        CommodityId cornRaw = new(CropKind.Corn, CommodityKind.Raw);
+        if (!inventoryWindow.Visible || !cornRawRow.IsVisibleInTree() ||
+            !ContainsVisibleText(cornRawRow, "玉米") || !ContainsVisibleText(cornRawRow, "原料") ||
+            Find<Label>(cornRawRow, "InventoryCornRawStock").Text !=
+                $"总 {main.Game.GetStock(cornRaw)}   可用 {main.Game.GetAvailableStock(cornRaw)}   冻结 {main.Game.GetFrozenStock(cornRaw)}")
             return Fail("库存窗口未显示分类库存");
         inventoryWindow.Position = new Vector2(260, 110);
         Find<Button>(inventoryWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);

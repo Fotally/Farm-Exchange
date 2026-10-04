@@ -34,11 +34,11 @@
 - `scripts/world/PlacementPreviewGeometry.cs`：内部候选几何，读取同一占地偏移生成候选格与逐格阻塞，按相邻格生成外围边；只查询地图范围与真实占用，不复制正式放置规则或保存经营状态。
 - `scripts/world/WorkerPresentation.cs`：读取工人编号、经营格位置、目标与活动快照，复用角色场景显示三人并按帧插值；位置换算复用地图接口，暂停保持画面，视觉帧率与动画不推进经营。
 - `scripts/world/CameraController.cs`：输入与镜头模块。唯一保存玩家倍率，内部抵消视口拉伸；窗口和全屏扩大时增加地图视野，保持农田与人物像素大小、镜头中心和玩家倍率。订阅尺寸变化并在退出时取消；缩放限制与输入换算保持内部，UI 沿用原适配。区分左键点击与拖动，释放即结束拖动，界面收到释放时清除按下凭据；公开拖动及鼠标在窗口内状态供摆放隐藏预览，通过 `WorldMap` 选择格子及限制镜头。
-- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。唯一持有摆放类型和候选锚点，所有类型逐次建造后保持摆放，右键、Esc、按钮统一取消；每帧在镜头更新后定位，界面遮挡或拖动时隐藏预览，标准费用与可用资金反馈分开显示。分发窗口意图及计时器命令，显示真实工人数、季、年、月、日与暂停按钮，经营变化后统一刷新，并组装读取工人快照的表现；只在地块变化时同步地图。
-- `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs`、`RoadDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与范围、建造目录、固定的选种/库存/市场控件、三类详情及共用视觉元素。目录包含道路卡片并统一查询费用；道路连续铺设到 Esc/取消为止，详情仅发出拆除意图。库存窗口在刷新时保留草稿与焦点；加工详情实时区分领取等待原因。窗口不持有经营状态。
+- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。组装像素田园浮动布局：顶部日期与暂停、右上金币与工人、左侧真实经营近况、右侧设施详情、底部中央经营入口。唯一持有摆放类型和候选锚点，所有类型逐次建造后保持摆放，右键、Esc、按钮统一取消；每帧在镜头更新后定位，界面遮挡或拖动时隐藏预览，标准费用与可用资金反馈分开显示。分发窗口意图及计时器命令，经营变化后统一刷新，并组装读取工人快照的表现；只在地块变化时同步地图。
+- `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs`、`RoadDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与可用区域、建造目录、固定的选种/库存/市场控件、三类详情及统一木框纸面主题。窗口避让顶部状态与底部入口，长内容可滚动；主题集中维护按钮、输入及勾选各态字色。目录包含九种设施、分类和名称搜索并统一查询费用；道路连续铺设到 Esc/取消为止，详情仅发出拆除意图。库存显示总量、冻结、可用量并保留底线草稿与焦点；设施详情从快照显示实际进度、产量、报价及损失说明。窗口不持有经营状态。
 - `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`：独立角色预览，接收 WASD/方向键移动、Q/E 切换 20 位角色并显示名称与跟随镜头；不接入主经营场景。
 - `scripts/ui/TradeOrdersWindow.cs`：从市场打开的委托与策略窗口，编辑商品、两种买单预算、数量、现金保留及条件组；列表读取真实状态、冻结和最近成交费用，编辑保留原 ID，每秒刷新不重建草稿控件；窗口不计算费用或修改经营资源。
-- `scripts/ui/CultivationWindow.cs`、`CultivationTimeline.cs` 与 `CultivationCropCard.cs`：共享年度表管理、四季时间图与作物拖动来源。鼠标居中抓取整条，落位跨季拆分及冬春环绕，任一片段操作原条；圆角时间带和作物条保留月份并显示周刻度，条内居中信息放不下时悬停显示整轮周期及起止日期。窗口唯一构造替换后的候选草稿，读取表的下一可用编号并仅在新增成功后推进草稿编号；拖放预检及实际落位复用独立条目排程检查，未命名也可编辑，完整保存仍要求名称。拒绝时原草稿与正式表保持并说明原因；农田勾选的普通、悬停、按下及焦点字色保持深色可读。编辑草稿与批量应用只提交经营意图，两种手动指令展示接管影响。窗口显示计划日期、农田引用与实际生产进度，动画不推进经营。
+- `scripts/ui/CultivationWindow.cs`、`CultivationTimeline.cs` 与 `CultivationCropCard.cs`：共享年度表管理、四季时间图与作物拖动来源。鼠标居中抓取整条，落位跨季拆分及冬春环绕，任一片段操作原条；纸色方形时间带和作物条保留月份并显示周刻度，条内居中信息放不下时悬停显示整轮周期及起止日期。窗口唯一构造替换后的候选草稿，读取表的下一可用编号并仅在新增成功后推进草稿编号；拖放预检及实际落位复用独立条目排程检查，未命名也可编辑，完整保存仍要求名称。拒绝时原草稿与正式表保持并说明原因；农田勾选的普通、悬停、按下及焦点字色保持深色可读。编辑草稿与批量应用只提交经营意图，两种手动指令展示接管影响。窗口显示计划日期、农田引用与实际生产进度，动画不推进经营。
 - `tests/unit/`：经营流程、土地占用、农田与加工状态边界、交易、作物定义、库存、钱包、市场、独立日历及地图坐标的单元测试；`tests/integration/`：镜头输入、地图选择与 NPC 动画预览的集成测试；`tests/e2e/`：主场景经营流程的端到端测试；`tests/performance/`：必跑的满地图 50 tick 负载测试（含角落实体推进检查）与按需的有窗口 FPS 性能测试。图形测试要求平均至少 60 FPS、P95 帧间隔不超过 16.67 ms，并保存前后截图。根目录 `TestSuite` 汇总 headless 检查；导出程序启动是构建冒烟测试。
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、导入 Godot 图片资源、运行必需的 headless 测试套件、生成 Cobertura 报告，并自动检查业务脚本总体行覆盖率不低于 80%；`-Performance` 追加图形性能测试和 JSON 报告。
 - `tools/Repair-RuleLinks.ps1` 与 `tools/Test-StaticChecks.ps1`：按 `.codex/rule-links.json` 修复及检查目录指令符号链接，并检查文档路径、内部链接和脚本命名空间。
@@ -70,6 +70,8 @@
 3. 发布前必须在 `main` 对目标提交完成 Release 编译、自动化场景测试、导出程序启动验收；通过后创建同版本 Git 标签与 GitHub Release，并只上传对应的 Windows zip。发布完成以标签、GitHub Release、压缩包版本号三者一致为准。
 
 # 文档索引
+
+- 修改 UI 视觉或布局时读取 `docs/project/ui-visual-prototype.md`：#94 采用田园布局与像素木作主题，保留当前地图与人物素材；HTML 为设计示例，Godot 窗口接入真实经营状态。
 
 - `docs/README.md`：玩法、架构、项目协作、调研与静态检查的中文导航。
 - `docs/gameplay/`：玩家可观察的作物、加工、交易、土地和地图操作规则。

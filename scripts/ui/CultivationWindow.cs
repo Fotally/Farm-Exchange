@@ -39,20 +39,21 @@ public partial class CultivationWindow : DraggableWindow
      */
     public event Action<int, IReadOnlyList<Vector2I>>? ApplyRequested;
 
-    public CultivationWindow() : base("CultivationWindow", "年度耕作表", new Vector2(130, 82),
-        new Vector2(1000, 520), avoidBottomBar: true)
+    public CultivationWindow() : base("CultivationWindow", "年度耕作表", new Vector2(130, 104),
+        new Vector2(1000, 520))
     {
         Body.AddThemeConstantOverride("separation", 6);
         var columns = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         columns.AddThemeConstantOverride("separation", 14);
         Body.AddChild(columns);
         var sidebar = new VBoxContainer { CustomMinimumSize = new Vector2(170, 0) };
+        sidebar.AddThemeConstantOverride("separation", 6);
         columns.AddChild(sidebar);
         sidebar.AddChild(Text("共享年度表", 15));
         _plans = new ItemList { Name = "CultivationPlanList", CustomMinimumSize = new Vector2(170, 120) };
         _plans.ItemSelected += index => LoadPlan(_snapshots[(int)index]);
         sidebar.AddChild(_plans);
-        Button create = MakeButton("新建年度表", Mid, 0, 32);
+        Button create = MakeSecondaryButton("＋ 新建年度表", 0, 34);
         create.Name = "NewCultivationPlanButton";
         create.Pressed += NewPlan;
         sidebar.AddChild(create);
@@ -62,6 +63,7 @@ public partial class CultivationWindow : DraggableWindow
             Name = "CultivationFarmScroll",
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            CustomMinimumSize = new Vector2(0, 90),
         };
         sidebar.AddChild(farmScroll);
         _farms = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -72,12 +74,13 @@ public partial class CultivationWindow : DraggableWindow
         sidebar.AddChild(apply);
 
         var editor = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        editor.AddThemeConstantOverride("separation", 6);
         columns.AddChild(editor);
         var config = new HBoxContainer();
         editor.AddChild(config);
-        _name = new LineEdit { Name = "CultivationPlanName", PlaceholderText = "年度表名称", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _name = new LineEdit { Name = "CultivationPlanName", PlaceholderText = "年度表名称", CustomMinimumSize = new Vector2(0, 36), SizeFlagsHorizontal = SizeFlags.ExpandFill };
         config.AddChild(_name);
-        _mode = new OptionButton { Name = "CultivationPlanMode", CustomMinimumSize = new Vector2(150, 0) };
+        _mode = new OptionButton { Name = "CultivationPlanMode", CustomMinimumSize = new Vector2(150, 36) };
         _mode.AddItem("立即改种");
         _mode.AddItem("预备下一轮");
         config.AddChild(_mode);
@@ -85,6 +88,7 @@ public partial class CultivationWindow : DraggableWindow
         _mode.ItemSelected += _ => ValidateDraft();
         _timeline = new CultivationTimeline(CheckDrop);
         var crops = new HBoxContainer();
+        crops.AddThemeConstantOverride("separation", 8);
         editor.AddChild(crops);
         foreach (CropDefinition crop in FarmGame.Crops) crops.AddChild(new CultivationCropCard(crop.Kind, _timeline));
         _timeline.EntrySelected += SelectEntry;
@@ -92,14 +96,16 @@ public partial class CultivationWindow : DraggableWindow
         editor.AddChild(_timeline);
         _entryInfo = Text("从上方拖入作物；空白为休耕。金线为今天。");
         _entryInfo.Name = "CultivationEntryInfo";
+        // 选中条说明有两行；新建和拖起时保持相同高度，避免外层滚动条改变日格宽度。
+        _entryInfo.CustomMinimumSize = new Vector2(0, 34);
         editor.AddChild(_entryInfo);
         var actions = new HBoxContainer();
         editor.AddChild(actions);
-        Button remove = MakeButton("移除选中整条", Mid, 140, 32);
+        Button remove = MakeQuietButton("移除选中整条", 140, 34);
         remove.Name = "RemoveCultivationEntryButton";
         remove.Pressed += RemoveEntry;
         actions.AddChild(remove);
-        Button save = MakeButton("保存共享表", Gold, 140, 32);
+        Button save = MakeButton("保存共享表", Mid, 140, 34);
         save.Name = "SaveCultivationPlanButton";
         save.Pressed += Save;
         actions.AddChild(save);

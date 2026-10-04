@@ -35,6 +35,10 @@
 
 2026-10-03 用户在 [#83](https://github.com/Fotally/Farm-Exchange/issues/83) 完成放置预览的交互对齐，随后明确授权由 [#87](https://github.com/Fotally/Farm-Exchange/issues/87) 承接开发、验收与 PR：跟随鼠标、沿用锚点、点击即建并保持摆放；占地由建筑属性动态生成，冲突仅标红对应格；所有建筑共用右键、Esc、按钮取消入口，道路继续逐次点击。摆放期间不弹详情，保留左键拖镜头，界面遮挡时隐藏预览并拦截建造，暂停状态保持。视觉参数按参考案例设计并通过画面检查调整。完整约定及验收见[设计方案](build-placement-preview-proposal.md)，证据见[案例调研](../research/build-placement-preview.md)。已完成本地验收，逐模块覆盖率、真实图形及 Windows 导出启动结果见[测试记录](testing.md#2026-10-03-87-建筑放置预览验收)。交付使用 [PR #84](https://github.com/Fotally/Farm-Exchange/pull/84)，合并状态以该 PR 为准。
 
+## 已确认 UI/UX 升级范围
+
+2026-10-04 在 [#94](https://github.com/Fotally/Farm-Exchange/issues/94) 授权将已设计的 HTML 主稿落实为正式 Godot UI/UX：采用田园布局与像素木作风格，顶部日期与暂停、右上资源、左侧经营近况、右侧设施详情及底部中央经营入口。统一主题和建造、选种、库存、市场、委托、年度表窗口，保留真实经营接口、输入草稿与焦点。已确认本轮保留当前地图和人物素材，生产、交易与排程规则继续按现行文档执行。设计依据与阶段边界见[视觉原型说明](ui-visual-prototype.md)，实施状态以 #94 为准。
+
 ## 待用户确认
 
 - 农田、七种配套加工场地与道路以外的建筑类型与建造规则。

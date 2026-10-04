@@ -12,10 +12,11 @@ public partial class RoadDetailsPanel : VBoxContainer
     {
         Name = "RoadDetailsPanel";
         AddThemeConstantOverride("separation", 9);
-        AddChild(MakeInfoCard("道路"));
+        AddChild(MakeLabel("道路 · 1×1 基础格", 18, Ink));
         AddChild(MakeInfoCard("用途：当前仅用于布局和外观"));
-        AddChild(MakeLabel("拆除道路不退还建造费。", 12, Ink));
-        Button remove = MakeButton("拆除道路", new Color(0.66f, 0.36f, 0.31f), 0, 43);
+        AddChild(MakeLabel("下一步：在建造目录选择道路，连续点击空格铺设。", 14, Ink));
+        AddChild(MakeLabel("拆除道路释放占地，不退还建造费。", 12, Ink));
+        Button remove = MakeQuietButton("拆除道路", 0, 32);
         remove.Name = "RemoveRoadButton";
         remove.Pressed += () => RemoveRequested?.Invoke();
         AddChild(remove);

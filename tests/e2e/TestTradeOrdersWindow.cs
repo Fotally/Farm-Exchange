@@ -122,7 +122,9 @@ public partial class TestTradeOrdersWindow : Node
         market.Refresh(game);
         Click(market, "CommodityRadishProductButton");
         if (!Find<Button>(market, "SellCommodityAllButton").Disabled || !Find<Button>(market, "SellButton").Disabled ||
-            !Find<Label>(market, "QuoteRadishProductStock").Text.Contains("可用 0"))
+            game.GetAvailableStock(RadishProduct) != 0 ||
+            Find<Label>(market, "QuoteRadishProductStock").Text != $"{game.GetStock(RadishProduct)} / 0" ||
+            !Find<Label>(market, "QuoteRadishProductStock").TooltipText.Contains($"冻结 {game.GetFrozenStock(RadishProduct)}"))
             return Fail("市场仍将冻结库存作为可出售库存");
         Click(window, "CancelOrderButton");
         if (game.GetFrozenStock(RadishProduct) != 0 || game.GetTradeOrders()[1].Status != TradeOrderStatus.Cancelled ||
@@ -314,7 +316,7 @@ public partial class TestTradeOrdersWindow : Node
         bool passed = true;
         Rect2 viewport = parent.GetViewport().GetVisibleRect();
         Rect2 rect = window.GetGlobalRect();
-        if (rect.Position.Y < 70 || rect.End.Y > viewport.End.Y - 109 || rect.Position.X < 0 || rect.End.X > viewport.End.X)
+        if (rect.Position.Y < 94 || rect.End.Y > viewport.End.Y - 90 || rect.Position.X < 0 || rect.End.X > viewport.End.X)
             passed = Fail("委托窗口溢出1280×720可用区域");
         passed = CheckWindowTitle(window, viewport) && passed;
         foreach (string button in new[] { "SaveOrderButton", "ToggleOrderButton", "CancelOrderButton", "NewOrderButton" })
@@ -365,7 +367,7 @@ public partial class TestTradeOrdersWindow : Node
         Label title = Controls<Label>(header, "")[0];
         Rect2 rect = window.GetGlobalRect();
         if (title.GetLineCount() != 1 || !header.GetGlobalRect().Encloses(title.GetGlobalRect()) ||
-            rect.Position.Y < 70 || rect.End.Y > viewport.End.Y - 109 || rect.Position.X < 0 || rect.End.X > viewport.End.X)
+            rect.Position.Y < 94 || rect.End.Y > viewport.End.Y - 90 || rect.Position.X < 0 || rect.End.X > viewport.End.X)
             return Fail(window.Name + "标题不是完整单行，或窗口溢出可用区域");
         return true;
     }

@@ -6,7 +6,7 @@
 
 - [作物与选种](gameplay/production/crop-growth.md)：七种作物、适宜季节、播种前检查、越季失败与恢复、收获数量和切换规则。
 - [农田供水与降雨](gameplay/production/water-and-rain.md)：留水、雨中播种、改种与收获后的水分处理。
-- [季节耕作表](gameplay/production/seasonal-cultivation.md)及[窗口操作](gameplay/production/seasonal-cultivation-ui.md)：共享年度安排、两种执行方式、休耕与手动接管，四季圆角时间图、周刻度、居中拖动、未命名草稿编辑、落位前校验、短条悬浮与清楚的农田勾选文字。
+- [季节耕作表](gameplay/production/seasonal-cultivation.md)及[窗口操作](gameplay/production/seasonal-cultivation-ui.md)：共享年度安排、两种执行方式、休耕与手动接管，四季纸面时间图、周刻度、居中拖动、未命名草稿编辑、落位前校验、短条悬浮与清楚的农田勾选文字。
 - [加工](gameplay/production/processing.md)：对应场地、加工时间、原料保留底线、领取顺序、场地详情与投入损失。
 - [独立报价与消息](gameplay/trading/market-quotes.md)：十四商品初价、供需与成本因素、双周行情、节日改期和真实公告。
 - [即时买卖与出售](gameplay/trading/sales.md)：同价买卖、公共库存、完整结算与失败原因。
@@ -42,6 +42,8 @@
 列出全部接口文档：`rg --files docs/architecture -g 'interface-*.md'`。新增模块时按模块路径添加具名接口文档；实现细节另写 `implementation-` 前缀文件。
 
 ## 项目协作与依据
+
+- [UI 视觉升级原型](project/ui-visual-prototype.md)：#94 的田园布局与像素木作主稿、离线 HTML 设计及正式 Godot UI/UX 实施范围；本轮保留地图与人物素材。
 
 - [系统规划](project/roadmap.md)、[构建与验收](project/build-and-validation.md)、[GitHub 协作](project/contribution-workflow.md)：包含分类 issue 模板与提交入口。
 - [后续功能计划](project/deferred-features-plan.md)：原 T11 的四项后续功能；#36 高级交易已验收并人工合并，#42 季节耕作表已实现并验收，其余两项继续暂缓。

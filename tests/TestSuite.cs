@@ -39,6 +39,8 @@ public partial class TestSuite : Node
         bool npcPassed = TestNpcPreview.RunChecks(this);
         GD.Print("端到端测试：主场景经营流程");
         bool coreLoopPassed = TestCoreLoop.RunChecks(this);
+        GD.Print("端到端测试：建造检索、选种信息与设施真实进度");
+        bool facilitiesPassed = TestUiFacilities.RunChecks(this);
         GD.Print("性能测试：满地图 headless 负载");
         bool loadPassed = TestFullWorldLoad.RunChecks();
         GD.Print("端到端测试：库存编辑真实布局与滚动");
@@ -55,8 +57,10 @@ public partial class TestSuite : Node
         bool placementPreviewPassed = await TestPlacementPreview.RunChecksAsync(this);
         GD.Print("端到端测试：连续摆放、统一取消、界面与镜头输入");
         bool buildPlacementPassed = await TestBuildPlacement.RunChecksAsync(this);
+        GD.Print("端到端测试：像素田园主界面、主题与窗口边界");
+        bool visualLayoutPassed = await TestUiVisualLayout.RunChecksAsync(this);
         bool passed = farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed;
+            coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");

@@ -6,44 +6,57 @@ namespace FarmExchange.UI;
 
 public partial class DraggableWindow : PanelContainer
 {
-    private readonly bool _avoidBottomBar;
+    private readonly Vector2 _preferredSize;
     private bool _dragging;
     private Vector2 _dragOffset;
 
     public VBoxContainer Body { get; }
 
     public DraggableWindow(string name, string title, Vector2 position, Vector2 size,
-        bool avoidBottomBar = false, Action? close = null)
+        Action? close = null)
     {
         Name = name;
         Position = position;
         Size = size;
         Visible = false;
         MouseFilter = MouseFilterEnum.Stop;
-        _avoidBottomBar = avoidBottomBar;
+        _preferredSize = size;
+        Theme = SharedTheme;
         VisibilityChanged += () => { if (!Visible) _dragging = false; };
-        AddThemeStyleboxOverride("panel", Style(Cream, 16));
+        StyleBoxFlat frame = Style(Paper, 0);
+        frame.SetBorderWidthAll(3);
+        AddThemeStyleboxOverride("panel", frame);
 
         var outer = new VBoxContainer();
+        outer.AddThemeConstantOverride("separation", 0);
         AddChild(outer);
-        var header = new PanelContainer { Name = "Header", CustomMinimumSize = new Vector2(0, 58) };
-        header.AddThemeStyleboxOverride("panel", Style(Dark, 14));
+        var header = new PanelContainer { Name = "Header", CustomMinimumSize = new Vector2(0, 50) };
+        header.AddThemeStyleboxOverride("panel", Style(new Color("e6d3a4"), 0));
         header.GuiInput += StartDrag;
         outer.AddChild(header);
         var headerMargin = WrapMargin(header, 16, 9);
         headerMargin.MouseFilter = MouseFilterEnum.Ignore;
         var headerRow = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         headerMargin.AddChild(headerRow);
-        Label titleLabel = MakeLabel(title, 19, Cream);
+        Label titleLabel = MakeLabel(title, 18, Ink);
         titleLabel.AutowrapMode = TextServer.AutowrapMode.Off;
         titleLabel.MouseFilter = MouseFilterEnum.Ignore;
         titleLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         headerRow.AddChild(titleLabel);
-        Button closeButton = MakeButton("×", Mid, 32, 32);
+        Button closeButton = MakeQuietButton("×", 32, 32);
         closeButton.Name = "CloseButton";
         closeButton.Pressed += close ?? Hide;
         headerRow.AddChild(closeButton);
-        var contentMargin = WrapMargin(outer, 16, 14);
+        var scroll = new ScrollContainer
+        {
+            Name = "WindowScroll",
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+        };
+        outer.AddChild(scroll);
+        var contentMargin = WrapMargin(scroll, 14, 12);
+        contentMargin.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         contentMargin.SizeFlagsVertical = SizeFlags.ExpandFill;
         Body = new VBoxContainer { Name = "Body", SizeFlagsVertical = SizeFlags.ExpandFill };
         Body.AddThemeConstantOverride("separation", 10);
@@ -51,7 +64,11 @@ public partial class DraggableWindow : PanelContainer
         Size = size;
     }
 
-    public override void _Ready() => GetViewport().SizeChanged += ClampToViewport;
+    public override void _Ready()
+    {
+        GetViewport().SizeChanged += ClampToViewport;
+        ClampToViewport();
+    }
 
     public override void _ExitTree() => GetViewport().SizeChanged -= ClampToViewport;
 
@@ -83,11 +100,14 @@ public partial class DraggableWindow : PanelContainer
     public void ClampToViewport()
     {
         Vector2 viewport = GetViewport().GetVisibleRect().Size;
-        float bottom = _avoidBottomBar ? viewport.Y - 111f : viewport.Y;
+        // 所有经营窗口共用上下常驻操作区，Body 的外层滚动接收较小视窗。
+        float bottom = viewport.Y - 90f;
+        Size = new Vector2(Math.Min(_preferredSize.X, viewport.X - 16f),
+            Math.Min(_preferredSize.Y, bottom - 94f));
         float maxX = Math.Max(8f, viewport.X - Size.X - 8f);
-        float maxY = Math.Max(78f, bottom - Size.Y - 8f);
+        float maxY = Math.Max(94f, bottom - Size.Y);
         Position = new Vector2(Math.Clamp(Position.X, 8f, maxX),
-            Math.Clamp(Position.Y, 78f, maxY));
+            Math.Clamp(Position.Y, 94f, maxY));
     }
 
     private void StartDrag(InputEvent inputEvent)

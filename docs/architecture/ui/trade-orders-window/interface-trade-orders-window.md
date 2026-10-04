@@ -2,7 +2,7 @@
 
 关联 [#36](https://github.com/Fotally/Farm-Exchange/issues/36)，实现为 `scripts/ui/TradeOrdersWindow.cs`，继承 [DraggableWindow](../draggable-window/interface-draggable-window.md)。玩家从[市场窗口](../market-window/interface-market-window.md)的“委托与策略”打开独立窗口；经营状态与冻结资源由 `FarmGame` 的委托入口唯一维护。
 
-图形场景验收截图，包含一次冻结买单与持续策略；原始截图归档，未经修改：
+#36 历史图形场景验收截图，包含一次冻结买单与持续策略；视觉先于 #94，原始截图归档，未经修改：
 
 ![委托窗口：一次冻结买单与持续策略](orders-window.png)
 
@@ -39,6 +39,8 @@
 
 标题沿用共享窗口的明确单行排版，避免初次零宽自动换行把窗口撑高后不回落。布局回归保留原 1280×720 可用区域、末行可达与焦点断言，并同时检查原市场窗口；删除正在编辑的条件组前先释放焦点，不在移出树后操作失效的控件。
 
-默认位置 `(160,78)`、尺寸 `960×520`，避让顶部和底部操作栏。左侧委托列表和状态有独立有界区域，右侧编辑器纵向滚动；保存、停用、撤销始终位于固定底部。节点入口为 `TradeOrdersWindow`，主要节点为 `OrderList`、`OrderResources`、`OrderDetails`、`OrderEditorScroll`、`OrderConditionGroups`、`OrderFeedback`；输入以 `OrderCommodity`、`OrderSide`、`OrderFrequency`、`OrderQuantityMode`、`OrderQuantityInput`、`OrderBudgetMode`、`OrderBudgetInput`、`OrderLimitInput`、`OrderReserveMode`、`OrderReserveInput` 命名。条件行和组使用单调递增的显示编号，编号不作为经营单据 ID。
+#94 默认位置 `(160,104)`、尺寸 `960×520`，采用共享木框与纸面主题，避让顶部 94 像素与底部 90 像素常驻区。左侧委托列表和状态使用独立有界区域，右侧编辑器纵向滚动；编辑标题、商品/方向/执行方式、买入资金、数量、现金保留及条件组按层级排列，字段高约 36 像素、纵向间距 12 像素。创建/保存为橄榄绿主操作，新建与添加条件为纸面次操作，撤销和删除降低强调。保存、停用、撤销位于编辑器下方，基准尺寸保持可见；较小可用高度由共享窗口外层滚动访问。
+
+节点入口为 `TradeOrdersWindow`，主要节点为 `OrderList`、`OrderResources`、`OrderDetails`、`OrderEditorScroll`、`OrderConditionGroups`、`OrderFeedback`；输入以 `OrderCommodity`、`OrderSide`、`OrderFrequency`、`OrderQuantityMode`、`OrderQuantityInput`、`OrderBudgetMode`、`OrderBudgetInput`、`OrderLimitInput`、`OrderReserveMode`、`OrderReserveInput` 命名。条件行和组使用单调递增的显示编号，编号不作为经营单据 ID。
 
 `tests/e2e/TestTradeOrdersWindow.cs` 通过真实主场景、可见控件和公开经营入口验证建单、OR/AND 编辑、季节条件、两种买单资金方式、单次锁定目标、现金基准不重算、冻结及撤销、持续停用恢复、真实买卖费用与反馈、终态按钮、市场可售量以及非法文本；持续买入成交后修改商品及方向仍显示原商品买入、原含费支出和成交后余额，后续卖出成功才替换为新商品和净收入。`RunLayoutChecks` 挂树等待排版后检查窗口和固定按钮可见、末个条件可滚动到达、条件行横向不溢出、暂停刷新保留焦点和滚动；图形后端将真实一次冻结单与持续策略窗口保存至 `build/issue36-validation/orders-window.png`。独立场景为 `tests/e2e/test_trade_orders_window.tscn`，根套件使用同一行为与布局入口。

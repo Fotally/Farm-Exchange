@@ -66,17 +66,19 @@ public partial class TradeOrdersWindow : DraggableWindow
      */
     public event Action<int, bool>? EnabledRequested;
 
-    public TradeOrdersWindow() : base("TradeOrdersWindow", "委托与自动交易", new Vector2(160, 78),
-        new Vector2(960, 520), avoidBottomBar: true)
+    public TradeOrdersWindow() : base("TradeOrdersWindow", "委托与自动交易", new Vector2(160, 104),
+        new Vector2(960, 520))
     {
-        Body.AddThemeConstantOverride("separation", 6);
+        Body.AddThemeConstantOverride("separation", 10);
         _resources = Text("", "OrderResources");
         Body.AddChild(_resources);
         var columns = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         columns.AddThemeConstantOverride("separation", 12);
         Body.AddChild(columns);
         var left = new VBoxContainer { CustomMinimumSize = new Vector2(255, 0) };
+        left.AddThemeConstantOverride("separation", 10);
         columns.AddChild(left);
+        left.AddChild(Text("已建委托 · 选择后编辑", "OrderListHeading"));
         _orders = new ItemList
         {
             Name = "OrderList",
@@ -88,14 +90,14 @@ public partial class TradeOrdersWindow : DraggableWindow
         var detailScroll = new ScrollContainer
         {
             Name = "OrderDetailScroll",
-            CustomMinimumSize = new Vector2(255, 165),
+            CustomMinimumSize = new Vector2(255, 145),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
         };
         left.AddChild(detailScroll);
         _details = Text("选择委托查看执行状态", "OrderDetails", wrap: true);
         _details.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         detailScroll.AddChild(_details);
-        Button newOrder = MakeButton("新建委托", Mid, 110, 34);
+        Button newOrder = MakeSecondaryButton("＋ 新建委托", 110, 34);
         newOrder.Name = "NewOrderButton";
         newOrder.Pressed += NewDraft;
         left.AddChild(newOrder);
@@ -108,10 +110,12 @@ public partial class TradeOrdersWindow : DraggableWindow
         };
         columns.AddChild(editorScroll);
         var editor = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        editor.AddThemeConstantOverride("separation", 8);
+        editor.AddThemeConstantOverride("separation", 12);
         editorScroll.AddChild(editor);
         _editorTitle = Text("新建委托", "OrderEditorTitle");
+        _editorTitle.AddThemeFontSizeOverride("font_size", 16);
         editor.AddChild(_editorTitle);
+        editor.AddChild(Text("商品、方向与执行方式", "OrderIdentityHeading"));
         var identity = Row(editor);
         _commodity = Choices("OrderCommodity", CommodityNames(), 190);
         _commodity.ItemSelected += _ => UpdateResources();
@@ -150,21 +154,21 @@ public partial class TradeOrdersWindow : DraggableWindow
         _groups = new VBoxContainer { Name = "OrderConditionGroups" };
         _groups.AddThemeConstantOverride("separation", 10);
         editor.AddChild(_groups);
-        Button addGroup = MakeButton("添加“或”条件组", Mid, 160, 34);
+        Button addGroup = MakeSecondaryButton("＋ 添加“或”条件组", 180, 34);
         addGroup.Name = "AddOrderGroupButton";
         addGroup.Pressed += () => AddGroup();
         editor.AddChild(addGroup);
         editor.AddChild(Text("一次委托冻结资源；持续策略不冻结。成交手续费 1%，未成交与撤销不收费。", "OrderRulesLabel", wrap: true));
         var footer = Row(Body);
-        _save = MakeButton("创建委托", Gold, 110, 36);
+        _save = MakeButton("创建委托", Mid, 110, 36);
         _save.Name = "SaveOrderButton";
         _save.Pressed += Submit;
         footer.AddChild(_save);
-        _toggle = MakeButton("停用", Mid, 90, 36);
+        _toggle = MakeSecondaryButton("停用", 90, 36);
         _toggle.Name = "ToggleOrderButton";
         _toggle.Pressed += ToggleSelected;
         footer.AddChild(_toggle);
-        _cancel = MakeButton("撤销委托", Mid, 110, 36);
+        _cancel = MakeQuietButton("撤销委托", 110, 36);
         _cancel.Name = "CancelOrderButton";
         _cancel.Pressed += () => { if (_selectedId is int id) CancelRequested?.Invoke(id); };
         footer.AddChild(_cancel);
@@ -325,11 +329,12 @@ public partial class TradeOrdersWindow : DraggableWindow
         _groups.AddChild(root);
         var header = Row(root);
         header.AddChild(heading);
-        Button add = MakeButton("添加条件", Mid, 100, 30);
+        root.AddThemeConstantOverride("separation", 8);
+        Button add = MakeSecondaryButton("添加条件", 100, 32);
         add.Name = $"AddOrderCondition{groupId}Button";
         add.Pressed += () => AddCondition(group);
         header.AddChild(add);
-        Button remove = MakeButton("删除组", Mid, 80, 30);
+        Button remove = MakeQuietButton("删除组", 80, 32);
         remove.Name = $"RemoveOrderGroup{groupId}Button";
         remove.Pressed += () =>
         {
@@ -360,7 +365,7 @@ public partial class TradeOrdersWindow : DraggableWindow
         var editor = new ConditionEditor(row, factor, comparison, value, season);
         group.Conditions.Add(editor);
         factor.ItemSelected += _ => UpdateCondition(editor);
-        Button remove = MakeButton("×", Mid, 32, 30);
+        Button remove = MakeQuietButton("×", 32, 32);
         remove.Name = $"RemoveOrderCondition{conditionId}Button";
         remove.Pressed += () => { group.Conditions.Remove(editor); row.GetParent().RemoveChild(row); row.QueueFree(); };
         row.AddChild(remove);
@@ -476,7 +481,7 @@ public partial class TradeOrdersWindow : DraggableWindow
 
     private static OptionButton Choices(string name, string[] items, float width)
     {
-        var control = new OptionButton { Name = name, CustomMinimumSize = new Vector2(width, 32) };
+        var control = new OptionButton { Name = name, CustomMinimumSize = new Vector2(width, 36) };
         foreach (string item in items) control.AddItem(item);
         return control;
     }
@@ -485,7 +490,7 @@ public partial class TradeOrdersWindow : DraggableWindow
     {
         Name = name,
         PlaceholderText = placeholder,
-        CustomMinimumSize = new Vector2(width, 32),
+        CustomMinimumSize = new Vector2(width, 36),
     };
 
     private sealed record ConditionGroup(VBoxContainer Root, Label Heading)
