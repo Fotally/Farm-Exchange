@@ -43,7 +43,7 @@
 
 ## 项目协作与依据
 
-- [系统规划](project/roadmap.md)、[构建与验收](project/build-and-validation.md)、[GitHub 协作](project/contribution-workflow.md)。
+- [系统规划](project/roadmap.md)、[构建与验收](project/build-and-validation.md)、[GitHub 协作](project/contribution-workflow.md)：包含分类 issue 模板与提交入口。
 - [后续功能计划](project/deferred-features-plan.md)：原 T11 的四项后续功能；#36 高级交易已验收并人工合并，#42 季节耕作表已实现并验收，其余两项继续暂缓。
 - [季节耕作表方案](project/seasonal-cultivation-proposal.md)：#42 的共享年度时间图、拖动编辑、两种表级模式与手动指令、预备安排、统一播种及内部换季成熟补救的已确认范围。
 - [多因素委托与自动交易实施方案](project/advanced-trading-proposal.md)：#36 已确认的条件组合、两种买单预算、冻结、现金保留、执行与 1% 成交费用。

@@ -52,7 +52,7 @@
 2. 实施前核对 `docs/project/roadmap.md` 中的已确认范围。具体数值和操作规则未确认前仅做不依赖它们的工作；需要变更已沟通的实施方案时，先与用户沟通。
 3. 保持模块接口简洁；只为实际出现的需求建立模块与接缝，不为假想情况增加兜底或抽象层。
 4. 使用项目指定的 Godot 引擎验证场景与脚本。引擎可执行文件位于上述目录。
-5. GitHub issue 是所有修改的唯一入口：收到功能请求后，Agent 自动查找对应 issue；没有匹配项时自动创建写明范围和验收标准的 issue。关联 issue 后才开始开发，并且只完成该 issue 记录的内容。用户已持续授权只读查看 GitHub issue 和 PR，Agent 直接查询，不再请求逐次许可；`.codex/rules/github-read.rules` 放行对应的 `gh` 只读命令。
+5. GitHub issue 是所有修改的唯一入口：收到功能请求后，Agent 自动查找对应 issue；没有匹配项时自动创建写明范围和验收标准的 issue。创建或更新 issue 时使用 [farm-exchange-submit-issue](.codex/skills/farm-exchange-submit-issue/SKILL.md)，按任务类型选择模板，正文只记录工程内容。关联 issue 后才开始开发，并且只完成该 issue 记录的内容。用户已持续授权只读查看 GitHub issue 和 PR，Agent 直接查询，不再请求逐次许可；`.codex/rules/github-read.rules` 放行对应的 `gh` 只读命令。
 6. 以本 issue 或事先划定的小模块为审查单元：先完成该单元全部代码和中文文档，再按 `.codex/agents/code-checker.toml` 新建只读 `code_checker` 子 Agent 集中审查；开发到一半不穿插审查。每轮初审、修复复查及验收修改后的复审均新开独立 Agent，不复用上一轮审查员；提供 issue、已完成单元、基准和完整变更文件，由新审查员独立读取。检查规范、可证实缺陷、回归风险、必要测试和已确认规则一致性，不评价玩法合理性。问题须附文件、行号和证据，主 Agent 修复并同步文档后再新开审查，直到没有待修问题。
 7. 功能开发与验证均在 `dev` 分支进行。代码、文档和审查完成后，Agent 必须使用项目指定引擎依次完成编译、自动化场景测试、Windows Release 中间导出，并运行 `build/windows/FarmExchange.exe` 验证导出产物；发现失败则继续修复并重新验证，直至全部通过，形成“issue → 开发 → 文档 → 审查与修复复查 → 编译 → 测试 → 导出 → 运行导出程序”的闭环。
 8. 闭环验证通过后，使用 `.codex/skills/farm-exchange-submit-pr/SKILL.md` 提交并推送 `dev`，创建或更新关联 issue 的 `dev` → `main` Pull Request，等待人工合并。Agent 不直接提交或推送 `main`，也不自行合并 Pull Request。
