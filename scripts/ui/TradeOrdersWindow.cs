@@ -90,7 +90,7 @@ public partial class TradeOrdersWindow : DraggableWindow
         var detailScroll = new ScrollContainer
         {
             Name = "OrderDetailScroll",
-            CustomMinimumSize = new Vector2(255, 145),
+            CustomMinimumSize = new Vector2(255, 105),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
         };
         left.AddChild(detailScroll);

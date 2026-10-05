@@ -22,7 +22,7 @@ internal static class UiElements
         var card = new PanelContainer();
         card.AddThemeStyleboxOverride("panel", Style(new Color("ebdbb1"), 0));
         var margin = WrapMargin(card, 11, 9);
-        label = MakeLabel(text, 14, Ink);
+        label = MakeLabel(text, 12, Ink);
         margin.AddChild(label);
         return card;
     }
@@ -38,6 +38,17 @@ internal static class UiElements
         margin.AddThemeConstantOverride("margin_bottom", vertical);
         parent.AddChild(margin);
         return margin;
+    }
+
+    internal static PanelContainer AddFrameLining(PanelContainer frame)
+    {
+        var lining = new PanelContainer();
+        var style = Style(((StyleBoxFlat)frame.GetThemeStylebox("panel")).BgColor, 0);
+        style.BorderColor = new Color("c8ad76");
+        style.SetBorderWidthAll(2);
+        lining.AddThemeStyleboxOverride("panel", style);
+        frame.AddChild(lining);
+        return lining;
     }
 
     internal static Label MakeLabel(string text, int size, Color color)
@@ -58,7 +69,7 @@ internal static class UiElements
         Color textColor = background.Luminance > 0.6f ? Ink : Cream;
         foreach (string state in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color" })
             button.AddThemeColorOverride(state, textColor);
-        button.AddThemeFontSizeOverride("font_size", 14);
+        button.AddThemeFontSizeOverride("font_size", 13);
         return button;
     }
 
@@ -78,10 +89,22 @@ internal static class UiElements
         BorderWidthBottom = 1,
     };
 
+    internal static StyleBoxFlat Frame(Color color, int borderWidth)
+    {
+        StyleBoxFlat frame = Style(color, 0);
+        frame.SetBorderWidthAll(borderWidth);
+        frame.ShadowColor = new Color("554b3430");
+        frame.ShadowSize = 1;
+        frame.ShadowOffset = new Vector2(4, 4);
+        return frame;
+    }
+
     private static StyleBoxFlat ButtonStyle(Color color, bool pressed = false)
     {
         StyleBoxFlat style = Style(color, 0);
-        style.BorderWidthBottom = pressed ? 1 : 3;
+        style.SetBorderWidthAll(2);
+        style.BorderColor = color.Luminance > 0.6f ? new Color("b9a477") : new Color("455234");
+        style.BorderWidthBottom = pressed ? 2 : 3;
         style.ContentMarginLeft = 10;
         style.ContentMarginRight = 10;
         style.ContentMarginTop = pressed ? 5 : 3;
@@ -91,10 +114,13 @@ internal static class UiElements
 
     private static Theme BuildTheme()
     {
-        var theme = new Theme { DefaultFontSize = 14 };
+        var theme = new Theme
+        {
+            DefaultFontSize = 13,
+            DefaultFont = new SystemFont { FontNames = new[] { "Microsoft YaHei", "PingFang SC" }, FontWeight = 400 },
+        };
         theme.SetColor("font_color", "Label", Ink);
-        StyleBoxFlat frame = Style(Paper, 0);
-        frame.SetBorderWidthAll(3);
+        StyleBoxFlat frame = Frame(Paper, 4);
         theme.SetStylebox("panel", "PanelContainer", frame);
         theme.SetConstant("separation", "VBoxContainer", 8);
         theme.SetConstant("separation", "HBoxContainer", 8);

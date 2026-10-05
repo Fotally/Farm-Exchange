@@ -23,6 +23,10 @@ public partial class Main : Node2D
     private Button _pauseButton = null!;
     private Label _messageLabel = null!;
     private Label _activityLabel = null!;
+    private Label _farmCountLabel = null!;
+    private Label _processorCountLabel = null!;
+    private Label _calendarStatusLabel = null!;
+    private Label _workerStatusLabel = null!;
     private Label _buildHint = null!;
     private Label _buildCost = null!;
     private Button _cancelPlacementButton = null!;
@@ -66,6 +70,7 @@ public partial class Main : Node2D
         _uiRoot = GetNode<Control>("CanvasLayer/UiRoot");
         _uiRoot.Theme = SharedTheme;
         BuildInterface();
+        UiScaling.Bind(_uiRoot);
         GetNode<Timer>("TickTimer").Timeout += OnTick;
         RefreshUi();
     }
@@ -153,9 +158,9 @@ public partial class Main : Node2D
         BuildBottomBar();
         BuildMessage();
 
-        _detailWindow = new DraggableWindow("DetailWindow", "地块详情", new Vector2(914, 104),
-            new Vector2(350, 490), close: CloseDetail);
-        _uiRoot.AddChild(_detailWindow);
+        _detailWindow = new DraggableWindow("DetailWindow", "地块详情", new Vector2(1480, 143),
+            new Vector2(409, 727), close: CloseDetail);
+        AddWindow(_detailWindow, right: true);
         VBoxContainer detailBody = _detailWindow.Body;
         var detailContent = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         detailContent.AddThemeConstantOverride("separation", 9);
@@ -164,31 +169,32 @@ public partial class Main : Node2D
         detailContent.AddChild(_detailCell);
         _emptyDetails = MakeInfoCard("空地\n点击底部“建造”选择建筑，再点击地图空位摆放。");
         detailContent.AddChild(_emptyDetails);
-        _farmDetails = new FarmDetailsPanel();
+        _farmDetails = new FarmDetailsPanel { Name = "FarmDetailsPanel" };
         _farmDetails.ChangeCropRequested += () => OpenCrop(prepareNext: false);
         _farmDetails.PrepareCropRequested += () => OpenCrop(prepareNext: true);
         _farmDetails.CultivationRequested += OpenCultivation;
         _farmDetails.RemoveRequested += RemoveSelected;
         detailContent.AddChild(_farmDetails);
-        _processorDetails = new ProcessorDetailsPanel();
+        _processorDetails = new ProcessorDetailsPanel { Name = "ProcessorDetailsPanel" };
         _processorDetails.RemoveRequested += RemoveSelected;
+        _processorDetails.InventoryRequested += OpenInventory;
         detailContent.AddChild(_processorDetails);
-        _roadDetails = new RoadDetailsPanel();
+        _roadDetails = new RoadDetailsPanel { Name = "RoadDetailsPanel" };
         _roadDetails.RemoveRequested += RemoveSelected;
         detailContent.AddChild(_roadDetails);
 
         _buildWindow = new BuildCatalogWindow();
         _buildWindow.SelectionRequested += (kind, crop) => StartPlacement(new Placement(kind, crop));
-        _uiRoot.AddChild(_buildWindow);
+        AddWindow(_buildWindow);
 
         _cropWindow = new CropSelectionWindow();
         _cropWindow.CropRequested += SetCrop;
         _cropWindow.NextCropRequested += PrepareCrop;
-        _uiRoot.AddChild(_cropWindow);
+        AddWindow(_cropWindow);
 
         _inventoryWindow = new InventoryWindow();
         _inventoryWindow.RawReserveRequested += SetRawReserve;
-        _uiRoot.AddChild(_inventoryWindow);
+        AddWindow(_inventoryWindow);
 
         _marketWindow = new MarketWindow();
         _marketWindow.SellRawRequested += SellRaw;
@@ -196,16 +202,16 @@ public partial class Main : Node2D
         _marketWindow.BuyRequested += (commodity, quantity) => Trade(commodity, quantity, buy: true);
         _marketWindow.SellRequested += (commodity, quantity) => Trade(commodity, quantity, buy: false);
         _marketWindow.SellCommodityAllRequested += SellCommodityAll;
-        _marketWindow.TradeInputRejected += message => _messageLabel.Text = message;
+        _marketWindow.TradeInputRejected += SetMessage;
         _marketWindow.OrdersRequested += OpenTradeOrders;
-        _uiRoot.AddChild(_marketWindow);
+        AddWindow(_marketWindow);
 
         _ordersWindow = new TradeOrdersWindow();
         _ordersWindow.CreateRequested += request => ShowOrderResult(_game.CreateTradeOrder(request));
         _ordersWindow.UpdateRequested += (id, request) => ShowOrderResult(_game.UpdateTradeOrder(id, request));
         _ordersWindow.CancelRequested += id => ShowOrderResult(_game.CancelTradeOrder(id));
         _ordersWindow.EnabledRequested += (id, enabled) => ShowOrderResult(_game.SetTradeOrderEnabled(id, enabled));
-        _uiRoot.AddChild(_ordersWindow);
+        AddWindow(_ordersWindow);
 
         _cultivationWindow = new CultivationWindow();
         _cultivationWindow.SaveRequested += (id, request) =>
@@ -213,17 +219,23 @@ public partial class Main : Node2D
             CultivationCommandResult result = id is int existingId
                 ? _game.UpdateCultivationPlan(existingId, request) : _game.CreateCultivationPlan(request);
             _cultivationWindow.ShowCommandResult(result);
-            _messageLabel.Text = result.Error ?? "共享年度表已保存";
+            SetMessage(result.Error ?? "共享年度表已保存");
             RefreshAfterGameChange(worldChanged: result.Success);
         };
         _cultivationWindow.ApplyRequested += (id, cells) =>
         {
             string? error = _game.ApplyCultivationPlan(id, cells);
             _cultivationWindow.ShowApplyResult(error);
-            _messageLabel.Text = error ?? "共享表已应用到勾选农田，当前轮保留";
+            SetMessage(error ?? "共享表已应用到勾选农田，当前轮保留");
             RefreshAfterGameChange(worldChanged: true);
         };
-        _uiRoot.AddChild(_cultivationWindow);
+        AddWindow(_cultivationWindow);
+    }
+
+    private void AddWindow(DraggableWindow window, bool right = false)
+    {
+        window.SetInitialPlacement(right);
+        _uiRoot.AddChild(window);
     }
 
     private void BuildTopBar()
@@ -232,47 +244,69 @@ public partial class Main : Node2D
         {
             Name = "TopBar",
             AnchorRight = 1f,
-            OffsetBottom = 84f,
+            OffsetBottom = 139f,
             MouseFilter = Control.MouseFilterEnum.Ignore,
         };
         _uiRoot.AddChild(top);
         var brand = new PanelContainer
         {
             Name = "BrandPanel",
-            Position = new Vector2(20, 20),
-            Size = new Vector2(200, 62),
+            Position = new Vector2(44, 38),
+            Size = new Vector2(277, 93),
         };
+        brand.AddThemeStyleboxOverride("panel", Frame(Paper, 4));
         top.AddChild(brand);
         var brandRow = new HBoxContainer();
-        WrapMargin(brand, 14, 9).AddChild(brandRow);
-        Label mark = MakeLabel("田", 27, Mid);
-        mark.CustomMinimumSize = new Vector2(42, 0);
-        brandRow.AddChild(mark);
-        Label title = MakeLabel("农场交易", 21, Ink);
+        brandRow.AddThemeConstantOverride("separation", 16);
+        WrapMargin(AddFrameLining(brand), 17, 11).AddChild(brandRow);
+        var logo = new PanelContainer { CustomMinimumSize = new Vector2(57, 57) };
+        logo.AddThemeStyleboxOverride("panel", Style(new Color("a58c5a"), 0));
+        WrapMargin(logo, 9, 9).AddChild(UiIcons.Create(UiIcon.Leaf, 39, Cream));
+        brandRow.AddChild(logo);
+        var brandText = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        brandText.AddThemeConstantOverride("separation", 5);
+        brandRow.AddChild(brandText);
+        Label title = MakeLabel("田间", 26, Ink);
         title.AutowrapMode = TextServer.AutowrapMode.Off;
-        brandRow.AddChild(title);
+        brandText.AddChild(title);
+        Label englishTitle = MakeLabel("FARM EXCHANGE", 10, Ink);
+        englishTitle.AutowrapMode = TextServer.AutowrapMode.Off;
+        brandText.AddChild(englishTitle);
 
         var datePanel = new PanelContainer
         {
             Name = "CalendarPanel",
             AnchorLeft = 0.5f,
             AnchorRight = 0.5f,
-            OffsetLeft = -171f,
-            OffsetRight = 171f,
-            OffsetTop = 20f,
-            OffsetBottom = 82f,
+            OffsetLeft = -220.5f,
+            OffsetRight = 220.5f,
+            OffsetTop = 38f,
+            OffsetBottom = 131f,
         };
+        datePanel.AddThemeStyleboxOverride("panel", Frame(Paper, 4));
         top.AddChild(datePanel);
         var dateRow = new HBoxContainer();
-        WrapMargin(datePanel, 12, 8).AddChild(dateRow);
-        _calendarLabel = MakeLabel("", 15, Ink);
+        dateRow.AddThemeConstantOverride("separation", 17);
+        WrapMargin(AddFrameLining(datePanel), 21, 13).AddChild(dateRow);
+        dateRow.AddChild(UiIcons.Create(UiIcon.Leaf, 28, Mid));
+        var dateText = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        dateText.AddThemeConstantOverride("separation", 5);
+        dateRow.AddChild(dateText);
+        _calendarLabel = MakeLabel("", 20, Ink);
         _calendarLabel.Name = "CalendarLabel";
         _calendarLabel.AutowrapMode = TextServer.AutowrapMode.Off;
-        _calendarLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        _calendarLabel.VerticalAlignment = VerticalAlignment.Center;
-        dateRow.AddChild(_calendarLabel);
-        _pauseButton = MakeSecondaryButton("暂停", 64, 38);
+        dateText.AddChild(_calendarLabel);
+        _calendarStatusLabel = MakeLabel("", 12, Muted);
+        _calendarStatusLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+        dateText.AddChild(_calendarStatusLabel);
+        dateRow.AddChild(new VSeparator());
+        _pauseButton = MakeQuietButton("", 43, 46);
         _pauseButton.Name = "PauseButton";
+        _pauseButton.Icon = UiIcons.Texture(UiIcon.Pause);
+        _pauseButton.ExpandIcon = true;
+        _pauseButton.AddThemeConstantOverride("icon_max_width", 23);
+        _pauseButton.AddThemeColorOverride("icon_normal_color", Ink);
+        _pauseButton.AddThemeColorOverride("icon_hover_color", Ink);
         _pauseButton.Pressed += TogglePause;
         dateRow.AddChild(_pauseButton);
 
@@ -281,17 +315,37 @@ public partial class Main : Node2D
             Name = "ResourcesPanel",
             AnchorLeft = 1f,
             AnchorRight = 1f,
-            OffsetLeft = -310f,
-            OffsetRight = -20f,
-            OffsetTop = 20f,
-            OffsetBottom = 82f,
+            OffsetLeft = -404f,
+            OffsetRight = -31f,
+            OffsetTop = 32f,
+            OffsetBottom = 139f,
         };
+        resources.AddThemeStyleboxOverride("panel", Frame(new Color("f1e3c0"), 5));
         top.AddChild(resources);
         var resourceRow = new HBoxContainer();
-        WrapMargin(resources, 12, 5).AddChild(resourceRow);
-        resourceRow.AddChild(MakeStat("金币", out _moneyLabel, width: 116));
-        resourceRow.AddChild(MakeStat("工人", out _workerLabel, width: 130));
+        resourceRow.AddThemeConstantOverride("separation", 16);
+        WrapMargin(AddFrameLining(resources), 19, 12).AddChild(resourceRow);
+        resourceRow.AddChild(UiIcons.Create(UiIcon.Coin, 27, Gold));
+        var money = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        money.AddThemeConstantOverride("separation", 3);
+        money.AddChild(MakeLabel("可用金币", 12, Muted));
+        _moneyLabel = MakeLabel("50.00", 30, Ink);
+        _moneyLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+        _moneyLabel.AddThemeFontOverride("font", new SystemFont { FontNames = new[] { "Consolas", "Microsoft YaHei" } });
+        money.AddChild(_moneyLabel);
+        resourceRow.AddChild(money);
+        resourceRow.AddChild(new VSeparator());
+        resourceRow.AddChild(UiIcons.Create(UiIcon.People, 27, Ink));
+        var workers = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ShrinkCenter };
+        workers.AddThemeConstantOverride("separation", 3);
+        _workerLabel = MakeLabel("", 18, Ink);
         _workerLabel.Name = "WorkerCountLabel";
+        _workerLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+        workers.AddChild(_workerLabel);
+        _workerStatusLabel = MakeLabel("", 12, Muted);
+        _workerStatusLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+        workers.AddChild(_workerStatusLabel);
+        resourceRow.AddChild(workers);
     }
 
     private void BuildBottomBar()
@@ -303,32 +357,41 @@ public partial class Main : Node2D
             AnchorRight = 0.5f,
             AnchorTop = 1f,
             AnchorBottom = 1f,
-            OffsetLeft = -270f,
-            OffsetRight = 270f,
-            OffsetTop = -78f,
-            OffsetBottom = -18f,
+            OffsetLeft = -387f,
+            OffsetRight = 387f,
+            OffsetTop = -177f,
+            OffsetBottom = -84f,
         };
-        bottom.AddThemeStyleboxOverride("panel", Style(Dark, 0));
+        bottom.AddThemeStyleboxOverride("panel", Frame(new Color("71583e"), 5));
         _uiRoot.AddChild(bottom);
         var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 8);
-        WrapMargin(bottom, 10, 7).AddChild(row);
-        Button build = MakeButton("建造", Gold, 124, 44);
-        build.Name = "BuildButton";
+        row.AddThemeConstantOverride("separation", 6);
+        WrapMargin(AddFrameLining(bottom), 10, 8).AddChild(row);
+        Button build = DockButton("建造", "BuildButton", UiIcon.Build, 190, new Color("8c774e"));
         build.Pressed += OpenBuild;
         row.AddChild(build);
-        Button inventory = MakeButton("库存", Dark, 116, 44);
-        inventory.Name = "InventoryButton";
+        row.AddChild(new VSeparator());
+        Button inventory = DockButton("库存", "InventoryButton", UiIcon.Box, 167, new Color("71583e"));
         inventory.Pressed += OpenInventory;
         row.AddChild(inventory);
-        Button market = MakeButton("市场", Dark, 116, 44);
-        market.Name = "MarketButton";
+        Button market = DockButton("市场", "MarketButton", UiIcon.Market, 167, new Color("71583e"));
         market.Pressed += OpenMarket;
         row.AddChild(market);
-        Button cultivation = MakeButton("年度耕作表", Dark, 136, 44);
-        cultivation.Name = "CultivationButton";
+        Button cultivation = DockButton("年度耕作表", "CultivationButton", UiIcon.Calendar, 190, new Color("71583e"));
         cultivation.Pressed += OpenCultivation;
         row.AddChild(cultivation);
+    }
+
+    private static Button DockButton(string text, string name, UiIcon icon, float width, Color color)
+    {
+        Button button = MakeButton(text, color, width, 63);
+        button.Name = name;
+        button.Icon = UiIcons.Texture(icon);
+        button.ExpandIcon = true;
+        button.AddThemeConstantOverride("icon_max_width", 29);
+        button.AddThemeConstantOverride("h_separation", 14);
+        button.AddThemeFontSizeOverride("font_size", 17);
+        return button;
     }
 
     private void BuildMessage()
@@ -336,20 +399,32 @@ public partial class Main : Node2D
         var panel = new PanelContainer
         {
             Name = "MessagePanel",
-            Position = new Vector2(20, 104),
-            Size = new Vector2(270, 0),
+            Position = new Vector2(47, 143),
+            Size = new Vector2(299, 389),
         };
+        panel.AddThemeStyleboxOverride("panel", Frame(new Color("f1e3c0"), 5));
         _uiRoot.AddChild(panel);
         var body = new VBoxContainer();
-        body.AddThemeConstantOverride("separation", 12);
-        WrapMargin(panel, 14, 14).AddChild(body);
-        body.AddChild(MakeLabel("农场近况", 17, Ink));
-        _activityLabel = MakeLabel("", 14, Ink);
+        body.AddThemeConstantOverride("separation", 19);
+        WrapMargin(AddFrameLining(panel), 22, 20).AddChild(body);
+        var heading = new HBoxContainer();
+        Label title = MakeLabel("田间近况", 17, Ink);
+        title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        heading.AddChild(title);
+        heading.AddChild(UiIcons.Create(UiIcon.Leaf, 23, new Color("84926d")));
+        body.AddChild(heading);
+        body.AddChild(ActivityItem(UiIcon.Wheat, "", "作物自动生长", out _farmCountLabel));
+        _farmCountLabel.Name = "FarmCountLabel";
+        body.AddChild(ActivityItem(UiIcon.Mill, "", "原料自动领取", out _processorCountLabel));
+        _processorCountLabel.Name = "ProcessorCountLabel";
+        body.AddChild(ActivityItem(UiIcon.Market, "十四种商品，独立报价", "双周行情 · 即时买卖零费", out _));
+        body.AddChild(new HSeparator());
+        _activityLabel = MakeLabel("", 12, Muted);
         _activityLabel.Name = "ActivityLabel";
         body.AddChild(_activityLabel);
-        body.AddChild(new HSeparator());
-        _messageLabel = MakeLabel("点击地图设施查看详情", 13, Muted);
+        _messageLabel = MakeLabel("", 12, Muted);
         _messageLabel.Name = "MessageLabel";
+        _messageLabel.Hide();
         body.AddChild(_messageLabel);
         _buildHint = MakeLabel("", 13, Ink);
         _buildHint.Name = "BuildHint";
@@ -367,6 +442,20 @@ public partial class Main : Node2D
         body.AddChild(_cancelPlacementButton);
     }
 
+    private static Control ActivityItem(UiIcon icon, string caption, string note, out Label label)
+    {
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 13);
+        row.AddChild(UiIcons.Create(icon, 24, new Color("84926d")));
+        var text = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        text.AddThemeConstantOverride("separation", 5);
+        label = MakeLabel(caption, 16, Ink);
+        text.AddChild(label);
+        text.AddChild(MakeLabel(note, 12, Muted));
+        row.AddChild(text);
+        return row;
+    }
+
     private void OnSelectionChanged(Vector2I cell)
     {
         if (_placement is Placement placement)
@@ -375,12 +464,12 @@ public partial class Main : Node2D
             PlacementResult result = _game.TryPlace(cell, placement.Kind, placement.Crop);
             if (!result.Success)
             {
-                _messageLabel.Text = result.ErrorMessage;
+                SetMessage(result.ErrorMessage);
                 _worldMap.ClearSelection();
                 RefreshPlacementPreview();
                 return;
             }
-            _messageLabel.Text = $"{placement.Name}已建造，花费 {FormatCoins(result.ChargedCents)} 金币";
+            SetMessage($"{placement.Name}已建造，花费 {FormatCoins(result.ChargedCents)} 金币");
             _worldMap.ClearSelection();
             RefreshAfterGameChange(worldChanged: true);
             RefreshPlacementPreview();
@@ -420,7 +509,7 @@ public partial class Main : Node2D
         _detailWindow.Hide();
         _buildWindow.Hide();
         _cropWindow.Hide();
-        _messageLabel.Text = $"移动鼠标预览{placement.Name}，左键短按建造，拖动平移；右键或 Esc 取消";
+        SetMessage($"移动鼠标预览{placement.Name}，左键短按建造，拖动平移；右键或 Esc 取消");
         RefreshPlacementPreview();
     }
 
@@ -428,7 +517,7 @@ public partial class Main : Node2D
     {
         _placement = null;
         ClearPlacementPreview();
-        _messageLabel.Text = "已取消摆放";
+        SetMessage("已取消摆放");
         RefreshFooter();
     }
 
@@ -455,7 +544,7 @@ public partial class Main : Node2D
         if (_selectedCell is not Vector2I cell)
             return;
         string? error = _game.SetFarmCrop(cell, crop);
-        _messageLabel.Text = error ?? $"农田已改种{FarmGame.GetCrop(crop).CropName}";
+        SetMessage(error ?? $"农田已改种{FarmGame.GetCrop(crop).CropName}");
         if (error == null)
             _cropWindow.Hide();
         RefreshAfterGameChange(worldChanged: true);
@@ -466,7 +555,7 @@ public partial class Main : Node2D
         if (_selectedCell is not Vector2I cell)
             return;
         string? error = _game.RemoveBuilding(cell);
-        _messageLabel.Text = error ?? "建筑已移除；不退还建造费";
+        SetMessage(error ?? "建筑已移除；不退还建造费");
         if (error == null)
             _cropWindow.Hide();
         RefreshAfterGameChange(worldChanged: true);
@@ -498,7 +587,7 @@ public partial class Main : Node2D
     {
         if (_selectedCell is not Vector2I cell) return;
         string? error = _game.PrepareFarmCrop(cell, crop);
-        _messageLabel.Text = error ?? $"下一轮已预备{FarmGame.GetCrop(crop).CropName}，本田已转为手动";
+        SetMessage(error ?? $"下一轮已预备{FarmGame.GetCrop(crop).CropName}，本田已转为手动");
         if (error == null) _cropWindow.Hide();
         RefreshAfterGameChange(worldChanged: true);
     }
@@ -527,7 +616,7 @@ public partial class Main : Node2D
     private void ShowOrderResult(TradeOrderCommandResult result)
     {
         _ordersWindow.ShowCommandResult(result);
-        _messageLabel.Text = result.Success ? $"委托 #{result.Id} 操作成功" : result.ErrorMessage;
+        SetMessage(result.Success ? $"委托 #{result.Id} 操作成功" : result.ErrorMessage);
         RefreshAfterGameChange(worldChanged: false);
     }
 
@@ -537,11 +626,11 @@ public partial class Main : Node2D
         if (failure == RawReserveFailure.None)
         {
             _inventoryWindow.ConfirmRawReserve(crop, quantity);
-            _messageLabel.Text = $"{FarmGame.GetCrop(crop).CropName}原料保留底线已设为 {quantity}";
+            SetMessage($"{FarmGame.GetCrop(crop).CropName}原料保留底线已设为 {quantity}");
         }
         else
-            _messageLabel.Text = failure == RawReserveFailure.InvalidCrop
-                ? "无效作物" : "保留底线必须是非负整数";
+            SetMessage(failure == RawReserveFailure.InvalidCrop
+                ? "无效作物" : "保留底线必须是非负整数");
         RefreshAfterGameChange(worldChanged: false);
     }
 
@@ -583,7 +672,7 @@ public partial class Main : Node2D
 
     private void ShowMarketFeedback(string message)
     {
-        _messageLabel.Text = message;
+        SetMessage(message);
         _marketWindow.ShowFeedback(message);
     }
 
@@ -593,7 +682,7 @@ public partial class Main : Node2D
             return;
         TickResult result = _game.AdvanceTick();
         if (result.Harvested > 0 || result.Produced > 0)
-            _messageLabel.Text = $"收获 {result.Harvested} 份原料，加工产出 {result.Produced} 份";
+            SetMessage($"收获 {result.Harvested} 份原料，加工产出 {result.Produced} 份");
         RefreshAfterGameChange(worldChanged: true);
     }
 
@@ -604,10 +693,18 @@ public partial class Main : Node2D
         RefreshUi();
     }
 
+    private void SetMessage(string? message)
+    {
+        _messageLabel.Text = message ?? "";
+        _messageLabel.Visible = !string.IsNullOrEmpty(_messageLabel.Text);
+    }
+
     private void RefreshUi()
     {
-        _moneyLabel.Text = FormatCoins(_game.MoneyCents);
-        _workerLabel.Text = $"{_game.GetWorkers().Count} · 自动照料";
+        _moneyLabel.Text = FormatCoins(_game.AvailableMoneyCents);
+        _moneyLabel.TooltipText = $"总余额 {FormatCoins(_game.MoneyCents)} · 冻结 {FormatCoins(_game.FrozenMoneyCents)}";
+        _workerLabel.Text = $"{_game.GetWorkers().Count} 名工人";
+        _workerStatusLabel.Text = _game.IsPaused ? "照料已暂停" : "自动照料中";
         CalendarSnapshot calendar = _game.Calendar;
         string season = calendar.Season switch
         {
@@ -618,7 +715,9 @@ public partial class Main : Node2D
         };
         _calendarLabel.Text = $"{season} · 第 {calendar.Year} 年 · {calendar.Month} 月 · {calendar.Day} 日";
         RefreshActivity();
-        _pauseButton.Text = _game.IsPaused ? "继续" : "暂停";
+        _pauseButton.Icon = UiIcons.Texture(_game.IsPaused ? UiIcon.Play : UiIcon.Pause);
+        _pauseButton.TooltipText = _game.IsPaused ? "继续经营" : "暂停经营";
+        _calendarStatusLabel.Text = _game.IsPaused ? "经营已暂停 · 仍可交易" : "自动照料 · 成熟自动入库";
         RefreshFooter();
         RefreshDetail();
         if (_inventoryWindow.Visible) _inventoryWindow.Refresh(_game);
@@ -637,9 +736,10 @@ public partial class Main : Node2D
             else if (space.Building == BuildingKind.Processor) processors++;
             else if (space.Building == BuildingKind.Road) roads++;
         }
-        _activityLabel.Text = $"{farms} 块农田 · 作物自动生长\n" +
-            $"{processors} 处加工场地 · 自动领取\n{roads} 格道路\n" +
-            $"十四种商品 · 独立报价\n{(_game.IsPaused ? "经营已暂停 · 仍可交易" : "工人自动照料中")}";
+        _farmCountLabel.Text = $"{farms} 块农田";
+        _processorCountLabel.Text = $"{processors} 处加工场地";
+        _activityLabel.Text = $"道路 {roads} 格\n" +
+            (_game.IsPaused ? "经营已暂停，仍可主动交易。" : "工人自动照料，成熟后自动入库。");
     }
 
     private void TogglePause()
@@ -653,11 +753,13 @@ public partial class Main : Node2D
         if (_placement is not Placement placement)
         {
             _buildHint.Text = "建造 → 选择设施\n点击地图空位连续摆放";
+            _buildHint.Hide();
             _buildCost.Hide();
             _cancelPlacementButton.Hide();
             return;
         }
         int costCents = FarmGame.GetBuildingCostCents(placement.Kind);
+        _buildHint.Show();
         bool insufficient = _game.AvailableMoneyCents < costCents;
         _buildHint.Text = $"{placement.Name} · 占地 {BuildingFootprint.Get(placement.Kind).Offsets.Count} 格\n" +
             "左键建造 · 拖动平移\n右键 / Esc 取消" +
@@ -681,6 +783,14 @@ public partial class Main : Node2D
             return;
         }
         PlotSnapshot plot = _game.GetPlot(cell);
+        _detailWindow.SetTitle(plot.Building switch
+        {
+            BuildingKind.Farm => "农田详情",
+            BuildingKind.Processor => "加工场地详情",
+            BuildingKind.Road => "道路详情",
+            _ => "地块详情",
+        });
+        _detailCell.Visible = plot.Building == BuildingKind.None;
         BuildingSpaceSnapshot? space = _game.GetBuildingSpace(cell);
         _detailCell.Text = space == null ? $"地块 ({cell.X}, {cell.Y})" :
             $"建筑锚点 ({space.AnchorCell.X}, {space.AnchorCell.Y}) · 占地 {space.Footprint.Offsets.Count} 格";
@@ -697,23 +807,11 @@ public partial class Main : Node2D
         {
             _processorDetails.Refresh(_game.GetProcessorDetails(cell));
             _processorDetails.RefreshProgress(plot);
+            _processorDetails.RefreshPlacement(space!, plot.CropKind);
         }
+        if (_roadDetails.Visible) _roadDetails.RefreshPlacement(space!);
         _detailWindow.Show();
         _detailWindow.ClampToViewport();
-    }
-
-    private static PanelContainer MakeStat(string caption, out Label value, string initial = "", int width = 0)
-    {
-        var panel = new PanelContainer { CustomMinimumSize = new Vector2(width > 0 ? width : caption == "工人" ? 140 : 105, 48) };
-        panel.AddThemeStyleboxOverride("panel", Style(Paper, 0));
-        var margin = WrapMargin(panel, 10, 4);
-        var box = new VBoxContainer();
-        box.AddThemeConstantOverride("separation", 1);
-        margin.AddChild(box);
-        box.AddChild(MakeLabel(caption, 11, Muted));
-        value = MakeLabel(initial, 16, Ink);
-        box.AddChild(value);
-        return panel;
     }
 
 }

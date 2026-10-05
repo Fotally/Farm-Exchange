@@ -9,6 +9,10 @@ namespace FarmExchange.UI;
 public partial class FarmDetailsPanel : VBoxContainer
 {
     private readonly Label _status;
+    private readonly Label _title;
+    private readonly Label _harvest;
+    private readonly Label _water;
+    private readonly FacilityPreview _preview;
     private readonly Label _growth;
     private readonly Label _price;
     private readonly Label _stock;
@@ -23,43 +27,86 @@ public partial class FarmDetailsPanel : VBoxContainer
 
     public FarmDetailsPanel()
     {
-        AddThemeConstantOverride("separation", 9);
-        _status = MakeLabel("", 18, Ink);
+        AddThemeConstantOverride("separation", 11);
+        _preview = new FacilityPreview { Name = "FarmFacilityPreview" };
+        AddChild(_preview);
+        var heading = new HBoxContainer();
+        _title = MakeLabel("", 27, Ink);
+        _title.Name = "FarmCropTitle";
+        _title.AutowrapMode = TextServer.AutowrapMode.Off;
+        _title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        heading.AddChild(_title);
+        _status = MakeLabel("", 14, Mid);
+        _status.AutowrapMode = TextServer.AutowrapMode.Off;
+        _status.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         _status.Name = "FarmCurrentStatus";
-        AddChild(_status);
-        _remaining = MakeLabel("", 13, Ink);
+        heading.AddChild(_status);
+        AddChild(heading);
+        _remaining = MakeLabel("", 14, Muted);
         _remaining.Name = "FarmActualProgress";
         AddChild(_remaining);
-        _progress = new ProgressBar { Name = "FarmProgress", ShowPercentage = false, CustomMinimumSize = new Vector2(0, 9) };
+        _progress = new ProgressBar { Name = "FarmProgress", ShowPercentage = false, CustomMinimumSize = new Vector2(0, 6) };
         AddChild(_progress);
-        _growth = MakeLabel("", 12, Ink);
+        var water = new HBoxContainer();
+        water.AddChild(UiIcons.Create(UiIcon.Water, 25, Muted));
+        _water = MakeLabel("", 14, Muted);
+        _water.Name = "FarmWaterStatus";
+        _water.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        water.AddChild(_water);
+        AddChild(water);
+        _growth = MakeLabel("", 12, Muted);
         AddChild(_growth);
-        var resources = new VBoxContainer();
-        var card = new PanelContainer();
-        card.AddThemeStyleboxOverride("panel", Style(Paper, 0));
-        WrapMargin(card, 9, 8).AddChild(resources);
-        _price = MakeLabel("", 14, Ink);
-        _stock = MakeLabel("", 14, Ink);
-        resources.AddChild(_price);
-        resources.AddChild(_stock);
-        AddChild(card);
-        AddChild(MakeInfoCard("", out _cultivation));
-        _cultivation.Name = "FarmCultivationStatus";
-        AddChild(MakeLabel("下一步", 14, Ink));
-        Button change = MakeSecondaryButton("立即改种 · 丢弃未收获作物", 0, 39);
-        change.Name = "ChangeCropButton";
-        change.Pressed += () => ChangeCropRequested?.Invoke();
-        AddChild(change);
-        Button prepare = MakeButton("预备下一轮 · 保留当前作物", Mid, 0, 39);
-        prepare.Name = "PrepareCropButton";
-        prepare.Pressed += () => PrepareCropRequested?.Invoke();
-        AddChild(prepare);
-        Button cultivation = MakeSecondaryButton("查看共享年度耕作表", 0, 37);
+        var metrics = new HBoxContainer();
+        metrics.AddThemeConstantOverride("separation", 11);
+        metrics.AddChild(MakeMetric("每轮收获", "份", "FarmHarvestQuantity", out _harvest));
+        metrics.AddChild(MakeMetric("原料当前报价", "金币", "FarmRawPrice", out _price));
+        AddChild(metrics);
+        _stock = MakeLabel("", 12, Muted);
+        AddChild(_stock);
+        Button cultivation = MakeSecondaryButton("", 0, 72);
         cultivation.Name = "FarmCultivationButton";
         cultivation.Pressed += () => CultivationRequested?.Invoke();
+        var planRow = new HBoxContainer { Name = "FarmCultivationRow", MouseFilter = MouseFilterEnum.Ignore };
+        var planMargin = WrapMargin(cultivation, 12, 9);
+        planMargin.Name = "FarmCultivationMargin";
+        planMargin.MouseFilter = MouseFilterEnum.Ignore;
+        planMargin.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        planMargin.AddChild(planRow);
+        var calendar = UiIcons.Create(UiIcon.Calendar, 27, Ink);
+        calendar.Name = "FarmCultivationIcon";
+        calendar.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        planRow.AddChild(calendar);
+        _cultivation = MakeLabel("", 14, Ink);
+        _cultivation.MouseFilter = MouseFilterEnum.Ignore;
+        _cultivation.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _cultivation.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        _cultivation.Name = "FarmCultivationStatus";
+        planRow.AddChild(_cultivation);
+        var arrow = UiIcons.Create(UiIcon.Arrow, 23, Ink);
+        arrow.Name = "FarmCultivationArrow";
+        arrow.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        planRow.AddChild(arrow);
         AddChild(cultivation);
-        AddChild(MakeLabel("移除会丢失本轮未收获作物，不退还建造费。", 12, Ink));
-        Button remove = MakeQuietButton("移除农田", 0, 32);
+        var actions = new HBoxContainer();
+        actions.AddThemeConstantOverride("separation", 11);
+        Button change = MakeSecondaryButton("立即改种", 0, 56);
+        change.AddThemeFontSizeOverride("font_size", 16);
+        change.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        change.TooltipText = "解除共享表引用与本田安排，丢弃当前未收获作物，保留水分。";
+        change.Name = "ChangeCropButton";
+        change.Pressed += () => ChangeCropRequested?.Invoke();
+        actions.AddChild(change);
+        Button prepare = MakeButton("预备下一轮", Mid, 0, 56);
+        prepare.AddThemeFontSizeOverride("font_size", 16);
+        prepare.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        prepare.TooltipText = "解除共享表引用与本田安排，保留当前轮，结束后接续手动作物。";
+        prepare.Name = "PrepareCropButton";
+        prepare.Pressed += () => PrepareCropRequested?.Invoke();
+        actions.AddChild(prepare);
+        AddChild(actions);
+        AddChild(MakeLabel("移除会丢失未收获作物，不退还建造费。", 12, Muted));
+        Button remove = MakeQuietButton("移除农田 · 不退款", 0, 35);
+        remove.AddThemeFontSizeOverride("font_size", 13);
         remove.Name = "RemoveButton";
         remove.Pressed += () => RemoveRequested?.Invoke();
         AddChild(remove);
@@ -69,17 +116,23 @@ public partial class FarmDetailsPanel : VBoxContainer
     {
         string status = details.Status switch
         {
-            FarmStatus.WaitingForWater => "等待浇水",
-            FarmStatus.WaitingForWorkerWithWater => "待播种 · 已有水分",
+            FarmStatus.WaitingForWater => "待浇水",
+            FarmStatus.WaitingForWorkerWithWater => "待播种",
             FarmStatus.Growing => "生长中",
-            FarmStatus.WrongSeason => "当前季节不适宜播种",
-            FarmStatus.InsufficientTime => "可播种 · 预计越过禁生边界，有枯萎风险",
-            FarmStatus.Resting => "按表休耕",
-            _ => "等待工人照料",
+            FarmStatus.WrongSeason => "待适季",
+            FarmStatus.InsufficientTime => "枯萎风险",
+            FarmStatus.Resting => "休耕中",
+            _ => "待工人",
         };
-        _status.Text = $"{details.Crop.CropName}农田 · {status}";
-        _growth.Text = $"生长周期：获得水后 {details.Crop.GrowthDays} 天成熟\n每轮收获 {details.Crop.HarvestQuantity} 份原料";
-        _price.Text = $"{details.Crop.CropName}原料当前报价：{FormatCoins(details.RawPriceCents)} 金币";
+        _title.Text = details.Crop.CropName;
+        _status.Text = status;
+        _growth.Text = $"生长周期：获得水后 {details.Crop.GrowthDays} 天成熟";
+        if (details.Status == FarmStatus.WrongSeason)
+            _growth.Text += "\n当前季节不适宜播种";
+        else if (details.Status == FarmStatus.InsufficientTime)
+            _growth.Text += "\n可播种 · 预计越过禁生边界，有枯萎风险";
+        _harvest.Text = details.Crop.HarvestQuantity.ToString(CultureInfo.InvariantCulture);
+        _price.Text = FormatCoins(details.RawPriceCents);
         _stock.Text = $"{details.Crop.CropName}原料库存：{details.RawStock}";
     }
 
@@ -92,6 +145,7 @@ public partial class FarmDetailsPanel : VBoxContainer
     {
         var state = game.GetFarmCultivation(cell);
         PlotSnapshot plot = game.GetPlot(cell);
+        _preview.Refresh(game.GetBuildingSpace(cell)!, plot.CropKind, plot.Crop);
         double remainingDays = Math.Ceiling(plot.RemainingSeconds *
             (double)FarmExchange.Time.GameTimeUnits.PerSecond /
             FarmExchange.Time.GameTimeUnits.PerDay * 10) / 10;
@@ -102,7 +156,8 @@ public partial class FarmDetailsPanel : VBoxContainer
         _progress.Visible = plot.Crop == CropStage.Growing;
         _progress.Value = plot.Crop == CropStage.Growing ?
             Math.Clamp((totalSeconds - plot.RemainingSeconds) / totalSeconds * 100, 0, 100) : 0;
-        _remaining.Text = actual + (plot.HasWater ? " · 已有水分" : " · 尚无水分");
+        _remaining.Text = actual;
+        _water.Text = plot.HasWater ? "水分充足 · 成熟自动入库" : "尚无水分 · 工人负责播种浇水";
         string prepared = state.WaitingForGrowthStart ? "获水后确定预备日期" :
             state.PreparedCrop is CropKind crop ? $"预备：{FarmGame.GetCrop(crop).CropName}" :
             state.IsResting ? "计划休耕" : "暂无下一轮安排";
@@ -122,5 +177,27 @@ public partial class FarmDetailsPanel : VBoxContainer
             }
         }
         _cultivation.Text = $"年度耕作表：{state.PlanName ?? "手动选种"}\n{prepared}";
+    }
+
+    private static PanelContainer MakeMetric(string title, string unit, string name, out Label value)
+    {
+        var panel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        panel.AddThemeStyleboxOverride("panel", Style(new Color("eee1ba"), 0));
+        var stack = new VBoxContainer();
+        WrapMargin(panel, 12, 11).AddChild(stack);
+        stack.AddChild(MakeLabel(title, 13, Muted));
+        var amount = new HBoxContainer();
+        value = MakeLabel("", 27, Ink);
+        value.Name = name;
+        value.AutowrapMode = TextServer.AutowrapMode.Off;
+        value.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        amount.AddChild(value);
+        var unitLabel = MakeLabel(unit, 13, Muted);
+        unitLabel.Name = name + "Unit";
+        unitLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+        unitLabel.SizeFlagsVertical = SizeFlags.ShrinkEnd;
+        amount.AddChild(unitLabel);
+        stack.AddChild(amount);
+        return panel;
     }
 }

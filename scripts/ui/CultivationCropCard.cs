@@ -39,7 +39,7 @@ public partial class CultivationCropCard : Button
 
     public override Variant _GetDragData(Vector2 atPosition)
     {
-        SetDragPreview(CultivationTimeline.MakePreview(_crop, _timeline.PixelsPerDay));
+        SetDragPreview(CultivationTimeline.MakePreview(_crop, _timeline));
         return CultivationTimeline.DragData(_crop, 0);
     }
 }

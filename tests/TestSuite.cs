@@ -4,6 +4,9 @@ public partial class TestSuite : Node
 {
     public override async void _Ready()
     {
+        GetWindow().Size = new Vector2I(1920, 1080);
+        for (int frame = 0; frame < 2; frame++)
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         GD.Print("单元测试：农田、加工与交易");
         bool farmGamePassed = TestFarmGame.RunChecks();
         GD.Print("单元测试：共享年度耕作表、日期事件与手动接管");
@@ -59,8 +62,10 @@ public partial class TestSuite : Node
         bool buildPlacementPassed = await TestBuildPlacement.RunChecksAsync(this);
         GD.Print("端到端测试：像素田园主界面、主题与窗口边界");
         bool visualLayoutPassed = await TestUiVisualLayout.RunChecksAsync(this);
+        GD.Print("端到端测试：整体与字体倍率、动态控件、原生拖放与分辨率像素稳定");
+        bool uiScalingPassed = await TestUiScaling.RunChecksAsync(this);
         bool passed = farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed;
+            coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed && uiScalingPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");

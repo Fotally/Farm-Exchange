@@ -25,8 +25,9 @@ public partial class TestBuildPlacement : Node
         try
         {
             // headless 默认物理窗口可能只有64×64；先建立与目标格一致的基准视野。
-            window.Size = new Vector2I(1280, 720);
+            window.Size = new Vector2I(1920, 1080);
             await Frames(parent);
+            if (!CheckPausedFeedback(parent)) return false;
             foreach (BuildingKind kind in new[] { BuildingKind.Farm, BuildingKind.Processor, BuildingKind.Road })
             {
                 IEnumerable<CropKind> crops = kind == BuildingKind.Processor
@@ -49,6 +50,41 @@ public partial class TestBuildPlacement : Node
         parent.AddChild(main);
         main.GetNode<Timer>("TickTimer").Stop();
         return main;
+    }
+
+    private static bool CheckPausedFeedback(Node parent)
+    {
+        foreach (bool placing in new[] { true, false })
+        {
+            Main main = CreateMain(parent);
+            try
+            {
+                Find<Button>(main, "PauseButton").EmitSignal(Button.SignalName.Pressed);
+                uint seconds = main.Game.Calendar.ElapsedSeconds;
+                Label message = Find<Label>(main, "MessageLabel");
+                if (placing)
+                {
+                    Start(main, BuildingKind.Farm);
+                    if (!message.IsVisibleInTree() || !message.Text.Contains("移动鼠标预览农田"))
+                        return Fail("暂停时首次选择建筑没有立即显示摆放反馈");
+                    Find<Button>(main, "CancelPlacementButton").EmitSignal(Button.SignalName.Pressed);
+                    if (!message.IsVisibleInTree() || message.Text != "已取消摆放")
+                        return Fail("暂停时取消摆放没有立即显示反馈");
+                }
+                else
+                {
+                    Find<Button>(main, "MarketButton").EmitSignal(Button.SignalName.Pressed);
+                    Find<LineEdit>(main, "MarketQuantityInput").Text = "0";
+                    Find<Button>(main, "BuyCommodityButton").EmitSignal(Button.SignalName.Pressed);
+                    if (!message.IsVisibleInTree() || !message.Text.Contains("请输入 1 到"))
+                        return Fail("暂停时首次无效交易输入没有立即显示全局反馈");
+                }
+                if (!main.Game.IsPaused || main.Game.Calendar.ElapsedSeconds != seconds)
+                    return Fail("显示操作反馈改变暂停状态或推进了经营日期");
+            }
+            finally { main.Free(); }
+        }
+        return true;
     }
 
     private static async Task<bool> CheckType(Node parent, BuildingKind kind, CropKind crop)
@@ -242,7 +278,7 @@ public partial class TestBuildPlacement : Node
         Vector2I originalMouse = DisplayServer.GetName() == "headless" ? default : DisplayServer.MouseGetPosition();
         try
         {
-            window.Size = new Vector2I(1280, 720);
+            window.Size = new Vector2I(1920, 1080);
             window.EmitSignal(Window.SignalName.MouseEntered);
             main.Game.SetPaused(true);
             await Frames(parent);
@@ -286,7 +322,7 @@ public partial class TestBuildPlacement : Node
             if (main.Game.MoneyCents != money || main.Game.GetBuildingSpaces().Count != count)
                 return Fail("UI点击或跨UI按下松开穿透建造");
 
-            Vector2 topGap = new(340, 50);
+            Vector2 topGap = new(parent.GetViewport().GetVisibleRect().Size.X / 3, 50);
             await Move(parent, main, topGap);
             if (map.PlacementPreviewAnchor != map.ScreenToCell(topGap))
                 return Fail("顶部独立状态面板之间的透明间隙仍阻挡地图候选");
@@ -355,7 +391,7 @@ public partial class TestBuildPlacement : Node
             Input.ParseInputEvent(new InputEventKey { Keycode = Key.D, Pressed = false });
             await Frames(parent);
             if (map.PlacementPreviewAnchor != MouseCell(main, map)) return Fail("键盘平移后候选滞后");
-            window.Size = new Vector2I(1440, 900);
+            window.Size = new Vector2I(2560, 1440);
             await Frames(parent);
             await Move(parent, main, point);
             if (map.PlacementPreviewAnchor != MouseCell(main, map)) return Fail("窗口改变后候选滞后");

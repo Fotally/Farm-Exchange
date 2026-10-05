@@ -12,6 +12,8 @@ public partial class TestCultivationWindow : Node
 {
     public override async void _Ready()
     {
+        GetWindow().Size = new Vector2I(1920, 1080);
+        await Frames(this);
         bool passed = RunChecks(this) && await RunLayoutChecks(this);
         if (passed) GD.Print("年度耕作表编辑、批量应用、手动接管与布局检查通过");
         GetTree().Quit(passed ? 0 : 1);
@@ -173,8 +175,14 @@ public partial class TestCultivationWindow : Node
             { main.QueueFree(); return Fail("移除夹具未打开手动选种窗口"); }
             CropSelectionWindow cropWindow = Find<CropSelectionWindow>(main, "CropWindow");
             if (Find<Label>(cropWindow, "ManualCultivationNotice").GetLineCount() != 2 ||
-                cropWindow.GetCombinedMinimumSize().Y > parent.GetViewport().GetVisibleRect().Size.Y - 94 - 90)
-            { main.QueueFree(); return Fail("手动告知初次布局撑高选种窗口"); }
+                cropWindow.GetCombinedMinimumSize().Y > parent.GetViewport().GetVisibleRect().Size.Y - 143 - 180)
+            {
+                string geometry = $"手动告知初次布局撑高选种窗口：Window={parent.GetWindow().Size}," +
+                    $"viewport={parent.GetViewport().GetVisibleRect()},rect={cropWindow.GetGlobalRect()},min={cropWindow.GetCombinedMinimumSize()}," +
+                    $"notice={Find<Label>(cropWindow, "ManualCultivationNotice").GetGlobalRect()}";
+                main.QueueFree();
+                return Fail(geometry);
+            }
             Click(Find<DraggableWindow>(main, "DetailWindow"), "RemoveButton");
             if (Find<CropSelectionWindow>(main, "CropWindow").Visible ||
                 main.Game.GetPlot(cell).Building != BuildingKind.None)
@@ -258,9 +266,9 @@ public partial class TestCultivationWindow : Node
         await Frames(parent);
         Rect2 rect = window.GetGlobalRect();
         Rect2 viewport = parent.GetViewport().GetVisibleRect();
-        bool passed = rect.Position.Y >= 94 && rect.End.Y <= viewport.End.Y - 90 &&
-            rect.Position.X >= 0 && rect.End.X <= viewport.End.X;
-        if (!passed) Fail("年度表窗口超出1280×720可用区域");
+        bool passed = rect.Position.Y >= 143 && rect.End.Y <= viewport.End.Y - 180 &&
+            rect.Position.X >= 31 && rect.End.X <= viewport.End.X - 31;
+        if (!passed) Fail("年度表窗口超出1080P可用区域");
         foreach (string node in new[] { "CultivationTimeline", "SaveCultivationPlanButton", "ApplyCultivationPlanButton" })
             if (!rect.Encloses(Find<Control>(window, node).GetGlobalRect())) passed = Fail("控件溢出：" + node);
         LineEdit name = Find<LineEdit>(window, "CultivationPlanName");
@@ -417,8 +425,8 @@ public partial class TestCultivationWindow : Node
         try
         {
             foreach ((Vector2I size, string file) in new[] {
-                (new Vector2I(1280, 720), "fresh-unnamed-checked.png"),
-                (new Vector2I(1600, 900), "enlarged-checked.png") })
+                (new Vector2I(1920, 1080), "fresh-unnamed-checked.png"),
+                (new Vector2I(2560, 1440), "enlarged-checked.png") })
             {
                 window.Size = size;
                 await Frames(parent);

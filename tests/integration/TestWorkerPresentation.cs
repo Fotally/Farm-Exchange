@@ -26,7 +26,7 @@ public partial class TestWorkerPresentation : Node
         WorkerPresentation presentation = main.GetNode<WorkerPresentation>("WorldMap/WorkerPresentation");
         passed = presentation.GetChildCount() == 3 &&
             main.GetNode<Control>("CanvasLayer/UiRoot").FindChild("WorkerCountLabel", true, false)
-                is Label { Text: "3 · 自动照料" };
+                is Label { Text: "3 名工人" };
         for (int i = 0; i < main.Game.GetWorkers().Count; i++)
         {
             var snapshot = main.Game.GetWorkers()[i];

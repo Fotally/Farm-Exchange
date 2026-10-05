@@ -94,10 +94,9 @@ public partial class CultivationWindow : DraggableWindow
         _timeline.EntrySelected += SelectEntry;
         _timeline.EntryDropped += DropEntry;
         editor.AddChild(_timeline);
-        _entryInfo = Text("从上方拖入作物；空白为休耕。金线为今天。");
+        _entryInfo = Text("从上方拖入作物；空白为休耕。金线为今天。\n ");
         _entryInfo.Name = "CultivationEntryInfo";
-        // 选中条说明有两行；新建和拖起时保持相同高度，避免外层滚动条改变日格宽度。
-        _entryInfo.CustomMinimumSize = new Vector2(0, 34);
+        // 固定保留两行文本，字号变化时自然重排，避免新建和拖起切换滚动条宽度。
         editor.AddChild(_entryInfo);
         var actions = new HBoxContainer();
         editor.AddChild(actions);
@@ -211,7 +210,7 @@ public partial class CultivationWindow : DraggableWindow
         _plans.DeselectAll();
         _impact.Text = "新表尚未关联农田";
         ValidateDraft();
-        _entryInfo.Text = "从上方拖入作物；空白为休耕。金线为今天。";
+        _entryInfo.Text = "从上方拖入作物；空白为休耕。金线为今天。\n ";
     }
 
     private void LoadPlan(CultivationPlanSnapshot plan)
@@ -224,7 +223,7 @@ public partial class CultivationWindow : DraggableWindow
         _name.Text = plan.Name;
         _mode.Select((int)plan.Mode);
         _impact.Text = $"保存影响 {plan.ReferencingFarms} 块引用田";
-        _entryInfo.Text = "拖动任何片段都会移动整轮；保存才改变共享表。";
+        _entryInfo.Text = "拖动任何片段都会移动整轮；保存才改变共享表。\n ";
         ValidateDraft();
     }
 
@@ -280,7 +279,7 @@ public partial class CultivationWindow : DraggableWindow
         if (_selectedEntry == null) { _feedback.Text = "先点击要移除的作物条"; return; }
         _draft.RemoveAll(e => e.Id == _selectedEntry);
         _selectedEntry = null;
-        _entryInfo.Text = "作物条已从草稿移除；保存后生效。";
+        _entryInfo.Text = "作物条已从草稿移除；保存后生效。\n ";
         ValidateDraft();
     }
 
