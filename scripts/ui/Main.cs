@@ -229,6 +229,13 @@ public partial class Main : Node2D
             SetMessage(error ?? "共享表已应用到勾选农田，当前轮保留");
             RefreshAfterGameChange(worldChanged: true);
         };
+        _cultivationWindow.DeleteRequested += id =>
+        {
+            string? error = _game.DeleteCultivationPlan(id);
+            _cultivationWindow.ShowDeleteResult(error);
+            SetMessage(error ?? "共享年度表已删除，原引用农田按当前作物自动复种");
+            RefreshAfterGameChange(worldChanged: false);
+        };
         AddWindow(_cultivationWindow);
     }
 

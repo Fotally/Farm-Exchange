@@ -413,6 +413,13 @@ public sealed class FarmGame
     public CultivationCommandResult UpdateCultivationPlan(int id, CultivationPlanRequest request) =>
         _cultivation.Update(id, request, (long)Calendar.ElapsedSeconds * GameTimeUnits.PerSecond);
     /**
+     * <summary>删除共享年度表并解除全部引用田的计划安排。</summary>
+     * <remarks>保留各田当前作物、当前轮和水分，恢复按当前作物自动复种；不推进经营或改变资源。</remarks>
+     * <param name="id">共享年度表编号。</param>
+     * <returns>成功为空；表不存在时返回中文原因且零修改。</returns>
+     */
+    public string? DeleteCultivationPlan(int id) => _cultivation.Delete(id);
+    /**
      * <summary>对选定农田原子应用同一共享表，保留正在种植的本轮。</summary>
      * <param name="id">共享表编号。</param>
      * <param name="cells">农田任意子格列表，重复引用同一实例仅应用一次。</param>

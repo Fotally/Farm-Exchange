@@ -180,11 +180,16 @@ internal static class UiElements
             theme.SetStylebox("grabber_pressed", type, Style(Dark, 0));
         }
         theme.SetStylebox("panel", "ItemList", Style(Cream, 0));
+        theme.SetStylebox("hovered", "ItemList", Style(Paper, 0));
         theme.SetStylebox("selected", "ItemList", Style(new Color("d6d9ad"), 0));
         theme.SetStylebox("selected_focus", "ItemList", Style(new Color("c6cea0"), 0));
+        theme.SetStylebox("hovered_selected", "ItemList", Style(new Color("d6d9ad"), 0));
+        theme.SetStylebox("hovered_selected_focus", "ItemList", Style(new Color("c6cea0"), 0));
         theme.SetStylebox("focus", "ItemList", focus);
-        theme.SetColor("font_color", "ItemList", Ink);
-        theme.SetColor("font_selected_color", "ItemList", Ink);
+        theme.SetStylebox("cursor", "ItemList", focus);
+        theme.SetStylebox("cursor_unfocused", "ItemList", focus);
+        foreach (string state in new[] { "font_color", "font_hovered_color", "font_selected_color", "font_hovered_selected_color" })
+            theme.SetColor(state, "ItemList", Ink);
         theme.SetStylebox("panel", "PopupMenu", Style(Paper, 0));
         theme.SetStylebox("hover", "PopupMenu", Style(new Color("d6d9ad"), 0));
         theme.SetColor("font_color", "PopupMenu", Ink);

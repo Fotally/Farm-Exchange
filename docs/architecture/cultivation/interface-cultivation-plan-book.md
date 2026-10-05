@@ -2,6 +2,8 @@
 
 实现位于 `scripts/cultivation/CultivationPlanBook.cs`，请求和值快照分别位于 `CultivationPlanRequest.cs`、`CultivationPlanSnapshot.cs`。外部调用方通过 [FarmGame](../game-state/farm-game/interface-farm-game.md) 提交命令；计划 Module 直接使用 [FarmingSystem](../farming/farming-system/interface-farming-system.md) 的精确生长时间和播种启停，不创建第二份作物生产状态。
 
+`Delete(id)` 由 `FarmGame.DeleteCultivationPlan` 调用：删除共享配置，并解除全部引用田的绑定、执行凭据、预备目标和日期事件。保留各田当前作物、当前轮阶段、精确剩余时长及水分，只恢复播种许可；空田和收获后的农田按当前作物自动复种，仍遵守原有季节判断并等待工人实际播种、供水。删除不推进经营、不收费、不修改金币或库存，不改变其他表、其他农田或手动预备安排；已分配的表编号不回收。成功返回 `null`；未知或已删除表返回“耕作表不存在”，全部状态保持。删除后旧表不能更新或再次应用，旧只读快照保持原值。
+
 | 公开值 | 调用方约定 |
 | --- | --- |
 | `CultivationEntry(Id, Crop, StartDay)` | 条编号为正且在同表唯一；年度日期为零基第 0～335 天。移动或编辑片段仍使用原条编号；新增条使用不小于该表 `NextEntryId` 的编号，删除旧条不得复用其编号。`LengthDays` 唯一读取作物完整周期。 |
@@ -13,7 +15,7 @@
 
 `PreparedTimeUnits` 是累计精确比例单位：一模拟秒 7 单位，一游戏日 360 单位。它表示目标条的计划起点，可能早于当前轮预计结束日期，表示当前轮结束时仍落在该条内；不宣称工人会在该时刻实际播种。当前轮结束预测直接读取农田的 `GetExpectedRoundEndTimeUnits`，纳入正常成熟的实际 tick 与首个禁生季的促熟或清理结局；适季跨季不提前结束。初年春季定位跨冬春条时，起点可以为负数，代表上一年度冬季段；显示时按真实年度位置解释，不能直接强转 `uint`。待水没有确定结束日期，不缓存推测的计划目标。手动预备仅指定作物，时间为空。
 
-内部 Interface 为 `Validate`、`ValidateEntries`、`Create`、`Update`、`Apply`、`TakeManualControl`、`GetSnapshots`、`GetFarm`、`Harvested`、`RecordSownCrops` 与 `Synchronize`。`ValidateEntries` 集中检查完整年度作物条，起点适季定义来自 `CropCatalog`，日期季节换算来自 `GameCalendar`；从不适宜季节起点开始拒绝，适季开始而周期跨入禁生季节则保留风险编号。条编号、日期、重叠、年度首尾及异种间距也由同一次检查处理。界面通过 `FarmGame.CheckCultivationEntries` 在悬停和提交落位时预检完整候选，不要求草稿名称；`Validate` 先检查名称和模式，再复用同一条目检查，原 `FarmGame.CheckCultivationPlan` 与 `Create`、`Update` 使用完整提交检查。预检只读，创建或更新被拒绝时共享表及农田不变，不自动挪条或换作物。`FarmGame` 原子检查批量农田并解析子格到锚点后才调用 `Apply`；配置查询不调用执行。`Update` 和 `Apply` 保留已播种或生长中的当前轮，再计算其后安排。手动立即改种强制中断，手动预备保留当前轮；二者均只解除本田引用。
+内部 Interface 为 `Validate`、`ValidateEntries`、`Create`、`Update`、`Delete`、`Apply`、`TakeManualControl`、`GetSnapshots`、`GetFarm`、`Harvested`、`RecordSownCrops` 与 `Synchronize`。`ValidateEntries` 集中检查完整年度作物条，起点适季定义来自 `CropCatalog`，日期季节换算来自 `GameCalendar`；从不适宜季节起点开始拒绝，适季开始而周期跨入禁生季节则保留风险编号。条编号、日期、重叠、年度首尾及异种间距也由同一次检查处理。界面通过 `FarmGame.CheckCultivationEntries` 在悬停和提交落位时预检完整候选，不要求草稿名称；`Validate` 先检查名称和模式，再复用同一条目检查，原 `FarmGame.CheckCultivationPlan` 与 `Create`、`Update` 使用完整提交检查。预检只读，创建或更新被拒绝时共享表及农田不变，不自动挪条或换作物。`FarmGame` 原子检查批量农田并解析子格到锚点后才调用 `Apply`；配置查询不调用执行。`Update` 和 `Apply` 保留已播种或生长中的当前轮，再计算其后安排。手动立即改种强制中断，手动预备保留当前轮；二者均只解除本田引用。
 
 每表 `Plan` 唯一持有编号高水位：创建时下一编号为最大条编号加一，空表从 1 开始；成功更新取旧高水位和新增条所需下一编号的较大值，删空不下降。更新允许保留当前表中的旧编号，拒绝新增条使用低于高水位的历史编号；失败不消费编号或改变执行凭据。窗口只持有未保存草稿的局部递增编号，读取快照后以 `NextEntryId` 为起点；删除、移动、保存空表再重新打开都不能把新条恢复为旧条身份。
 

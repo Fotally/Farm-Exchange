@@ -11,6 +11,8 @@ public partial class TestSuite : Node
         bool farmGamePassed = TestFarmGame.RunChecks();
         GD.Print("单元测试：共享年度耕作表、日期事件与手动接管");
         bool cultivationPassed = TestCultivationPlanBook.RunChecks();
+        GD.Print("单元测试：共享年度表删除、引用解除与当前作物自动复种");
+        bool cultivationDeletionPassed = TestCultivationDeletion.RunChecks();
         GD.Print("单元测试：资源与作物定义");
         bool resourcesPassed = TestResources.RunChecks();
         GD.Print("单元测试：土地、农田与加工状态边界");
@@ -64,8 +66,10 @@ public partial class TestSuite : Node
         bool visualLayoutPassed = await TestUiVisualLayout.RunChecksAsync(this);
         GD.Print("端到端测试：整体与字体倍率、动态控件、原生拖放与分辨率像素稳定");
         bool uiScalingPassed = await TestUiScaling.RunChecksAsync(this);
+        GD.Print("端到端测试：共享年度表列表可读性、整表删除与引用解除");
+        bool cultivationManagementPassed = await TestCultivationManagement.RunChecksAsync(this);
         bool passed = farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed && uiScalingPassed;
+            coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationDeletionPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed && uiScalingPassed && cultivationManagementPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");
