@@ -10,11 +10,12 @@ using static FarmExchange.UI.UiElements;
 namespace FarmExchange.UI;
 
 /**
- * <summary>编辑具名共享年度表并向经营入口提交保存、批量应用意图。</summary>
+ * <summary>编辑具名共享年度表并向经营入口提交保存、批量应用及整表删除意图。</summary>
  */
 public partial class CultivationWindow : DraggableWindow
 {
     private readonly ItemList _plans;
+    private readonly Button _deletePlan;
     private readonly LineEdit _name;
     private readonly OptionButton _mode;
     private readonly CultivationTimeline _timeline;
@@ -38,21 +39,37 @@ public partial class CultivationWindow : DraggableWindow
      * <summary>请求把已保存表应用到所勾选农田的锚点列表。</summary>
      */
     public event Action<int, IReadOnlyList<Vector2I>>? ApplyRequested;
+    /**
+     * <summary>请求删除已保存共享表并解除全部引用；当前作物保留，后续按当前作物自动复种。</summary>
+     */
+    public event Action<int>? DeleteRequested;
 
-    public CultivationWindow() : base("CultivationWindow", "年度耕作表", new Vector2(130, 82),
-        new Vector2(1000, 520), avoidBottomBar: true)
+    public CultivationWindow() : base("CultivationWindow", "年度耕作表", new Vector2(130, 104),
+        new Vector2(1000, 520))
     {
         Body.AddThemeConstantOverride("separation", 6);
         var columns = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         columns.AddThemeConstantOverride("separation", 14);
         Body.AddChild(columns);
         var sidebar = new VBoxContainer { CustomMinimumSize = new Vector2(170, 0) };
+        sidebar.AddThemeConstantOverride("separation", 6);
         columns.AddChild(sidebar);
-        sidebar.AddChild(Text("共享年度表", 15));
+        var planHeading = new HBoxContainer();
+        planHeading.AddThemeConstantOverride("separation", 6);
+        var planTitle = Text("共享年度表", 15);
+        planTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        planHeading.AddChild(planTitle);
+        _deletePlan = MakeQuietButton("删除表", 66, 28);
+        _deletePlan.Name = "DeleteCultivationPlanButton";
+        _deletePlan.AddThemeFontSizeOverride("font_size", 12);
+        _deletePlan.Disabled = true;
+        _deletePlan.Pressed += DeletePlan;
+        planHeading.AddChild(_deletePlan);
+        sidebar.AddChild(planHeading);
         _plans = new ItemList { Name = "CultivationPlanList", CustomMinimumSize = new Vector2(170, 120) };
         _plans.ItemSelected += index => LoadPlan(_snapshots[(int)index]);
         sidebar.AddChild(_plans);
-        Button create = MakeButton("新建年度表", Mid, 0, 32);
+        Button create = MakeSecondaryButton("＋ 新建年度表", 0, 34);
         create.Name = "NewCultivationPlanButton";
         create.Pressed += NewPlan;
         sidebar.AddChild(create);
@@ -62,6 +79,7 @@ public partial class CultivationWindow : DraggableWindow
             Name = "CultivationFarmScroll",
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            CustomMinimumSize = new Vector2(0, 90),
         };
         sidebar.AddChild(farmScroll);
         _farms = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -72,12 +90,13 @@ public partial class CultivationWindow : DraggableWindow
         sidebar.AddChild(apply);
 
         var editor = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        editor.AddThemeConstantOverride("separation", 6);
         columns.AddChild(editor);
         var config = new HBoxContainer();
         editor.AddChild(config);
-        _name = new LineEdit { Name = "CultivationPlanName", PlaceholderText = "年度表名称", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _name = new LineEdit { Name = "CultivationPlanName", PlaceholderText = "年度表名称", CustomMinimumSize = new Vector2(0, 36), SizeFlagsHorizontal = SizeFlags.ExpandFill };
         config.AddChild(_name);
-        _mode = new OptionButton { Name = "CultivationPlanMode", CustomMinimumSize = new Vector2(150, 0) };
+        _mode = new OptionButton { Name = "CultivationPlanMode", CustomMinimumSize = new Vector2(150, 36) };
         _mode.AddItem("立即改种");
         _mode.AddItem("预备下一轮");
         config.AddChild(_mode);
@@ -85,21 +104,23 @@ public partial class CultivationWindow : DraggableWindow
         _mode.ItemSelected += _ => ValidateDraft();
         _timeline = new CultivationTimeline(CheckDrop);
         var crops = new HBoxContainer();
+        crops.AddThemeConstantOverride("separation", 8);
         editor.AddChild(crops);
         foreach (CropDefinition crop in FarmGame.Crops) crops.AddChild(new CultivationCropCard(crop.Kind, _timeline));
         _timeline.EntrySelected += SelectEntry;
         _timeline.EntryDropped += DropEntry;
         editor.AddChild(_timeline);
-        _entryInfo = Text("从上方拖入作物；空白为休耕。金线为今天。");
+        _entryInfo = Text("从上方拖入作物；空白为休耕。金线为今天。\n ");
         _entryInfo.Name = "CultivationEntryInfo";
+        // 固定保留两行文本，字号变化时自然重排，避免新建和拖起切换滚动条宽度。
         editor.AddChild(_entryInfo);
         var actions = new HBoxContainer();
         editor.AddChild(actions);
-        Button remove = MakeButton("移除选中整条", Mid, 140, 32);
+        Button remove = MakeQuietButton("移除选中整条", 140, 34);
         remove.Name = "RemoveCultivationEntryButton";
         remove.Pressed += RemoveEntry;
         actions.AddChild(remove);
-        Button save = MakeButton("保存共享表", Gold, 140, 32);
+        Button save = MakeButton("保存共享表", Mid, 140, 34);
         save.Name = "SaveCultivationPlanButton";
         save.Pressed += Save;
         actions.AddChild(save);
@@ -120,6 +141,11 @@ public partial class CultivationWindow : DraggableWindow
     {
         _game = game;
         _snapshots = game.GetCultivationPlans();
+        if (_planId is int selectedId && !_snapshots.Any(plan => plan.Id == selectedId))
+        {
+            NewPlan();
+            _feedback.Text = "所选共享表已删除，已切换到新表草稿";
+        }
         int selection = -1;
         if (_plans.ItemCount != _snapshots.Count)
         {
@@ -140,6 +166,7 @@ public partial class CultivationWindow : DraggableWindow
         if (selection >= 0) _plans.Select(selection);
         _impact.Text = _planId == null ? "新表尚未关联农田" :
             $"保存影响 {_snapshots.First(p => p.Id == _planId).ReferencingFarms} 块引用田";
+        UpdateDeleteAction();
         var cells = game.GetBuildingSpaces().Where(s => s.Building == BuildingKind.Farm)
             .Select(s => s.AnchorCell).ToArray();
         var currentCells = cells.ToHashSet();
@@ -192,6 +219,16 @@ public partial class CultivationWindow : DraggableWindow
      */
     public void ShowApplyResult(string? error) => _feedback.Text = error ?? "已应用共享表，当前轮保留";
 
+    /**
+     * <summary>显示删除结果；失败保留草稿，成功清除当前表选择，列表由后续刷新同步。</summary>
+     * <param name="error">空值表示成功，否则为经营入口的真实拒绝原因。</param>
+     */
+    public void ShowDeleteResult(string? error)
+    {
+        if (error == null) NewPlan();
+        _feedback.Text = error ?? "共享表已删除；引用已解除，当前作物保留，后续按当前作物自动复种";
+    }
+
     private CultivationPlanRequest Request() => new(_name.Text, (CultivationMode)_mode.Selected, _draft.ToArray());
 
     private void NewPlan()
@@ -204,8 +241,9 @@ public partial class CultivationWindow : DraggableWindow
         _mode.Select(0);
         _plans.DeselectAll();
         _impact.Text = "新表尚未关联农田";
+        UpdateDeleteAction();
         ValidateDraft();
-        _entryInfo.Text = "从上方拖入作物；空白为休耕。金线为今天。";
+        _entryInfo.Text = "从上方拖入作物；空白为休耕。金线为今天。\n ";
     }
 
     private void LoadPlan(CultivationPlanSnapshot plan)
@@ -218,7 +256,8 @@ public partial class CultivationWindow : DraggableWindow
         _name.Text = plan.Name;
         _mode.Select((int)plan.Mode);
         _impact.Text = $"保存影响 {plan.ReferencingFarms} 块引用田";
-        _entryInfo.Text = "拖动任何片段都会移动整轮；保存才改变共享表。";
+        UpdateDeleteAction();
+        _entryInfo.Text = "拖动任何片段都会移动整轮；保存才改变共享表。\n ";
         ValidateDraft();
     }
 
@@ -274,7 +313,7 @@ public partial class CultivationWindow : DraggableWindow
         if (_selectedEntry == null) { _feedback.Text = "先点击要移除的作物条"; return; }
         _draft.RemoveAll(e => e.Id == _selectedEntry);
         _selectedEntry = null;
-        _entryInfo.Text = "作物条已从草稿移除；保存后生效。";
+        _entryInfo.Text = "作物条已从草稿移除；保存后生效。\n ";
         ValidateDraft();
     }
 
@@ -292,6 +331,19 @@ public partial class CultivationWindow : DraggableWindow
         Vector2I[] cells = _farmChecks.Where(pair => pair.Value.ButtonPressed).Select(pair => pair.Key).ToArray();
         if (cells.Length == 0) { _feedback.Text = "先勾选至少一块农田"; return; }
         ApplyRequested?.Invoke(id, cells);
+    }
+
+    private void DeletePlan()
+    {
+        if (_planId is int id) DeleteRequested?.Invoke(id);
+    }
+
+    private void UpdateDeleteAction()
+    {
+        _deletePlan.Disabled = _planId == null;
+        int references = _planId is int id ? _snapshots.First(plan => plan.Id == id).ReferencingFarms : 0;
+        _deletePlan.TooltipText = _planId == null ? "先保存或选择共享年度表" :
+            $"删除此表并解除 {references} 块农田的引用；保留当前作物和水分，后续按各田当前作物自动复种。";
     }
 
     private void ValidateDraft()

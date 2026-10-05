@@ -12,6 +12,8 @@ public partial class TestCultivationWindow : Node
 {
     public override async void _Ready()
     {
+        GetWindow().Size = new Vector2I(1920, 1080);
+        await Frames(this);
         bool passed = RunChecks(this) && await RunLayoutChecks(this);
         if (passed) GD.Print("年度耕作表编辑、批量应用、手动接管与布局检查通过");
         GetTree().Quit(passed ? 0 : 1);
@@ -173,8 +175,14 @@ public partial class TestCultivationWindow : Node
             { main.QueueFree(); return Fail("移除夹具未打开手动选种窗口"); }
             CropSelectionWindow cropWindow = Find<CropSelectionWindow>(main, "CropWindow");
             if (Find<Label>(cropWindow, "ManualCultivationNotice").GetLineCount() != 2 ||
-                cropWindow.GetCombinedMinimumSize().Y > parent.GetViewport().GetVisibleRect().Size.Y - 70 - 109)
-            { main.QueueFree(); return Fail("手动告知初次布局撑高选种窗口"); }
+                cropWindow.GetCombinedMinimumSize().Y > parent.GetViewport().GetVisibleRect().Size.Y - 143 - 180)
+            {
+                string geometry = $"手动告知初次布局撑高选种窗口：Window={parent.GetWindow().Size}," +
+                    $"viewport={parent.GetViewport().GetVisibleRect()},rect={cropWindow.GetGlobalRect()},min={cropWindow.GetCombinedMinimumSize()}," +
+                    $"notice={Find<Label>(cropWindow, "ManualCultivationNotice").GetGlobalRect()}";
+                main.QueueFree();
+                return Fail(geometry);
+            }
             Click(Find<DraggableWindow>(main, "DetailWindow"), "RemoveButton");
             if (Find<CropSelectionWindow>(main, "CropWindow").Visible ||
                 main.Game.GetPlot(cell).Building != BuildingKind.None)
@@ -258,9 +266,9 @@ public partial class TestCultivationWindow : Node
         await Frames(parent);
         Rect2 rect = window.GetGlobalRect();
         Rect2 viewport = parent.GetViewport().GetVisibleRect();
-        bool passed = rect.Position.Y >= 70 && rect.End.Y <= viewport.End.Y - 109 &&
-            rect.Position.X >= 0 && rect.End.X <= viewport.End.X;
-        if (!passed) Fail("年度表窗口超出1280×720可用区域");
+        bool passed = rect.Position.Y >= 143 && rect.End.Y <= viewport.End.Y - 180 &&
+            rect.Position.X >= 31 && rect.End.X <= viewport.End.X - 31;
+        if (!passed) Fail("年度表窗口超出1080P可用区域");
         foreach (string node in new[] { "CultivationTimeline", "SaveCultivationPlanButton", "ApplyCultivationPlanButton" })
             if (!rect.Encloses(Find<Control>(window, node).GetGlobalRect())) passed = Fail("控件溢出：" + node);
         LineEdit name = Find<LineEdit>(window, "CultivationPlanName");
@@ -417,8 +425,8 @@ public partial class TestCultivationWindow : Node
         try
         {
             foreach ((Vector2I size, string file) in new[] {
-                (new Vector2I(1280, 720), "fresh-unnamed-checked.png"),
-                (new Vector2I(1600, 900), "enlarged-checked.png") })
+                (new Vector2I(1920, 1080), "fresh-unnamed-checked.png"),
+                (new Vector2I(2560, 1440), "enlarged-checked.png") })
             {
                 window.Size = size;
                 await Frames(parent);
@@ -499,8 +507,9 @@ public partial class TestCultivationWindow : Node
         }
         Click(window, "NewCultivationPlanButton");
         Find<LineEdit>(window, "CultivationPlanName").Text = "合法跨禁生风险";
-        await Drag(parent, Find<Control>(window, "CultivationCropCorn").GetGlobalRect().GetCenter(),
-            timeline.GlobalPosition + DropPoint(timeline, CropKind.Corn, 166));
+        bool stableGeometry = await Drag(parent, Find<Control>(window, "CultivationCropCorn").GetGlobalRect().GetCenter(),
+            timeline.GlobalPosition + DropPoint(timeline, CropKind.Corn, 166), verifyTimelineGeometry: true);
+        if (!stableGeometry) passed = Fail("新建表后原生拖动期间时间图位置或宽度改变，导致日期格偏移");
         Drop(timeline, CropKind.Sunflower, 120);
         if (!Find<Label>(window, "CultivationFeedback").Text.Contains("风险"))
             passed = Fail("原生适季起点跨禁生条没有保留风险提示");
@@ -637,9 +646,13 @@ public partial class TestCultivationWindow : Node
         timeline.GlobalPosition + new Vector2(42 + (timeline.Size.X - 50) *
             ((day % 84) + 0.5f) / 84, 40 + (day / 84) * 50);
 
-    private static async Task<bool> Drag(Node parent, Vector2 from, Vector2 to, bool capturePreview = false)
+    private static async Task<bool> Drag(Node parent, Vector2 from, Vector2 to, bool capturePreview = false,
+        bool verifyTimelineGeometry = false)
     {
         Viewport viewport = parent.GetViewport();
+        CultivationTimeline? timeline = verifyTimelineGeometry ? Find<CultivationTimeline>(parent, "CultivationTimeline") : null;
+        Vector2 timelineSize = timeline?.Size ?? default;
+        Vector2 timelinePosition = timeline?.GlobalPosition ?? default;
         bool graphical = DisplayServer.GetName() != "headless";
         Vector2I originalScreenMousePosition = graphical ? DisplayServer.MouseGetPosition() : default;
         void Send(InputEventMouse inputEvent)
@@ -678,7 +691,8 @@ public partial class TestCultivationWindow : Node
                 ButtonMask = MouseButtonMask.Left,
             });
             await Frames(parent);
-            bool holdingPreview = !capturePreview || viewport.GuiIsDragging();
+            bool holdingPreview = (!capturePreview || viewport.GuiIsDragging()) &&
+                (timeline == null || timeline.Size == timelineSize && timeline.GlobalPosition == timelinePosition);
             if (capturePreview)
             {
                 Label? previewLabel = Descendants(parent.GetTree().Root).OfType<Label>()

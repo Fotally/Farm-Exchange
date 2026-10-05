@@ -17,6 +17,12 @@
 5. 使用仓库的 `farm-exchange-submit-pr` skill，按 `.github/PULL_REQUEST_TEMPLATE.md` 整理说明，提交并推送 `dev`，创建或更新从 `dev` 到 `main` 的 Pull Request；在说明中关联对应 issue，按实际改动多选附有简短说明的变更类型，并列出验证结果。推送会触发 GitHub Actions，再次执行编译、测试与覆盖率检查。
 6. Agent 停止在待合并状态，由人工审查和合并 Pull Request。
 
+## Issue 正文与提交
+
+创建或更新 issue 时使用 [farm-exchange-submit-issue](../../.codex/skills/farm-exchange-submit-issue/SKILL.md)。入口按缺陷、功能、重构、性能、调研设计与维护任务加载对应参考模板，并负责查重、正文提交和结果核对；正文直接描述工程问题、现状、改进范围与验收标准。
+
+短任务只保留必要字段，模板中的提示和空章节不进入正式正文。研究与维护任务按实际交付工件验收，具体执行约定和开源参照由 skill 维护；统一修改流程仍以根 `AGENTS.md` 为准。
+
 ## Main 分支保护
 
 `main` 要求通过 Pull Request 合并，并禁止直接推送、强制推送和删除。持续集成检查名为 `测试与导出`：`dev` 推送执行 headless 测试和 80% 业务脚本行覆盖率门槛；PR 人工合并进入 `main` 后再次测试，并在通过后导出、启动验证和上传 Windows x86_64 构建。地图绘制、镜头、实体负载或渲染相关修改需要图形 FPS 数据时，可手动触发工作流并勾选 `performance`，生成独立性能报告；普通推送不自动运行图形性能测试。工作流细节及本地复现命令见[构建与验收](build-and-validation.md)。

@@ -1,5 +1,15 @@
 # UiElements 内部接口
 
-对应 `scripts/ui/UiElements.cs`，只供本工程 UI 模块使用。它集中提供当前主题颜色、标签、按钮、信息卡、边距、样式、金币格式和目录卡片清理，避免 `Main` 与各窗口复制同一视觉构造。它不保存经营或窗口状态；具体窗口仍由各自模块拥有控件。
+对应 `scripts/ui/UiElements.cs`，只供本工程 UI 模块使用。它集中提供当前主题颜色、共享 Godot Theme、标签、按钮、信息卡、边距、样式、金币格式和目录卡片清理，避免 `Main` 与各窗口复制同一视觉构造。它不保存经营或窗口状态；具体窗口仍由各自模块拥有控件。
+
+#94 正式主题采用方形木框 `Wood #846848`、纸面 `Paper #f6e8c6`、深棕正文 `Ink #53452f` 与橄榄绿主操作 `Mid #657342`。`Dark` 是深木色，`Cream` 是深色按钮上的浅色文字，`Muted` 为纸面次要文字。`Style` 保留各调用方现有参数形状，输出统一方角木框；`MakeInfoCard` 使用浅纸色底。
+
+`SharedTheme` 按首次使用创建并供主界面和每个 `DraggableWindow` 共享原始基准。默认字号 13，中文使用系统 `Microsoft YaHei` / `PingFang SC` 普通 400 字重；金币另用 `Consolas`。它覆盖原生按钮、下拉、勾选、输入框、进度条、滚动条、列表、菜单与提示文字。输入框正文、选中文字和光标使用深棕色；纸色勾选控件的普通、悬停、按下和焦点字色保持一致。SpinBox 内部的 LineEdit 继承同一输入主题。滚动条保留可抓取的轨道宽度。
+
+年度表和委托等共用 `ItemList` 的普通、悬停、选中及选中悬停字色均为深棕：对应原生键为 `font_color`、`font_hovered_color`、`font_selected_color` 和 `font_hovered_selected_color`。悬停使用纸色，选中/选中悬停使用浅绿，获得焦点时使用较深浅绿；`cursor` 与 `cursor_unfocused` 使用透明底的焦点描框，避免原生白色覆盖层冲淡选中底色。规则集中在共享主题，不强制覆盖列表已有的自定义主题或局部颜色；整体与独立字体倍率沿用统一模块。
+
+`Frame` 提供外层木框和像素偏移阴影，标题区与内卡片使用不同纸色和细边形成原型层级。线条图标由 [UiIcons](../ui-icons/interface-ui-icons.md) 提供；颜色只作用于对应单色图标，不统一覆盖彩色设施缩略图。[UiScaling](../ui-scaling/interface-ui-scaling.md) 保存原始样式和字号，根据局部设置生成控件覆盖及提示/菜单主题，不修改共享基准。
+
+`MakeButton` 根据实际底色亮度设置深棕或奶油文字，并提供普通、悬停、按下、禁用和键盘焦点状态。`MakeSecondaryButton` 用纸色表示次要操作，`MakeQuietButton` 用纸面降低关闭、拆除等操作的视觉强调。各窗口仍保留自己的按钮节点名称和意图，不由主题决定经营操作。
 
 FormatCoins(long cents) 接受交易聚合金额并固定显示两位小数；现有 int 金额调用可直接传入。此格式接口不扩大 Wallet 或库存的 int 容量。

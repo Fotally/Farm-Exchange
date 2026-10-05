@@ -38,7 +38,7 @@ public partial class TestCameraInteraction : Node
         Vector2 originalCenter = camera.GlobalPosition;
         try
         {
-            foreach (Vector2I size in new[] { new Vector2I(1280, 720), new Vector2I(1920, 1080), new Vector2I(2560, 1440), new Vector2I(1280, 720) })
+            foreach (Vector2I size in new[] { new Vector2I(1280, 720), new Vector2I(1920, 1080), new Vector2I(2560, 1440), new Vector2I(3840, 2160), new Vector2I(1280, 720) })
             {
                 window.Size = size;
                 await Frames(parent);
@@ -50,7 +50,7 @@ public partial class TestCameraInteraction : Node
 
             Wheel(camera, MouseButton.WheelUp, 1);
             await Frames(parent);
-            foreach (Vector2I size in new[] { new Vector2I(1920, 1080), new Vector2I(2560, 1440), new Vector2I(1280, 720) })
+            foreach (Vector2I size in new[] { new Vector2I(1920, 1080), new Vector2I(2560, 1440), new Vector2I(3840, 2160), new Vector2I(1280, 720) })
             {
                 window.Size = size;
                 await Frames(parent);
@@ -93,7 +93,7 @@ public partial class TestCameraInteraction : Node
             if (!CheckView(window, main.GetNode<WorldMap>("WorldMap"), main.GetNode<CameraController>("Camera2D"),
                 main.GetNode<Control>("CanvasLayer/UiRoot"), 1.25f))
                 return Fail("大窗口冷启动没有保持原农田大小");
-            GD.Print("镜头尺寸检查：1280/1920/2560、往返、玩家缩放、输入与大窗口冷启动通过");
+            GD.Print("镜头尺寸检查：1280兼容/1920基准/2560/3840、往返、玩家缩放、输入与大窗口冷启动通过");
             return true;
         }
         finally

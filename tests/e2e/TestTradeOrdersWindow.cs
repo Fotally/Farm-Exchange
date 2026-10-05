@@ -16,6 +16,8 @@ public partial class TestTradeOrdersWindow : Node
 
     public override async void _Ready()
     {
+        GetWindow().Size = new Vector2I(1920, 1080);
+        await Frames(this);
         bool passed = RunChecks(this) && await RunLayoutChecks(this);
         if (passed) GD.Print("委托编辑、冻结、成交与窗口布局检查通过");
         GetTree().Quit(passed ? 0 : 1);
@@ -122,7 +124,9 @@ public partial class TestTradeOrdersWindow : Node
         market.Refresh(game);
         Click(market, "CommodityRadishProductButton");
         if (!Find<Button>(market, "SellCommodityAllButton").Disabled || !Find<Button>(market, "SellButton").Disabled ||
-            !Find<Label>(market, "QuoteRadishProductStock").Text.Contains("可用 0"))
+            game.GetAvailableStock(RadishProduct) != 0 ||
+            Find<Label>(market, "QuoteRadishProductStock").Text != $"{game.GetStock(RadishProduct)} / 0" ||
+            !Find<Label>(market, "QuoteRadishProductStock").TooltipText.Contains($"冻结 {game.GetFrozenStock(RadishProduct)}"))
             return Fail("市场仍将冻结库存作为可出售库存");
         Click(window, "CancelOrderButton");
         if (game.GetFrozenStock(RadishProduct) != 0 || game.GetTradeOrders()[1].Status != TradeOrderStatus.Cancelled ||
@@ -314,11 +318,16 @@ public partial class TestTradeOrdersWindow : Node
         bool passed = true;
         Rect2 viewport = parent.GetViewport().GetVisibleRect();
         Rect2 rect = window.GetGlobalRect();
-        if (rect.Position.Y < 70 || rect.End.Y > viewport.End.Y - 109 || rect.Position.X < 0 || rect.End.X > viewport.End.X)
-            passed = Fail("委托窗口溢出1280×720可用区域");
+        if (rect.Position.Y < 143 || rect.End.Y > viewport.End.Y - 180 || rect.Position.X < 31 || rect.End.X > viewport.End.X - 31)
+            passed = Fail("委托窗口溢出1080P可用区域");
         passed = CheckWindowTitle(window, viewport) && passed;
+        Rect2 outerScroll = Find<ScrollContainer>(window, "WindowScroll").GetGlobalRect();
         foreach (string button in new[] { "SaveOrderButton", "ToggleOrderButton", "CancelOrderButton", "NewOrderButton" })
-            if (!rect.Encloses(Find<Button>(window, button).GetGlobalRect())) passed = Fail("委托固定按钮超出窗口：" + button);
+        {
+            Rect2 buttonRect = Find<Button>(window, button).GetGlobalRect();
+            if (!rect.Encloses(buttonRect) || !outerScroll.Encloses(buttonRect))
+                passed = Fail($"委托固定按钮未默认完整显示：{button},button={buttonRect},scroll={outerScroll}");
+        }
         ScrollContainer scroll = Find<ScrollContainer>(window, "OrderEditorScroll");
         List<LineEdit> values = Controls<LineEdit>(window, "OrderConditionValue");
         LineEdit last = values[^1];
@@ -362,10 +371,10 @@ public partial class TestTradeOrdersWindow : Node
     private static bool CheckWindowTitle(DraggableWindow window, Rect2 viewport)
     {
         Control header = Find<Control>(window, "Header");
-        Label title = Controls<Label>(header, "")[0];
+        Label title = Find<Label>(header, "WindowTitleLabel");
         Rect2 rect = window.GetGlobalRect();
         if (title.GetLineCount() != 1 || !header.GetGlobalRect().Encloses(title.GetGlobalRect()) ||
-            rect.Position.Y < 70 || rect.End.Y > viewport.End.Y - 109 || rect.Position.X < 0 || rect.End.X > viewport.End.X)
+            rect.Position.Y < 143 || rect.End.Y > viewport.End.Y - 180 || rect.Position.X < 31 || rect.End.X > viewport.End.X - 31)
             return Fail(window.Name + "标题不是完整单行，或窗口溢出可用区域");
         return true;
     }

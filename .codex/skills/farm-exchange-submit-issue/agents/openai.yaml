@@ -1,0 +1,4 @@
+interface:
+  display_name: "提交 Farm Exchange Issue"
+  short_description: "按缺陷、功能、重构等任务类型组织中文问题、改进范围和验收标准并提交 GitHub"
+  default_prompt: "使用 $farm-exchange-submit-issue，为这项任务查找匹配 issue，按任务类型整理正文并提交 GitHub。"

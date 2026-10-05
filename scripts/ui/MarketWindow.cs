@@ -12,7 +12,7 @@ namespace FarmExchange.UI;
 
 public partial class MarketWindow : DraggableWindow
 {
-    private static readonly float[] ColumnWidths = { 150, 85, 85, 85, 80, 150 };
+    private static readonly float[] ColumnWidths = { 130, 80, 80, 80, 90, 120 };
     private readonly Dictionary<CommodityId, QuoteRow> _rows = new();
     private readonly Label _dates;
     private readonly Label _news;
@@ -32,17 +32,17 @@ public partial class MarketWindow : DraggableWindow
     public event Action<string>? TradeInputRejected;
     public event Action? OrdersRequested;
 
-    public MarketWindow() : base("MarketWindow", "市场 · 即时买卖", new Vector2(250, 78),
-        new Vector2(780, 520), avoidBottomBar: true)
+    public MarketWindow() : base("MarketWindow", "市场 · 即时买卖", new Vector2(235, 104),
+        new Vector2(810, 510))
     {
-        Body.AddThemeConstantOverride("separation", 6);
+        Body.AddThemeConstantOverride("separation", 8);
         _dates = MakeLabel("", 13, Ink);
         _dates.Name = "MarketDates";
         _dates.AutowrapMode = TextServer.AutowrapMode.Off;
         var datesRow = new HBoxContainer();
         _dates.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         datesRow.AddChild(_dates);
-        Button orders = MakeButton("委托与策略", Mid, 120, 30);
+        Button orders = MakeSecondaryButton("委托与策略 →", 140, 34);
         orders.Name = "OpenTradeOrdersButton";
         orders.Pressed += () => OrdersRequested?.Invoke();
         datesRow.AddChild(orders);
@@ -71,17 +71,18 @@ public partial class MarketWindow : DraggableWindow
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            CustomMinimumSize = new Vector2(0, 154),
         };
         Body.AddChild(scroll);
-        var rows = new GridContainer { Name = "MarketRows", Columns = 6 };
+        var rows = new GridContainer { Name = "MarketRows", Columns = 6, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         rows.AddThemeConstantOverride("h_separation", 8);
-        rows.AddThemeConstantOverride("v_separation", 4);
+        rows.AddThemeConstantOverride("v_separation", 6);
         scroll.AddChild(rows);
         var selectionGroup = new ButtonGroup();
         foreach (CommodityDefinition definition in CommodityCatalog.All)
         {
             CommodityId id = definition.Id;
-            Button select = MakeButton(definition.Name, Mid, ColumnWidths[0], 34);
+            Button select = MakeSecondaryButton(definition.Name, ColumnWidths[0], 34);
             select.Name = $"Commodity{id.Crop}{id.Kind}Button";
             select.ToggleMode = true;
             select.ButtonGroup = selectionGroup;
@@ -103,7 +104,7 @@ public partial class MarketWindow : DraggableWindow
             Button? rawShortcut = null;
             if (id.Kind == CommodityKind.Raw)
             {
-                rawShortcut = MakeButton("全部售原料", Mid, ColumnWidths[5], 34);
+                rawShortcut = MakeQuietButton("全部售原料", ColumnWidths[5], 34);
                 rawShortcut.Name = $"SellRaw{id.Crop}Button";
                 rawShortcut.Pressed += () => SellRawRequested?.Invoke(id.Crop);
                 rows.AddChild(rawShortcut);
@@ -135,18 +136,18 @@ public partial class MarketWindow : DraggableWindow
         buy.Name = "BuyCommodityButton";
         buy.Pressed += () => Submit(buy: true);
         tradeRow.AddChild(buy);
-        _sellSelectedButton = MakeButton("卖出", Mid, 72, 38);
+        _sellSelectedButton = MakeSecondaryButton("卖出", 72, 38);
         _sellSelectedButton.Name = "SellCommodityButton";
         _sellSelectedButton.Pressed += () => Submit(buy: false);
         tradeRow.AddChild(_sellSelectedButton);
-        _sellSelectedAllButton = MakeButton("该商品全售", Gold, 110, 38);
+        _sellSelectedAllButton = MakeQuietButton("该商品全售", 110, 38);
         _sellSelectedAllButton.Name = "SellCommodityAllButton";
         _sellSelectedAllButton.Pressed += () => SellCommodityAllRequested?.Invoke(_selected);
         tradeRow.AddChild(_sellSelectedAllButton);
         var footer = new HBoxContainer();
         footer.AddThemeConstantOverride("separation", 10);
         Body.AddChild(footer);
-        _sellButton = MakeButton("出售全部加工品", Gold, 180, 38);
+        _sellButton = MakeSecondaryButton("出售全部加工品", 180, 38);
         _sellButton.Name = "SellButton";
         _sellButton.Pressed += () => SellAllRequested?.Invoke();
         footer.AddChild(_sellButton);
@@ -177,7 +178,7 @@ public partial class MarketWindow : DraggableWindow
             row.Price.Text = FormatCoins(quote.PriceCents);
             row.Previous.Text = FormatCoins(quote.PreviousPriceCents);
             row.Change.Text = quote.ChangePercent.ToString("+0.00;-0.00;0.00", CultureInfo.InvariantCulture) + "%";
-            row.Stock.Text = frozen == 0 ? stock.ToString(CultureInfo.InvariantCulture) : $"{stock}\n可用 {available}";
+            row.Stock.Text = frozen == 0 ? stock.ToString(CultureInfo.InvariantCulture) : $"{stock} / {available}";
             row.Stock.TooltipText = $"总库存 {stock}，可用 {available}，冻结 {frozen}";
             if (row.RawShortcut != null) row.RawShortcut.Disabled = available == 0;
             else hasProducts |= available > 0;
@@ -215,6 +216,7 @@ public partial class MarketWindow : DraggableWindow
         label.AutowrapMode = TextServer.AutowrapMode.Off;
         label.CustomMinimumSize = new Vector2(ColumnWidths[column], 0);
         label.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        label.HorizontalAlignment = column > 0 && column < 5 ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         return label;
     }
 

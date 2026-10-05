@@ -92,6 +92,27 @@ internal sealed class CultivationPlanBook
         return new(id, null);
     }
 
+    /**
+     * <summary>删除共享表并解除全部引用田的计划安排。</summary>
+     * <remarks>保留当前作物、当前轮和水分，恢复各田按当前作物自动复种；表编号不回收。</remarks>
+     * <param name="id">共享年度表编号。</param>
+     * <returns>成功为空；表不存在时返回中文原因且零修改。</returns>
+     */
+    internal string? Delete(int id)
+    {
+        if (!_plans.ContainsKey(id))
+            return "耕作表不存在";
+        foreach ((int index, Binding binding) in _bindings.ToArray())
+        {
+            if (binding.PlanId != id)
+                continue;
+            _bindings.Remove(index);
+            _farming.SetSowingEnabled(index, true);
+        }
+        _plans.Remove(id);
+        return null;
+    }
+
     internal bool Contains(int id) => _plans.ContainsKey(id);
 
     internal IReadOnlyList<CultivationPlanSnapshot> GetSnapshots() => Array.AsReadOnly(

@@ -13,8 +13,12 @@ namespace FarmExchange.UI;
  */
 public partial class CultivationTimeline : Control
 {
-    private const float LabelWidth = 42;
-    private const float RowHeight = 50;
+    private float Overall => UiScaling.OverallScale(this);
+    private float VerticalScale => Math.Max(Overall, UiScaling.FontSize(this, 12) / 12f);
+    private float LabelWidth => 42 * Overall;
+    private float RowHeight => 50 * VerticalScale;
+    private float HeaderHeight => 22 * VerticalScale;
+    private Font UiFont => GetThemeFont("font");
     private readonly Func<int, CropKind, int, bool> _checkDrop;
     private IReadOnlyList<CultivationEntry> _entries = Array.Empty<CultivationEntry>();
     private IReadOnlyList<int> _risks = Array.Empty<int>();
@@ -35,7 +39,7 @@ public partial class CultivationTimeline : Control
     /**
      * <summary>当前图中一个游戏日的画面宽度。</summary>
      */
-    public float PixelsPerDay => (Size.X - LabelWidth - 8) / 84;
+    public float PixelsPerDay => (Size.X - LabelWidth - 8 * Overall) / 84;
 
     /**
      * <summary>构造时间图，候选排程由拥有草稿的窗口检查。</summary>
@@ -45,10 +49,11 @@ public partial class CultivationTimeline : Control
     {
         _checkDrop = checkDrop;
         Name = "CultivationTimeline";
-        CustomMinimumSize = new Vector2(540, 4 * RowHeight + 22);
         SizeFlagsHorizontal = SizeFlags.ExpandFill;
         MouseFilter = MouseFilterEnum.Stop;
     }
+
+    public override Vector2 _GetMinimumSize() => new(540 * Overall, 4 * RowHeight + HeaderHeight);
 
     /**
      * <summary>只显示草稿、风险和当前日期，不提交经营命令。</summary>
@@ -77,25 +82,25 @@ public partial class CultivationTimeline : Control
     public override void _Draw()
     {
         _segments.Clear();
-        Font font = ThemeDB.FallbackFont;
-        float width = Size.X - LabelWidth - 8;
+        Font font = UiFont;
+        float width = PixelsPerDay * 84;
         string[] seasons = { "春", "夏", "秋", "冬" };
         for (int row = 0; row < 4; row++)
         {
-            float y = 22 + row * RowHeight;
-            DrawString(font, new Vector2(4, y + 24), seasons[row], fontSize: 15, modulate: Ink);
-            DrawStyleBox(Style(new Color(0.86f, 0.91f, 0.83f), 5), new Rect2(LabelWidth, y, width, 40));
+            float y = HeaderHeight + row * RowHeight;
+            DrawString(font, new Vector2(4 * Overall, y + 24 * VerticalScale), seasons[row], fontSize: UiScaling.FontSize(this, 15), modulate: Ink);
+            DrawStyleBox(Style(new Color("e7e8d4"), 0), new Rect2(LabelWidth, y, width, 32 * VerticalScale));
             for (int week = 1; week < 12; week++)
             {
                 float x = LabelWidth + PixelsPerDay * week * 7;
-                DrawLine(new Vector2(x, y + 40), new Vector2(x, y + 45), Muted);
+                DrawLine(new Vector2(x, y + 32 * VerticalScale), new Vector2(x, y + 37 * VerticalScale), Muted, Overall);
             }
             for (int month = 0; month <= 3; month++)
             {
                 float x = LabelWidth + width * month / 3f;
-                DrawLine(new Vector2(x, y), new Vector2(x, y + 40), Muted);
+                DrawLine(new Vector2(x, y), new Vector2(x, y + 32 * VerticalScale), Muted, Overall);
                 if (month < 3)
-                    DrawString(font, new Vector2(x + 3, y - 4), $"{row * 3 + month + 1}月", fontSize: 11, modulate: Ink);
+                    DrawString(font, new Vector2(x + 3 * Overall, y - 4 * VerticalScale), $"{row * 3 + month + 1}月", fontSize: UiScaling.FontSize(this, 11), modulate: Ink);
             }
         }
         foreach (CultivationEntry entry in _entries)
@@ -107,29 +112,31 @@ public partial class CultivationTimeline : Control
                 int row = day / 84;
                 int localDay = day % 84;
                 int count = Math.Min(remaining, 84 - localDay);
-                float extra = _selectedId == entry.Id ? _landing * 8 : 0;
+                float extra = _selectedId == entry.Id ? _landing * 8 * Overall : 0;
                 var rect = new Rect2(LabelWidth + width * localDay / 84f,
-                    24 + row * RowHeight - extra, width * count / 84f, 36);
-                Color color = new Color(0.24f + (int)entry.Crop * 0.055f, 0.48f, 0.32f);
+                    HeaderHeight + 2 * VerticalScale + row * RowHeight - extra, width * count / 84f, 28 * VerticalScale);
+                Color color = CropColor(entry.Crop);
                 bool risk = Contains(_risks, entry.Id);
-                StyleBoxFlat style = Style(color, 5);
+                StyleBoxFlat style = Style(color, 0);
+                style.BorderColor = Wood;
+                style.SetBorderWidthAll(Math.Max(1, (int)Math.Round(Overall)));
                 if (risk || _selectedId == entry.Id)
                 {
-                    style.BorderColor = risk ? new Color(0.82f, 0.25f, 0.18f) : Gold;
-                    style.SetBorderWidthAll(2);
+                    style.BorderColor = risk ? new Color("a53d2b") : Mid;
+                    style.SetBorderWidthAll(Math.Max(1, (int)Math.Round(2 * Overall)));
                 }
                 DrawStyleBox(style, rect);
                 string[] lines = EntryLines(entry);
                 if (Fits(rect, lines))
                 {
-                    DrawCentered(font, rect, lines[0], 14);
-                    DrawCentered(font, rect, lines[1], 30);
+                    DrawCentered(font, rect, lines[0], 12 * VerticalScale);
+                    DrawCentered(font, rect, lines[1], 25 * VerticalScale);
                 }
                 else
                 {
                     string name = FarmGame.GetCrop(entry.Crop).CropName;
-                    if (font.GetStringSize(name, fontSize: 12).X + 4 <= rect.Size.X)
-                        DrawCentered(font, rect, name, 24);
+                    if (font.GetStringSize(name, fontSize: UiScaling.FontSize(this, 12)).X + 4 * Overall <= rect.Size.X)
+                        DrawCentered(font, rect, name, 19 * VerticalScale);
                 }
                 _segments.Add((rect, entry));
                 remaining -= count;
@@ -138,8 +145,8 @@ public partial class CultivationTimeline : Control
         }
         int currentRow = _currentDay / 84;
         float currentX = LabelWidth + width * (_currentDay % 84) / 84f;
-        DrawLine(new Vector2(currentX, 22 + currentRow * RowHeight),
-            new Vector2(currentX, 62 + currentRow * RowHeight), Gold, 2);
+        DrawLine(new Vector2(currentX, HeaderHeight + currentRow * RowHeight),
+            new Vector2(currentX, HeaderHeight + 32 * VerticalScale + currentRow * RowHeight), Gold, 2 * Overall);
     }
 
     public override string _GetTooltip(Vector2 atPosition)
@@ -173,13 +180,13 @@ public partial class CultivationTimeline : Control
         GameDate date = GameCalendar.GetDate((uint)day);
         return $"{date.Month}月{date.Day}日";
     }
-    private static bool Fits(Rect2 rect, string[] lines) =>
-        ThemeDB.FallbackFont.GetStringSize(lines[0], fontSize: 12).X + 6 <= rect.Size.X &&
-        ThemeDB.FallbackFont.GetStringSize(lines[1], fontSize: 12).X + 6 <= rect.Size.X;
+    private bool Fits(Rect2 rect, string[] lines) =>
+        UiFont.GetStringSize(lines[0], fontSize: UiScaling.FontSize(this, 12)).X + 6 * Overall <= rect.Size.X &&
+        UiFont.GetStringSize(lines[1], fontSize: UiScaling.FontSize(this, 12)).X + 6 * Overall <= rect.Size.X;
 
     private void DrawCentered(Font font, Rect2 rect, string text, float baseline) =>
-        DrawString(font, rect.Position + new Vector2((rect.Size.X - font.GetStringSize(text, fontSize: 12).X) / 2,
-            baseline), text, fontSize: 12, modulate: Cream);
+        DrawString(font, rect.Position + new Vector2((rect.Size.X - font.GetStringSize(text, fontSize: UiScaling.FontSize(this, 12)).X) / 2,
+            baseline), text, fontSize: UiScaling.FontSize(this, 12), modulate: Ink);
 
     public override void _GuiInput(InputEvent inputEvent)
     {
@@ -200,7 +207,7 @@ public partial class CultivationTimeline : Control
             if (rect.HasPoint(atPosition))
             {
                 EntrySelected?.Invoke(entry.Id);
-                SetDragPreview(MakePreview(entry.Crop, PixelsPerDay));
+                SetDragPreview(MakePreview(entry.Crop, this));
                 return DragData(entry.Crop, entry.Id);
             }
         return default;
@@ -208,8 +215,8 @@ public partial class CultivationTimeline : Control
 
     public override bool _CanDropData(Vector2 atPosition, Variant data)
     {
-        bool canDrop = atPosition.X >= LabelWidth && atPosition.X < Size.X - 8 &&
-            atPosition.Y >= 22 && atPosition.Y < 22 + 4 * RowHeight && IsCropDrag(data);
+        bool canDrop = atPosition.X >= LabelWidth && atPosition.X < Size.X - 8 * Overall &&
+            atPosition.Y >= HeaderHeight && atPosition.Y < HeaderHeight + 4 * RowHeight && IsCropDrag(data);
         if (!canDrop) return false;
         var values = data.AsGodotDictionary();
         CropKind crop = (CropKind)values["crop"].AsInt32();
@@ -228,7 +235,7 @@ public partial class CultivationTimeline : Control
 
     private int DropDay(Vector2 atPosition, CropKind crop)
     {
-        int row = (int)((atPosition.Y - 22) / RowHeight);
+        int row = (int)((atPosition.Y - HeaderHeight) / RowHeight);
         int day = row * 84 + (int)Math.Floor((atPosition.X - LabelWidth) / PixelsPerDay -
             FarmGame.GetCrop(crop).GrowthDays / 2f);
         return (day + 336) % 336;
@@ -240,24 +247,30 @@ public partial class CultivationTimeline : Control
     internal static bool IsCropDrag(Variant data) => data.VariantType == Variant.Type.Dictionary &&
         data.AsGodotDictionary().ContainsKey("cultivation");
 
-    internal static Control MakePreview(CropKind kind, float pixelsPerDay)
+    internal static Control MakePreview(CropKind kind, CultivationTimeline source)
     {
         CropDefinition crop = FarmGame.GetCrop(kind);
-        var preview = new Control { MouseFilter = MouseFilterEnum.Ignore };
+        float pixelsPerDay = source.PixelsPerDay;
+        float height = 40 * source.VerticalScale;
+        int fontSize = UiScaling.FontSize(source, 13);
+        var preview = new Control { MouseFilter = MouseFilterEnum.Ignore, Theme = SharedTheme };
         var bar = new PanelContainer
         {
-            Size = new Vector2(crop.GrowthDays * pixelsPerDay, 40),
-            Position = new Vector2(-crop.GrowthDays * pixelsPerDay / 2, -20),
+            Size = new Vector2(crop.GrowthDays * pixelsPerDay, height),
+            Position = new Vector2(-crop.GrowthDays * pixelsPerDay / 2, -height / 2),
             Modulate = new Color(1, 1, 1, 0.86f),
         };
         preview.AddChild(bar);
-        bar.AddThemeStyleboxOverride("panel", Style(Mid.Lightened(0.15f), 5));
+        StyleBoxFlat previewStyle = Style(CropColor(kind), 0);
+        previewStyle.BorderColor = Wood;
+        previewStyle.SetBorderWidthAll(Math.Max(1, (int)Math.Round(source.Overall)));
+        bar.AddThemeStyleboxOverride("panel", previewStyle);
         string caption = $"{crop.CropName} · {crop.GrowthDays}天";
         float width = crop.GrowthDays * pixelsPerDay;
-        if (ThemeDB.FallbackFont.GetStringSize(caption, fontSize: 13).X + 4 > width)
-            caption = ThemeDB.FallbackFont.GetStringSize(crop.CropName, fontSize: 13).X + 4 <= width
+        if (source.UiFont.GetStringSize(caption, fontSize: fontSize).X + 4 * source.Overall > width)
+            caption = source.UiFont.GetStringSize(crop.CropName, fontSize: fontSize).X + 4 * source.Overall <= width
                 ? crop.CropName : "";
-        Label text = MakeLabel(caption, 13, Cream);
+        Label text = MakeLabel(caption, fontSize, Ink);
         text.AutowrapMode = TextServer.AutowrapMode.Off;
         text.VerticalAlignment = VerticalAlignment.Center;
         text.HorizontalAlignment = HorizontalAlignment.Center;
@@ -271,4 +284,16 @@ public partial class CultivationTimeline : Control
         foreach (int value in values) if (value == id) return true;
         return false;
     }
+
+    private static Color CropColor(CropKind crop) => crop switch
+    {
+        CropKind.Wheat => new Color("d8c17c"),
+        CropKind.Corn => new Color("c3d18d"),
+        CropKind.Rice => new Color("d1d5ad"),
+        CropKind.Potato => new Color("d8c0a0"),
+        CropKind.Sunflower => new Color("e4ce85"),
+        CropKind.Sugarcane => new Color("b9cd90"),
+        CropKind.Radish => new Color("e2bca3"),
+        _ => throw new ArgumentOutOfRangeException(nameof(crop)),
+    };
 }
