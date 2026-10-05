@@ -49,6 +49,7 @@
 - `.github/workflows/macos.yml`：在 macOS runner 上编译、导出 Universal 2 ZIP、检查双架构程序集并启动应用，上传提交级构建产物。
 - `.github/workflows/release.yml`：独立手动发布游戏版本；操作者输入版本号，复用触发时 main 同提交成功的 Windows 与 macOS CI 产物。Windows 下载后验收启动并打包，macOS 检查 Universal 2 ZIP 后保持原包字节；两平台准备成功后创建标签与单个 GitHub Release，上传两份版本 ZIP。操作与失败处理见 `docs/project/release.md`。
 - `export_presets.cfg`：定义 Windows x86_64 与 macOS Universal 2 验收构建。
+- `.github/ISSUE_TEMPLATE/`：六类中文议题正文模板的唯一维护位置，供 GitHub 网页与 `.codex/skills/farm-exchange-submit-issue/SKILL.md` 共用；skill 负责查重、按模板填写与提交核对。模板在人工合入默认分支后供网页使用，来源说明见 `docs/research/issue-template-sources.md`。
 
 # 工作约定
 

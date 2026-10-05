@@ -19,9 +19,19 @@
 
 ## Issue 正文与提交
 
-创建或更新 issue 时使用 [farm-exchange-submit-issue](../../.codex/skills/farm-exchange-submit-issue/SKILL.md)。入口按缺陷、功能、重构、性能、调研设计与维护任务加载对应参考模板，并负责查重、正文提交和结果核对；正文直接描述工程问题、现状、改进范围与验收标准。
+六类正文模板统一维护在 [.github/ISSUE_TEMPLATE/](../../.github/ISSUE_TEMPLATE/)，包含缺陷、功能、重构、性能、调研设计与维护任务。人工从 GitHub 的 New issue 选择对应模板，直接填写正文。模板元数据提供中文名称、用途与默认标题前缀；填写提示为 HTML 注释，可在编辑器中查看，提交前删除无关章节与提示。
 
-短任务只保留必要字段，模板中的提示和空章节不进入正式正文。研究与维护任务按实际交付工件验收，具体执行约定和开源参照由 skill 维护；统一修改流程仍以根 `AGENTS.md` 为准。
+模板在 `dev` 开发，通过 `dev` → `main` PR 人工合并到默认分支后，GitHub 网页才会显示并由 Insights → 社区标准识别；社区标准提供检查与设置入口，模板内容保存在仓库文件中。格式与生效方式见 [GitHub 官方说明](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/about-issue-and-pull-request-templates)。
+
+Agent 创建或更新 issue 时使用 [farm-exchange-submit-issue](../../.codex/skills/farm-exchange-submit-issue/SKILL.md)。skill 按任务类型读取同一份仓库模板，负责查重、事实与规则核对、填写、正文提交和结果核对。读取 YAML 元数据选择标题前缀，填写其后的 Markdown；元数据、HTML 提示注释与空章节不进入正式正文，通过 UTF-8 文件和 `--body-file` 提交。
+
+GitHub CLI 可用 `gh api` 读取远端模板。例如下面命令读取 `dev` 上的缺陷模板，查阅默认分支时去掉 `?ref=dev`：
+
+```powershell
+gh api -H "Accept: application/vnd.github.raw+json" 'repos/Fotally/Farm-Exchange/contents/.github/ISSUE_TEMPLATE/bug.md?ref=dev'
+```
+
+本地模板可直接读仓库文件，无需每次请求远端；CLI 读取依据[仓库内容 API](https://docs.github.com/en/rest/repos/contents#get-repository-content)。短任务只保留必要字段。研究与维护任务按实际交付工件验收，字段来源见[议题模板的开源参照](../research/issue-template-sources.md)；统一修改流程仍以根 `AGENTS.md` 为准。
 
 ## Main 分支保护
 
