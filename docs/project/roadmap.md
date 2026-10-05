@@ -43,7 +43,7 @@
 
 ## 已确认版本发布范围
 
-2026-10-05 在 [#96](https://github.com/Fotally/Farm-Exchange/issues/96) 确认保留独立的发布工作流，版本号暂由操作者指定；从触发时 main 同提交成功 CI 下载完整 Windows 产物，验收启动、打包后创建版本标签和 GitHub Release，无需本地构建或上传。macOS 继续作为提交级验收产物。操作与失败处理见[正式版本发布](release.md)，交付状态以关联 PR 为准。
+2026-10-05 在 [#96](https://github.com/Fotally/Farm-Exchange/issues/96) 确认保留独立的发布工作流，版本号暂由操作者指定；从触发时 main 同提交成功的 Windows 与 macOS CI 下载两平台产物，Windows 验收启动并完整打包，macOS 检查 Universal 2 ZIP 后保留原包内容，再创建版本标签和同一个 GitHub Release，同时上传两份带版本号的 ZIP，无需本地构建或上传。两平台必须都准备成功，保持当前 macOS 签名与未配置 Apple 公证的状态。操作与失败处理见[正式版本发布](release.md)，交付状态以关联 PR 为准。
 
 ## 待用户确认
 

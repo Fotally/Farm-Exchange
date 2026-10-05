@@ -47,7 +47,7 @@
 - `tools/Repair-RuleLinks.ps1` 与 `tools/Test-StaticChecks.ps1`：按 `.codex/rule-links.json` 修复及检查目录指令符号链接，并检查文档路径、内部链接和脚本命名空间。
 - `.github/workflows/ci.yml`：`dev` 推送时自动运行 headless 测试；手动触发可选图形 FPS 性能测试；`main` 推送时在测试通过后额外完成 Windows Release 导出，通过进程退出码验收导出程序启动并上传构建产物。
 - `.github/workflows/macos.yml`：在 macOS runner 上编译、导出 Universal 2 ZIP、检查双架构程序集并启动应用，上传提交级构建产物。
-- `.github/workflows/release.yml`：独立手动发布 Windows 版本；操作者输入版本号，复用触发时 main 同提交成功 CI 的完整产物，下载后验收启动、打包并创建标签与 GitHub Release。操作与失败处理见 `docs/project/release.md`。
+- `.github/workflows/release.yml`：独立手动发布游戏版本；操作者输入版本号，复用触发时 main 同提交成功的 Windows 与 macOS CI 产物。Windows 下载后验收启动并打包，macOS 检查 Universal 2 ZIP 后保持原包字节；两平台准备成功后创建标签与单个 GitHub Release，上传两份版本 ZIP。操作与失败处理见 `docs/project/release.md`。
 - `export_presets.cfg`：定义 Windows x86_64 与 macOS Universal 2 验收构建。
 
 # 工作约定
@@ -70,8 +70,8 @@
 # 版本发布
 
 1. 正式版本只从已人工合并的 `main` 发布。版本号使用 `v主版本.次版本.修订版本`：不兼容既有存档或核心玩法规则时递增主版本；兼容地新增玩法、系统或内容时递增次版本；兼容地修复缺陷、优化性能或调整表现、文档和构建时递增修订版本。首个稳定公开版本为 `v1.0.0`，此前使用 `v0.次版本.修订版本`。
-2. `build/windows/` 是可覆盖的 Windows x86_64 中间导出目录，不纳入 Git。正式发布包写入 `build/releases/v主版本.次版本.修订版本/FarmExchange-v主版本.次版本.修订版本-windows-x86_64.zip`。
-3. 发布前必须在 `main` 对目标提交完成 Release 编译、自动化场景测试、导出程序启动验收；独立发布工作流复用同提交成功 CI 的 Windows 产物，下载后再验收启动并打包，无需本地上传。版本号由操作者指定，通过后创建同版本 Git 标签与 GitHub Release，并只上传对应的 Windows zip。发布完成以标签、GitHub Release、压缩包版本号三者一致为准。
+2. `build/windows/` 是可覆盖的 Windows x86_64 中间导出目录，不纳入 Git。正式发布包写入 `build/releases/v主版本.次版本.修订版本/`，文件名分别为 `FarmExchange-v主版本.次版本.修订版本-windows-x86_64.zip` 和 `FarmExchange-v主版本.次版本.修订版本-macos-universal.zip`。
+3. 发布前必须在 `main` 对目标提交完成 Release 编译、自动化场景测试、导出程序启动验收；独立发布工作流要求同提交的 Windows 与 macOS CI 均成功，复用两平台产物；Windows 下载后再验收启动并打包，macOS 保留已在 CI 验收的原始 ZIP，无需本地上传。版本号由操作者指定，两平台准备成功后创建同版本 Git 标签与单个 GitHub Release，上传两份 ZIP。发布完成以标签、GitHub Release、两平台压缩包版本号一致为准。
 
 # 文档索引
 

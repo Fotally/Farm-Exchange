@@ -18,4 +18,4 @@ godot --headless --path . --export-release macOS build/macos/FarmExchange.zip --
 
 若编辑器可执行文件不在 `PATH` 中，将 `godot` 换为其 `.app/Contents/MacOS/` 内的可执行文件。导出路径是可覆盖的中间构建，不纳入 Git。
 
-此预设使用内建临时签名，不进行 Apple 公证。CI 产物用于编译与启动验收；从网络下载后直接分发时，macOS Gatekeeper 可能阻止打开。正式版本仍遵守[发布流程](release.md)，当前只发布 Windows 压缩包。Godot 对 [macOS Universal 2、bundle ID 与签名的要求](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_for_macos.html)及[命令行导出格式](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_projects.html)是本配置依据。
+此预设使用内建临时签名，不进行 Apple 公证。CI 产物用于编译与启动验收；独立[发布工作流](release.md)复用同提交成功 CI 的原始 Universal 2 ZIP，只改成带版本号的附件名称，与 Windows ZIP 一起上传到同一个 Release，不解压重打包，保留包内容与 UNIX 权限信息。发布 runner 不在 Windows 上重新启动 macOS 应用，双架构与启动验收由该提交的 macOS CI 完成。当前未配置 Apple 公证，从网络下载后 macOS Gatekeeper 可能阻止打开；发布工作流不增加签名或公证服务。Godot 对 [macOS Universal 2、bundle ID 与签名的要求](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_for_macos.html)及[命令行导出格式](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_projects.html)是本配置依据。

@@ -1,4 +1,4 @@
-name: 发布 Windows 版本
+name: 发布游戏版本
 
 on:
   workflow_dispatch:
@@ -12,12 +12,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-release
+  group: game-release
   cancel-in-progress: false
 
 jobs:
   publish:
-    name: 发布成功 CI 的 Windows 产物
+    name: 发布成功 CI 的 Windows 与 macOS 产物
     runs-on: windows-latest
     timeout-minutes: 15
     permissions:
@@ -51,50 +51,67 @@ jobs:
             throw "版本 $version 已有标签，请使用新的版本号"
           }
 
-          $runResponse = gh api "repos/$repository/actions/workflows/ci.yml/runs?branch=main&head_sha=$($env:GITHUB_SHA)&status=success&per_page=1"
-          if ($LASTEXITCODE -ne 0) {
-            throw '查询 CI 运行记录失败'
-          }
-          $runs = @((($runResponse | ConvertFrom-Json).workflow_runs))
-          if ($runs.Count -ne 1) {
-            throw "提交 $($env:GITHUB_SHA) 尚无成功的 main CI，请等 CI 通过后重新运行发布"
-          }
-          $ciRun = $runs[0]
-          if ($ciRun.head_branch -cne 'main' -or
-              $ciRun.head_sha -cne $env:GITHUB_SHA -or
-              $ciRun.head_repository.full_name -cne $repository -or
-              $ciRun.status -cne 'completed' -or $ciRun.conclusion -cne 'success') {
-            throw 'CI 来源、提交或完成状态与本次发布不一致'
-          }
+          $platforms = @(
+            @{ Name = 'Windows'; Workflow = 'ci.yml'; ArtifactPrefix = 'FarmExchange-windows-x86_64'; OutputPrefix = 'windows' },
+            @{ Name = 'macOS'; Workflow = 'macos.yml'; ArtifactPrefix = 'FarmExchange-macos-universal'; OutputPrefix = 'macos' }
+          )
+          foreach ($platform in $platforms) {
+            $runResponse = gh api "repos/$repository/actions/workflows/$($platform.Workflow)/runs?branch=main&head_sha=$($env:GITHUB_SHA)&status=success&per_page=1"
+            if ($LASTEXITCODE -ne 0) {
+              throw "查询 $($platform.Name) CI 运行记录失败"
+            }
+            $runs = @((($runResponse | ConvertFrom-Json).workflow_runs))
+            if ($runs.Count -ne 1) {
+              throw "提交 $($env:GITHUB_SHA) 尚无成功的 main $($platform.Name) CI，请等 CI 通过后重新运行发布"
+            }
+            $ciRun = $runs[0]
+            if ($ciRun.head_branch -cne 'main' -or
+                $ciRun.head_sha -cne $env:GITHUB_SHA -or
+                $ciRun.head_repository.full_name -cne $repository -or
+                $ciRun.status -cne 'completed' -or $ciRun.conclusion -cne 'success') {
+              throw "$($platform.Name) CI 来源、提交或完成状态与本次发布不一致"
+            }
 
-          $artifactName = "FarmExchange-windows-x86_64-$($env:GITHUB_SHA)"
-          $artifactResponse = gh api "repos/$repository/actions/runs/$($ciRun.id)/artifacts?name=$artifactName&per_page=100"
-          if ($LASTEXITCODE -ne 0) {
-            throw '查询 CI 构建产物失败'
+            $artifactName = "$($platform.ArtifactPrefix)-$($env:GITHUB_SHA)"
+            $artifactResponse = gh api "repos/$repository/actions/runs/$($ciRun.id)/artifacts?name=$artifactName&per_page=100"
+            if ($LASTEXITCODE -ne 0) {
+              throw "查询 $($platform.Name) CI 构建产物失败"
+            }
+            $artifacts = @((($artifactResponse | ConvertFrom-Json).artifacts) |
+              Where-Object { $_.name -ceq $artifactName })
+            if ($artifacts.Count -ne 1 -or $artifacts[0].expired -or
+                [DateTimeOffset]::Parse($artifacts[0].expires_at) -le [DateTimeOffset]::UtcNow) {
+              throw "$($platform.Name) CI 产物 $artifactName 缺失或已过期，请在 main 为同提交重新运行对应 CI"
+            }
+            "$($platform.OutputPrefix)-run-id=$($ciRun.id)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "$($platform.OutputPrefix)-artifact-name=$artifactName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "$($platform.Name) 源 CI：$($ciRun.html_url)；提交：$($env:GITHUB_SHA)" |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           }
-          $artifacts = @((($artifactResponse | ConvertFrom-Json).artifacts) |
-            Where-Object { $_.name -ceq $artifactName })
-          if ($artifacts.Count -ne 1 -or $artifacts[0].expired -or
-              [DateTimeOffset]::Parse($artifacts[0].expires_at) -le [DateTimeOffset]::UtcNow) {
-            throw "CI 产物 $artifactName 缺失或已过期，请在 main 为同提交重新运行 CI"
-          }
-          "run-id=$($ciRun.id)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "artifact-name=$artifactName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "源 CI：$($ciRun.html_url)；提交：$($env:GITHUB_SHA)" |
-            Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       - name: 下载完整 Windows 产物
         shell: pwsh
         env:
-          CI_RUN_ID: ${{ steps.source.outputs.run-id }}
-          CI_ARTIFACT_NAME: ${{ steps.source.outputs.artifact-name }}
+          CI_RUN_ID: ${{ steps.source.outputs.windows-run-id }}
+          CI_ARTIFACT_NAME: ${{ steps.source.outputs.windows-artifact-name }}
         run: |
           gh run download $env:CI_RUN_ID --repo $env:GITHUB_REPOSITORY --name $env:CI_ARTIFACT_NAME --dir build/windows
           if ($LASTEXITCODE -ne 0) {
             throw '下载 CI Windows 产物失败'
           }
 
-      - name: 验收下载的游戏并生成版本压缩包
+      - name: 下载 macOS Universal 2 产物
+        shell: pwsh
+        env:
+          CI_RUN_ID: ${{ steps.source.outputs.macos-run-id }}
+          CI_ARTIFACT_NAME: ${{ steps.source.outputs.macos-artifact-name }}
+        run: |
+          gh run download $env:CI_RUN_ID --repo $env:GITHUB_REPOSITORY --name $env:CI_ARTIFACT_NAME --dir build/macos
+          if ($LASTEXITCODE -ne 0) {
+            throw '下载 CI macOS 产物失败'
+          }
+
+      - name: 验收 Windows 游戏并生成版本压缩包
         id: package
         shell: pwsh
         run: |
@@ -123,12 +140,52 @@ jobs:
             $archive)
           "archive=$archive" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
+      - name: 检查 macOS 应用包并保留原始 ZIP
+        id: macos-package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sourceArchive = 'build/macos/FarmExchange.zip'
+          if (-not (Test-Path -LiteralPath $sourceArchive -PathType Leaf)) {
+            throw 'macOS 产物缺少 FarmExchange.zip'
+          }
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $sourceArchive).Path)
+          try {
+            $appRoots = @($zip.Entries.FullName |
+              Where-Object { $_ -cmatch '^[^/]+\.app/' } |
+              ForEach-Object { $_.Split('/')[0] } | Sort-Object -Unique)
+            if ($appRoots.Count -ne 1) {
+              throw 'macOS ZIP 必须包含一个根目录应用包'
+            }
+            $appRoot = $appRoots[0]
+            $appName = [System.IO.Path]::GetFileNameWithoutExtension($appRoot)
+            $requiredEntries = @(
+              "$appRoot/Contents/MacOS/$appName",
+              "$appRoot/Contents/Resources/data_FarmExchange_macos_x86_64/FarmExchange.dll",
+              "$appRoot/Contents/Resources/data_FarmExchange_macos_arm64/FarmExchange.dll"
+            )
+            foreach ($entryPath in $requiredEntries) {
+              $entry = $zip.GetEntry($entryPath)
+              if ($null -eq $entry -or $entry.Length -eq 0) {
+                throw "macOS ZIP 缺少有效文件：$entryPath"
+              }
+            }
+          } finally {
+            $zip.Dispose()
+          }
+          $releaseDirectory = "build/releases/$($env:RELEASE_VERSION)"
+          New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
+          $archive = Join-Path (Resolve-Path -LiteralPath $releaseDirectory).Path "FarmExchange-$($env:RELEASE_VERSION)-macos-universal.zip"
+          Copy-Item -LiteralPath $sourceArchive -Destination $archive
+          "archive=$archive" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
       - name: 创建标签与 GitHub Release 并上传压缩包
         shell: pwsh
         env:
           RELEASE_ARCHIVE: ${{ steps.package.outputs.archive }}
+          MACOS_RELEASE_ARCHIVE: ${{ steps.macos-package.outputs.archive }}
         run: |
-          gh release create $env:RELEASE_VERSION $env:RELEASE_ARCHIVE --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title $env:RELEASE_VERSION --generate-notes
+          gh release create $env:RELEASE_VERSION $env:RELEASE_ARCHIVE $env:MACOS_RELEASE_ARCHIVE --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title $env:RELEASE_VERSION --generate-notes
           if ($LASTEXITCODE -ne 0) {
             throw '创建 Release 或上传压缩包失败，请检查 GitHub 的标签与 Release 状态；工作流不会覆盖已有版本'
           }

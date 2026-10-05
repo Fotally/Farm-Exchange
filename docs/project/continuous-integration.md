@@ -14,4 +14,4 @@
 
 `.github/workflows/macos.yml` 是独立的 macOS 构建检查，在 `dev`、`main` 推送和手动触发时运行。它使用 macOS runner 编译 C#、导出 Universal 2 ZIP、检查双架构程序集并启动应用；通过后上传 ZIP，保留 14 天。详细命令、产物用途和签名范围见[macOS 构建与验收](macos-build.md)。
 
-`.github/workflows/release.yml` 提供独立的「发布 Windows 版本」手动入口：选择 `main` 并输入版本号，复用触发时同提交成功 CI 的完整 Windows 产物，下载后验收启动、打包并上传 GitHub Release；无需本地上传。发布不会重复编译，不会用其他提交的产物；操作与失败处理见[正式版本发布](release.md)。
+`.github/workflows/release.yml` 提供独立的「发布游戏版本」手动入口：选择 `main` 并输入版本号，要求触发时同提交的 Windows 主 CI 与 macOS CI 均成功，下载两平台产物；Windows 再验收启动并完整打包，macOS 检查 Universal 2 ZIP 后保留原包字节，两份 ZIP 一起上传到同一个 GitHub Release。任一平台无成功 CI、产物缺失或过期、包不完整都停止发布；无需本地上传，不重复编译，也不使用其他提交的产物。操作与失败处理见[正式版本发布](release.md)。
