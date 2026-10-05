@@ -1,4 +1,4 @@
-# 开源参照与采用理由
+# 议题模板的开源参照与采用理由
 
 查阅日期：2026-10-04。以下均为项目维护者发布的模板或指南。链接固定到查阅时的提交；Wiki 为当时页面。分类模板使用本项目重新编写的中文内容，仅采用字段组织思路。
 
@@ -16,4 +16,6 @@
 - 中文正文、范围与验收标准、只写工程内容，来自本项目协作约定；不是开源模板的原文。
 - 重构的行为保持与状态归属、性能的前后对照及现行阈值、研究的决策边界，按 Farm Exchange 的实际任务补充。
 - 开源项目要求的引擎升级验证、禁用扩展、另建提案仓库等只适用于其自身流程。本项目不照搬这些操作。
-- 使用普通 Markdown 正文配合 GitHub CLI；此 skill 不安装 GitHub 网页 Issue Forms、不改仓库标签，也不依赖外部项目的机器人。
+- 六类中文 Markdown 模板统一维护在 [GitHub 议题模板目录](../../.github/ISSUE_TEMPLATE/)，由网页建单与 [issue 提交 skill](../../.codex/skills/farm-exchange-submit-issue/SKILL.md)共用。模板保留各类证据与验收指导，填写提示使用 HTML 注释。
+- `name`、`about` 与 `title` 元数据分别提供模板名称、选择器用途与默认标题前缀；使用方法见[协作流程](../project/contribution-workflow.md)。不配置标签、负责人或外部机器人，不使用 YAML Issue Forms。
+- GitHub 模板格式与默认分支生效方式依据 [GitHub 官方说明](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository)。上述开源参照仍用于字段组织，不改变本项目规则。
