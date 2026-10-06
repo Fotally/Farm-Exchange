@@ -2,6 +2,7 @@ using Godot;
 using FarmExchange.Characters;
 using FarmExchange.Gameplay;
 using FarmExchange.Workers;
+using FarmExchange.Time;
 
 namespace FarmExchange.World;
 
@@ -13,10 +14,18 @@ public partial class WorkerPresentation : Node2D
     private WorkerVisual[] _workers = System.Array.Empty<WorkerVisual>();
     private uint _snapshotSecond;
     private double _interpolationSeconds;
+    private SimulationDriver? _driver;
 
-    public void SetGame(FarmGame game, WorldMap map)
+    /**
+     * <summary>绑定真实经营快照、地图坐标与本局倍率。</summary>
+     * <param name="game">只读经营对象。</param>
+     * <param name="map">地图坐标表现。</param>
+     * <param name="driver">同一局驱动；独立表现测试省略时按1×显示。</param>
+     */
+    public void SetGame(FarmGame game, WorldMap map, SimulationDriver? driver = null)
     {
         _game = game;
+        _driver = driver;
         _map = map;
         Name = "WorkerPresentation";
         YSortEnabled = true;
@@ -43,9 +52,16 @@ public partial class WorkerPresentation : Node2D
     {
         if (_game.IsPaused)
         {
-            foreach (WorkerVisual worker in _workers)
+            var snapshots = _game.GetWorkers();
+            for (int i = 0; i < _workers.Length; i++)
+            {
+                WorkerVisual worker = _workers[i];
+                worker.From = worker.To = worker.Position = snapshots[i].GridPosition;
                 worker.Character.ShowAt(ToLocal(_map.GetGridWorldPosition(worker.Position)),
                     Vector2.Zero, moving: false, paused: true);
+            }
+            _snapshotSecond = _game.Calendar.ElapsedSeconds;
+            _interpolationSeconds = 1;
             return;
         }
         if (_snapshotSecond != _game.Calendar.ElapsedSeconds)
@@ -59,15 +75,21 @@ public partial class WorkerPresentation : Node2D
             }
             _interpolationSeconds = 0;
         }
-        _interpolationSeconds = System.Math.Min(1, _interpolationSeconds + delta);
-        float progress = (float)_interpolationSeconds;
-        foreach (WorkerVisual worker in _workers)
+        double rate = _driver?.Rate ?? 1;
+        bool accelerated = !SimulationDriver.IsPublicRateAllowed(rate);
+        _interpolationSeconds = System.Math.Min(1, _interpolationSeconds + delta * rate);
+        float progress = accelerated ? 1 : (float)_interpolationSeconds;
+        var current = _game.GetWorkers();
+        for (int i = 0; i < _workers.Length; i++)
         {
+            WorkerVisual worker = _workers[i];
             worker.Position = worker.From.Lerp(worker.To, progress);
             Vector2 direction = MapCoordinates.GridPositionToLocal(worker.To) -
                 MapCoordinates.GridPositionToLocal(worker.From);
             worker.Character.ShowAt(ToLocal(_map.GetGridWorldPosition(worker.Position)), direction,
-                moving: progress < 1 && direction != Vector2.Zero, paused: false);
+                moving: accelerated ? current[i].Activity == WorkerActivity.Moving :
+                    progress < 1 && direction != Vector2.Zero,
+                paused: false, animationRate: accelerated ? 1 : rate);
         }
     }
 

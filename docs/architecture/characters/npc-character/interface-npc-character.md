@@ -7,7 +7,7 @@
 | 场景属性 `CharacterSheet` | 初始角色图集；场景默认使用 `npc_animation_001.png`。 |
 | `SetCharacter(sheet)` | 将现有三方向动画的图集切换为指定角色，保留动画帧的规格和当前位置。 |
 | `SetMoveDirection(direction)` | 接收二维移动方向并限制最大长度为 1；角色按原示例每秒 180 本地像素移动。零方向停在当前朝向的首帧。 |
-| `ShowAt(localPosition, direction, moving, paused)` | 外部快照驱动模式：按父节点本地坐标设置位置，方向只用于朝向；`moving` 决定是否播放走路动画，停步保留朝向首帧。暂停保持当前动画和帧，仅暂停播放。首次调用停用自主物理移动与碰撞，此实例随后由外部持续定位，不使用预览速度或碰撞决定到达。 |
+| `ShowAt(localPosition, direction, moving, paused, animationRate=1)` | 外部快照驱动模式：位置和朝向由调用方给定；`moving` 决定走路播放，`animationRate` 控制播放倍率。暂停保留帧；首次调用停用自主物理移动及碰撞。公共经营倍率同比播放，开发高倍率调用方传1；角色不根据倍率自行推进经营。 |
 
 图集每帧 64×64 像素，三方向各 6 帧、8 FPS 循环。向下、向左、向上分别取图集第 8、9、10 行；向右镜像向左动画。角色场景不读取键盘，也不持有游戏日历或 `FarmGame`。[独立预览](../../ui/npc-preview/interface-npc-preview.md)继续使用原方向控制与物理移动；[工人表现](../../world/worker-presentation/interface-worker-presentation.md)仅使用外部定位，不依赖动画完成回调。
 

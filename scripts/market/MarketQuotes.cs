@@ -45,6 +45,12 @@ internal sealed class MarketQuotes
         AdvanceTo(calendar.ElapsedDays);
     }
 
+    /**
+     * <summary>查询下一公告准备或正式报价的绝对游戏日。</summary>
+     * <returns>当前排期的下一个真实行情事件日。</returns>
+     */
+    internal uint NextEventDay => ActualQuoteDay(_nextAnchorDay) - (_prepared ? 0u : 1u);
+
     internal MarketQuoteSnapshot GetQuote(CommodityId commodity)
     {
         CommodityDefinition definition = CommodityCatalog.Get(commodity);

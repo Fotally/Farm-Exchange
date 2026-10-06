@@ -36,7 +36,7 @@ public partial class TestCultivationManagement : Node
             await Frames(parent);
             main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
             parent.AddChild(main);
-            main.GetNode<Timer>("TickTimer").Stop();
+            main.SetProcess(false);
             Click(main, "PauseButton");
             uint seconds = main.Game.Calendar.ElapsedSeconds;
             Click(main, "CultivationButton");

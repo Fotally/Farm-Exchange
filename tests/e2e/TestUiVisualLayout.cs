@@ -34,7 +34,7 @@ public partial class TestUiVisualLayout : Node
             await Frames(parent);
             var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
             parent.AddChild(main);
-            main.GetNode<Timer>("TickTimer").Stop();
+            main.SetProcess(false);
             try
             {
                 await Frames(parent);

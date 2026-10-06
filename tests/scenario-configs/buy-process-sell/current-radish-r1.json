@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "caseId": "current-radish",
+  "revision": 1,
+  "flow": "buy-process-sell",
+  "run": { "target": "current" },
+  "execution": { "timePlan": [{ "endDate": "01-02-01", "rate": 1 }] },
+  "parameters": {
+    "rawCommodity": "Radish.Raw",
+    "quantity": 1,
+    "processorAnchor": { "x": 0, "y": 0 },
+    "processingWaitLimitTicks": 27,
+    "orderWaitLimitTicks": 1
+  }
+}

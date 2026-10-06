@@ -486,6 +486,101 @@ public sealed class FarmGame
             return default;
         if (_calendar.Snapshot.ElapsedSeconds == uint.MaxValue)
             throw new InvalidOperationException("模拟时间已达到上限");
+        return AdvanceEventTick(isRaining);
+    }
+
+    /**
+     * <summary>一次请求推进无外部降雨输入区间，平静数据直接累计，真实事件按原相位结算。</summary>
+     * <remarks>整段先校验日历容量；检查点可提交正式命令，修改后须返回 false 停止并重算请求。显式雨 tick 由宿主先拆段再调用 AdvanceTick。</remarks>
+     * <param name="maxTicks">最多推进的完整经营秒数；零或暂停时不推进。</param>
+     * <param name="checkpoint">真实事件及请求终点的稳定回调，true 继续，false 停止；不能嵌套推进。</param>
+     * <returns>实际秒数、宽整数产出、事件/平静秒数及检查点停止标识。</returns>
+     */
+    public SimulationAdvanceResult AdvanceTicks(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint = null)
+    {
+        if (_calendar.IsPaused || maxTicks == 0)
+            return default;
+        if (maxTicks > uint.MaxValue - Calendar.ElapsedSeconds)
+            throw new InvalidOperationException("模拟时间请求超出上限");
+        _tradeOrders.BeginAdvanceRequest();
+        uint advanced = 0, quiet = 0, events = 0, interval = 0;
+        long harvested = 0, produced = 0;
+        bool workerActed = false, dayAdvanced = false;
+        while (advanced < maxTicks)
+        {
+            uint remaining = maxTicks - advanced;
+            uint nextEvent = GetNextEventSeconds();
+            uint quietSpan = Math.Min(remaining, nextEvent - 1);
+            bool intervalDayAdvanced = false;
+            if (quietSpan > 0)
+            {
+                intervalDayAdvanced = AdvanceQuietSeconds(quietSpan);
+                advanced += quietSpan;
+                quiet += quietSpan;
+                interval += quietSpan;
+                dayAdvanced |= intervalDayAdvanced;
+            }
+            TickResult result = new(0, 0, false, intervalDayAdvanced);
+            bool isEvent = advanced < maxTicks;
+            if (isEvent)
+            {
+                result = AdvanceEventTick(false);
+                advanced++;
+                events++;
+                interval++;
+                harvested += result.Harvested;
+                produced += result.Produced;
+                workerActed |= result.WorkerActed;
+                dayAdvanced |= result.DayAdvanced;
+                result = result with { DayAdvanced = result.DayAdvanced || intervalDayAdvanced };
+            }
+            if (checkpoint != null && !checkpoint(new SimulationCheckpoint(
+                advanced, interval, Calendar.ElapsedSeconds, result, isEvent)))
+                return new(advanced, harvested, produced, workerActed, dayAdvanced, true, quiet, events);
+            interval = 0;
+        }
+        return new(advanced, harvested, produced, workerActed, dayAdvanced, false, quiet, events);
+    }
+
+    private uint GetNextEventSeconds()
+    {
+        uint next = Math.Min(_calendar.SecondsUntilNextSeason,
+            _calendar.SecondsUntilDay(_market.NextEventDay));
+        next = Math.Min(next, _cultivation.GetNextEventSeconds(Calendar.ElapsedSeconds));
+        next = Math.Min(next, _workerScheduler.GetNextEventSeconds(_farming, Calendar));
+        if (_tradeOrders.NeedsNextTickCheck)
+            next = 1;
+        foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
+        {
+            if (space.Building == BuildingKind.Farm)
+                next = Math.Min(next, _farming.GetNextEventSeconds(space.AnchorIndex));
+            else if (space.Building == BuildingKind.Processor)
+                next = Math.Min(next, _processing.GetNextEventSeconds(space.AnchorIndex, _inventory));
+        }
+        return next;
+    }
+
+    private bool AdvanceQuietSeconds(uint seconds)
+    {
+        uint previousDay = Calendar.ElapsedDays;
+        foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
+        {
+            if (space.Building == BuildingKind.Farm)
+                _farming.AdvanceQuietSeconds(space.AnchorIndex, seconds);
+            else if (space.Building == BuildingKind.Processor)
+                _processing.AdvanceQuietSeconds(space.AnchorIndex, seconds);
+        }
+        _workerScheduler.AdvanceQuietSeconds(seconds);
+        if (!_calendar.TryAdvanceSeconds(seconds))
+            throw new InvalidOperationException("模拟时间已达到上限");
+        if (Calendar.ElapsedDays == previousDay)
+            return false;
+        _market.Advance(Calendar);
+        return true;
+    }
+
+    private TickResult AdvanceEventTick(bool isRaining)
+    {
         if (isRaining)
             ApplyRain();
         int harvested = 0;

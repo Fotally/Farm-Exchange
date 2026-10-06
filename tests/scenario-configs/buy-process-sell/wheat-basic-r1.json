@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "caseId": "wheat-basic",
+  "revision": 1,
+  "flow": "buy-process-sell",
+  "run": { "target": "independent", "seed": 12345 },
+  "execution": { "timePlan": [{ "endDate": "01-04-01", "rate": 2 }] },
+  "parameters": {
+    "rawCommodity": "Wheat.Raw",
+    "quantity": 1,
+    "processorAnchor": { "x": 0, "y": 0 },
+    "processingWaitLimitTicks": 1800,
+    "orderWaitLimitTicks": 10
+  }
+}

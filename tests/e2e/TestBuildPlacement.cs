@@ -48,7 +48,7 @@ public partial class TestBuildPlacement : Node
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
         parent.AddChild(main);
-        main.GetNode<Timer>("TickTimer").Stop();
+        main.SetProcess(false);
         return main;
     }
 
@@ -154,6 +154,8 @@ public partial class TestBuildPlacement : Node
         try
         {
             main.Game.SetPaused(true);
+            // 暂停经营保留真实场景帧，解除冻结后悬停费用仍须自动刷新。
+            main.SetProcess(true);
             var request = new TradeOrderRequest(new CommodityId(CropKind.Radish, CommodityKind.Raw),
                 TradeOrderSide.Buy, TradeOrderFrequency.Once, TradeOrderQuantityMode.Fixed, 0,
                 TradeOrderBudgetMode.FixedBudget, 4300, 0, CashReserveMode.Amount, 0,
@@ -193,7 +195,7 @@ public partial class TestBuildPlacement : Node
         // 挂树前订阅真实选择信号，保证观察先于 Main._Ready 注册的经营提交回调。
         map.SelectionChanged += BeforePlacement;
         parent.AddChild(main);
-        main.GetNode<Timer>("TickTimer").Stop();
+        main.SetProcess(false);
         main.Game.SetPaused(true);
         try
         {
@@ -281,6 +283,7 @@ public partial class TestBuildPlacement : Node
             window.Size = new Vector2I(1920, 1080);
             window.EmitSignal(Window.SignalName.MouseEntered);
             main.Game.SetPaused(true);
+            main.SetProcess(true);
             await Frames(parent);
             var map = main.GetNode<WorldMap>("WorldMap");
             var camera = main.GetNode<CameraController>("Camera2D");

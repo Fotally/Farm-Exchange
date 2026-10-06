@@ -36,7 +36,7 @@ public partial class TestUiScaling : Node
             bool reparentingPassed = await CheckReparenting(parent);
             main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
             parent.AddChild(main);
-            main.GetNode<Timer>("TickTimer").Stop();
+            main.SetProcess(false);
             main.Game.SetPaused(true);
             uint beforeSeconds = main.Game.Calendar.ElapsedSeconds;
             Click(main, "InventoryButton");

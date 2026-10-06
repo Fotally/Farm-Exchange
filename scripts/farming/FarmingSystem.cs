@@ -124,6 +124,30 @@ internal sealed class FarmingSystem
     }
 
     /**
+     * <summary>只读查询该农田正常成熟的秒距离。</summary>
+     * <param name="index">现有农田锚点。</param>
+     * <returns>未生长时为 uint.MaxValue，生长时按每轮向上取整。</returns>
+     */
+    internal uint GetNextEventSeconds(int index)
+    {
+        FarmState farm = _farms[index]!;
+        return farm.Stage == CropStage.Growing
+            ? (uint)GameTimeUnits.RemainingSeconds(farm.RemainingTimeUnits) : uint.MaxValue;
+    }
+
+    /**
+     * <summary>一次累计成熟之前的无事件生长区间。</summary>
+     * <param name="index">现有农田锚点。</param>
+     * <param name="seconds">严格小于该轮剩余经营秒数的区间。</param>
+     */
+    internal void AdvanceQuietSeconds(int index, uint seconds)
+    {
+        FarmState farm = _farms[index]!;
+        if (farm.Stage == CropStage.Growing)
+            farm.RemainingTimeUnits -= checked((int)(seconds * GameTimeUnits.PerSecond));
+    }
+
+    /**
      * <summary>只读预测已开始生长的一轮实际结束时刻，包含正常成熟与禁生换季结局。</summary>
      * <param name="index">现有农田的锚点索引。</param>
      * <param name="now">完成本步推进后的累计精确时间单位。</param>

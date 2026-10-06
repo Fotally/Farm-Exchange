@@ -98,7 +98,7 @@ public partial class TestUiFacilities : Node
         string pausedText = remaining.Text;
         double pausedValue = Find<ProgressBar>(main, "ProcessorProgress").Value;
         game.SetPaused(true);
-        main.GetNode<Timer>("TickTimer").EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (remaining.Text != pausedText || Find<ProgressBar>(main, "ProcessorProgress").Value != pausedValue ||
             game.GetPlot(processor).RemainingSeconds != processing.RemainingSeconds)
             return Fail("暂停刷新推进或虚构了加工进度");

@@ -174,7 +174,6 @@ public partial class TestCoreLoop : Node
         var buy = Find<Button>(window, "BuyCommodityButton");
         var sell = Find<Button>(window, "SellCommodityButton");
         var all = Find<Button>(window, "SellCommodityAllButton");
-        var timer = main.GetNode<Timer>("TickTimer");
         foreach (MarketQuoteSnapshot quote in main.Game.GetMarketSnapshot().Quotes)
         {
             string prefix = $"Quote{quote.Id.Crop}{quote.Id.Kind}";
@@ -195,7 +194,7 @@ public partial class TestCoreLoop : Node
         var scroll = Find<ScrollContainer>(window, "MarketScroll");
         scroll.ScrollVertical = 30;
         int scrollPosition = scroll.ScrollVertical;
-        timer.EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (input.Text != "123" || !input.HasFocus() || input.CaretColumn != 2 ||
             scroll.ScrollVertical != scrollPosition ||
             Find<Label>(window, "SelectedCommodityLabel").Text != "萝卜原料" ||
@@ -227,7 +226,7 @@ public partial class TestCoreLoop : Node
         int price = main.Game.GetQuote(raw).PriceCents;
         EnterText(input, "2");
         buy.EmitSignal(Button.SignalName.Pressed);
-        timer.EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (main.Game.MoneyCents != before - 2 * price || main.Game.GetStock(raw) != beforeStock + 2 ||
             main.Game.Calendar.ElapsedSeconds != pausedSecond || input.Text != "2")
             return Fail("暂停买入未按当前报价进入公共库存，或推进了经营");
@@ -395,7 +394,6 @@ public partial class TestCoreLoop : Node
         var input = Find<LineEdit>(window, "RawReserveRadishInput");
         var apply = Find<Button>(window, "SetRawReserveRadishButton");
         var scroll = Find<ScrollContainer>(window, "InventoryScroll");
-        var timer = main.GetNode<Timer>("TickTimer");
         if (input.Text != "6")
             return Fail("库存输入未显示经营模块的已提交底线");
 
@@ -404,7 +402,7 @@ public partial class TestCoreLoop : Node
         input.CaretColumn = 2;
         scroll.ScrollVertical = 20;
         int scrollPosition = scroll.ScrollVertical;
-        timer.EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (input.Text != "123" || !input.HasFocus() || input.CaretColumn != 2 ||
             scroll.ScrollVertical != scrollPosition ||
             !object.ReferenceEquals(input, Find<LineEdit>(window, "RawReserveRadishInput")) ||
@@ -412,7 +410,7 @@ public partial class TestCoreLoop : Node
             main.Game.GetRawReserve(CropKind.Radish) != 6)
             return Fail("经营刷新丢失底线输入、光标、焦点、滚动或控件身份");
         input.ReleaseFocus();
-        timer.EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         Find<Button>(window, "CloseButton").EmitSignal(Button.SignalName.Pressed);
         Find<Button>(ui, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
         if (input.Text != "123")
@@ -436,7 +434,7 @@ public partial class TestCoreLoop : Node
         }
         EnterText(input, "5");
         input.EmitSignal(LineEdit.SignalName.TextSubmitted, input.Text);
-        timer.EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (main.Game.GetRawStock(CropKind.Radish) != 5 || main.Game.GetPlot(processor).RemainingSeconds != 26 ||
             !ContainsVisibleText(detail, "加工中"))
             return Fail("回车提交后下次经营领取未正确启动加工");
@@ -473,7 +471,6 @@ public partial class TestCoreLoop : Node
         Button cancel = Find<Button>(ui, "CancelPlacementButton");
         Label footer = Find<Label>(ui, "BuildHint");
         Label message = Find<Label>(ui, "MessageLabel");
-        Timer timer = main.GetNode<Timer>("TickTimer");
         build.EmitSignal(Button.SignalName.Pressed);
         Button farmCard = Find<Button>(window, "FarmCard");
         Button roadCard = Find<Button>(window, "RoadCard");
@@ -488,7 +485,7 @@ public partial class TestCoreLoop : Node
         LineEdit search = Find<LineEdit>(window, "BuildSearch");
         EnterText(search, "腌制坊");
         search.GrabFocus();
-        timer.EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (!processorCard.IsVisibleInTree() || !processorCard.Text.Contains("10.00 金币") ||
             search.Text != "腌制坊" || !search.HasFocus() ||
             !object.ReferenceEquals(processorCard, Find<Button>(window, "ProcessorCardRadish")))
@@ -531,7 +528,7 @@ public partial class TestCoreLoop : Node
             ContainsVisibleText(detail, "生长周期") || ContainsVisibleText(detail, "加工周期") ||
             ContainsVisibleText(detail, "库存") || ContainsVisibleText(detail, "售价"))
             return Fail("道路详情误读作物/加工字段或没有独立拆除说明");
-        timer.EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (!object.ReferenceEquals(remove, Find<Button>(roadDetails, "RemoveRoadButton")) ||
             !roadDetails.IsVisibleInTree() || Find<Label>(ui, "WorkerCountLabel").Text != "3 名工人")
             return Fail("经营刷新重建道路详情控件或改变真实三人工人摘要");
@@ -561,14 +558,13 @@ public partial class TestCoreLoop : Node
         var inventoryWindow = Find<Control>(ui, "InventoryWindow");
         var cancel = Find<Button>(ui, "CancelPlacementButton");
         var message = Find<Label>(ui, "MessageLabel");
-        var timer = main.GetNode<Timer>("TickTimer");
 
         if (main.Game.MoneyCents != 5000 || detail.Visible || buildWindow.Visible || cancel.Visible ||
             !ContainsVisibleText(ui, "春 · 第 1 年 · 1 月 · 1 日"))
             return Fail("初始界面或日期显示错误");
         Button pause = Find<Button>(ui, "PauseButton");
         pause.EmitSignal(Button.SignalName.Pressed);
-        timer.EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (main.Game.Calendar.ElapsedSeconds != 0 || !main.Game.Calendar.IsPaused || pause.Icon == null ||
             !pause.TooltipText.Contains("继续"))
             return Fail("顶部暂停按钮未停止经营");
@@ -699,7 +695,7 @@ public partial class TestCoreLoop : Node
         bool sawProcessing = false;
         for (int i = 0; i < 250; i++)
         {
-            timer.EmitSignal(Timer.SignalName.Timeout);
+            main.AdvanceSimulation(1);
             sawProcessing |= ContainsVisibleText(detail, "加工中");
         }
         int radishProducts = main.Game.GetProductStock(CropKind.Radish);
@@ -718,7 +714,7 @@ public partial class TestCoreLoop : Node
         Button radishRawButton = Find<Button>(marketWindow, "SellRawRadishButton");
         marketScroll.ScrollVertical = 30;
         int scrollPosition = marketScroll.ScrollVertical;
-        timer.EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (marketScroll.ScrollVertical != scrollPosition ||
             !object.ReferenceEquals(sell, Find<Button>(marketWindow, "SellButton")) ||
             !object.ReferenceEquals(radishRawButton, Find<Button>(marketWindow, "SellRawRadishButton")))

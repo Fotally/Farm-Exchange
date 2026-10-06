@@ -68,6 +68,33 @@ internal sealed class ProcessingSystem
         return true;
     }
 
+    /**
+     * <summary>查询当前场地下一次完工或可领取的秒距离。</summary>
+     * <param name="index">现有加工锚点。</param>
+     * <param name="inventory">本局库存，用于只读检查空闲领取。</param>
+     * <returns>忙碌按单批向上取整；可领取为一秒，无事件为 uint.MaxValue。</returns>
+     */
+    internal uint GetNextEventSeconds(int index, GoodsInventory inventory)
+    {
+        ProcessorState processor = _processors[index]!;
+        if (processor.RemainingTimeUnits > 0)
+            return (uint)GameTimeUnits.RemainingSeconds(processor.RemainingTimeUnits);
+        return inventory.GetProcessingAvailability(processor.CropKind) == RawProcessingAvailability.Available
+            ? 1u : uint.MaxValue;
+    }
+
+    /**
+     * <summary>一次累计当前批次完工之前的无事件区间。</summary>
+     * <param name="index">现有加工锚点。</param>
+     * <param name="seconds">严格小于当前批次剩余经营秒数的区间。</param>
+     */
+    internal void AdvanceQuietSeconds(int index, uint seconds)
+    {
+        ProcessorState processor = _processors[index]!;
+        if (processor.RemainingTimeUnits > 0)
+            processor.RemainingTimeUnits -= checked((int)(seconds * GameTimeUnits.PerSecond));
+    }
+
     internal bool TryStart(int index, GoodsInventory inventory)
     {
         ProcessorState? processor = _processors[index];

@@ -4,6 +4,7 @@ using FarmExchange.Characters;
 using FarmExchange.Gameplay;
 using FarmExchange.UI;
 using FarmExchange.World;
+using FarmExchange.Time;
 
 public partial class TestWorkerPresentation : Node
 {
@@ -16,11 +17,11 @@ public partial class TestWorkerPresentation : Node
 
     public static async Task<bool> RunChecksAsync(Node parent)
     {
-        bool passed = CheckInterpolation(parent) && CheckFrameIndependence(parent);
+        bool passed = CheckInterpolation(parent) && CheckFrameIndependence(parent) && CheckRates(parent);
         if (!passed) return false;
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
         parent.AddChild(main);
-        main.GetNode<Timer>("TickTimer").Stop();
+        main.SetProcess(false);
         main.Game.SetPaused(true);
         await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
         WorkerPresentation presentation = main.GetNode<WorkerPresentation>("WorldMap/WorkerPresentation");
@@ -47,13 +48,13 @@ public partial class TestWorkerPresentation : Node
         return game;
     }
 
-    private static WorkerPresentation CreatePresentation(Node parent, FarmGame game, out WorldMap map)
+    private static WorkerPresentation CreatePresentation(Node parent, FarmGame game, out WorldMap map, SimulationDriver? driver = null)
     {
         map = new WorldMap();
         parent.AddChild(map);
         var presentation = new WorkerPresentation();
         map.AddChild(presentation);
-        presentation.SetGame(game, map);
+        presentation.SetGame(game, map, driver);
         // 逐帧输入由测试显式提供，真实节点仍在树上；不让自动 _Process 干扰指定帧序列。
         presentation.SetProcess(false);
         return presentation;
@@ -96,7 +97,7 @@ public partial class TestWorkerPresentation : Node
             presentation._Process(0);
             if (!first.GlobalPosition.IsEqualApprox(map.GetGridWorldPosition(halfway)))
                 return Fail("平移旋转缩放地图后，工人显示没有应用相同节点变换");
-            Vector2 pausedPosition = first.GlobalPosition;
+            Vector2 pausedPosition = map.GetGridWorldPosition(moved[0].GridPosition);
             game.SetPaused(true);
             presentation._Process(100);
             first._PhysicsProcess(1);
@@ -113,9 +114,9 @@ public partial class TestWorkerPresentation : Node
 
             game.SetPaused(false);
             presentation._Process(0.25);
-            Vector2 resumed = initial[0].GridPosition.Lerp(moved[0].GridPosition, 0.75f);
+            Vector2 resumed = moved[0].GridPosition;
             if (!first.GlobalPosition.IsEqualApprox(map.GetGridWorldPosition(resumed)))
-                return Fail("暂停恢复补算了现实时间或丢失原插值段");
+                return Fail("暂停恢复未保持对齐后的真实经营位置");
             presentation._Process(0.25);
             if (!first.GlobalPosition.IsEqualApprox(map.GetGridWorldPosition(moved[0].GridPosition)) ||
                 thirdSprite.IsPlaying() || thirdSprite.Frame != 0)
@@ -175,6 +176,37 @@ public partial class TestWorkerPresentation : Node
             slowMap.Free();
             fastMap.Free();
         }
+    }
+
+    private static bool CheckRates(Node parent)
+    {
+        foreach (double rate in new[] { 0.5, 1, 2, 20 })
+        {
+            FarmGame game = CreateGame();
+            var driver = new SimulationDriver();
+            driver.SetDevelopmentRate(rate);
+            WorkerPresentation presentation = CreatePresentation(parent, game, out WorldMap map, driver);
+            try
+            {
+                var initial = game.GetWorkers();
+                game.AdvanceTick();
+                var moved = game.GetWorkers();
+                presentation._Process(0.25 / rate);
+                NpcCharacter character = presentation.GetNode<NpcCharacter>("Worker1");
+                Vector2 expected = rate > 2 ? moved[0].GridPosition :
+                    initial[0].GridPosition.Lerp(moved[0].GridPosition, 0.25f);
+                AnimatedSprite2D sprite = character.GetNode<AnimatedSprite2D>("AnimatedSprite2D");
+                if (!character.GlobalPosition.IsEqualApprox(map.GetGridWorldPosition(expected)) ||
+                    !Mathf.IsEqualApprox(sprite.SpeedScale, rate > 2 ? 1 : (float)rate))
+                    return Fail("经营倍率未同比控制位置/公共动画，高倍率未显示最新真实位置并保留正常动画速度");
+            }
+            finally
+            {
+                parent.RemoveChild(map);
+                map.Free();
+            }
+        }
+        return true;
     }
 
     private static bool Fail(string message)

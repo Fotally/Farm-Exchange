@@ -5,6 +5,11 @@
 ```mermaid
 flowchart LR
     Main[Main：场景与窗口] --> FarmGame[FarmGame：经营命令与推进]
+    Main --> Driver[SimulationDriver：倍率与未完成tick]
+    Driver --> FarmGame
+    DeveloperWindow[开发窗口] --> Scenario[固定参数化流程与报告]
+    Scenario --> FarmGame
+    DeveloperWindow --> Driver
     Main --> UiWindows[UI 窗口：固定控件与玩家意图]
     UiWindows --> DragWindow[DraggableWindow：拖动与位置]
     Main --> UiStyle[UiElements：共用视觉元素]
@@ -71,7 +76,10 @@ flowchart LR
 | 播种适宜季节与预计成熟判断 | `PlantingRules` | `FarmingSystem` 执行播种和 `FarmGame` 查询详情共用同一只读结果；仅当前禁生季节禁止播种，预计时间不足为风险提示。 |
 | 加工场地配对与进行中批次 | `ProcessingSystem` | `FarmGame` 协调完工入库与领取相位；模块从 `Inventory` 领取原料。 |
 | 工人位置、当前任务、独占认领与候选游标 | `WorkerScheduler` | `FarmGame` 只推进一秒并提供只读快照；三人按编号推进，当前选择算法留在私有方法，外部不读取或修改游标及认领表。 |
-| 累计模拟秒、日历和暂停 | `GameCalendar` | `FarmGame` 每次经营步进推进一秒；主界面读取日期并设置暂停。 |
+| 累计模拟秒、日历和暂停 | `GameCalendar` | `FarmGame` 单tick结算或批量累计，主界面读取日期并设置暂停；日历容量在请求前校验。 |
+| 经营倍率与未完成tick进度 | `SimulationDriver` | 当前局由 `Main` 唯一驱动，流程共用稳定检查点与推进限额；独立数据局保存自身驱动。暂停不累计，改速保留进度。 |
+| 下一真实事件与平静区间累计 | 各业务状态拥有模块 | `FarmGame.AdvanceTicks` 协调最近事件，平静区间一次累计，事件共用原单tick相位；工人行程计算及事件距离留内部。 |
+| 固定流程进度、配置引用与检查证据 | 开发参数化流程 | 使用正式经营命令，独立受控局严格检查，现场归因不足明确记录；JSON报告保存稳定检查点及原文件摘要，不复制配置。 |
 | 行情排期与真实公告 | `MarketQuotes` | `FarmGame` 在换日后传入日历，只在实际前一日与报价日处理；UI 和交易读取同一报价。 |
 | 生产共用的时间比例 | `GameTimeUnits` | 日历、农田和加工使用同一整数比例与剩余秒数换算。 |
 | 七种作物的定义 | `CropCatalog` | `FarmGame` 查询只读作物表与单种定义。 |

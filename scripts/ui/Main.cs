@@ -14,6 +14,14 @@ namespace FarmExchange.UI;
 public partial class Main : Node2D
 {
     private readonly FarmGame _game = new();
+    private readonly SimulationDriver _driver = new();
+    private WorkerPresentation _workerPresentation = null!;
+    private Button _rateButton = null!;
+    private long _tickHarvested;
+    private long _tickProduced;
+#if DEBUG
+    private DeveloperToolsWindow _developerWindow = null!;
+#endif
     private WorldMap _worldMap = null!;
     private CameraController _camera = null!;
     private Control _uiRoot = null!;
@@ -54,6 +62,7 @@ public partial class Main : Node2D
     }
 
     internal FarmGame Game => _game;
+    internal SimulationDriver Driver => _driver;
 
     public override void _Ready()
     {
@@ -63,19 +72,70 @@ public partial class Main : Node2D
         _worldMap.SetGame(_game);
         GetNode<Camera2D>("Camera2D").GlobalPosition = _worldMap.GetGridWorldPosition(
             new Vector2((FarmGame.MapSize - 1) / 2f, (FarmGame.MapSize - 1) / 2f));
-        var workerPresentation = new WorkerPresentation();
-        _worldMap.AddChild(workerPresentation);
-        workerPresentation.SetGame(_game, _worldMap);
+        _workerPresentation = new WorkerPresentation();
+        _worldMap.AddChild(_workerPresentation);
+        _workerPresentation.SetGame(_game, _worldMap, _driver);
+        _workerPresentation.ProcessPriority = 2;
         _worldMap.SelectionChanged += OnSelectionChanged;
         _uiRoot = GetNode<Control>("CanvasLayer/UiRoot");
         _uiRoot.Theme = SharedTheme;
         BuildInterface();
         UiScaling.Bind(_uiRoot);
-        GetNode<Timer>("TickTimer").Timeout += OnTick;
+        _driver.RateChanged += RefreshSimulationRate;
         RefreshUi();
     }
 
-    public override void _Process(double delta) => RefreshPlacementPreview();
+    public override void _ExitTree()
+    {
+        _driver.RateChanged -= RefreshSimulationRate;
+    }
+
+    public override void _Process(double delta)
+    {
+        AdvanceSimulation(delta);
+#if DEBUG
+        _developerWindow.AdvanceIndependent(delta);
+#endif
+        RefreshPlacementPreview();
+    }
+
+    internal uint AdvanceSimulation(double delta)
+    {
+        _tickHarvested = _tickProduced = 0;
+        uint advanced;
+        try
+        {
+#if DEBUG
+            advanced = _driver.Advance(delta, _game, ObserveSimulationCheckpoint,
+                _developerWindow.GetCurrentMaxTicks);
+#else
+            advanced = _driver.Advance(delta, _game, ObserveSimulationCheckpoint);
+#endif
+        }
+        catch (System.InvalidOperationException error)
+        {
+#if DEBUG
+            _developerWindow.Abort("经营推进被拒绝：" + error.Message);
+#endif
+            SetMessage("经营推进被拒绝：" + error.Message);
+            return 0;
+        }
+        if (_tickHarvested > 0 || _tickProduced > 0)
+            SetMessage($"收获 {_tickHarvested} 份原料，加工产出 {_tickProduced} 份");
+        if (advanced > 0) RefreshAfterGameChange(worldChanged: true);
+        return advanced;
+    }
+
+    private bool ObserveSimulationCheckpoint(SimulationCheckpoint point)
+    {
+        _tickHarvested += point.Result.Harvested;
+        _tickProduced += point.Result.Produced;
+#if DEBUG
+        return _developerWindow.ObserveCurrentCheckpoint(point);
+#else
+        return true;
+#endif
+    }
 
     public override void _Input(InputEvent inputEvent)
     {
@@ -141,6 +201,9 @@ public partial class Main : Node2D
         if (inputEvent is not InputEventKey { Pressed: true, Keycode: Key.Escape })
             return;
         if (_placement != null) CancelPlacement();
+#if DEBUG
+        else if (_developerWindow.Visible) _developerWindow.Hide();
+#endif
         else if (_cultivationWindow.Visible) _cultivationWindow.Hide();
         else if (_ordersWindow.Visible) _ordersWindow.Hide();
         else if (_marketWindow.Visible) _marketWindow.Hide();
@@ -237,6 +300,16 @@ public partial class Main : Node2D
             RefreshAfterGameChange(worldChanged: false);
         };
         AddWindow(_cultivationWindow);
+#if DEBUG
+        _developerWindow = new DeveloperToolsWindow(_game, _driver,
+            () => RefreshAfterGameChange(worldChanged: true));
+        AddWindow(_developerWindow);
+        var developerButton = MakeQuietButton("开发测试", 115, 36);
+        developerButton.Name = "DeveloperToolsButton";
+        developerButton.Position = new Vector2(47, 520);
+        developerButton.Pressed += _developerWindow.ShowRaised;
+        _uiRoot.AddChild(developerButton);
+#endif
     }
 
     private void AddWindow(DraggableWindow window, bool right = false)
@@ -285,10 +358,11 @@ public partial class Main : Node2D
             Name = "CalendarPanel",
             AnchorLeft = 0.5f,
             AnchorRight = 0.5f,
-            OffsetLeft = -220.5f,
-            OffsetRight = 220.5f,
+            OffsetLeft = -260f,
+            OffsetRight = 260f,
             OffsetTop = 38f,
             OffsetBottom = 131f,
+            GrowHorizontal = Control.GrowDirection.Both,
         };
         datePanel.AddThemeStyleboxOverride("panel", Frame(Paper, 4));
         top.AddChild(datePanel);
@@ -306,7 +380,14 @@ public partial class Main : Node2D
         _calendarStatusLabel = MakeLabel("", 12, Muted);
         _calendarStatusLabel.AutowrapMode = TextServer.AutowrapMode.Off;
         dateText.AddChild(_calendarStatusLabel);
-        dateRow.AddChild(new VSeparator());
+        dateRow.AddChild(new VSeparator { Name = "CalendarActionSeparator" });
+        _rateButton = MakeQuietButton("1×", 65, 46);
+        _rateButton.Name = "SimulationRateButton";
+        _rateButton.Pressed += () =>
+        {
+            _driver.SetRate(NextPublicRate(_driver.Rate), SimulationRateSource.Player);
+        };
+        dateRow.AddChild(_rateButton);
         _pauseButton = MakeQuietButton("", 43, 46);
         _pauseButton.Name = "PauseButton";
         _pauseButton.Icon = UiIcons.Texture(UiIcon.Pause);
@@ -683,16 +764,6 @@ public partial class Main : Node2D
         _marketWindow.ShowFeedback(message);
     }
 
-    private void OnTick()
-    {
-        if (_game.IsPaused)
-            return;
-        TickResult result = _game.AdvanceTick();
-        if (result.Harvested > 0 || result.Produced > 0)
-            SetMessage($"收获 {result.Harvested} 份原料，加工产出 {result.Produced} 份");
-        RefreshAfterGameChange(worldChanged: true);
-    }
-
     private void RefreshAfterGameChange(bool worldChanged)
     {
         if (worldChanged)
@@ -706,11 +777,20 @@ public partial class Main : Node2D
         _messageLabel.Visible = !string.IsNullOrEmpty(_messageLabel.Text);
     }
 
+    private static double NextPublicRate(double rate) => rate switch { 1 => 2, 2 => 0.5, _ => 1 };
+
+    private void RefreshSimulationRate(double rate, SimulationRateSource source)
+    {
+        _rateButton.Text = rate.ToString("0.################", System.Globalization.CultureInfo.InvariantCulture) + "×";
+        _rateButton.TooltipText = "点击切换至 " + NextPublicRate(rate).ToString(System.Globalization.CultureInfo.InvariantCulture) + "×";
+    }
+
     private void RefreshUi()
     {
         _moneyLabel.Text = FormatCoins(_game.AvailableMoneyCents);
         _moneyLabel.TooltipText = $"总余额 {FormatCoins(_game.MoneyCents)} · 冻结 {FormatCoins(_game.FrozenMoneyCents)}";
         _workerLabel.Text = $"{_game.GetWorkers().Count} 名工人";
+        RefreshSimulationRate(_driver.Rate, SimulationRateSource.Player);
         _workerStatusLabel.Text = _game.IsPaused ? "照料已暂停" : "自动照料中";
         CalendarSnapshot calendar = _game.Calendar;
         string season = calendar.Season switch
@@ -752,6 +832,7 @@ public partial class Main : Node2D
     private void TogglePause()
     {
         _game.SetPaused(!_game.IsPaused);
+        _workerPresentation._Process(0);
         RefreshUi();
     }
 

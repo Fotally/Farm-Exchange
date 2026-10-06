@@ -1,5 +1,41 @@
 # 自动化测试与性能测量
 
+## 2026-10-06 #100 / #101 共用速率、等价批量推进与参数化开发测试验收
+
+变更基准为 `dev` 的 `72a91ac` 与启动前工作区快照；本次只交付 [#100](https://github.com/Fotally/Farm-Exchange/issues/100)、[#101](https://github.com/Fotally/Farm-Exchange/issues/101) 及相关设计依据，保留其他任务修改。公共发布速率0.5×、1×、2×与开发正整数倍率共用时间驱动；批量推进累计平静区间、逐事件完整结算。开发窗口加载持久JSON，当前局与独立数据局共用买入Q份→加工→一次委托卖出流程，报告仅输出JSON并引用原配置SHA-256。主计划及最终交付状态见[设计与完成记录](developer-tools-parameterized-tests.md)。
+
+- #100完整单元、#101修复后的完整单元、旧摆放测试的帧刷新迁移分别由新独立只读审查员审查，未发现待修问题。原截图抓取早于帧绘制、暂停夹具同时禁用UI刷新和开发包节点脚本资源被排除的问题已修正；没有放宽经营、余额、原生输入或截图断言。
+- 指定Godot 4.7.2 Mono的Debug / Release编译零警告零错误。完整自动化场景、满地图50 tick及图形性能套件通过。覆盖七作物、季年边界、严格促熟、工人重选目标、加工底线与订单冻结、逐笔费用、计划凭据、暂停改速、容量拒绝及JSON严格校验；同命令逐tick/批量在每个检查点比较公开状态和后续结果。
+- 空局整年17,280 tick中17,232 tick一次累计、48个事件秒结算；纯数据逐秒23.153 ms、批量0.133 ms。密集250 tick全部按250事件秒结算，实测0.799 ms。该基准证明真实累计与事件保序，不代表满地图或所有流程的加速倍数。
+- 满地图16,384生产实例、147,456占用子格，50 tick为92.58 ms，平均1.852 ms/tick。1920×1080、地图倍率1.25、关闭VSync且不限帧，修改前597.0 FPS / P95 2.45 ms，修改后641.2 FPS / P95 1.93 ms，两次均达到60 FPS / 16.67 ms门槛并保存前后采样图；不据系统负载波动宣称性能提升。
+- Windows Release中间导出成功；实际 `build/windows/FarmExchange.exe --headless --quit-after 5` 从Temp工作目录启动并正常退出，Exit0、stderr0字节。最终结果保存在 `export-startup-final.json`。
+- 普通Release与实际Windows Release导出程序集均无开发流程/工具/测试类型，额外倍率接口不存在；公共时间驱动保留。Windows Release PCK的开发脚本、测试配置与专用验收图排除检查通过。Windows Dev实际导出Exit0，开发程序集包含18个开发类型及额外倍率入口，实际PCK保留工具节点脚本并排除tests/build/coverage/专用验收图。
+- 从用户Temp工作目录启动真实Windows Dev包，在物理1920×1080窗口操作工具，Q1 / Q3分别28 / 80 tick严格通过，各8项检查全Passed，原配置SHA-256一致，每次只生成exe旁单一report.json。两次正常关闭均Exit0、stderr0字节；输入探针采用真实Unicode键盘事件，未改变生产逻辑。
+- 开发窗口真实1080P原生入口、控件操作和独立Q3流程通过，80 tick严格通过、加工区间79 tick、订单区间1 tick；工人动画和摆放原生回归通过。[实际工具窗口图](../architecture/ui/developer-tools-window/godot-developer-tools-1080.png)直接来自测试绘制完成后的截图。
+
+Cobertura按脚本文件与行号去重为 **6451 / 6643（97.11%）**；以下15个一级模块均达到80%：
+
+| 模块 | 已覆盖行 / 有效行 | 行覆盖率 |
+| --- | ---: | ---: |
+| characters | 74 / 76 | 97.37% |
+| cultivation | 287 / 292 | 98.29% |
+| development | 448 / 479 | 93.53% |
+| economy | 31 / 35 | 88.57% |
+| farming | 223 / 224 | 99.55% |
+| gameplay | 465 / 493 | 94.32% |
+| inventory | 82 / 85 | 96.47% |
+| land | 100 / 101 | 99.01% |
+| market | 225 / 225 | 100.00% |
+| processing | 71 / 71 | 100.00% |
+| time | 77 / 77 | 100.00% |
+| trading | 391 / 399 | 97.99% |
+| ui | 3288 / 3388 | 97.05% |
+| workers | 118 / 122 | 96.72% |
+| world | 571 / 576 | 99.13% |
+
+证据保存在 `build/issue100-101-validation/`：独立审查记录、`windows-dev-final-export.json`、`assembly-dev-final.json` / `dev-pack-final.json`、`dev-window-final.json`、`export-startup-final.json`、`full-tests.log`、`coverage.cobertura.xml` / `coverage-modules.json`、前后性能JSON及截图、Debug / Release编译、真实图形、导出启动与实际包检查日志。运行报告、测试配置库和源码分别存放，不把报告或临时诊断工件提交Git。macOS包外报告根目录已有路径夹具验证；Windows环境未进行macOS原生导出启动验收。
+
+
 ## 2026-10-05 #94 共享年度表字色、整表删除与自动复种验收
 
 UI 源码基准 `0bbbaf54cb68a0d5af76a945f802f5c8ff2f3201`，本单验收时 `dev` 为 `5a04827` 并保留独立 #96 发布成果。共享年度表原生列表悬停及选中悬停字色已修正，新增整表删除入口；删除解除全部引用，保留当前作物、阶段、剩余时间与水分，恢复按当前作物自动复种。领域规则和接口、窗口操作及系统结构同步，最终审查与交付状态见 [#94](https://github.com/Fotally/Farm-Exchange/issues/94)。

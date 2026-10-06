@@ -12,3 +12,5 @@
 | `SetProcessingForBenchmark`、`Clear` | 仅供满地图 50 tick 夹具设置和重建。 |
 
 `FarmGame` 保留旧遍历顺序：先推进已有批次，之后按 `Y * 384 + X` 递增，按空间实例让全部空闲场地各一次依次领取；后一个场地读取前一个扣减后的库存。新建场地立即调用同一全场领取阶段，并检查当前底线。设置底线不启动领取，下一经营步领取阶段按新值检查；提高底线不退还进行中投入物，也不重置时长。配方、时长与建造费保持。
+
+批量内部接口 `GetNextEventSeconds(index, inventory)` 在忙碌时返回本批向上取整的剩余秒数，空闲且有可领取原料返回 1，无可领取原料返回 `uint.MaxValue`。`AdvanceQuietSeconds(index, seconds)` 只在完工前一次扣除 `7×seconds` 精确单位，不入库、不领取。事件秒仍使用 `Advance` 和稳定锚点顺序的 `TryStart`，每批独立取整，不结转超出的单位；共享原料竞争、冻结与底线由原库存操作重验。委托买入的原料使下一秒成为领取事件，不在成交当秒领取，详见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。

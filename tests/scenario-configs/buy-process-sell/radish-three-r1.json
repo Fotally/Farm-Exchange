@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "caseId": "radish-three",
+  "revision": 1,
+  "flow": "buy-process-sell",
+  "run": { "target": "independent", "seed": 12345 },
+  "execution": {
+    "timePlan": [{ "endDate": "01-01-02", "rate": 2 }, { "endDate": "01-02-01", "rate": 20 }]
+  },
+  "parameters": {
+    "rawCommodity": "Radish.Raw",
+    "quantity": 3,
+    "processorAnchor": { "x": 0, "y": 0 },
+    "processingWaitLimitTicks": 79,
+    "orderWaitLimitTicks": 1
+  }
+}

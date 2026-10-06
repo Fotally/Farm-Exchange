@@ -21,7 +21,7 @@
 - `scripts/farming/FarmingSystem.cs`：每块农田所选作物、水分、播种与精确生长进度的唯一拥有者；统一季节检查，工人浇水与显式降雨共用供水操作，改种留水、收获与拆除清水。播种启停支持计划休耕，已播种仍可供水和成熟；只读预测按实际步长及首次禁生边界给出本轮结束，不把清除预测为收获；重启同种也失效旧任务。禁生换季先按内部严格阈值促成临近成熟并走原收获入库流程，再清理其余待水或生长中的本轮作物与水分，保留农田和选种；修改该边界时读取 `docs/architecture/farming/farming-system/implementation-season-maturity.md`。
 - `scripts/cultivation/CultivationPlanBook.cs`、`CultivationPlanRequest.cs` 与 `CultivationPlanSnapshot.cs`：共享年度表、农田引用、逐条年度执行凭据、预备安排与日期事件的唯一拥有者。每表生命周期保留下一可用条编号，删除及保存空表不回退，快照向草稿提供 `NextEntryId`；原条编辑仍保留编号与凭据。精确年度时间环绕，四季条每年重复，空白休耕、不同种至少间隔一天；独立条目排程校验拒绝禁生季起点，适季开始但跨入禁生季仍返回风险，完整保存另检查名称与模式。编辑或重应用后仍保持每条每年一轮，错过不补种。两种表级模式封装切换与保留，空白和同种后续条保留当前轮且停止复种，每条独立播种；实际结束按当前日期重新定位，应用编辑保留当前轮，手动指令解除本田引用；整表删除移除全部该表引用且不回退表编号；不拥有生长状态、库存或工人任务。
 - `scripts/processing/ProcessingSystem.cs`：加工场地匹配作物与批次进度的唯一拥有者，负责按旧顺序从公共库存领取匹配原料。
-- `scripts/workers/WorkerScheduler.cs` 与 `WorkerSnapshot.cs`：工人位置、任务、按实例独占认领与稳定锚点轮转游标的唯一拥有者。三人每经营秒推进 3 小格，到农田定义的工作中心播种浇水，执行前重验版本凭据；外部只推进一秒或读快照，选择算法保持私有以便替换复杂调度。
+- `scripts/workers/WorkerScheduler.cs` 与 `WorkerSnapshot.cs`：工人位置、任务、按实例独占认领与稳定锚点轮转游标的唯一拥有者。三人每经营秒推进 3 小格，到农田定义的工作中心播种浇水，执行前重验版本凭据；按单tick或平静区间推进，最近事件距离、行程起点与累计移动公式封装在工人模块；选择算法保持私有以便替换复杂调度。
 - `scripts/inventory/CommodityId.cs` 与 `Inventory.cs`：前者统一十四商品标识与合法性；后者唯一拥有两类公共库存、逐作物底线和冻结数量。总查询含冻结，可用量扣除一次卖单冻结，加工仅从可用原料领取超过底线的一份；买入与自产共用存储，主动出售不受加工底线限制但不能用冻结量。
 - `scripts/trading/TradingService.cs` 与 `TradeResult.cs`：完整即时与委托结算模块，先检查数量、执行时报价、可用及本单冻结资源、保留线和容量，再一次提交；即时零费，委托按实际成交额收 1% 向上取分费用，结果分别给出货值与费用。宽整数预检，失败资源零修改；调用方不拼装扣款和入库。
 - `scripts/trading/TradeOrderBook.cs`、`TradeOrderRequest.cs` 与 `TradeOrderSnapshot.cs`：订单模块唯一持有单据配置、创建顺序、原现金基准、生命周期和各单资源归属。组内全部/组间任一条件，季节仅读日历；一次限价数量或固定预算买单冻结，卖单冻结数量，持续策略不冻结。一次目标差额建单锁定、持续动态算，行情更新后每单检查一次；同 ID 编辑重验、撤销释放，查询返回独立只读快照。
@@ -29,15 +29,16 @@
 - `scripts/characters/NpcCharacter.cs` 与 `scenes/npc_character.tscn`：可复用的 NPC 动画角色。读取 64×64、每方向 6 帧的角色图集；预览模式按外部方向移动，主地图通过 `ShowAt` 只展示经营快照给定的位置、朝向和暂停，不执行自主物理移动或决定经营任务。
 - `scripts/market/CommodityCatalog.cs` 与 `CommodityDefinition.cs`：唯一维护十四商品名称和初价，稳定排列，使用库存模块的统一商品标识。
 - `scripts/market/MarketQuotes.cs` 与 `MarketSnapshot.cs`：唯一持有正式报价、固定双周排期、事件与公告，封装供需、季节、成本、整数分限幅及节日改期；只接收日历推进并返回独立只读快照，玩家交易量不影响报价。`MarketPriceCurve.cs` 保留为历史独立曲线及测试，不再参与经营。
-- `scripts/time/GameCalendar.cs`、`GameDate.cs` 与 `GameTimeUnits.cs`：日历唯一维护累计 `uint32` 模拟秒与暂停，纯日期查询共用相同年月日与季节换算，为未来实际报价日生成不可变日期；比例模块统一生产和日历的整数比例及剩余秒数换算。`FarmGame` 持有日历并按步进推进。
+- `scripts/time/GameCalendar.cs`、`GameDate.cs` 与 `GameTimeUnits.cs`：日历唯一维护累计 `uint32` 模拟秒与暂停，纯日期查询共用相同年月日与季节换算，为未来实际报价日生成不可变日期；比例模块统一生产和日历的整数比例及剩余秒数换算。`FarmGame` 持有日历，按单tick或平静区间推进并在事件边界完整结算。
 - `scripts/world/MapCoordinates.cs`：固定等距地图的格坐标与地图本地坐标换算入口，使用 `FarmGame.MapSize` 定义的同一地图范围；不读取节点或经营状态。
 - `scripts/world/WorldMap.cs`：地图表现模块。每空间实例读取一次生产快照，填入完整占地；按 8×8 基础格缓存网格，一个实例只在工作中心画一次标记。镜头只更新块可见性，外观变化时重建对应块；按占地偏移绘制完整设施外围选框。独立覆盖层显示候选占地、局部冲突与半透明类型标记，外围边由占地属性生成；输入转为本地基础格并限制镜头，不维护经营规则。
 - `scripts/world/PlacementPreviewGeometry.cs`：内部候选几何，读取同一占地偏移生成候选格与逐格阻塞，按相邻格生成外围边；只查询地图范围与真实占用，不复制正式放置规则或保存经营状态。
-- `scripts/world/WorkerPresentation.cs`：读取工人编号、经营格位置、目标与活动快照，复用角色场景显示三人并按帧插值；位置换算复用地图接口，暂停保持画面，视觉帧率与动画不推进经营。
+- `scripts/world/WorkerPresentation.cs`：读取工人编号、经营格位置、目标与活动快照，复用角色场景显示三人，公共倍率按帧插值并同比调整行走动画，高倍率显示最新真实位置；位置换算复用地图接口，暂停立即对齐真实位置并保留动画帧，视觉帧率与动画不推进经营。
 - `scripts/world/CameraController.cs`：输入与镜头模块。唯一保存地图玩家倍率，窗口和全屏扩大时增加地图视野，保持农田与人物像素大小、镜头中心和玩家倍率。订阅尺寸变化并在退出时取消；缩放限制与输入换算保持内部，UI 倍率由 `UiScaling` 独立维护。区分左键点击与拖动，释放即结束拖动，界面收到释放时清除按下凭据；公开拖动及鼠标在窗口内状态供摆放隐藏预览，通过 `WorldMap` 选择格子及限制镜头。
-- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。组装像素田园浮动布局：顶部日期与暂停、右上金币与工人、左侧真实经营近况、右侧设施详情、底部中央经营入口。唯一持有摆放类型和候选锚点，所有类型逐次建造后保持摆放，右键、Esc、按钮统一取消；每帧在镜头更新后定位，界面遮挡或拖动时隐藏预览，标准费用与可用资金反馈分开显示。分发窗口意图及计时器命令，经营变化后统一刷新，并组装读取工人快照的表现；只在地块变化时同步地图。
+- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。组装像素田园浮动布局：顶部日期、点击循环倍率与暂停、右上金币与工人、左侧真实经营近况、右侧设施详情、底部中央经营入口。倍率位于日期竖线右、暂停左，1×→2×→0.5×循环，高开发倍率点击回1×，均提交玩家意图且不解除暂停。唯一持有摆放类型和候选锚点，所有类型逐次建造后保持摆放，右键、Esc、按钮统一取消；每帧在镜头更新后定位，界面遮挡或拖动时隐藏预览，标准费用与可用资金反馈分开显示。分发窗口意图并通过唯一时间驱动推进经营，经营变化后统一刷新，并组装读取工人快照的表现；只在地块变化时同步地图。
 - `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs`、`RoadDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与可用区域、建造目录、固定的选种/库存/市场控件、三类详情及统一木框纸面主题。窗口避让顶部状态与底部入口，长内容可滚动；主题集中维护按钮、输入、勾选及列表各态字色。目录包含九种设施、分类和名称搜索并统一查询费用；道路连续铺设到 Esc/取消为止，详情仅发出拆除意图。库存显示总量、冻结、可用量并保留底线草稿与焦点；设施详情从快照显示实际进度、产量、报价及损失说明。窗口不持有经营状态。
 - `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`：独立角色预览，接收 WASD/方向键移动、Q/E 切换 20 位角色并显示名称与跟随镜头；不接入主经营场景。
+- `scripts/development/configuration/`：可编辑字段类型与中文元数据、反射描述、严格JSON校验、配置库及独立草稿。配置库唯一负责文件来源、修订、另存/覆盖、单配置删除及流程目录持久移除；内置示例只读，项目内用户配置长期纳入Git。修改字段或保存删除约定时读取[配置编辑接口](docs/architecture/development/interface-scenario-configuration-editor.md)。
 - `scripts/ui/UiScaling.cs`：统一 UI 倍率模块，唯一记录控件原始排版与整体/字体倍率。两个公开设置接口支持独立子树与父子倍率组合，重复设置不累计，动态控件继承；字体变化触发真实重排，自绘时间图共用字号换算。默认1080P且关闭画布拉伸，扩大窗口不改设定倍率；不维护地图或经营状态。
 - `scripts/ui/UiIcons.cs` 与 `FacilityPreview.cs`：复用原型 SVG 的线条图标及设施/作物缩略，只读快照展示真实锚点。图标跟随整体倍率，字体倍率仅调整文字；素材来源见 `assets/ui/source_notes.md`，不替换世界地图与人物素材。
 - `scripts/ui/TradeOrdersWindow.cs`：从市场打开的委托与策略窗口，编辑商品、两种买单预算、数量、现金保留及条件组；列表读取真实状态、冻结和最近成交费用，编辑保留原 ID，每秒刷新不重建草稿控件；窗口不计算费用或修改经营资源。
@@ -48,8 +49,13 @@
 - `.github/workflows/ci.yml`：`dev` 推送时自动运行 headless 测试；手动触发可选图形 FPS 性能测试；`main` 推送时在测试通过后额外完成 Windows Release 导出，通过进程退出码验收导出程序启动并上传构建产物。
 - `.github/workflows/macos.yml`：在 macOS runner 上编译、导出 Universal 2 ZIP、检查双架构程序集并启动应用，上传提交级构建产物。
 - `.github/workflows/release.yml`：独立手动发布游戏版本；操作者输入版本号，复用触发时 main 同提交成功的 Windows 与 macOS CI 产物。Windows 下载后验收启动并打包，macOS 检查 Universal 2 ZIP 后保持原包字节；两平台准备成功后创建标签与单个 GitHub Release，上传两份版本 ZIP。操作与失败处理见 `docs/project/release.md`。
-- `export_presets.cfg`：定义 Windows x86_64 与 macOS Universal 2 验收构建。
+- `export_presets.cfg`：定义 Windows x86_64 与 macOS Universal 2 正式验收构建，以及保留开发节点脚本资源的本地 Windows Dev / macOS Dev 预设；开发包不进入 CI 或正式发布。
 - `.github/ISSUE_TEMPLATE/`：六类中文议题正文模板的唯一维护位置，供 GitHub 网页与 `.codex/skills/farm-exchange-submit-issue/SKILL.md` 共用；skill 负责查重、按模板填写与提交核对。模板在人工合入默认分支后供网页使用，来源说明见 `docs/research/issue-template-sources.md`。
+
+- `scripts/gameplay/SimulationAdvanceResult.cs`：完整经营检查点、实际推进与宽整数产出汇总。`FarmGame.AdvanceTicks` 请求无外部输入区间，各状态模块提供最近事件并累计平静数据，事件复用完整经营相位；显式降雨仍由单tick入口输入。
+- `scripts/time/SimulationDriver.cs` 与 `SimulationRateSource.cs`：唯一拥有每局倍率与未完成tick进度，现实帧时间转为同一经营批量请求；暂停不累计，改速保留进度，提供玩家/流程来源通知。发布仅0.5/1/2，开发额外有限正整数；场景只组装唯一当前局驱动。
+- `scripts/development/scenarios/`：严格持久配置、共用买入→加工→一次卖出流程和JSON报告。流程只使用真实经营命令与稳定检查点，不拥有生产或交易状态；独立局准备受控数据，现场明确证据不足。报告引用原文件及加载时SHA-256，不保存配置副本。
+- `scripts/ui/development/DeveloperToolsWindow.cs`、`ScenarioCatalogStep.cs`、`ScenarioEditorStep.cs`、`ScenarioResultStep.cs` 与 `ScenarioConfigurationForm.cs`：C三步协调、换行分类按钮与双列目录、配置编辑和真实运行结果；视觉按已确认C原型逐项比对步骤选中态、卡片与间距。同一表单按描述生成字段与并排分组，窗口唯一维护选择与步骤，草稿及文件规则交给配置库。两种垃圾桶经确认后转交删除意图，运行中锁定编辑；当前局借主驱动、独立局只推进数据，报告引用已保存原文件。修改窗口操作时读取[开发窗口接口](docs/architecture/ui/developer-tools-window/interface-developer-tools-window.md)。
 
 # 工作约定
 

@@ -23,6 +23,7 @@ public partial class TestFullWorldFps : Node
     private ulong _previousFrameUsec;
     private int _startFrames;
     private int _ticks;
+    private uint _initialTicks;
     private int _maxVisiblePlotCandidates;
     private int _startChunkRedraws;
     private int _movingWorkersAtStart;
@@ -47,7 +48,7 @@ public partial class TestFullWorldFps : Node
         _map = main.GetNode<WorldMap>("WorldMap");
         _map.SyncFromGame();
         _camera = main.GetNode<Camera2D>("Camera2D");
-        main.GetNode<Timer>("TickTimer").Timeout += () => _ticks++;
+        _initialTicks = main.Game.Calendar.ElapsedSeconds;
         Engine.MaxFps = 0;
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
         Directory.CreateDirectory(Path.GetDirectoryName(ProjectSettings.GlobalizePath("res://coverage/performance.json"))!);
@@ -60,6 +61,7 @@ public partial class TestFullWorldFps : Node
         if (_readyAtUsec == 0)
             return;
 
+        _ticks = checked((int)(_main.Game.Calendar.ElapsedSeconds - _initialTicks));
         ulong now = Time.GetTicksUsec();
         double seconds = (now - _readyAtUsec) / 1_000_000.0;
         Vector2 workerCenter = Vector2.Zero;
