@@ -65,6 +65,7 @@
 - [市场曲线调研](research/market-price-curve.md)、[测试分类调研](research/test-taxonomy.md)。
 - [基础格细分调研](research/grid-subdivision.md)：用户最终选择 64×32 基础格与 3×3（192×96）生产设施，保留各轮比例示例和最小空间 Interface；#75 已完成新地图实现与完整验收。
 - [成熟作品的窗口、地图与 UI 缩放调研](research/window-size-and-map-zoom.md)：以一手资料区分窗口变大、分辨率、地图镜头与界面缩放，记录证实行为和证据边界；用于显示策略讨论。
+- [运行时日志现状与两类日志设计](research/runtime-logging.md)：检查已有 Godot 引擎日志，开发者 Debug / 发布关键事件分开，Windows 业务日志放游戏目录，采用可读 `.log`；尚未接入代码。
 - [开发者工具与双构建设计草案](project/developer-tools-proposal.md)及[构建机制调研](research/developer-tools-builds.md)：#97的历史设计与构建依据；本次速率、固定流程和dev/release边界已由#100/#101实施，单步、诊断与日志等候选保持独立范围，现状见[主计划](project/developer-tools-parameterized-tests.md)。
 - [公开 C# 开发工具案例](research/developer-tools-csharp-cases.md)及[源码组织讨论](project/developer-tools-csharp-organization.md)：历史案例比较与单项目源码组织依据；本次development目录编译排除的实际配置见[本地开发构建](project/development-build.md)。
 - [跨模块自动调试设计补充](project/developer-tools-cross-module-debugging.md)：固定流程、两运行对象和报告的历史设计依据；现行接入与验收见[主计划](project/developer-tools-parameterized-tests.md)及[参数化流程接口](architecture/development/interface-parameterized-scenario.md)。
@@ -72,5 +73,6 @@
 - [点击倍率与分类流程配置界面设计](project/developer-tools-flow-editor-design.md)：#103的C分步设计及#104实施计划，公共倍率按钮、分类检索、自动字段表单、另存覆盖与删除确认；功能验收与C原型视觉修正完成记录在计划顶部，原型仅保留独立来源分支。
 - [跨 tick 等价批量经营推进方案](project/batched-simulation-proposal.md)：#100 按平静区间累计、跳到事件 tick 完整结算，保留生产、工人、计划、行情和订单的时序；密集成交逐笔处理，统一工人位置公式及模块内部行程实现已确认。
 - [地图内容放置预览调研](research/build-placement-preview.md)与[设计方案](project/build-placement-preview-proposal.md)：#83 的设计来源与 #87 的实施：占地属性驱动预览、逐格冲突反馈、通用取消及镜头交互。
+- [日志 schema v1 草案](project/runtime-log-schema-v1.md)：两类业务日志的字段类型、单位、必填条件、事件时点、示例和 AI 分析规则；后续随发布包附带同版本说明。
 - [EditorConfig 检查](static-checks/editorconfig.md)、[CI 静态检查](static-checks/ci.md)、[接口注释格式](static-checks/interface-comments.md)。
 - [规则加载与链接对应表](../.codex/rule-loading.md)。
