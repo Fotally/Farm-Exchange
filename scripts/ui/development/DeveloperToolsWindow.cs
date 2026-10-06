@@ -24,6 +24,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
     private readonly ScenarioResultStep _result;
     private readonly ScenarioConfirmationPanel _confirmation;
     private readonly Label _feedback;
+    private readonly ScrollContainer _feedbackScroll;
     private readonly Button[] _steps = new Button[3];
     private ScenarioConfigurationLibrary? _library;
     private IReadOnlyList<ScenarioConfigurationEntry> _entries = Array.Empty<ScenarioConfigurationEntry>();
@@ -46,36 +47,51 @@ public partial class DeveloperToolsWindow : DraggableWindow
      */
     public DeveloperToolsWindow(FarmGame currentGame, SimulationDriver currentDriver, Action refreshCurrent,
         ScenarioConfigurationLibrary? library = null)
-        : base("DeveloperToolsWindow", "参数化经营测试", new Vector2(280, 155), new Vector2(1360, 740))
+        : base("DeveloperToolsWindow", "开发测试 · 流程与配置", new Vector2(280, 155), new Vector2(1360, 740))
     {
         _currentGame = currentGame;
         _currentDriver = currentDriver;
         _refreshCurrent = refreshCurrent;
         SetInitialPlacement(false);
+        ConfigureFrame();
         // 各步骤正文独立滚动，保存和运行入口留在固定底部。
         ((ScrollContainer)FindChild("WindowScroll", true, false)).VerticalScrollMode = ScrollContainer.ScrollMode.Disabled;
-        var navigation = new HBoxContainer();
+        Body.AddThemeConstantOverride("separation", 18);
+        var navigation = new HBoxContainer { Name = "ScenarioSteps" };
+        navigation.AddThemeConstantOverride("separation", 13);
         Body.AddChild(navigation);
-        string[] titles = { "1 选择流程", "2 编辑配置", "3 运行与结果" };
+        string[] titles = { "1 · 选择流程", "2 · 调整配置", "3 · 运行与结果" };
         for (int index = 0; index < 3; index++)
         {
             int destination = index;
-            _steps[index] = MakeSecondaryButton(titles[index], 220, 42);
+            _steps[index] = MakeQuietButton(titles[index], 0, 43);
             _steps[index].SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            _steps[index].Alignment = HorizontalAlignment.Left;
+            _steps[index].AddThemeFontSizeOverride("font_size", 16);
+            var inset = new Panel { MouseFilter = MouseFilterEnum.Ignore };
+            StyleBoxFlat insetStyle = Style(Colors.Transparent, 0);
+            insetStyle.BorderColor = new Color("fff1d0");
+            inset.AddThemeStyleboxOverride("panel", insetStyle);
+            _steps[index].AddChild(inset);
+            inset.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+            inset.OffsetLeft = inset.OffsetTop = 2;
+            inset.OffsetRight = inset.OffsetBottom = -2;
             _steps[index].Name = "ScenarioStep" + (index + 1) + "Button";
             _steps[index].Pressed += () => Navigate(destination);
             navigation.AddChild(_steps[index]);
         }
         _feedback = MakeLabel("", 12, Ink);
         _feedback.Name = "ScenarioFeedbackLabel";
-        var feedbackScroll = new ScrollContainer
+        _feedbackScroll = new ScrollContainer
         {
+            Name = "ScenarioFeedbackScroll",
+            Visible = false,
             CustomMinimumSize = new Vector2(0, 40),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
         _feedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        feedbackScroll.AddChild(_feedback);
-        Body.AddChild(feedbackScroll);
+        _feedbackScroll.AddChild(_feedback);
+        Body.AddChild(_feedbackScroll);
         _catalog = new ScenarioCatalogStep();
         _catalog.Selected += SelectFlow;
         _catalog.DeleteRequested += ConfirmDeleteFlow;
@@ -88,9 +104,9 @@ public partial class DeveloperToolsWindow : DraggableWindow
         _editor.DeleteRequested += ConfirmDeleteConfiguration;
         _editor.BackRequested += () => Navigate(0);
         _editor.ContinueRequested += () => Navigate(2);
-        _editor.Form.Edited += () => _feedback.Text = string.Join("\n", _draft!.Errors.Values);
+        _editor.Form.Edited += () => SetFeedback(string.Join("\n", _draft!.Errors.Values));
         Body.AddChild(_editor);
-        _result = new ScenarioResultStep(currentDriver, message => _feedback.Text = message);
+        _result = new ScenarioResultStep(currentDriver, SetFeedback);
         _result.StartRequested += Start;
         _result.AbortRequested += () => Abort("用户中止");
         _result.BackRequested += () => Navigate(1);
@@ -106,14 +122,74 @@ public partial class DeveloperToolsWindow : DraggableWindow
         {
             _library = library ?? CreateLibrary();
             RefreshCatalog();
-            _feedback.Text = string.Join("\n", _library.DiscoveryErrors);
+            SetFeedback(string.Join("\n", _library.DiscoveryErrors));
         }
         catch (Exception error) when (IsConfigurationError(error))
         {
-            _feedback.Text = "配置目录读取失败：" + error.Message;
+            SetFeedback("配置目录读取失败：" + error.Message);
         }
         UpdateStep();
         _currentDriver.RateChanged += OnCurrentRateChanged;
+    }
+
+    private void ConfigureFrame()
+    {
+        var lining = GetChild<PanelContainer>(0);
+        var liningStyle = (StyleBoxFlat)lining.GetThemeStylebox("panel").Duplicate();
+        liningStyle.ContentMarginLeft = liningStyle.ContentMarginRight = 0;
+        liningStyle.ContentMarginTop = liningStyle.ContentMarginBottom = 0;
+        lining.AddThemeStyleboxOverride("panel", liningStyle);
+        var header = (PanelContainer)FindChild("Header", true, false);
+        header.CustomMinimumSize = new Vector2(0, 68);
+        StyleBoxFlat headerStyle = Style(new Color("e6d3a4"), 0);
+        headerStyle.SetBorderWidthAll(0);
+        headerStyle.BorderWidthBottom = 1;
+        headerStyle.BorderColor = new Color("af9363");
+        headerStyle.ContentMarginLeft = headerStyle.ContentMarginRight = 0;
+        headerStyle.ContentMarginTop = headerStyle.ContentMarginBottom = 0;
+        header.AddThemeStyleboxOverride("panel", headerStyle);
+        var headerMargin = header.GetChild<MarginContainer>(0);
+        SetMargins(headerMargin, 22, 12);
+        var title = (Label)FindChild("WindowTitleLabel", true, false);
+        title.AddThemeFontSizeOverride("font_size", 21);
+        var headerRow = (HBoxContainer)title.GetParent().GetParent();
+        headerRow.AddThemeConstantOverride("separation", 16);
+        var badge = new PanelContainer
+        {
+            Name = "ScenarioDevelopmentBadge",
+            MouseFilter = MouseFilterEnum.Ignore,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
+        };
+        StyleBoxFlat badgeStyle = Style(new Color("f8edcf"), 0);
+        badgeStyle.BorderColor = new Color("a78c5d");
+        badgeStyle.ContentMarginLeft = badgeStyle.ContentMarginRight = 9;
+        badgeStyle.ContentMarginTop = badgeStyle.ContentMarginBottom = 5;
+        badge.AddThemeStyleboxOverride("panel", badgeStyle);
+        Label badgeText = MakeLabel("开发工具", 13, Ink);
+        badgeText.AutowrapMode = TextServer.AutowrapMode.Off;
+        badgeText.MouseFilter = MouseFilterEnum.Ignore;
+        badge.AddChild(badgeText);
+        headerRow.AddChild(badge);
+        headerRow.MoveChild(badge, headerRow.GetChildCount() - 2);
+        var close = (Button)FindChild("CloseButton", true, false);
+        close.CustomMinimumSize = new Vector2(34, 34);
+        close.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        var bodyMargin = ((ScrollContainer)FindChild("WindowScroll", true, false)).GetChild<MarginContainer>(0);
+        SetMargins(bodyMargin, 22, 20);
+    }
+
+    private static void SetMargins(MarginContainer margin, int horizontal, int vertical)
+    {
+        margin.AddThemeConstantOverride("margin_left", horizontal);
+        margin.AddThemeConstantOverride("margin_right", horizontal);
+        margin.AddThemeConstantOverride("margin_top", vertical);
+        margin.AddThemeConstantOverride("margin_bottom", vertical);
+    }
+
+    private void SetFeedback(string message)
+    {
+        _feedback.Text = message;
+        _feedbackScroll.Visible = message.Length != 0;
     }
 
     private static ScenarioConfigurationLibrary CreateLibrary()
@@ -167,7 +243,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
             _draft = _entries.Count == 0 ? null : _library!.Open(_entries[0]);
         }
         _editor.ShowProfiles(_entries, _draft);
-        _feedback.Text = string.Join("\n", _library!.DiscoveryErrors);
+        SetFeedback(string.Join("\n", _library!.DiscoveryErrors));
         RefreshSummary();
     }
 
@@ -190,7 +266,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
         ResetResults();
         _draft = draft;
         RefreshProfiles();
-        _feedback.Text = "保存成功。";
+        SetFeedback("保存成功。");
         UpdateStep();
     }
 
@@ -217,10 +293,11 @@ public partial class DeveloperToolsWindow : DraggableWindow
                     _entries = Array.Empty<ScenarioConfigurationEntry>();
                     _editor.ShowProfiles(_entries, null);
                     ResetResults();
+                    RefreshSummary();
                     _step = 0;
                 }
                 RefreshCatalog();
-                _feedback.Text = "流程已从目录移除，其可写配置已删除。";
+                SetFeedback("流程已从目录移除，其可写配置已删除。");
                 UpdateStep();
             }, synchronizeDeletionFailure: true));
         UpdateStep();
@@ -236,7 +313,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
                 _library!.DeleteConfiguration(entry);
                 _draft = null;
                 RefreshProfiles();
-                _feedback.Text = "配置文件已删除。";
+                SetFeedback("配置文件已删除。");
                 UpdateStep();
             }, synchronizeDeletionFailure: true));
         UpdateStep();
@@ -263,7 +340,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
                     message += "\n实际目录刷新失败：" + refreshError.Message;
                 }
             }
-            _feedback.Text = message;
+            SetFeedback(message);
         }
     }
 
@@ -290,7 +367,10 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void RefreshSummary()
     {
-        _result.Summary.Text = _draft == null ? "没有可运行配置。" : _draft.Entry!.CaseId + " · 修订" + _draft.Entry.Revision +
+        ScenarioFlowDefinition? flow = _library?.Flows.FirstOrDefault(item => item.Id == _flowId);
+        _editor.ShowFlow(flow?.Name ?? "", flow?.Description ?? "");
+        _result.ShowFlow(flow?.Name ?? "");
+        _result.Summary.Text = _draft == null ? "没有可运行配置。" : "配置：" + _draft.Entry!.CaseId + " · 修订" + _draft.Entry.Revision +
             (_draft.Entry.IsReadOnly ? " · 内置只读，请先另存为" : "");
     }
 
@@ -303,12 +383,28 @@ public partial class DeveloperToolsWindow : DraggableWindow
         for (int index = 0; index < _steps.Length; index++)
         {
             _steps[index].Disabled = locked || index == 1 && _flowId == null || index == 2 && _draft == null;
-            _steps[index].Text = new[] { "1 选择流程", "2 编辑配置", "3 运行与结果" }[index] + (index == _step ? " ●" : "");
+            SetStepStyle(_steps[index], index == _step);
         }
         _catalog.SetLocked(locked);
         _editor.UpdateState(locked);
         _result.SetRunning(locked, _draft != null && !_draft.Entry!.IsReadOnly);
         if (_confirmation.Visible) _result.AbortButton.Disabled = true;
+    }
+
+    private static void SetStepStyle(Button button, bool selected)
+    {
+        float scale = UiScaling.OverallScale(button);
+        foreach (string state in new[] { "normal", "hover", "pressed", "disabled" })
+        {
+            StyleBoxFlat style = Style(selected ? Mid : new Color("f0dfb4"), 0);
+            style.BorderColor = selected ? Mid : new Color("b59a67");
+            style.SetBorderWidthAll((int)MathF.Round(2 * scale));
+            style.ContentMarginLeft = style.ContentMarginRight = 15 * scale;
+            style.ContentMarginTop = style.ContentMarginBottom = 9 * scale;
+            button.AddThemeStyleboxOverride(state, style);
+        }
+        foreach (string state in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color" })
+            button.AddThemeColorOverride(state, selected ? new Color("fff3d8") : Ink);
     }
 
     private void Start()
@@ -326,15 +422,15 @@ public partial class DeveloperToolsWindow : DraggableWindow
             _observedPaused = _scenario.Game.IsPaused;
             if (_scenario.IsRunning) ApplyScenarioRate();
             if (_isCurrent) _refreshCurrent();
-            _feedback.Text = "";
+            SetFeedback("");
             _result.ReportPath.Text = "本次报告目录：" + _runDirectory;
-            _result.Summary.Text = configuration.CaseId + " · 修订" + configuration.Revision;
+            _result.Summary.Text = "配置：" + configuration.CaseId + " · 修订" + configuration.Revision;
             _step = 2;
             RefreshProgress();
         }
         catch (Exception error) when (IsConfigurationError(error))
         {
-            _feedback.Text = (error is ScenarioConfigurationException ? "启动失败（配置错误）：" : "启动失败（输出错误）：") + error.Message;
+            SetFeedback((error is ScenarioConfigurationException ? "启动失败（配置错误）：" : "启动失败（输出错误）：") + error.Message);
         }
     }
 
@@ -410,11 +506,11 @@ public partial class DeveloperToolsWindow : DraggableWindow
         try
         {
             _result.ReportPath.Text = "报告：" + _scenario.WriteReport(_runDirectory!);
-            _feedback.Text = _scenario.Report.Reason ?? "流程结束，检查结果见JSON报告。";
+            SetFeedback(_scenario.Report.Reason ?? "流程结束，检查结果见JSON报告。");
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            _feedback.Text = "输出错误（报告尚未保存）：" + error.Message + "；执行结果保留，未切换输出位置。";
+            SetFeedback("输出错误（报告尚未保存）：" + error.Message + "；执行结果保留，未切换输出位置。");
         }
     }
 

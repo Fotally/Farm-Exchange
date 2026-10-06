@@ -14,6 +14,7 @@ internal partial class ScenarioResultStep : VBoxContainer
     internal readonly Button StartButton;
     internal readonly Button AbortButton;
     private readonly Button _back;
+    private readonly Label _flowTitle;
     internal event Action? StartRequested;
     internal event Action? AbortRequested;
     internal event Action? BackRequested;
@@ -22,9 +23,16 @@ internal partial class ScenarioResultStep : VBoxContainer
     {
         Name = "ScenarioResultStep";
         SizeFlagsVertical = SizeFlags.ExpandFill;
-        Summary = MakeLabel("选择已保存配置后运行。", 16, Ink);
+        AddThemeConstantOverride("separation", 14);
+        var intro = new VBoxContainer();
+        intro.AddThemeConstantOverride("separation", 0);
+        AddChild(intro);
+        _flowTitle = MakeLabel("运行与结果", 24, Ink);
+        _flowTitle.Name = "ScenarioResultFlowTitle";
+        intro.AddChild(_flowTitle);
+        Summary = MakeLabel("选择已保存配置后运行。", 14, Muted);
         Summary.Name = "ScenarioRunConfigurationLabel";
-        AddChild(Summary);
+        intro.AddChild(Summary);
         var scroll = new ScrollContainer
         {
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
@@ -33,13 +41,21 @@ internal partial class ScenarioResultStep : VBoxContainer
         };
         AddChild(scroll);
         var content = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        content.AddThemeConstantOverride("separation", 12);
         scroll.AddChild(content);
-        Progress = MakeLabel("尚未运行", 16, Ink);
+        var panel = new PanelContainer { Name = "ScenarioResultPanel" };
+        StyleBoxFlat panelStyle = Style(new Color("e4dfbc"), 0);
+        panelStyle.BorderColor = new Color("b7ad75");
+        panel.AddThemeStyleboxOverride("panel", panelStyle);
+        content.AddChild(panel);
+        var resultBody = new VBoxContainer();
+        WrapMargin(panel, 15, 15).AddChild(resultBody);
+        Progress = MakeLabel("尚未运行", 15, Ink);
         Progress.Name = "ScenarioProgressLabel";
-        content.AddChild(Progress);
+        resultBody.AddChild(Progress);
         ReportPath = MakeLabel("报告尚未生成", 12, Muted);
         ReportPath.Name = "ScenarioReportPathLabel";
-        content.AddChild(ReportPath);
+        resultBody.AddChild(ReportPath);
         content.AddChild(MakeLabel("现场暂停时等待继续；主动改速中断现场流程，已经发生的交易与生产保留。", 13, Muted));
         content.AddChild(MakeLabel("当前局经营倍率", 14, Ink));
         var rates = new HBoxContainer();
@@ -68,23 +84,30 @@ internal partial class ScenarioResultStep : VBoxContainer
             currentDriver.SetDevelopmentRate(rate);
         };
         custom.AddChild(apply);
+        var separator = new HSeparator { Name = "ScenarioResultFooterSeparator" };
+        separator.AddThemeConstantOverride("separation", 1);
+        separator.AddThemeStyleboxOverride("separator", new StyleBoxLine { Color = new Color("bba573"), Thickness = 1 });
+        AddChild(separator);
         var actions = new HBoxContainer();
         AddChild(actions);
-        _back = MakeSecondaryButton("← 返回配置", 140, 44);
+        _back = MakeSecondaryButton("← 返回配置", 140, 43);
         _back.Name = "ScenarioResultBackButton";
         _back.Pressed += () => BackRequested?.Invoke();
         actions.AddChild(_back);
         actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        StartButton = MakeButton("启动流程", Mid, 140, 44);
+        StartButton = MakeButton("启动流程", Mid, 140, 43);
         StartButton.Name = "ScenarioStartButton";
         StartButton.Pressed += () => StartRequested?.Invoke();
         actions.AddChild(StartButton);
-        AbortButton = MakeQuietButton("中止流程", 140, 44);
+        AbortButton = MakeQuietButton("中止流程", 140, 43);
         AbortButton.Name = "ScenarioAbortButton";
         AbortButton.Pressed += () => AbortRequested?.Invoke();
         actions.AddChild(AbortButton);
+        foreach (Button button in new[] { _back, StartButton, AbortButton }) button.AddThemeFontSizeOverride("font_size", 16);
         SetRunning(false, false);
     }
+
+    internal void ShowFlow(string name) => _flowTitle.Text = name.Length == 0 ? "运行与结果" : name;
 
     internal void SetRunning(bool running, bool runnable)
     {
