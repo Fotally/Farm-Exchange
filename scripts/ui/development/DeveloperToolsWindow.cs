@@ -1,6 +1,7 @@
 using System;
-using System.Globalization;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Godot;
 using FarmExchange.Development;
 using FarmExchange.Gameplay;
@@ -10,22 +11,25 @@ using static FarmExchange.UI.UiElements;
 namespace FarmExchange.UI;
 
 /**
- * <summary>选择持久配置、执行固定流程并展示进度与真实报告路径。</summary>
- * <remarks>当前局借用 Main 唯一驱动；独立局只推进数据，不更换地图。</remarks>
+ * <summary>协调分类流程目录、配置草稿及真实流程的三个独立步骤。</summary>
+ * <remarks>当前局借用Main唯一驱动；配置持久化由配置库拥有，独立局不更换地图。</remarks>
  */
 public partial class DeveloperToolsWindow : DraggableWindow
 {
     private readonly FarmGame _currentGame;
     private readonly SimulationDriver _currentDriver;
     private readonly Action _refreshCurrent;
-    private readonly LineEdit _configurationPath;
-    private readonly Label _progress;
+    private readonly ScenarioCatalogStep _catalog;
+    private readonly ScenarioEditorStep _editor;
+    private readonly ScenarioResultStep _result;
+    private readonly ScenarioConfirmationPanel _confirmation;
     private readonly Label _feedback;
-    private readonly Label _reportPath;
-    private readonly Button _start;
-    private readonly Button _abort;
-    private readonly Button _choose;
-    private readonly FileDialog _files;
+    private readonly Button[] _steps = new Button[3];
+    private ScenarioConfigurationLibrary? _library;
+    private IReadOnlyList<ScenarioConfigurationEntry> _entries = Array.Empty<ScenarioConfigurationEntry>();
+    private string? _flowId;
+    private ScenarioConfigurationDraft? _draft;
+    private int _step;
     private BuyProcessSellScenario? _scenario;
     private SimulationDriver? _independentDriver;
     private string? _runDirectory;
@@ -34,96 +38,97 @@ public partial class DeveloperToolsWindow : DraggableWindow
     private bool _observedPaused;
 
     /**
-     * <summary>组装绑定当前局及唯一驱动的开发窗口。</summary>
+     * <summary>组装绑定当前局、唯一驱动和配置库的开发窗口。</summary>
      * <param name="currentGame">当前地图使用的经营对象。</param>
      * <param name="currentDriver">当前局唯一时间驱动。</param>
-     * <param name="refreshCurrent">正常经营变化后的统一刷新。</param>
+     * <param name="refreshCurrent">经营变化后的统一刷新。</param>
+     * <param name="library">已明确目录的配置库；省略时使用仓库或开发包配置目录。</param>
      */
-    public DeveloperToolsWindow(FarmGame currentGame, SimulationDriver currentDriver, Action refreshCurrent)
-        : base("DeveloperToolsWindow", "参数化经营测试", new Vector2(540, 160), new Vector2(840, 690))
+    public DeveloperToolsWindow(FarmGame currentGame, SimulationDriver currentDriver, Action refreshCurrent,
+        ScenarioConfigurationLibrary? library = null)
+        : base("DeveloperToolsWindow", "参数化经营测试", new Vector2(280, 155), new Vector2(1360, 740))
     {
         _currentGame = currentGame;
         _currentDriver = currentDriver;
         _refreshCurrent = refreshCurrent;
-        Body.AddChild(MakeLabel("选择 JSON 配置，执行买入 → 加工 → 一次委托卖出。独立局只运行数据。", 17, Ink));
-        var fileRow = new HBoxContainer();
-        Body.AddChild(fileRow);
-        _configurationPath = new LineEdit
+        SetInitialPlacement(false);
+        // 各步骤正文独立滚动，保存和运行入口留在固定底部。
+        ((ScrollContainer)FindChild("WindowScroll", true, false)).VerticalScrollMode = ScrollContainer.ScrollMode.Disabled;
+        var navigation = new HBoxContainer();
+        Body.AddChild(navigation);
+        string[] titles = { "1 选择流程", "2 编辑配置", "3 运行与结果" };
+        for (int index = 0; index < 3; index++)
         {
-            Name = "ScenarioConfigurationPath",
-            PlaceholderText = "持久配置文件的完整路径",
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-        };
-        fileRow.AddChild(_configurationPath);
-        _files = new FileDialog
-        {
-            Name = "ScenarioFileDialog",
-            Access = FileDialog.AccessEnum.Filesystem,
-            FileMode = FileDialog.FileModeEnum.OpenFile,
-            Filters = new[] { "*.json ; JSON 配置" },
-        };
-        _files.FileSelected += path => _configurationPath.Text = path;
-        AddChild(_files);
-        _choose = MakeSecondaryButton("选择文件", 116, 42);
-        _choose.Name = "ScenarioChooseFileButton";
-        _choose.Pressed += () => _files.PopupCentered(new Vector2I(1000, 680));
-        fileRow.AddChild(_choose);
-
-        var actions = new HBoxContainer();
-        Body.AddChild(actions);
-        _start = MakeButton("启动流程", new Color("657342"), 142, 44);
-        _start.Name = "ScenarioStartButton";
-        _start.Pressed += Start;
-        actions.AddChild(_start);
-        _abort = MakeQuietButton("中止流程", 142, 44);
-        _abort.Name = "ScenarioAbortButton";
-        _abort.Disabled = true;
-        _abort.Pressed += () => Abort("用户中止");
-        actions.AddChild(_abort);
-        _progress = MakeLabel("尚未运行", 17, Ink);
-        _progress.Name = "ScenarioProgressLabel";
-        Body.AddChild(_progress);
-        _feedback = MakeLabel("", 15, Ink);
-        _feedback.Name = "ScenarioFeedbackLabel";
-        Body.AddChild(_feedback);
-        _reportPath = MakeLabel("报告尚未生成", 14, Muted);
-        _reportPath.Name = "ScenarioReportPathLabel";
-        Body.AddChild(_reportPath);
-        Body.AddChild(MakeLabel("现场暂停时流程等待继续；主动改速会中断现场流程，已经发生的交易与生产保留。", 15, Muted));
-
-        Body.AddChild(MakeLabel("当前局经营倍率", 17, Ink));
-        var rates = new HBoxContainer();
-        Body.AddChild(rates);
-        foreach (double rate in new[] { 0.5, 1, 2, 5, 10, 20 })
-        {
-            Button button = MakeQuietButton($"{rate.ToString(CultureInfo.InvariantCulture)}×", 78, 40);
-            button.Name = "DevelopmentRate" + rate.ToString(CultureInfo.InvariantCulture).Replace(".", "_") + "Button";
-            button.Pressed += () => _currentDriver.SetDevelopmentRate(rate);
-            rates.AddChild(button);
+            int destination = index;
+            _steps[index] = MakeSecondaryButton(titles[index], 220, 42);
+            _steps[index].SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            _steps[index].Name = "ScenarioStep" + (index + 1) + "Button";
+            _steps[index].Pressed += () => Navigate(destination);
+            navigation.AddChild(_steps[index]);
         }
-        var custom = new HBoxContainer();
-        Body.AddChild(custom);
-        var value = new LineEdit
+        _feedback = MakeLabel("", 12, Ink);
+        _feedback.Name = "ScenarioFeedbackLabel";
+        var feedbackScroll = new ScrollContainer
         {
-            Name = "DevelopmentRateInput",
-            PlaceholderText = "正整数倍率",
-            CustomMinimumSize = new Vector2(180, 40),
+            CustomMinimumSize = new Vector2(0, 40),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
-        custom.AddChild(value);
-        Button apply = MakeQuietButton("应用倍率", 140, 40);
-        apply.Name = "DevelopmentRateApplyButton";
-        apply.Pressed += () =>
+        _feedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        feedbackScroll.AddChild(_feedback);
+        Body.AddChild(feedbackScroll);
+        _catalog = new ScenarioCatalogStep();
+        _catalog.Selected += SelectFlow;
+        _catalog.DeleteRequested += ConfirmDeleteFlow;
+        _catalog.ContinueRequested += () => Navigate(1);
+        Body.AddChild(_catalog);
+        _editor = new ScenarioEditorStep();
+        _editor.ProfileSelected += SelectProfile;
+        _editor.SaveAsRequested += ConfirmSaveAs;
+        _editor.OverwriteRequested += () => ExecuteEdit(() => ReplaceDraft(_library!.Overwrite(_draft!)));
+        _editor.DeleteRequested += ConfirmDeleteConfiguration;
+        _editor.BackRequested += () => Navigate(0);
+        _editor.ContinueRequested += () => Navigate(2);
+        _editor.Form.Edited += () => _feedback.Text = string.Join("\n", _draft!.Errors.Values);
+        Body.AddChild(_editor);
+        _result = new ScenarioResultStep(currentDriver, message => _feedback.Text = message);
+        _result.StartRequested += Start;
+        _result.AbortRequested += () => Abort("用户中止");
+        _result.BackRequested += () => Navigate(1);
+        Body.AddChild(_result);
+        _confirmation = new ScenarioConfirmationPanel();
+        _confirmation.Closed += () =>
         {
-            if (!double.TryParse(value.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double rate) ||
-                !SimulationDriver.IsDevelopmentRateAllowed(rate))
-            {
-                _feedback.Text = "倍率只接受 0.5、1、2 或有限正整数。";
-                return;
-            }
-            _currentDriver.SetDevelopmentRate(rate);
+            UpdateStep();
+            if (_step == 1) _editor.Form.RestoreFocus();
         };
-        custom.AddChild(apply);
+        AddChild(_confirmation);
+        try
+        {
+            _library = library ?? CreateLibrary();
+            RefreshCatalog();
+            _feedback.Text = string.Join("\n", _library.DiscoveryErrors);
+        }
+        catch (Exception error) when (IsConfigurationError(error))
+        {
+            _feedback.Text = "配置目录读取失败：" + error.Message;
+        }
+        UpdateStep();
         _currentDriver.RateChanged += OnCurrentRateChanged;
+    }
+
+    private static ScenarioConfigurationLibrary CreateLibrary()
+    {
+        var builtin = new Dictionary<string, byte[]>();
+        foreach (string name in new[] { "wheat-basic-r1", "radish-three-r1", "current-radish-r1" })
+        {
+            string resource = "res://assets/development/scenario_configs/" + name.Replace('-', '_') + ".json";
+            if (!Godot.FileAccess.FileExists(resource))
+                throw new ScenarioConfigurationException("内置示例资源不存在：" + name);
+            builtin.Add(name + ".json", Godot.FileAccess.GetFileAsBytes(resource));
+        }
+        string directory = ScenarioConfigurationLibrary.ResolveUserDirectory(ProjectSettings.GlobalizePath("res://"),
+            OS.GetExecutablePath(), !OS.HasFeature("editor"));
+        return new ScenarioConfigurationLibrary(builtin, directory);
     }
 
     public override void _ExitTree()
@@ -133,14 +138,186 @@ public partial class DeveloperToolsWindow : DraggableWindow
         base._ExitTree();
     }
 
+    private bool IsRunning => _scenario?.IsRunning == true;
+    private void RefreshCatalog() => _catalog.ShowFlows(_library?.Flows ?? Array.Empty<ScenarioFlowDefinition>(), _flowId);
+
+    private void SelectFlow(string id)
+    {
+        if (IsRunning || _library == null) return;
+        ExecuteEdit(() =>
+        {
+            if (_flowId != id)
+            {
+                ResetResults();
+                _flowId = id;
+                _draft = null;
+                RefreshProfiles();
+            }
+            RefreshCatalog();
+            UpdateStep();
+        });
+    }
+
+    private void RefreshProfiles()
+    {
+        _entries = _flowId == null ? Array.Empty<ScenarioConfigurationEntry>() : _library!.ListConfigurations(_flowId);
+        if (_draft == null || !_entries.Any(entry => entry.Id == _draft.Entry!.Id))
+        {
+            ResetResults();
+            _draft = _entries.Count == 0 ? null : _library!.Open(_entries[0]);
+        }
+        _editor.ShowProfiles(_entries, _draft);
+        _feedback.Text = string.Join("\n", _library!.DiscoveryErrors);
+        RefreshSummary();
+    }
+
+    private void SelectProfile(int index)
+    {
+        if (IsRunning || index < 0 || index >= _entries.Count) return;
+        ExecuteEdit(() =>
+        {
+            ScenarioConfigurationDraft next = _library!.Open(_entries[index]);
+            if (_draft?.Entry != next.Entry) ResetResults();
+            _draft = next;
+            _editor.ShowProfiles(_entries, _draft);
+            RefreshSummary();
+            UpdateStep();
+        });
+    }
+
+    private void ReplaceDraft(ScenarioConfigurationDraft draft)
+    {
+        ResetResults();
+        _draft = draft;
+        RefreshProfiles();
+        _feedback.Text = "保存成功。";
+        UpdateStep();
+    }
+
+    private void ConfirmSaveAs()
+    {
+        if (IsRunning || _draft == null) return;
+        _confirmation.Open("为这份配置输入新名称。另存为从修订1开始，原配置保留。", name =>
+            ExecuteEdit(() => ReplaceDraft(_library!.SaveAs(_draft, name))), enterName: true);
+        UpdateStep();
+    }
+
+    private void ConfirmDeleteFlow(string id)
+    {
+        if (IsRunning || _library == null) return;
+        ScenarioFlowDefinition flow = _library.Flows.Single(item => item.Id == id);
+        _confirmation.Open("删除流程「" + flow.Name + "」？\n从目录移除，并删除此流程的所有可写配置；内置示例、历史报告和流程代码保留。", _ =>
+            ExecuteEdit(() =>
+            {
+                _library.DeleteFlow(id);
+                if (_flowId == id)
+                {
+                    _flowId = null;
+                    _draft = null;
+                    _entries = Array.Empty<ScenarioConfigurationEntry>();
+                    _editor.ShowProfiles(_entries, null);
+                    ResetResults();
+                    _step = 0;
+                }
+                RefreshCatalog();
+                _feedback.Text = "流程已从目录移除，其可写配置已删除。";
+                UpdateStep();
+            }, synchronizeDeletionFailure: true));
+        UpdateStep();
+    }
+
+    private void ConfirmDeleteConfiguration()
+    {
+        if (IsRunning || _draft == null || _draft.Entry!.IsReadOnly) return;
+        ScenarioConfigurationEntry entry = _draft.Entry;
+        _confirmation.Open("删除配置「" + entry.CaseId + "」？\n删除此配置文件，已有报告保留。", _ =>
+            ExecuteEdit(() =>
+            {
+                _library!.DeleteConfiguration(entry);
+                _draft = null;
+                RefreshProfiles();
+                _feedback.Text = "配置文件已删除。";
+                UpdateStep();
+            }, synchronizeDeletionFailure: true));
+        UpdateStep();
+    }
+
+    private void ExecuteEdit(Action action, bool synchronizeDeletionFailure = false)
+    {
+        if (IsRunning) return;
+        try { action(); }
+        catch (Exception error) when (IsConfigurationError(error))
+        {
+            string message = "配置操作失败：" + error.Message;
+            if (synchronizeDeletionFailure)
+            {
+                try
+                {
+                    RefreshProfiles();
+                    RefreshCatalog();
+                    UpdateStep();
+                    if (_step == 1) _editor.Form.RestoreFocus();
+                }
+                catch (Exception refreshError) when (IsConfigurationError(refreshError))
+                {
+                    message += "\n实际目录刷新失败：" + refreshError.Message;
+                }
+            }
+            _feedback.Text = message;
+        }
+    }
+
+    private void ResetResults()
+    {
+        _scenario = null;
+        _independentDriver = null;
+        _runDirectory = null;
+        _reportAttempted = false;
+        _result.Summary.Text = "选择已保存配置后运行。";
+        _result.Progress.Text = "尚未运行";
+        _result.ReportPath.Text = "报告尚未生成";
+    }
+
+    private static bool IsConfigurationError(Exception error) => error is ScenarioConfigurationException or IOException or UnauthorizedAccessException;
+
+    private void Navigate(int destination)
+    {
+        if (IsRunning || _confirmation.Visible || destination > 0 && _flowId == null || destination == 2 && _draft == null) return;
+        _step = destination;
+        UpdateStep();
+        if (destination == 1) _editor.Form.RestoreFocus();
+    }
+
+    private void RefreshSummary()
+    {
+        _result.Summary.Text = _draft == null ? "没有可运行配置。" : _draft.Entry!.CaseId + " · 修订" + _draft.Entry.Revision +
+            (_draft.Entry.IsReadOnly ? " · 内置只读，请先另存为" : "");
+    }
+
+    private void UpdateStep()
+    {
+        bool locked = IsRunning || _confirmation.Visible;
+        _catalog.Visible = _step == 0;
+        _editor.Visible = _step == 1;
+        _result.Visible = _step == 2;
+        for (int index = 0; index < _steps.Length; index++)
+        {
+            _steps[index].Disabled = locked || index == 1 && _flowId == null || index == 2 && _draft == null;
+            _steps[index].Text = new[] { "1 选择流程", "2 编辑配置", "3 运行与结果" }[index] + (index == _step ? " ●" : "");
+        }
+        _catalog.SetLocked(locked);
+        _editor.UpdateState(locked);
+        _result.SetRunning(locked, _draft != null && !_draft.Entry!.IsReadOnly);
+        if (_confirmation.Visible) _result.AbortButton.Disabled = true;
+    }
+
     private void Start()
     {
-        if (_scenario?.IsRunning == true) return;
+        if (IsRunning || _draft == null || _library == null) return;
         try
         {
-            ScenarioConfiguration configuration = ScenarioConfiguration.Load(_configurationPath.Text);
-            string root = ScenarioReport.ResolveRoot(ProjectSettings.GlobalizePath("res://"),
-                OS.GetExecutablePath(), !OS.HasFeature("editor"));
+            ScenarioConfiguration configuration = _library.LoadForRun(_draft);
+            string root = ScenarioReport.ResolveRoot(ProjectSettings.GlobalizePath("res://"), OS.GetExecutablePath(), !OS.HasFeature("editor"));
             _runDirectory = ScenarioReport.CreateRunDirectory(root);
             _reportAttempted = false;
             _isCurrent = configuration.Target == "current";
@@ -150,10 +327,12 @@ public partial class DeveloperToolsWindow : DraggableWindow
             if (_scenario.IsRunning) ApplyScenarioRate();
             if (_isCurrent) _refreshCurrent();
             _feedback.Text = "";
-            _reportPath.Text = "本次报告目录：" + _runDirectory;
+            _result.ReportPath.Text = "本次报告目录：" + _runDirectory;
+            _result.Summary.Text = configuration.CaseId + " · 修订" + configuration.Revision;
+            _step = 2;
             RefreshProgress();
         }
-        catch (Exception error) when (error is ScenarioConfigurationException or IOException or UnauthorizedAccessException)
+        catch (Exception error) when (IsConfigurationError(error))
         {
             _feedback.Text = (error is ScenarioConfigurationException ? "启动失败（配置错误）：" : "启动失败（输出错误）：") + error.Message;
         }
@@ -161,9 +340,9 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void OnCurrentRateChanged(double rate, SimulationRateSource source)
     {
-        if (_isCurrent && _scenario?.IsRunning == true)
+        if (_isCurrent && IsRunning)
         {
-            _scenario.ObserveTime(rate, source.ToString(), _scenario.Game.IsPaused);
+            _scenario!.ObserveTime(rate, source.ToString(), _scenario.Game.IsPaused);
             if (source == SimulationRateSource.Player) Abort("玩家主动改速，中断自动流程");
         }
         _refreshCurrent();
@@ -173,32 +352,28 @@ public partial class DeveloperToolsWindow : DraggableWindow
     {
         SimulationDriver driver = _isCurrent ? _currentDriver : _independentDriver!;
         bool changed = driver.Rate != _scenario!.CurrentRateIntent;
-        if (changed)
-            driver.SetDevelopmentRate(_scenario.CurrentRateIntent, SimulationRateSource.Scenario);
-        if (!_isCurrent || !changed)
-            _scenario.ObserveTime(driver.Rate, SimulationRateSource.Scenario.ToString(), _scenario.Game.IsPaused);
+        if (changed) driver.SetDevelopmentRate(_scenario.CurrentRateIntent, SimulationRateSource.Scenario);
+        if (!_isCurrent || !changed) _scenario.ObserveTime(driver.Rate, SimulationRateSource.Scenario.ToString(), _scenario.Game.IsPaused);
     }
 
-    internal uint GetCurrentMaxTicks() => _isCurrent && _scenario?.IsRunning == true
-        ? _scenario.GetMaxAdvanceTicks() : uint.MaxValue;
+    internal uint GetCurrentMaxTicks() => _isCurrent && IsRunning ? _scenario!.GetMaxAdvanceTicks() : uint.MaxValue;
 
     internal bool ObserveCurrentCheckpoint(SimulationCheckpoint point)
     {
-        if (!_isCurrent || _scenario?.IsRunning != true) return true;
-        bool keepGoing = _scenario.ObserveCheckpoint(point);
-        if (_scenario.IsRunning) ApplyScenarioRate();
+        if (!_isCurrent || !IsRunning) return true;
+        bool keepGoing = _scenario!.ObserveCheckpoint(point);
+        if (IsRunning) ApplyScenarioRate();
         RefreshProgress();
         return keepGoing;
     }
 
     internal void AdvanceIndependent(double delta)
     {
-        if (_scenario?.IsRunning != true) return;
-        if (_observedPaused != _scenario.Game.IsPaused)
+        if (!IsRunning) return;
+        if (_observedPaused != _scenario!.Game.IsPaused)
         {
             _observedPaused = _scenario.Game.IsPaused;
-            _scenario.ObserveTime((_isCurrent ? _currentDriver : _independentDriver!).Rate,
-                SimulationRateSource.Scenario.ToString(), _scenario.Game.IsPaused);
+            _scenario.ObserveTime((_isCurrent ? _currentDriver : _independentDriver!).Rate, SimulationRateSource.Scenario.ToString(), _scenario.Game.IsPaused);
         }
         if (!_isCurrent)
         {
@@ -207,41 +382,35 @@ public partial class DeveloperToolsWindow : DraggableWindow
                 _independentDriver!.Advance(delta, _scenario.Game, point =>
                 {
                     bool keepGoing = _scenario.ObserveCheckpoint(point);
-                    if (_scenario.IsRunning) ApplyScenarioRate();
+                    if (IsRunning) ApplyScenarioRate();
                     return keepGoing;
-                }, () => _scenario.IsRunning ? _scenario.GetMaxAdvanceTicks() : 0);
+                }, () => IsRunning ? _scenario.GetMaxAdvanceTicks() : 0);
             }
-            catch (InvalidOperationException error)
-            {
-                Abort("经营推进被拒绝：" + error.Message);
-            }
+            catch (InvalidOperationException error) { Abort("经营推进被拒绝：" + error.Message); }
         }
         RefreshProgress();
     }
 
     internal void Abort(string reason)
     {
-        if (_scenario?.IsRunning != true) return;
-        _scenario.Abort(reason);
+        if (!IsRunning) return;
+        _scenario!.Abort(reason);
         RefreshProgress();
     }
 
     private void RefreshProgress()
     {
         if (_scenario == null) return;
-        _start.Disabled = _scenario.IsRunning;
-        _configurationPath.Editable = !_scenario.IsRunning;
-        _choose.Disabled = _scenario.IsRunning;
-        _abort.Disabled = !_scenario.IsRunning;
-        _progress.Text = $"{(_isCurrent ? "当前局" : "独立局")} · {_scenario.Progress}\n" +
+        UpdateStep();
+        _result.Progress.Text = $"{(_isCurrent ? "当前局" : "独立局")} · {_scenario.Progress}\n" +
             $"实际倍率 {(_isCurrent ? _currentDriver : _independentDriver!)?.Rate}× · " +
-            (_scenario.Game.IsPaused && _scenario.IsRunning ? "暂停，等待继续" : OutcomeText(_scenario.Outcome));
-        if (_scenario.IsRunning || _reportAttempted) return;
+            (_scenario.Game.IsPaused && IsRunning ? "暂停，等待继续" : OutcomeText(_scenario.Outcome));
+        if (IsRunning || _reportAttempted) return;
         _reportAttempted = true;
         try
         {
-            _reportPath.Text = "报告：" + _scenario.WriteReport(_runDirectory!);
-            _feedback.Text = _scenario.Report.Reason ?? "流程结束，检查结果见 JSON 报告。";
+            _result.ReportPath.Text = "报告：" + _scenario.WriteReport(_runDirectory!);
+            _feedback.Text = _scenario.Report.Reason ?? "流程结束，检查结果见JSON报告。";
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {

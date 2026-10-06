@@ -16,7 +16,7 @@ public partial class Main : Node2D
     private readonly FarmGame _game = new();
     private readonly SimulationDriver _driver = new();
     private WorkerPresentation _workerPresentation = null!;
-    private OptionButton _rateChoice = null!;
+    private Button _rateButton = null!;
     private long _tickHarvested;
     private long _tickProduced;
 #if DEBUG
@@ -81,8 +81,13 @@ public partial class Main : Node2D
         _uiRoot.Theme = SharedTheme;
         BuildInterface();
         UiScaling.Bind(_uiRoot);
-
+        _driver.RateChanged += RefreshSimulationRate;
         RefreshUi();
+    }
+
+    public override void _ExitTree()
+    {
+        _driver.RateChanged -= RefreshSimulationRate;
     }
 
     public override void _Process(double delta)
@@ -353,10 +358,11 @@ public partial class Main : Node2D
             Name = "CalendarPanel",
             AnchorLeft = 0.5f,
             AnchorRight = 0.5f,
-            OffsetLeft = -220.5f,
-            OffsetRight = 220.5f,
+            OffsetLeft = -260f,
+            OffsetRight = 260f,
             OffsetTop = 38f,
             OffsetBottom = 131f,
+            GrowHorizontal = Control.GrowDirection.Both,
         };
         datePanel.AddThemeStyleboxOverride("panel", Frame(Paper, 4));
         top.AddChild(datePanel);
@@ -374,23 +380,14 @@ public partial class Main : Node2D
         _calendarStatusLabel = MakeLabel("", 12, Muted);
         _calendarStatusLabel.AutowrapMode = TextServer.AutowrapMode.Off;
         dateText.AddChild(_calendarStatusLabel);
-        _rateChoice = new OptionButton { Name = "SimulationRateChoice", CustomMinimumSize = new Vector2(104, 30) };
-        _rateChoice.AddItem("0.5×");
-        _rateChoice.AddItem("1×");
-        _rateChoice.AddItem("2×");
-        _rateChoice.Selected = 1;
-        _rateChoice.ItemSelected += index =>
+        dateRow.AddChild(new VSeparator { Name = "CalendarActionSeparator" });
+        _rateButton = MakeQuietButton("1×", 65, 46);
+        _rateButton.Name = "SimulationRateButton";
+        _rateButton.Pressed += () =>
         {
-            _driver.SetRate(new[] { 0.5, 1, 2 }[index]);
-            RefreshUi();
+            _driver.SetRate(NextPublicRate(_driver.Rate), SimulationRateSource.Player);
         };
-        _rateChoice.AnchorLeft = _rateChoice.AnchorRight = 0.5f;
-        _rateChoice.OffsetLeft = 236;
-        _rateChoice.OffsetRight = 340;
-        _rateChoice.OffsetTop = 62;
-        _rateChoice.OffsetBottom = 108;
-        top.AddChild(_rateChoice);
-        dateRow.AddChild(new VSeparator());
+        dateRow.AddChild(_rateButton);
         _pauseButton = MakeQuietButton("", 43, 46);
         _pauseButton.Name = "PauseButton";
         _pauseButton.Icon = UiIcons.Texture(UiIcon.Pause);
@@ -780,13 +777,20 @@ public partial class Main : Node2D
         _messageLabel.Visible = !string.IsNullOrEmpty(_messageLabel.Text);
     }
 
+    private static double NextPublicRate(double rate) => rate switch { 1 => 2, 2 => 0.5, _ => 1 };
+
+    private void RefreshSimulationRate(double rate, SimulationRateSource source)
+    {
+        _rateButton.Text = rate.ToString("0.################", System.Globalization.CultureInfo.InvariantCulture) + "×";
+        _rateButton.TooltipText = "点击切换至 " + NextPublicRate(rate).ToString(System.Globalization.CultureInfo.InvariantCulture) + "×";
+    }
+
     private void RefreshUi()
     {
         _moneyLabel.Text = FormatCoins(_game.AvailableMoneyCents);
         _moneyLabel.TooltipText = $"总余额 {FormatCoins(_game.MoneyCents)} · 冻结 {FormatCoins(_game.FrozenMoneyCents)}";
         _workerLabel.Text = $"{_game.GetWorkers().Count} 名工人";
-        _rateChoice.Selected = _driver.Rate switch { 0.5 => 0, 1 => 1, 2 => 2, _ => -1 };
-        if (_rateChoice.Selected < 0) _rateChoice.Text = $"{_driver.Rate}×";
+        RefreshSimulationRate(_driver.Rate, SimulationRateSource.Player);
         _workerStatusLabel.Text = _game.IsPaused ? "照料已暂停" : "自动照料中";
         CalendarSnapshot calendar = _game.Calendar;
         string season = calendar.Season switch

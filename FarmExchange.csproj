@@ -9,4 +9,15 @@
     <Compile Remove="scripts/**/development/**/*.cs" />
     <Compile Remove="tests/**/*.cs" />
   </ItemGroup>
+  <Target Name="PrepareDevelopmentScenarioConfigurations" BeforeTargets="BeforeBuild"
+          Condition="'$(Configuration)' == 'Debug' Or '$(Configuration)' == 'ExportDebug'">
+    <ItemGroup>
+      <DevelopmentScenarioConfiguration Include="$(MSBuildProjectDirectory)/tests/scenario-configs/buy-process-sell/wheat-basic-r1.json" TargetFileName="wheat_basic_r1.json" />
+      <DevelopmentScenarioConfiguration Include="$(MSBuildProjectDirectory)/tests/scenario-configs/buy-process-sell/radish-three-r1.json" TargetFileName="radish_three_r1.json" />
+      <DevelopmentScenarioConfiguration Include="$(MSBuildProjectDirectory)/tests/scenario-configs/buy-process-sell/current-radish-r1.json" TargetFileName="current_radish_r1.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DevelopmentScenarioConfiguration)"
+          DestinationFiles="@(DevelopmentScenarioConfiguration->'$(MSBuildProjectDirectory)/assets/development/scenario_configs/%(TargetFileName)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>

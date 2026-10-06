@@ -34,6 +34,7 @@
 - [GameCalendar 接口](architecture/time/game-calendar/interface-game-calendar.md)和[GameTimeUnits 接口](architecture/time/game-time-units/interface-game-time-units.md)：经营日历、暂停与生产共用的精确时间比例。
 - [SimulationDriver 接口](architecture/time/simulation-driver/interface-simulation-driver.md)：唯一倍率与未完成tick进度、稳定检查点、预算限额和玩家/流程改速来源。
 - [参数化流程接口](architecture/development/interface-parameterized-scenario.md)与[固定流程实现](architecture/development/implementation-buy-process-sell.md)：严格配置、两种运行对象、日期及等待预算、同步结算和证据检查、只输出JSON报告。
+- [配置编辑接口](architecture/development/interface-scenario-configuration-editor.md)与[配置库实现](architecture/development/implementation-scenario-configuration-library.md)：可编辑字段元数据、严格扫描与草稿、Git持久配置、另存覆盖及两种删除的文件归属。
 - [开发窗口接口](architecture/ui/developer-tools-window/interface-developer-tools-window.md)：文件选择、启动/中止、当前局与独立数据局接入、真实进度及报告保存结果。
 - [MapCoordinates 接口](architecture/world/map-coordinates/interface-map-coordinates.md)：格坐标与地图本地坐标的统一换算。
 - [WorldMap 接口](architecture/world/world-map/interface-world-map.md)及[分块缓存实现](architecture/world/world-map/implementation-chunk-cache.md)。
@@ -68,6 +69,7 @@
 - [公开 C# 开发工具案例](research/developer-tools-csharp-cases.md)及[源码组织讨论](project/developer-tools-csharp-organization.md)：历史案例比较与单项目源码组织依据；本次development目录编译排除的实际配置见[本地开发构建](project/development-build.md)。
 - [跨模块自动调试设计补充](project/developer-tools-cross-module-debugging.md)：固定流程、两运行对象和报告的历史设计依据；现行接入与验收见[主计划](project/developer-tools-parameterized-tests.md)及[参数化流程接口](architecture/development/interface-parameterized-scenario.md)。
 - [固定流程与可变参数的开发测试设计](project/developer-tools-parameterized-tests.md)及[使用说明](project/parameterized-tests-usage.md)：#100 / #101 的主计划与长期用例、文件选择、两对象固定流程、开发窗口、持久配置引用和JSON报告；最新交付证据记在计划顶部。
+- [点击倍率与分类流程配置界面设计](project/developer-tools-flow-editor-design.md)：#103的C分步设计及#104实施计划，公共倍率按钮、分类检索、自动字段表单、另存覆盖与删除确认；完整实现、逐模块覆盖率与两种实际包验收记录在计划顶部，原型仅保留独立来源分支。
 - [跨 tick 等价批量经营推进方案](project/batched-simulation-proposal.md)：#100 按平静区间累计、跳到事件 tick 完整结算，保留生产、工人、计划、行情和订单的时序；密集成交逐笔处理，统一工人位置公式及模块内部行程实现已确认。
 - [地图内容放置预览调研](research/build-placement-preview.md)与[设计方案](project/build-placement-preview-proposal.md)：#83 的设计来源与 #87 的实施：占地属性驱动预览、逐格冲突反馈、通用取消及镜头交互。
 - [EditorConfig 检查](static-checks/editorconfig.md)、[CI 静态检查](static-checks/ci.md)、[接口注释格式](static-checks/interface-comments.md)。

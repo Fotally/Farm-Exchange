@@ -41,8 +41,16 @@ public partial class TestSuite : Node
         bool batchPassed = TestBatchedSimulation.RunChecks();
         GD.Print("单元测试：严格参数化买入加工卖出流程");
         bool scenarioPassed = TestParameterizedScenario.RunChecks();
-        GD.Print("端到端测试：开发窗口文件选择、独立报告及现场暂停改速");
+        GD.Print("单元测试：可扫描配置字段与严格结构校验");
+        bool scenarioSchemaPassed = TestScenarioConfigurationSchema.RunChecks();
+        GD.Print("单元测试：流程配置库保存、目录移除与文件删除");
+        bool scenarioLibraryPassed = TestScenarioConfigurationLibrary.RunChecks();
+        GD.Print("端到端测试：点击倍率、暂停半tick与日期卡布局");
+        bool rateButtonPassed = await TestSimulationRateButton.RunChecksAsync(this);
+        GD.Print("端到端测试：开发窗口持久配置、独立报告及现场暂停改速");
         bool developerWindowPassed = await TestDeveloperToolsWindow.RunChecksAsync(this);
+        GD.Print("端到端测试：分类流程分步界面、自动表单与保存删除确认");
+        bool developerEditorPassed = await TestDeveloperFlowEditor.RunChecksAsync(this);
         GD.Print("单元测试：等距地图坐标");
         bool worldMapPassed = TestWorldMap.RunChecks();
         GD.Print("集成测试：镜头输入与地图选择");
@@ -76,7 +84,7 @@ public partial class TestSuite : Node
         bool uiScalingPassed = await TestUiScaling.RunChecksAsync(this);
         GD.Print("端到端测试：共享年度表列表可读性、整表删除与引用解除");
         bool cultivationManagementPassed = await TestCultivationManagement.RunChecksAsync(this);
-        bool passed = driverPassed && batchPassed && scenarioPassed && developerWindowPassed && farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
+        bool passed = driverPassed && batchPassed && scenarioPassed && scenarioSchemaPassed && scenarioLibraryPassed && rateButtonPassed && developerWindowPassed && developerEditorPassed && farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
             coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationDeletionPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed && uiScalingPassed && cultivationManagementPassed;
 
         if (passed)

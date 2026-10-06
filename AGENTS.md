@@ -35,9 +35,10 @@
 - `scripts/world/PlacementPreviewGeometry.cs`：内部候选几何，读取同一占地偏移生成候选格与逐格阻塞，按相邻格生成外围边；只查询地图范围与真实占用，不复制正式放置规则或保存经营状态。
 - `scripts/world/WorkerPresentation.cs`：读取工人编号、经营格位置、目标与活动快照，复用角色场景显示三人，公共倍率按帧插值并同比调整行走动画，高倍率显示最新真实位置；位置换算复用地图接口，暂停立即对齐真实位置并保留动画帧，视觉帧率与动画不推进经营。
 - `scripts/world/CameraController.cs`：输入与镜头模块。唯一保存地图玩家倍率，窗口和全屏扩大时增加地图视野，保持农田与人物像素大小、镜头中心和玩家倍率。订阅尺寸变化并在退出时取消；缩放限制与输入换算保持内部，UI 倍率由 `UiScaling` 独立维护。区分左键点击与拖动，释放即结束拖动，界面收到释放时清除按下凭据；公开拖动及鼠标在窗口内状态供摆放隐藏预览，通过 `WorldMap` 选择格子及限制镜头。
-- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。组装像素田园浮动布局：顶部日期与暂停、右上金币与工人、左侧真实经营近况、右侧设施详情、底部中央经营入口。唯一持有摆放类型和候选锚点，所有类型逐次建造后保持摆放，右键、Esc、按钮统一取消；每帧在镜头更新后定位，界面遮挡或拖动时隐藏预览，标准费用与可用资金反馈分开显示。分发窗口意图并通过唯一时间驱动推进经营，经营变化后统一刷新，并组装读取工人快照的表现；只在地块变化时同步地图。
+- `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。组装像素田园浮动布局：顶部日期、点击循环倍率与暂停、右上金币与工人、左侧真实经营近况、右侧设施详情、底部中央经营入口。倍率位于日期竖线右、暂停左，1×→2×→0.5×循环，高开发倍率点击回1×，均提交玩家意图且不解除暂停。唯一持有摆放类型和候选锚点，所有类型逐次建造后保持摆放，右键、Esc、按钮统一取消；每帧在镜头更新后定位，界面遮挡或拖动时隐藏预览，标准费用与可用资金反馈分开显示。分发窗口意图并通过唯一时间驱动推进经营，经营变化后统一刷新，并组装读取工人快照的表现；只在地块变化时同步地图。
 - `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs`、`RoadDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与可用区域、建造目录、固定的选种/库存/市场控件、三类详情及统一木框纸面主题。窗口避让顶部状态与底部入口，长内容可滚动；主题集中维护按钮、输入、勾选及列表各态字色。目录包含九种设施、分类和名称搜索并统一查询费用；道路连续铺设到 Esc/取消为止，详情仅发出拆除意图。库存显示总量、冻结、可用量并保留底线草稿与焦点；设施详情从快照显示实际进度、产量、报价及损失说明。窗口不持有经营状态。
 - `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`：独立角色预览，接收 WASD/方向键移动、Q/E 切换 20 位角色并显示名称与跟随镜头；不接入主经营场景。
+- `scripts/development/configuration/`：可编辑字段类型与中文元数据、反射描述、严格JSON校验、配置库及独立草稿。配置库唯一负责文件来源、修订、另存/覆盖、单配置删除及流程目录持久移除；内置示例只读，项目内用户配置长期纳入Git。修改字段或保存删除约定时读取[配置编辑接口](docs/architecture/development/interface-scenario-configuration-editor.md)。
 - `scripts/ui/UiScaling.cs`：统一 UI 倍率模块，唯一记录控件原始排版与整体/字体倍率。两个公开设置接口支持独立子树与父子倍率组合，重复设置不累计，动态控件继承；字体变化触发真实重排，自绘时间图共用字号换算。默认1080P且关闭画布拉伸，扩大窗口不改设定倍率；不维护地图或经营状态。
 - `scripts/ui/UiIcons.cs` 与 `FacilityPreview.cs`：复用原型 SVG 的线条图标及设施/作物缩略，只读快照展示真实锚点。图标跟随整体倍率，字体倍率仅调整文字；素材来源见 `assets/ui/source_notes.md`，不替换世界地图与人物素材。
 - `scripts/ui/TradeOrdersWindow.cs`：从市场打开的委托与策略窗口，编辑商品、两种买单预算、数量、现金保留及条件组；列表读取真实状态、冻结和最近成交费用，编辑保留原 ID，每秒刷新不重建草稿控件；窗口不计算费用或修改经营资源。
@@ -54,7 +55,7 @@
 - `scripts/gameplay/SimulationAdvanceResult.cs`：完整经营检查点、实际推进与宽整数产出汇总。`FarmGame.AdvanceTicks` 请求无外部输入区间，各状态模块提供最近事件并累计平静数据，事件复用完整经营相位；显式降雨仍由单tick入口输入。
 - `scripts/time/SimulationDriver.cs` 与 `SimulationRateSource.cs`：唯一拥有每局倍率与未完成tick进度，现实帧时间转为同一经营批量请求；暂停不累计，改速保留进度，提供玩家/流程来源通知。发布仅0.5/1/2，开发额外有限正整数；场景只组装唯一当前局驱动。
 - `scripts/development/scenarios/`：严格持久配置、共用买入→加工→一次卖出流程和JSON报告。流程只使用真实经营命令与稳定检查点，不拥有生产或交易状态；独立局准备受控数据，现场明确证据不足。报告引用原文件及加载时SHA-256，不保存配置副本。
-- `scripts/ui/development/DeveloperToolsWindow.cs`：开发窗口文件选择、启动/中止、进度与报告反馈；当前局借用主驱动，独立局仅数据。`development/` 源码和入口从Release排除；配置在 `tests/scenario-configs/`，运行报告按[主计划](docs/project/developer-tools-parameterized-tests.md)分开保存。
+- `scripts/ui/development/DeveloperToolsWindow.cs`、`ScenarioCatalogStep.cs`、`ScenarioEditorStep.cs`、`ScenarioResultStep.cs` 与 `ScenarioConfigurationForm.cs`：C三步协调、分类双列目录、配置编辑和真实运行结果；同一表单按描述生成字段，窗口唯一维护选择与步骤，草稿及文件规则交给配置库。两种垃圾桶经确认后转交删除意图，运行中锁定编辑；当前局借主驱动、独立局只推进数据，报告引用已保存原文件。修改窗口操作时读取[开发窗口接口](docs/architecture/ui/developer-tools-window/interface-developer-tools-window.md)。
 
 # 工作约定
 
