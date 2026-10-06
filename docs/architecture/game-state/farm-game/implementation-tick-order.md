@@ -28,3 +28,7 @@
 地图镜头、可见块和帧率不影响上述遍历；满地图 50 步检查覆盖角落实体。作物成熟与加工时长以[作物表](../../../gameplay/production/crop-growth.md)为准，出售结算以[交易规则](../../../gameplay/trading/sales.md)为准。
 
 共享表的日期与缓存约定见[计划 Interface](../../cultivation/interface-cultivation-plan-book.md)。应用和编辑保留当前轮；立即表在下一日期事件可中断，预备表等待本轮结束。计划收获先关闭空田 Sow 并保留目标，原日历相位结束后 `Synchronize` 才按已生效日期重验启用；保持工人读取本步起始日历的原有约定。空白或本条已播种后用 `SetSowingEnabled` 阻止空田的 Sow，不阻止已有 Seeded 获水。手动下一轮在原收获相位接续，不追加一天等待；计划一天间隔只作用于排程验证。查询、草稿和动画不执行经营相位。
+
+## 批量区间与事件秒
+
+`AdvanceTick` 和 `AdvanceTicks` 的事件秒共用私有 `AdvanceEventTick`，以上六相位顺序保持一致。批量只在确认没有离散事件的区间调用各状态拥有模块的一次累计；成熟、领取、工人、计划、季节、公告报价及必要订单检查的 tick 仍完整结算。订单买入后的下一秒领取、每批取整和显式雨输入都保留。检查点发生在完整相位完成后，宿主正式命令修改后停止本次请求，后续请求重新定位事件。细节与验收见[批量实现](implementation-batched-simulation.md)。

@@ -65,7 +65,7 @@ public partial class TestTradeOrdersWindow : Node
             !Find<Button>(window, "ToggleOrderButton").Disabled)
             return Fail("冻结或单次操作按钮未显示真实快照");
         uint pausedSeconds = game.Calendar.ElapsedSeconds;
-        main.GetNode<Timer>("TickTimer").EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (game.Calendar.ElapsedSeconds != pausedSeconds || game.GetStock(RadishRaw) != 0)
             return Fail("暂停期间委托提前成交");
         LineEdit draft = Find<LineEdit>(window, "OrderQuantityInput");
@@ -96,7 +96,7 @@ public partial class TestTradeOrdersWindow : Node
             order.CashBasisCents != 5000 || order.ReserveCents != 1000)
             return Fail("条件组组合或原设单基准编辑丢失");
         Click(main, "PauseButton");
-        main.GetNode<Timer>("TickTimer").EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         order = game.GetTradeOrders()[0];
         if (order.Status != TradeOrderStatus.Completed || order.LastFill?.Trade is not TradeResult trade ||
             trade.Quantity != 10 || trade.TotalCents != 250 || trade.FeeCents != 3 || game.MoneyCents != 4747 ||
@@ -183,7 +183,7 @@ public partial class TestTradeOrdersWindow : Node
         Click(window, "SaveOrderButton");
         int beforeSell = game.MoneyCents;
         Click(main, "PauseButton");
-        main.GetNode<Timer>("TickTimer").EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         if (game.GetTradeOrders().Count != 5 || game.GetTradeOrders()[4].LastFill?.Trade is not TradeResult sale ||
             sale.Quantity != 1 || sale.TotalCents != 50 || sale.FeeCents != 1 || game.MoneyCents != beforeSell + 49 ||
             !Find<Label>(window, "OrderDetails").Text.Contains("实际收入 0.49"))
@@ -266,7 +266,7 @@ public partial class TestTradeOrdersWindow : Node
         int beforeBuy = game.MoneyCents;
         Click(window, "SaveOrderButton");
         Click(main, "PauseButton");
-        main.GetNode<Timer>("TickTimer").EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         Click(main, "PauseButton");
         TradeOrderFillSnapshot? buy = game.GetTradeOrders()[0].LastFill;
         if (buy == null || buy.Commodity != RadishRaw || buy.Side != TradeOrderSide.Buy ||
@@ -286,7 +286,7 @@ public partial class TestTradeOrdersWindow : Node
             !text.Contains("成交后余额 " + oldBalance) || text.Contains("实际收入"))
             return Fail("编辑方向和商品误解释或清空了之前的真实买入");
         Click(main, "PauseButton");
-        main.GetNode<Timer>("TickTimer").EmitSignal(Timer.SignalName.Timeout);
+        main.AdvanceSimulation(1);
         TradeOrderFillSnapshot? sell = game.GetTradeOrders()[0].LastFill;
         text = Find<Label>(window, "OrderDetails").Text;
         if (sell == null || sell.Commodity != RadishProduct || sell.Side != TradeOrderSide.Sell ||

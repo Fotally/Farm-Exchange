@@ -39,6 +39,21 @@ public sealed class GameCalendar
 
     public void SetPaused(bool paused) => IsPaused = paused;
 
+    /**
+     * <summary>查询下一季节起点的完整经营秒距离。</summary>
+     * <returns>严格晚于当前时刻的季节边界距离。</returns>
+     */
+    internal uint SecondsUntilNextSeason => 4320u - _elapsedSeconds % 4320u;
+
+    /**
+     * <summary>将未来游戏日起点转换为首个到达它的经营秒距离。</summary>
+     * <param name="elapsedDay">严格晚于当前游戏日的累计日数。</param>
+     * <returns>按七比三百六十整数比例向上取整的秒距离。</returns>
+     */
+    internal uint SecondsUntilDay(uint elapsedDay) => checked((uint)(
+        ((ulong)elapsedDay * GameTimeUnits.PerDay + GameTimeUnits.PerSecond - 1) /
+        GameTimeUnits.PerSecond - _elapsedSeconds));
+
     public bool TryAdvanceSeconds(uint seconds)
     {
         if (IsPaused)

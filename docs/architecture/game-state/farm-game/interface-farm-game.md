@@ -39,4 +39,14 @@
 
 时间顺序见[实现](implementation-tick-order.md)；开局布局见[实现](implementation-opening-layout.md)。玩家可观察的生产、交易、土地规则分别以 docs/gameplay/ 下的专题文档为准。
 
+## 等价批量推进
+
+`AdvanceTicks(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint = null)` 推进没有外部降雨输入的区间。暂停或零请求返回零且不调用检查点；未暂停时先核对完整请求是否超过 `uint32` 日历容量，超过则抛出 `InvalidOperationException` 且资源与时间零修改。调用方有显式雨输入时，先推进雨 tick 之前的无雨区间，再调用原 `AdvanceTick(true)`，随后继续无雨区间，不预报或补造天气。
+
+`SimulationAdvanceResult` 给出实际 `AdvancedTicks`、`long Harvested/Produced`、是否发生工人动作/换日、`StoppedAtCheckpoint`，以及执行成本 `QuietTicks/EventTicks`。平静秒数一次累计；事件秒数按完整相位结算。两种计数之和等于实际推进数，密集持续成交仍逐秒逐笔执行。
+
+每个事件结算完成后及请求终点调用检查点。`SimulationCheckpoint.AdvancedTicks` 是本次请求累计秒数，`IntervalTicks` 是上个检查点以来的秒数，`ElapsedSeconds` 是日历绝对秒数，`Result` 汇总本段结果，`IsEvent` 表示终点是否执行完整事件相位。回调返回 `true` 继续、`false` 停止；宿主可在稳定点提交正式命令，但修改后必须返回 `false`，再按新状态、倍率、日期与预算重算下一请求；不能在回调嵌套推进经营。流程首次达到产品数量的事件秒可直接停下建单，订单随后经营秒才执行。
+
+模块职责、整数口径和对照验证见[批量实现](implementation-batched-simulation.md)。
+
 满地图夹具以三格间距铺设锚点 `(0,0)` 到 `(381,381)`，按标准列奇偶交替农田/加工，保留 8,192+8,192 个生产实例与 147,456 个占用子格。生产、雨水与领取均按空间实例各处理一次。专用人物表现夹具将三座中心右上方农田改为空田并真实推进一秒，以采样移动；普通负载夹具不受影响。

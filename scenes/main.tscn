@@ -15,10 +15,6 @@ position = Vector2(0, 6128)
 zoom = Vector2(1.25, 1.25)
 script = ExtResource("3_camera")
 
-[node name="TickTimer" type="Timer" parent="."]
-wait_time = 1.0
-autostart = true
-
 [node name="CanvasLayer" type="CanvasLayer" parent="."]
 
 [node name="UiRoot" type="Control" parent="CanvasLayer"]

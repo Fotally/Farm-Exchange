@@ -46,10 +46,11 @@ foreach ($document in $documents) {
     }
 }
 
-$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; cultivation = 'FarmExchange.Cultivation'; farming = 'FarmExchange.Farming'; land = 'FarmExchange.Land'; processing = 'FarmExchange.Processing'; workers = 'FarmExchange.Workers'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; characters = 'FarmExchange.Characters'; market = 'FarmExchange.Market'; trading = 'FarmExchange.Trading'; time = 'FarmExchange.Time'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI' }
+$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; cultivation = 'FarmExchange.Cultivation'; farming = 'FarmExchange.Farming'; land = 'FarmExchange.Land'; processing = 'FarmExchange.Processing'; workers = 'FarmExchange.Workers'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; characters = 'FarmExchange.Characters'; market = 'FarmExchange.Market'; trading = 'FarmExchange.Trading'; time = 'FarmExchange.Time'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI'; development = 'FarmExchange.Development' }
 foreach ($group in $namespaces.Keys) {
     $directory = Join-Path $repoRoot "scripts/$group"
-    foreach ($script in Get-ChildItem -LiteralPath $directory -File -Filter '*.cs') {
+    if (-not (Test-Path -LiteralPath $directory)) { continue }
+    foreach ($script in Get-ChildItem -LiteralPath $directory -Recurse -File -Filter '*.cs') {
         $content = Get-Content -LiteralPath $script.FullName -Raw
         if ($content -notmatch "(?m)^namespace $([regex]::Escape($namespaces[$group]));\r?$") {
             $errors.Add("脚本命名空间与路径不一致：scripts/$group/$($script.Name)")

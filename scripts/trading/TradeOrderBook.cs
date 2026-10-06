@@ -29,6 +29,19 @@ internal sealed class TradeOrderBook
     private readonly Wallet _wallet;
     private readonly MarketQuotes _market;
     private readonly TradingService _trading;
+    private bool _nextCheckRequired = true;
+
+    /**
+     * <summary>新批量请求重新检查等待订单，纳入请求之间的正式经营命令。</summary>
+     */
+    internal void BeginAdvanceRequest() => _nextCheckRequired = true;
+
+    /**
+     * <summary>查询是否必须在下一经营秒重新检查活动订单。</summary>
+     * <returns>有等待订单且新请求或上秒持续成交时返回 true。</returns>
+     */
+    internal bool NeedsNextTickCheck => _nextCheckRequired &&
+        _orders.Exists(order => order.Status == TradeOrderStatus.Waiting);
 
     internal TradeOrderBook(GoodsInventory inventory, Wallet wallet, MarketQuotes market, TradingService trading)
     {
@@ -161,6 +174,7 @@ internal sealed class TradeOrderBook
     {
         if (calendar.IsPaused)
             return;
+        _nextCheckRequired = false;
         foreach (Order order in _orders)
         {
             if (order.Status != TradeOrderStatus.Waiting)
@@ -192,6 +206,8 @@ internal sealed class TradeOrderBook
             }
             order.LastFill = new TradeOrderFillSnapshot(request.Commodity, request.Side, result, _wallet.BalanceCents);
             order.WaitingReason = null;
+            if (request.Frequency == TradeOrderFrequency.Continuous)
+                _nextCheckRequired = true;
             if (request.Frequency == TradeOrderFrequency.Once)
             {
                 order.FrozenCents = order.FrozenQuantity = 0;

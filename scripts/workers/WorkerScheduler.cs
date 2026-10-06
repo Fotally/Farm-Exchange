@@ -84,6 +84,45 @@ internal sealed class WorkerScheduler
         return Array.AsReadOnly(snapshots);
     }
 
+    /**
+     * <summary>查询下一次任务选择、失效、抵达或动作的经营秒距离。</summary>
+     * <param name="farming">本局农田状态。</param>
+     * <param name="calendar">当前完整经营步结束时的日历。</param>
+     * <returns>无待处理事件时为 uint.MaxValue，其余为至少一秒。</returns>
+     */
+    internal uint GetNextEventSeconds(FarmingSystem farming, CalendarSnapshot calendar)
+    {
+        uint next = uint.MaxValue;
+        bool idle = false;
+        foreach (WorkerState worker in _workers)
+        {
+            if (worker.Work is not FarmWorkRequest work)
+            {
+                idle = true;
+                continue;
+            }
+            if (farming.GetWorkNeed(work.CellIndex, calendar) != work || worker.RemainingTravelSeconds == 0)
+                return 1;
+            next = Math.Min(next, (uint)worker.RemainingTravelSeconds);
+        }
+        if (idle)
+            foreach (int index in farming.Indices)
+                if (!_claimedCells.Contains(index) && farming.GetWorkNeed(index, calendar) != null)
+                    return 1;
+        return next;
+    }
+
+    /**
+     * <summary>累计无任务边界的行程，沿用单秒推进的位置公式。</summary>
+     * <param name="seconds">严格位于下一工人事件之前的完整经营秒数。</param>
+     */
+    internal void AdvanceQuietSeconds(uint seconds)
+    {
+        foreach (WorkerState worker in _workers)
+            if (worker.Work != null && worker.RemainingTravelSeconds > 0)
+                AdvanceTravel(worker, checked((int)seconds));
+    }
+
     private FarmWorkRequest? SelectNextWork(FarmingSystem farming, CalendarSnapshot calendar)
     {
         IReadOnlyList<int> indices = farming.Indices;
@@ -108,13 +147,16 @@ internal sealed class WorkerScheduler
         Vector2 distance = (Vector2)CellOf(work.CellIndex) - worker.GridPosition;
         float gridDistance = Mathf.Max(Mathf.Abs(distance.X), Mathf.Abs(distance.Y));
         worker.RemainingTravelSeconds = Mathf.CeilToInt(gridDistance / CellsPerSecond);
+        worker.TravelStart = worker.GridPosition;
+        worker.TravelTicks = 0;
         worker.TravelPerSecond = gridDistance == 0f ? Vector2.Zero : distance * (CellsPerSecond / gridDistance);
     }
 
-    private static void AdvanceTravel(WorkerState worker)
+    private static void AdvanceTravel(WorkerState worker, int seconds = 1)
     {
-        worker.RemainingTravelSeconds--;
-        worker.GridPosition += worker.TravelPerSecond;
+        worker.RemainingTravelSeconds -= seconds;
+        worker.TravelTicks += seconds;
+        worker.GridPosition = worker.TravelStart + worker.TravelPerSecond * worker.TravelTicks;
         if (worker.RemainingTravelSeconds == 0)
             worker.GridPosition = CellOf(worker.Work!.Value.CellIndex);
     }
@@ -136,6 +178,8 @@ internal sealed class WorkerScheduler
         internal FarmWorkRequest? Work;
         internal int RemainingTravelSeconds;
         internal Vector2 TravelPerSecond;
+        internal Vector2 TravelStart;
+        internal int TravelTicks;
 
         internal WorkerState(Vector2I startingCell) => GridPosition = startingCell;
     }

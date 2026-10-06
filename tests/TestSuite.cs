@@ -35,6 +35,14 @@ public partial class TestSuite : Node
         bool cultivationUiPassed = TestCultivationWindow.RunChecks(this);
         GD.Print("单元测试：独立日历换算");
         bool calendarPassed = TestGameCalendar.RunChecks();
+        GD.Print("单元测试：经营倍率、暂停半tick与稳定检查点换速");
+        bool driverPassed = TestSimulationDriver.RunChecks();
+        GD.Print("单元测试：等价批量经营推进");
+        bool batchPassed = TestBatchedSimulation.RunChecks();
+        GD.Print("单元测试：严格参数化买入加工卖出流程");
+        bool scenarioPassed = TestParameterizedScenario.RunChecks();
+        GD.Print("端到端测试：开发窗口文件选择、独立报告及现场暂停改速");
+        bool developerWindowPassed = await TestDeveloperToolsWindow.RunChecksAsync(this);
         GD.Print("单元测试：等距地图坐标");
         bool worldMapPassed = TestWorldMap.RunChecks();
         GD.Print("集成测试：镜头输入与地图选择");
@@ -68,7 +76,7 @@ public partial class TestSuite : Node
         bool uiScalingPassed = await TestUiScaling.RunChecksAsync(this);
         GD.Print("端到端测试：共享年度表列表可读性、整表删除与引用解除");
         bool cultivationManagementPassed = await TestCultivationManagement.RunChecksAsync(this);
-        bool passed = farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
+        bool passed = driverPassed && batchPassed && scenarioPassed && developerWindowPassed && farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
             coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationDeletionPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed && uiScalingPassed && cultivationManagementPassed;
 
         if (passed)

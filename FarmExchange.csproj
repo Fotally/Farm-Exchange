@@ -5,4 +5,8 @@
     <RootNamespace>FarmExchange</RootNamespace>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup Condition="'$(Configuration)' != 'Debug' And '$(Configuration)' != 'ExportDebug'">
+    <Compile Remove="scripts/**/development/**/*.cs" />
+    <Compile Remove="tests/**/*.cs" />
+  </ItemGroup>
 </Project>

@@ -43,13 +43,22 @@ public partial class NpcCharacter : CharacterBody2D
         UpdateAnimation(_moveDirection, _moveDirection != Vector2.Zero);
     }
 
-    public void ShowAt(Vector2 localPosition, Vector2 direction, bool moving, bool paused)
+    /**
+     * <summary>按外部位置和朝向显示角色，不推进自主移动。</summary>
+     * <param name="localPosition">父节点本地位置。</param>
+     * <param name="direction">画面朝向向量。</param>
+     * <param name="moving">是否播放行走。</param>
+     * <param name="paused">是否保留当前动画帧并暂停。</param>
+     * <param name="animationRate">调用方确认的正数动画播放倍率。</param>
+     */
+    public void ShowAt(Vector2 localPosition, Vector2 direction, bool moving, bool paused, double animationRate = 1)
     {
         _usesExternalPosition = true;
         SetPhysicsProcess(false);
         CollisionLayer = 0;
         CollisionMask = 0;
         Position = localPosition;
+        _sprite.SpeedScale = (float)animationRate;
         if (paused)
             _sprite.Pause();
         else

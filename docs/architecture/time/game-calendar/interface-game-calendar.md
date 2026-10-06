@@ -15,3 +15,5 @@
 调用方只传模拟推进量，不传动画帧时长或上次打开程序的现实时间。主界面展示 `Snapshot` 的季、年、月、日。`GameTimeUnits` 位于 `scripts/time/GameTimeUnits.cs`，是生产模块共用的比例单位：一模拟秒 7 单位、一日 360 单位、半日 180 单位；`RemainingSeconds` 向上取整，保证到期落在两次整秒之间时按首个到达整秒结算。独立日历测试见 `tests/unit/TestGameCalendar.cs`，经营连接测试见 `tests/unit/TestFarmGame.cs`。
 
 `GameDate` 定义位于 `scripts/time/GameDate.cs`，市场读取它显示本次、下次及公告日期。日期换算在累计 `uint32` 日数范围内同样不会回绕；实际经营范围仍由累计 `uint32` 模拟秒限定。节日改期属于 [MarketQuotes](../../market/market-quotes/interface-market-quotes.md) 的报价排期规则，日历模块只提供日期与季节，不管理商品或事件。T09B 补充的独立测试检查两种日期读取的一致性、节日日期和日数上限。
+
+批量协调使用内部 `SecondsUntilNextSeason` 和 `SecondsUntilDay(elapsedDay)`：前者返回严格晚于当前时刻的季界距离，后者将未来日的起点按 `ceil(day×360/7)` 转成相对秒数。乘法与绝对时刻使用宽整数，先求差再转 `uint`，未来日首次整秒可能大于日历上限但距离不会回绕；实际批量请求仍由经营入口整段检查容量。`TryAdvanceSeconds` 继续唯一提交连续区间累计，生产或行情不直接写日历。参见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。

@@ -59,6 +59,10 @@
 
 `Main` 负责组装窗口、唯一保留摆放类型与候选生命周期、保留普通所选格、分发玩家命令，并在命令或 tick 完成后统一刷新。建造目录发出建筑意图，地图短按松开时调用 `FarmGame.TryPlace` 重验，失败显示真实原因，成功显示实际扣费 `ChargedCents`；所有类型成功和失败都保留模式，并清普通选框、不弹详情。右键、Esc、按钮交给同一个 `CancelPlacement()`，统一清类型、候选和地图预览；重新打开目录或年度表也经该入口结束摆放。Esc 在摆放期间优先取消，输入在 `_Input` 接收，避免被已聚焦的界面控件拦截。
 
+#100 移除主场景 `TickTimer`，`Main._Process(delta)` 通过唯一 [SimulationDriver](../../time/simulation-driver/interface-simulation-driver.md) 推进完整经营。内部 `AdvanceSimulation(delta)` 也是场景测试使用的真实入口，不发出人工计时器信号。`SetProcess(false)` 停止主场景逐帧经营推进及预览、悬停费用刷新，`_Input` 等输入回调仍处理鼠标取消和摆放；`Game.SetPaused(true)` 只暂停经营，保留真实主场景帧。需要验证暂停中的界面自动刷新时，夹具应暂停经营并保持 `Main` 处理启用；`TestBuildPlacement.CheckFunds` 验证撤销冻结后悬停费用自动恢复，`CheckNativeInput` 验证拖动、镜头、缩放和离窗后的预览逐帧更新，并保留累计经营秒为0的断言。顶部日期右侧 `SimulationRateChoice` 选择0.5×、1×、2×，保留原日期面板尺寸。暂停按钮立即同步工人真实位置；每帧经营后再显示最新人物，界面与地图统一刷新。
+
+#101 在集中 `DEBUG` 组装区创建[DeveloperToolsWindow](../developer-tools-window/interface-developer-tools-window.md)和“开发测试”按钮；所有开发字段与调用均在同一编译条件内。当前流程只接入本驱动完整检查点和下一边界限额，独立对象由窗口用同一时间模块推进数据。公共经营不引用开发流程类型，发布保留公共速率入口。容量拒绝显示实际原因，不截断请求或改用其他倍率。
+
 每帧在镜头处理后读取当前鼠标位置，检查窗口内状态、镜头拖动及可见界面矩形，使用 `WorldMap.ScreenToCell` 得到未裁剪的候选锚点并调用 `UpdatePlacementPreview`。界面遮挡检查递归穿过忽略鼠标的透明容器，遇到接收鼠标的面板只检查其自身矩形，不读取滚动区域外被裁切子项的矩形。透明 `TopBar` 容器忽略鼠标、仅三个真实顶部面板阻挡地图；间隙可继续操作地图。界面遮挡、离窗或拖动时清候选并调用 `ClearPlacementPreview`，不重同步生产地图块。整体原因复用 `FarmGame.CheckPlacement` 的现有顺序；空间逐格染色由地图读取实际占用，费用独立读取 `GetBuildingCostCents`，不能使用失败预检的零费用。摆放反馈每帧读取 `AvailableMoneyCents`，使经营、交易和冻结变化即时反映；预览不持有金币或生产状态，不推进经营，进入摆放保持暂停状态。
 
 原始鼠标移动和左键松开也在 `_Input` 同步候选，沿用同一界面、窗口与拖动隐藏检查，避免同一帧的新位置尚未进入 `_Process` 就被提交。选择信号的经营提交入口再通过共用的 `SetPlacementCandidate` 同步释放格、地图覆盖、预检与费用，并将同一个释放格参数交给 `TryPlace` 重验，不从可空状态字段反读目标。回归用例在主场景挂树前订阅真实 `SelectionChanged`，先于经营回调观察候选与未扣费、未建状态；覆盖连续移动/松开和小于 8 像素跨格短按，验证提交前就已一致，不依赖建成后下一帧自愈。
@@ -73,7 +77,7 @@
 
 库存的 `RawReserveRequested` 交给 `FarmGame.SetRawReserve`；成功后 `Main` 调用窗口确认输入并统一刷新，失败显示稳定原因。底线修改只刷新经营窗口，不同步地图、不启动加工。库存窗口的草稿、焦点与滚动由窗口自身维护。加工详情区分缺料、底线限制、待领取与进行中；底线编辑与生效规则见[原料加工](../../../gameplay/production/processing.md)。
 
-`Main` 在地图下创建[WorkerPresentation](../../world/worker-presentation/interface-worker-presentation.md)，提供同一局 `FarmGame` 与地图坐标变换；不为显示调用经营推进或接收到达回调。工人摘要标签为 `WorkerCountLabel`，每次经营刷新从 `GetWorkers().Count` 更新。暂停同时停止经营与工人插值/动画，恢复不补现实时间；主地图的三名角色与独立 NPC 预览使用同一角色 Module。
+`Main` 在地图下创建[WorkerPresentation](../../world/worker-presentation/interface-worker-presentation.md)，提供同一局 `FarmGame`、唯一时间驱动与地图变换；不为显示推进经营或接收到达回调。工人摘要标签为 `WorkerCountLabel`，从快照人数更新。暂停立即对齐真实位置并冻结动画，恢复不补现实时间；主地图和独立预览共用角色模块。
 
 当前农田详情显示“生长周期：获得水后 N 天成熟”，加工详情显示“加工周期：投入原料后 N 天完成”。生产详情各显示自己负责的库存与售价，库存仍按品种共享；道路详情仅显示当前用途和拆除操作。主界面不计算建造费用、价格曲线或生产时间，也不暴露内部 `tick`。窗口实现见 [DraggableWindow](../draggable-window/interface-draggable-window.md)、[BuildCatalogWindow](../build-catalog-window/interface-build-catalog-window.md)、[CropSelectionWindow](../crop-selection-window/interface-crop-selection-window.md)、[InventoryWindow](../inventory-window/interface-inventory-window.md)、[MarketWindow](../market-window/interface-market-window.md)、[FarmDetailsPanel](../farm-details-panel/interface-farm-details-panel.md)、[ProcessorDetailsPanel](../processor-details-panel/interface-processor-details-panel.md)、[RoadDetailsPanel](../road-details-panel/interface-road-details-panel.md) 和 [UiElements](../ui-elements/interface-ui-elements.md)。
 

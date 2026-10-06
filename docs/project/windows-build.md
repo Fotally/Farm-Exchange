@@ -6,6 +6,7 @@
 - 官方 .NET 导出模板：同一目录中的 `Godot_v4.7.2-stable_mono_export_templates.tpz`；Windows x86_64 模板与中文所需 ICU 数据解压在 `export_templates/4.7.2.stable.mono/`，可供后续项目复用。
 - `project.godot` 启用中文断行所需的文本服务数据；导出包应包含该数据。
 - 项目导出配置：`export_presets.cfg`，排除测试场景、构建目录与覆盖率/FPS 报告目录；C# 构建配置：`FarmExchange.sln`、`FarmExchange.csproj`、`NuGet.Config`。Godot 的 .NET 导出要求项目根目录有与程序集同名的 `.sln`，Windows 发布首次运行还需从 nuget.org 获取 .NET 运行时包。
+- Release / ExportRelease 不编译 development 目录与测试源码，发布资源也排除开发目录；Debug / ExportDebug 本地接入开发窗口。公共经营实现保持一份，开发倍率接口只在 DEBUG 存在；dev 本地构建与报告位置见[本地开发构建](development-build.md)，CI 不新增 dev 包。
 
 ## 生成可运行版本
 

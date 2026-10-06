@@ -160,6 +160,27 @@ internal sealed class CultivationPlanBook
     internal void Clear() => _bindings.Clear();
 
     /**
+     * <summary>只读查询已绑定年度表下一条起止或年度凭据清理的秒距离。</summary>
+     * <param name="elapsedSeconds">当前完整经营步的累计秒数。</param>
+     * <returns>无绑定表时为 uint.MaxValue；事件对齐首个到达它的经营秒。</returns>
+     */
+    internal uint GetNextEventSeconds(uint elapsedSeconds)
+    {
+        long now = (long)elapsedSeconds * GameTimeUnits.PerSecond;
+        long next = long.MaxValue;
+        foreach (Binding binding in _bindings.Values)
+        {
+            if (binding.PlanId == null)
+                continue;
+            next = Math.Min(next, (now / YearUnits + 1) * YearUnits);
+            if (binding.NextEvent is long due)
+                next = Math.Min(next, due);
+        }
+        return next == long.MaxValue ? uint.MaxValue : checked((uint)Math.Max(1,
+            (next + GameTimeUnits.PerSecond - 1) / GameTimeUnits.PerSecond - elapsedSeconds));
+    }
+
+    /**
      * <summary>在换日清理之前记录工人已经完成的实际计划播种。</summary>
      * <remarks>只登记执行凭据，不查询安排、不启用目标或推进经营。</remarks>
      */

@@ -31,7 +31,7 @@ public partial class TestCameraInteraction : Node
         await Frames(parent);
         parent.AddChild(main);
         main.Game.SetPaused(true);
-        main.GetNode<Timer>("TickTimer").Stop();
+        main.SetProcess(false);
         var map = main.GetNode<WorldMap>("WorldMap");
         var camera = main.GetNode<CameraController>("Camera2D");
         var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
@@ -88,7 +88,7 @@ public partial class TestCameraInteraction : Node
             main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
             parent.AddChild(main);
             main.Game.SetPaused(true);
-            main.GetNode<Timer>("TickTimer").Stop();
+            main.SetProcess(false);
             await Frames(parent);
             if (!CheckView(window, main.GetNode<WorldMap>("WorldMap"), main.GetNode<CameraController>("Camera2D"),
                 main.GetNode<Control>("CanvasLayer/UiRoot"), 1.25f))

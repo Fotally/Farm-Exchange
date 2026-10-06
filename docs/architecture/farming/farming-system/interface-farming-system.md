@@ -25,3 +25,5 @@
 `WorkerScheduler` 只查询工作需求并调用指定工作操作，不取得可变农田状态。`FarmGame` 在步进开始时向全部现有农田实例各一次传递显式降雨，再按固定相位把正常成熟结果交给 `Inventory`；换季时先报告并沿原路径入库补救成熟，随后清理禁生未成熟作物，并由计划更新后续安排。调用方不逐字段清除农田，也不记录历史失败状态；已收获空田不会被越季清理。移除农田删除其水分状态。精确阈值与共同终结路径见[换季成熟实现](implementation-season-maturity.md)，播种检查见[PlantingRules 接口](../planting-rules/interface-planting-rules.md)，工人移动与三人认领见[WorkerScheduler 接口](../../workers/worker-scheduler/interface-worker-scheduler.md)。旧对象、旧轮、雨水满足及季末执行重验的专项测试位于 `tests/unit/TestWorkerScheduler.cs`。
 
 模块不解析占用子格或决定设施形状；`FarmGame` 在土地接口解析锚点后调用，`WorkerScheduler` 从 `Indices` 取得真实锚点。少量容量测试数组直接验证生产状态，完整空间几何由土地测试负责。
+
+批量内部接口 `GetNextEventSeconds(index)` 返回正常成熟的剩余完整秒数，未生长返回 `uint.MaxValue`；`AdvanceQuietSeconds(index, seconds)` 只累计严格位于成熟之前的区间，一次扣除 `7×seconds` 精确单位，不收获或更改凭据。换季仍是经营入口独立事件，促熟与清理沿用原操作。单秒与批量都在正常到期的事件秒调用原 `AdvanceGrowth`，不会对跨轮总时长统一取整。调用顺序见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。
