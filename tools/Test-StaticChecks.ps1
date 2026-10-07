@@ -26,6 +26,13 @@ foreach ($entry in $mapping) {
     }
 }
 
+try {
+    & (Join-Path $PSScriptRoot 'Test-RuleReferences.ps1') -RepositoryRoot $repoRoot
+}
+catch {
+    $errors.Add($_.Exception.Message)
+}
+
 $documents = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'docs') -Recurse -File -Filter '*.md'
 foreach ($document in $documents) {
     $relative = [IO.Path]::GetRelativePath((Join-Path $repoRoot 'docs'), $document.FullName).Replace('\', '/')

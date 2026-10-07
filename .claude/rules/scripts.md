@@ -11,4 +11,4 @@ paths:
 - 跨模块只依赖对方公开接口，内部状态和绘制缓存留在拥有它的模块。模块接口是实际公开约定，不要求一一对应 C# interface 类型。
 - 只有出现真实的可替换实现时才声明 C# interface 类型；一旦声明，跨模块调用方按该类型依赖它，场景组装处接入具体实现。
 - 修改模块公开约定时更新对应的 docs/architecture/ 接口文档；修改玩家规则时更新 docs/gameplay/。不为尚未出现的情况增加接缝或兜底。
-- 接口 XML 注释的块边界各占一行，`summary`、每个 `param`、`returns` 及 `remarks` 各占一行；示例见[接口注释格式](../../docs/static-checks/interface-comments.md)。
+- 接口 XML 注释的块边界各占一行，`summary`、每个 `param`、`returns` 及 `remarks` 各占一行；修改接口注释时读取格式示例（仓库根路径：`docs/static-checks/interface-comments.md`）。标注“仓库根路径”的引用均从仓库根目录解析，原文与目录 AGENTS.md 使用同一目标。
