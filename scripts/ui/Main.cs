@@ -3,6 +3,7 @@ using FarmExchange.Gameplay;
 using FarmExchange.Cultivation;
 using FarmExchange.Inventory;
 using FarmExchange.Land;
+using FarmExchange.Logging;
 using FarmExchange.Market;
 using FarmExchange.Time;
 using FarmExchange.Trading;
@@ -13,7 +14,9 @@ namespace FarmExchange.UI;
 
 public partial class Main : Node2D
 {
-    private readonly FarmGame _game = new();
+    private FarmGame? _currentGame;
+    private RuntimeLog? _logging;
+    private FarmGame GameState => InitializeGame();
     private readonly SimulationDriver _driver = new();
     private WorkerPresentation _workerPresentation = null!;
     private Button _rateButton = null!;
@@ -61,20 +64,53 @@ public partial class Main : Node2D
             Kind == BuildingKind.Road ? "道路" : FarmGame.GetCrop(Crop).BuildingName;
     }
 
-    internal FarmGame Game => _game;
+    internal FarmGame Game => GameState;
     internal SimulationDriver Driver => _driver;
+
+    private FarmGame InitializeGame()
+    {
+        if (_currentGame != null) return _currentGame;
+#if DEBUG
+        const bool development = true;
+#else
+        const bool development = false;
+#endif
+        if (OS.HasFeature("editor") || OS.HasFeature("windows"))
+        {
+            string directory = OS.HasFeature("editor")
+                ? ProjectSettings.GlobalizePath("res://build/logs")
+                : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(OS.GetExecutablePath())!, "logs");
+            var size = DisplayServer.WindowGetSize();
+            _logging = RuntimeLog.OpenFile(directory, development, new LogEnvironment(
+                GameVersion: ProjectSettings.HasSetting("application/config/version")
+                    ? ProjectSettings.GetSetting("application/config/version").AsString() : null,
+                EngineVersion: Engine.GetVersionInfo()["string"].AsString(),
+                Renderer: RenderingServer.GetCurrentRenderingMethod(), WindowWidth: size.X, WindowHeight: size.Y,
+                BuildKind: OS.HasFeature("editor") ? "Debug" : OS.HasFeature("debug") ? "ExportDebug" : "Release"),
+                diagnostic: message => GD.PushWarning(message));
+        }
+        else _logging = RuntimeLog.Disabled();
+        try { _currentGame = new FarmGame(logging: _logging); }
+        catch (System.Exception error)
+        {
+            _logging.InitializationFailed(error);
+            _logging.Dispose();
+            throw;
+        }
+        return _currentGame;
+    }
 
     public override void _Ready()
     {
         _worldMap = GetNode<WorldMap>("WorldMap");
         _camera = GetNode<CameraController>("Camera2D");
         ProcessPriority = 1;
-        _worldMap.SetGame(_game, _driver);
+        _worldMap.SetGame(GameState, _driver);
         GetNode<Camera2D>("Camera2D").GlobalPosition = _worldMap.GetGridWorldPosition(
             new Vector2((FarmGame.MapSize - 1) / 2f, (FarmGame.MapSize - 1) / 2f));
         _workerPresentation = new WorkerPresentation();
         _worldMap.AttachDepthSorted(_workerPresentation);
-        _workerPresentation.SetGame(_game, _worldMap, _driver);
+        _workerPresentation.SetGame(GameState, _worldMap, _driver);
         _workerPresentation.ProcessPriority = 2;
         _worldMap.SelectionChanged += OnSelectionChanged;
         _uiRoot = GetNode<Control>("CanvasLayer/UiRoot");
@@ -88,6 +124,8 @@ public partial class Main : Node2D
     public override void _ExitTree()
     {
         _driver.RateChanged -= RefreshSimulationRate;
+        _currentGame?.Dispose();
+        _logging?.Dispose();
     }
 
     public override void _Process(double delta)
@@ -106,10 +144,10 @@ public partial class Main : Node2D
         try
         {
 #if DEBUG
-            advanced = _driver.Advance(delta, _game, ObserveSimulationCheckpoint,
+            advanced = _driver.Advance(delta, GameState, ObserveSimulationCheckpoint,
                 _developerWindow.GetCurrentMaxTicks);
 #else
-            advanced = _driver.Advance(delta, _game, ObserveSimulationCheckpoint);
+            advanced = _driver.Advance(delta, GameState, ObserveSimulationCheckpoint);
 #endif
         }
         catch (System.InvalidOperationException error)
@@ -192,7 +230,7 @@ public partial class Main : Node2D
     {
         _placementCell = cell;
         _worldMap.UpdatePlacementPreview(placement.Kind, placement.Crop, cell);
-        _placementFailure = _game.CheckPlacement(_placementCell.Value, placement.Kind, placement.Crop).Failure;
+        _placementFailure = GameState.CheckPlacement(_placementCell.Value, placement.Kind, placement.Crop).Failure;
         RefreshFooter();
     }
 
@@ -270,38 +308,38 @@ public partial class Main : Node2D
         AddWindow(_marketWindow);
 
         _ordersWindow = new TradeOrdersWindow();
-        _ordersWindow.CreateRequested += request => ShowOrderResult(_game.CreateTradeOrder(request));
-        _ordersWindow.UpdateRequested += (id, request) => ShowOrderResult(_game.UpdateTradeOrder(id, request));
-        _ordersWindow.CancelRequested += id => ShowOrderResult(_game.CancelTradeOrder(id));
-        _ordersWindow.EnabledRequested += (id, enabled) => ShowOrderResult(_game.SetTradeOrderEnabled(id, enabled));
+        _ordersWindow.CreateRequested += request => ShowOrderResult(GameState.CreateTradeOrder(request));
+        _ordersWindow.UpdateRequested += (id, request) => ShowOrderResult(GameState.UpdateTradeOrder(id, request));
+        _ordersWindow.CancelRequested += id => ShowOrderResult(GameState.CancelTradeOrder(id));
+        _ordersWindow.EnabledRequested += (id, enabled) => ShowOrderResult(GameState.SetTradeOrderEnabled(id, enabled));
         AddWindow(_ordersWindow);
 
         _cultivationWindow = new CultivationWindow();
         _cultivationWindow.SaveRequested += (id, request) =>
         {
             CultivationCommandResult result = id is int existingId
-                ? _game.UpdateCultivationPlan(existingId, request) : _game.CreateCultivationPlan(request);
+                ? GameState.UpdateCultivationPlan(existingId, request) : GameState.CreateCultivationPlan(request);
             _cultivationWindow.ShowCommandResult(result);
             SetMessage(result.Error ?? "共享年度表已保存");
             RefreshAfterGameChange(worldChanged: result.Success);
         };
         _cultivationWindow.ApplyRequested += (id, cells) =>
         {
-            string? error = _game.ApplyCultivationPlan(id, cells);
+            string? error = GameState.ApplyCultivationPlan(id, cells);
             _cultivationWindow.ShowApplyResult(error);
             SetMessage(error ?? "共享表已应用到勾选农田，当前轮保留");
             RefreshAfterGameChange(worldChanged: true);
         };
         _cultivationWindow.DeleteRequested += id =>
         {
-            string? error = _game.DeleteCultivationPlan(id);
+            string? error = GameState.DeleteCultivationPlan(id);
             _cultivationWindow.ShowDeleteResult(error);
             SetMessage(error ?? "共享年度表已删除，原引用农田按当前作物自动复种");
             RefreshAfterGameChange(worldChanged: false);
         };
         AddWindow(_cultivationWindow);
 #if DEBUG
-        _developerWindow = new DeveloperToolsWindow(_game, _driver,
+        _developerWindow = new DeveloperToolsWindow(GameState, _driver,
             () => RefreshAfterGameChange(worldChanged: true));
         AddWindow(_developerWindow);
         var developerButton = MakeQuietButton("开发测试", 115, 36);
@@ -549,7 +587,7 @@ public partial class Main : Node2D
         if (_placement is Placement placement)
         {
             SetPlacementCandidate(cell, placement);
-            PlacementResult result = _game.TryPlace(cell, placement.Kind, placement.Crop);
+            PlacementResult result = GameState.TryPlace(cell, placement.Kind, placement.Crop);
             if (!result.Success)
             {
                 SetMessage(result.ErrorMessage);
@@ -619,11 +657,11 @@ public partial class Main : Node2D
 
     private void OpenCrop(bool prepareNext)
     {
-        if (_selectedCell is not Vector2I cell || _game.GetPlot(cell).Building != BuildingKind.Farm)
+        if (_selectedCell is not Vector2I cell || GameState.GetPlot(cell).Building != BuildingKind.Farm)
             return;
         _buildWindow.Hide();
         _cropWindow.SetManualMode(prepareNext, cell);
-        _cropWindow.Refresh(_game);
+        _cropWindow.Refresh(GameState);
         _cropWindow.ShowRaised();
     }
 
@@ -631,7 +669,7 @@ public partial class Main : Node2D
     {
         if (_selectedCell is not Vector2I cell)
             return;
-        string? error = _game.SetFarmCrop(cell, crop);
+        string? error = GameState.SetFarmCrop(cell, crop);
         SetMessage(error ?? $"农田已改种{FarmGame.GetCrop(crop).CropName}");
         if (error == null)
             _cropWindow.Hide();
@@ -642,7 +680,7 @@ public partial class Main : Node2D
     {
         if (_selectedCell is not Vector2I cell)
             return;
-        string? error = _game.RemoveBuilding(cell);
+        string? error = GameState.RemoveBuilding(cell);
         SetMessage(error ?? "建筑已移除；不退还建造费");
         if (error == null)
             _cropWindow.Hide();
@@ -656,7 +694,7 @@ public partial class Main : Node2D
         _cropWindow.Hide();
         _marketWindow.Hide();
         _ordersWindow.Hide();
-        _inventoryWindow.Refresh(_game);
+        _inventoryWindow.Refresh(GameState);
         _inventoryWindow.ShowRaised();
     }
 
@@ -667,14 +705,14 @@ public partial class Main : Node2D
         _cropWindow.Hide();
         _inventoryWindow.Hide();
         _ordersWindow.Hide();
-        _marketWindow.Refresh(_game);
+        _marketWindow.Refresh(GameState);
         _marketWindow.ShowRaised();
     }
 
     private void PrepareCrop(CropKind crop)
     {
         if (_selectedCell is not Vector2I cell) return;
-        string? error = _game.PrepareFarmCrop(cell, crop);
+        string? error = GameState.PrepareFarmCrop(cell, crop);
         SetMessage(error ?? $"下一轮已预备{FarmGame.GetCrop(crop).CropName}，本田已转为手动");
         if (error == null) _cropWindow.Hide();
         RefreshAfterGameChange(worldChanged: true);
@@ -689,7 +727,7 @@ public partial class Main : Node2D
         _marketWindow.Hide();
         _ordersWindow.Hide();
         _detailWindow.Hide();
-        _cultivationWindow.Refresh(_game);
+        _cultivationWindow.Refresh(GameState);
         _cultivationWindow.ShowRaised();
         RefreshFooter();
     }
@@ -697,7 +735,7 @@ public partial class Main : Node2D
     private void OpenTradeOrders()
     {
         _marketWindow.Hide();
-        _ordersWindow.Refresh(_game);
+        _ordersWindow.Refresh(GameState);
         _ordersWindow.ShowRaised();
     }
 
@@ -710,7 +748,7 @@ public partial class Main : Node2D
 
     private void SetRawReserve(CropKind crop, int quantity)
     {
-        RawReserveFailure failure = _game.SetRawReserve(crop, quantity);
+        RawReserveFailure failure = GameState.SetRawReserve(crop, quantity);
         if (failure == RawReserveFailure.None)
         {
             _inventoryWindow.ConfirmRawReserve(crop, quantity);
@@ -724,7 +762,7 @@ public partial class Main : Node2D
 
     private void SellRaw(CropKind crop)
     {
-        SaleResult sale = _game.SellRaw(crop);
+        SaleResult sale = GameState.SellRaw(crop);
         ShowMarketFeedback(sale.Success
             ? $"卖出 {sale.Quantity} 份{FarmGame.GetCrop(crop).CropName}原料，获得 {FormatCoins(sale.RevenueCents)} 金币"
             : sale.ErrorMessage!);
@@ -733,7 +771,7 @@ public partial class Main : Node2D
 
     private void SellAll()
     {
-        SaleResult sale = _game.SellAll();
+        SaleResult sale = GameState.SellAll();
         ShowMarketFeedback(!sale.Success ? sale.ErrorMessage! : sale.Quantity == 0
             ? "加工品库存为空"
             : $"卖出 {sale.Quantity} 份加工品，获得 {FormatCoins(sale.RevenueCents)} 金币");
@@ -742,12 +780,12 @@ public partial class Main : Node2D
 
     private void Trade(CommodityId commodity, int quantity, bool buy)
     {
-        TradeResult result = buy ? _game.Buy(commodity, quantity) : _game.Sell(commodity, quantity);
+        TradeResult result = buy ? GameState.Buy(commodity, quantity) : GameState.Sell(commodity, quantity);
         ShowTradeFeedback(commodity, result, buy);
     }
 
     private void SellCommodityAll(CommodityId commodity) =>
-        ShowTradeFeedback(commodity, _game.SellCommodityAll(commodity), buy: false);
+        ShowTradeFeedback(commodity, GameState.SellCommodityAll(commodity), buy: false);
 
     private void ShowTradeFeedback(CommodityId commodity, TradeResult result, bool buy)
     {
@@ -787,12 +825,12 @@ public partial class Main : Node2D
 
     private void RefreshUi()
     {
-        _moneyLabel.Text = FormatCoins(_game.AvailableMoneyCents);
-        _moneyLabel.TooltipText = $"总余额 {FormatCoins(_game.MoneyCents)} · 冻结 {FormatCoins(_game.FrozenMoneyCents)}";
-        _workerLabel.Text = $"{_game.GetWorkers().Count} 名工人";
+        _moneyLabel.Text = FormatCoins(GameState.AvailableMoneyCents);
+        _moneyLabel.TooltipText = $"总余额 {FormatCoins(GameState.MoneyCents)} · 冻结 {FormatCoins(GameState.FrozenMoneyCents)}";
+        _workerLabel.Text = $"{GameState.GetWorkers().Count} 名工人";
         RefreshSimulationRate(_driver.Rate, SimulationRateSource.Player);
-        _workerStatusLabel.Text = _game.IsPaused ? "照料已暂停" : "自动照料中";
-        CalendarSnapshot calendar = _game.Calendar;
+        _workerStatusLabel.Text = GameState.IsPaused ? "照料已暂停" : "自动照料中";
+        CalendarSnapshot calendar = GameState.Calendar;
         string season = calendar.Season switch
         {
             Season.Spring => "春",
@@ -802,22 +840,22 @@ public partial class Main : Node2D
         };
         _calendarLabel.Text = $"{season} · 第 {calendar.Year} 年 · {calendar.Month} 月 · {calendar.Day} 日";
         RefreshActivity();
-        _pauseButton.Icon = UiIcons.Texture(_game.IsPaused ? UiIcon.Play : UiIcon.Pause);
-        _pauseButton.TooltipText = _game.IsPaused ? "继续经营" : "暂停经营";
-        _calendarStatusLabel.Text = _game.IsPaused ? "经营已暂停 · 仍可交易" : "自动照料 · 成熟自动入库";
+        _pauseButton.Icon = UiIcons.Texture(GameState.IsPaused ? UiIcon.Play : UiIcon.Pause);
+        _pauseButton.TooltipText = GameState.IsPaused ? "继续经营" : "暂停经营";
+        _calendarStatusLabel.Text = GameState.IsPaused ? "经营已暂停 · 仍可交易" : "自动照料 · 成熟自动入库";
         RefreshFooter();
         RefreshDetail();
-        if (_inventoryWindow.Visible) _inventoryWindow.Refresh(_game);
-        if (_marketWindow.Visible) _marketWindow.Refresh(_game);
-        if (_ordersWindow.Visible) _ordersWindow.Refresh(_game);
-        if (_cropWindow.Visible) _cropWindow.Refresh(_game);
-        if (_cultivationWindow.Visible) _cultivationWindow.Refresh(_game);
+        if (_inventoryWindow.Visible) _inventoryWindow.Refresh(GameState);
+        if (_marketWindow.Visible) _marketWindow.Refresh(GameState);
+        if (_ordersWindow.Visible) _ordersWindow.Refresh(GameState);
+        if (_cropWindow.Visible) _cropWindow.Refresh(GameState);
+        if (_cultivationWindow.Visible) _cultivationWindow.Refresh(GameState);
     }
 
     private void RefreshActivity()
     {
         int farms = 0, processors = 0, roads = 0;
-        foreach (BuildingSpaceSnapshot space in _game.GetBuildingSpaces())
+        foreach (BuildingSpaceSnapshot space in GameState.GetBuildingSpaces())
         {
             if (space.Building == BuildingKind.Farm) farms++;
             else if (space.Building == BuildingKind.Processor) processors++;
@@ -826,12 +864,12 @@ public partial class Main : Node2D
         _farmCountLabel.Text = $"{farms} 块农田";
         _processorCountLabel.Text = $"{processors} 处加工场地";
         _activityLabel.Text = $"道路 {roads} 格\n" +
-            (_game.IsPaused ? "经营已暂停，仍可主动交易。" : "工人自动照料，成熟后自动入库。");
+            (GameState.IsPaused ? "经营已暂停，仍可主动交易。" : "工人自动照料，成熟后自动入库。");
     }
 
     private void TogglePause()
     {
-        _game.SetPaused(!_game.IsPaused);
+        GameState.SetPaused(!GameState.IsPaused);
         _workerPresentation._Process(0);
         RefreshUi();
     }
@@ -848,13 +886,13 @@ public partial class Main : Node2D
         }
         int costCents = FarmGame.GetBuildingCostCents(placement.Kind);
         _buildHint.Show();
-        bool insufficient = _game.AvailableMoneyCents < costCents;
+        bool insufficient = GameState.AvailableMoneyCents < costCents;
         _buildHint.Text = $"{placement.Name} · 占地 {BuildingFootprint.Get(placement.Kind).Offsets.Count} 格\n" +
             "左键建造 · 拖动平移\n右键 / Esc 取消" +
             (_placementFailure == LandFailure.None ? "" :
                 $"\n无法建造：\n{new PlacementResult(_placementFailure, 0).ErrorMessage}");
         _buildCost.Text = insufficient
-            ? $"费用 {FormatCoins(costCents)} 金币\n可用 {FormatCoins(_game.AvailableMoneyCents)}"
+            ? $"费用 {FormatCoins(costCents)} 金币\n可用 {FormatCoins(GameState.AvailableMoneyCents)}"
             : $"费用 {FormatCoins(costCents)} 金币";
         Color costColor = insufficient ? new Color("a34131") : Ink;
         if (_buildCost.GetThemeColor("font_color") != costColor)
@@ -870,7 +908,7 @@ public partial class Main : Node2D
             _detailWindow.Hide();
             return;
         }
-        PlotSnapshot plot = _game.GetPlot(cell);
+        PlotSnapshot plot = GameState.GetPlot(cell);
         _detailWindow.SetTitle(plot.Building switch
         {
             BuildingKind.Farm => "农田详情",
@@ -879,7 +917,7 @@ public partial class Main : Node2D
             _ => "地块详情",
         });
         _detailCell.Visible = plot.Building == BuildingKind.None;
-        BuildingSpaceSnapshot? space = _game.GetBuildingSpace(cell);
+        BuildingSpaceSnapshot? space = GameState.GetBuildingSpace(cell);
         _detailCell.Text = space == null ? $"地块 ({cell.X}, {cell.Y})" :
             $"建筑锚点 ({space.AnchorCell.X}, {space.AnchorCell.Y}) · 占地 {space.Footprint.Offsets.Count} 格";
         _emptyDetails.Visible = plot.Building == BuildingKind.None;
@@ -888,12 +926,12 @@ public partial class Main : Node2D
         _roadDetails.Visible = plot.Building == BuildingKind.Road;
         if (_farmDetails.Visible)
         {
-            _farmDetails.Refresh(_game.GetFarmDetails(cell));
-            _farmDetails.RefreshCultivation(_game, cell);
+            _farmDetails.Refresh(GameState.GetFarmDetails(cell));
+            _farmDetails.RefreshCultivation(GameState, cell);
         }
         else if (_processorDetails.Visible)
         {
-            _processorDetails.Refresh(_game.GetProcessorDetails(cell));
+            _processorDetails.Refresh(GameState.GetProcessorDetails(cell));
             _processorDetails.RefreshProgress(plot);
             _processorDetails.RefreshPlacement(space!, plot.CropKind);
         }

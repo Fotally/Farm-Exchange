@@ -41,7 +41,9 @@
 
 - 农田、七种配套加工场地与道路以外的建筑类型与建造规则。
 - 存档与离线收益规则。
-- 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、设施朝向 #111、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[朝向](facility-orientation-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。[日志设计 #82](https://github.com/Fotally/Farm-Exchange/issues/82)尚未定稿，草稿保留在dev，不随本次归档进入main。这些待确认项不作为已实施功能。
+- 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、设施朝向 #111、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[朝向](facility-orientation-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。这些待确认项不作为已实施功能。
+
+日志 #82 的初版 #126 已验收；#127 内先完成底座/子模块日志职责及观察协议修正，再接入完整交易/订单/行情，随后依次由 #128～#130 接入建造与生产、耕作与开发流程、有界诊断及性能。按需要记录的子模块组织领域入口，底座维持通用提交契约；观察关联与终结共用，业务保留原执行权。已确定但尚未实施的安排见[后续修正方向](../research/runtime-logging.md#已确认的后续修正方向)。实际覆盖仍以[日志接口](../architecture/logging/interface-logging.md)为准，字段见[schema v1](runtime-log-schema-v1.md)。普通日志不提供可靠重放。
 
 ## 系统划分
 

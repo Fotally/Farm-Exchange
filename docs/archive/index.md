@@ -24,7 +24,7 @@
 | [点击倍率与分类流程配置界面设计](project/developer-tools-flow-editor-design.md) | [现行说明](../architecture/ui/developer-tools-window/interface-developer-tools-window.md) | #103、#104；PR #102已合并 |
 | [Farm Exchange 美术总包 v1 分析](research/art-agent-bundle-v1.md) | [现行说明](../research/bright-complete-v2.md) | #105；首批PR #122已合并，后续设计仍开放 |
 | [Farm Exchange 系统组织与深接口设计：已完成计划归档](project/farm-exchange-system-design-and-execution-plan.md) | [现行说明](../project/roadmap.md) | #76、#75；PR #70已合并 |
-| [历史自动化测试与性能验收](project/testing.md) | [现行说明](../project/testing.md) | #36、#42、#75、#78、#86、#87、#94、#100、#101、#105 |
+| [历史自动化测试与性能验收](project/testing.md) | [现行说明](../project/testing.md) | #36、#42、#75、#78、#86、#87、#94、#100、#101、#105、#116；#116已验收，本地dev交付状态见议题 |
 | [UI 原型与早期验收历史](project/ui-visual-prototype.md) | [现行说明](../project/ui-visual-prototype.md) | #94；PR #95已合并 |
 | [系统规划的阶段决策与交付历史](project/roadmap.md) | [现行说明](../project/roadmap.md) | #74～#113的阶段记录；交付状态见归档索引 |
 | [后续功能计划历史](project/deferred-features-plan.md) | [现行说明](../project/deferred-features-plan.md) | #36、#42、#86；PR #81、#84已合并；#43、#44仍待确认 |

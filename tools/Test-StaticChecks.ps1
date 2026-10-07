@@ -26,6 +26,13 @@ foreach ($entry in $mapping) {
     }
 }
 
+try {
+    & (Join-Path $PSScriptRoot 'Test-RuleReferences.ps1') -RepositoryRoot $repoRoot
+}
+catch {
+    $errors.Add($_.Exception.Message)
+}
+
 $documents = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'docs') -Recurse -File -Filter '*.md'
 foreach ($document in $documents) {
     $relative = [IO.Path]::GetRelativePath((Join-Path $repoRoot 'docs'), $document.FullName).Replace('\', '/')
@@ -46,7 +53,7 @@ foreach ($document in $documents) {
     }
 }
 
-$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; cultivation = 'FarmExchange.Cultivation'; farming = 'FarmExchange.Farming'; land = 'FarmExchange.Land'; processing = 'FarmExchange.Processing'; workers = 'FarmExchange.Workers'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; characters = 'FarmExchange.Characters'; market = 'FarmExchange.Market'; trading = 'FarmExchange.Trading'; time = 'FarmExchange.Time'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI'; development = 'FarmExchange.Development' }
+$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; cultivation = 'FarmExchange.Cultivation'; farming = 'FarmExchange.Farming'; land = 'FarmExchange.Land'; processing = 'FarmExchange.Processing'; workers = 'FarmExchange.Workers'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; characters = 'FarmExchange.Characters'; market = 'FarmExchange.Market'; trading = 'FarmExchange.Trading'; time = 'FarmExchange.Time'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI'; development = 'FarmExchange.Development'; logging = 'FarmExchange.Logging' }
 foreach ($group in $namespaces.Keys) {
     $directory = Join-Path $repoRoot "scripts/$group"
     if (-not (Test-Path -LiteralPath $directory)) { continue }

@@ -110,6 +110,25 @@ public sealed class ScenarioConfigurationLibrary
     }
 
     /**
+     * <summary>显式重选时按稳定文件身份重新发现并打开最新版本，不改变旧草稿凭据。</summary>
+     * <param name="entry">用户明确选择重新加载的原目录条目。</param>
+     * <returns>最新合法目录和独立草稿；文件失效时返回空草稿及明确错误。</returns>
+     */
+    public ScenarioConfigurationSelection ReloadSelection(ScenarioConfigurationEntry entry)
+    {
+        IReadOnlyList<ScenarioConfigurationEntry> entries = ListConfigurations(entry.FlowId);
+        ScenarioConfigurationEntry? current = entries.FirstOrDefault(item => item.Id == entry.Id);
+        if (current == null)
+            return new ScenarioConfigurationSelection(entries, null, "所选配置已删除或不再合法，请从最新目录选择配置。");
+        try { return new ScenarioConfigurationSelection(entries, Open(current), null); }
+        catch (ScenarioConfigurationException error)
+        {
+            return new ScenarioConfigurationSelection(Array.AsReadOnly(entries.Where(item => item.Id != entry.Id).ToArray()), null,
+                "重新加载失败：" + error.Message);
+        }
+    }
+
+    /**
      * <summary>以新名称另存为修订1；原文件和草稿保持。</summary>
      * <param name="draft">本库所选流程的合法草稿。</param>
      * <param name="newCaseId">新配置名称。</param>

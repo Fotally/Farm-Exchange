@@ -18,7 +18,7 @@ public partial class TestScenarioConfigurationLibrary : Node
 #if DEBUG
         string root = Path.Combine(Path.GetTempPath(), "farm-config-library-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        try { return CheckPersistence(root) && CheckFailures(root) && CheckPartialDeletion(root) && CheckRoots(root); }
+        try { return CheckPersistence(root) && CheckReload(root) && CheckFailures(root) && CheckPartialDeletion(root) && CheckRoots(root); }
         catch (Exception error) { return Fail(error.ToString()); }
         finally
         {
@@ -80,6 +80,45 @@ public partial class TestScenarioConfigurationLibrary : Node
         return true;
     }
 
+    private static bool CheckReload(string root)
+    {
+        byte[] bytes = ScenarioConfigurationSchema.BuyProcessSell.Write(new ScenarioEditableConfiguration());
+        string user = Path.Combine(root, "reload-user");
+        var library = new ScenarioConfigurationLibrary(new Dictionary<string, byte[]> { ["sample.json"] = bytes }, user);
+        var saved = library.SaveAs(library.Open(library.ListConfigurations("buy-process-sell")[0]), "原名称");
+        var entry = saved.Entry!;
+        ScenarioConfiguration running = library.LoadForRun(saved);
+        saved.SetValue("parameters.quantity", "2");
+        string external = Encoding.UTF8.GetString(File.ReadAllBytes(entry.Id))
+            .Replace("\"quantity\": 1", "\"quantity\": 4");
+        File.WriteAllText(entry.Id, external);
+        byte[] changed = File.ReadAllBytes(entry.Id);
+        if (!Throws(() => library.Overwrite(saved)) || !Throws(() => library.Open(entry))) return Fail("旧凭据绕过摘要保护");
+        ScenarioConfigurationSelection result = library.ReloadSelection(entry);
+        if (result.Error != null || result.Draft == null || result.Draft.Entry!.Id != entry.Id ||
+            result.Entries.Count != 2 || (int)result.Draft.GetValue("parameters.quantity")! != 4 ||
+            library.LoadForRun(result.Draft).Sha256 != Hash(changed) || !saved.IsDirty ||
+            (int)saved.GetValue("parameters.quantity")! != 2 || running.Quantity != 1 ||
+            !Throws(() => library.Overwrite(saved)) || !File.ReadAllBytes(entry.Id).SequenceEqual(changed))
+            return Fail("显式重选没有固定文件身份、独立新草稿或保持旧凭据及运行参数");
+        // 修改名称、修订及排序仍根据文件身份打开。
+        var renamed = result.Draft;
+        renamed.SetValue("caseId", "外部改名");
+        library.Overwrite(renamed);
+        result = library.ReloadSelection(entry);
+        if (result.Draft?.Entry?.CaseId != "外部改名" || result.Draft.Entry.Revision != 2)
+            return Fail("恢复依赖可变名称或修订，未使用稳定文件身份");
+        File.WriteAllText(entry.Id, "{}");
+        result = library.ReloadSelection(entry);
+        if (result.Draft != null || result.Error == null || result.Entries.Count != 1 || library.DiscoveryErrors.Count != 1)
+            return Fail("非法文件恢复仍保留可运行选择");
+        File.Delete(entry.Id);
+        result = library.ReloadSelection(entry);
+        if (result.Draft != null || result.Error == null || result.Entries.Count != 1 || library.DiscoveryErrors.Count != 0)
+            return Fail("删除文件恢复仍保留过期选择");
+        return true;
+    }
+
     private static bool CheckFailures(string root)
     {
         byte[] bytes = ScenarioConfigurationSchema.BuyProcessSell.Write(new ScenarioEditableConfiguration());
@@ -94,7 +133,7 @@ public partial class TestScenarioConfigurationLibrary : Node
         saved.SetValue("parameters.quantity", "3");
         File.WriteAllText(saved.Entry.Id, Encoding.UTF8.GetString(original).Replace("\"quantity\": 1", "\"quantity\": 4"));
         if (!Throws(() => library.Overwrite(saved)) || !Throws(() => library.DeleteConfiguration(saved.Entry))) return Fail("外部修改未重新校验");
-        var fresh = library.Open(library.ListConfigurations("buy-process-sell").Single(entry => !entry.IsReadOnly));
+        var fresh = library.ReloadSelection(saved.Entry).Draft!;
         string invalidFile = Path.Combine(user, "invalid.json"); File.WriteAllText(invalidFile, "{}");
         if (library.ListConfigurations("buy-process-sell").Count != 2 || library.DiscoveryErrors.Count != 1 || !Throws(() => library.DeleteFlow("buy-process-sell"))) return Fail("非法文件未明确反馈或流程范围假成功");
         File.Delete(invalidFile);

@@ -29,4 +29,4 @@
 ./tools/Run-Tests.ps1 -GodotConsole 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe'
 ```
 
-脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码。以 `scripts/` 的每个一级目录为模块，**每个模块及业务脚本总体的行覆盖率均不得低于 80%**；高覆盖率模块不能抵消未达标模块。现有 `Run-Tests.ps1` 自动检查总体门槛，模块门槛需从 Cobertura 报告按目录汇总有效行与已覆盖行，逐项核对并记录。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
+脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码。以 `scripts/` 的每个一级目录为模块，**每个模块及业务脚本总体的行覆盖率均不得低于 80%**；高覆盖率模块不能抵消未达标模块。`Run-Tests.ps1` 调用统一的 `Test-Coverage.ps1`，动态发现一级目录，按文件与行号去重、同一行任一记录命中即覆盖，自动输出并检查各模块与总体的有效行、已覆盖行及百分比；任一项低于 80% 或缺少有效数据即失败。本地与 CI 共用该门禁，不再要求人工另算模块结果。路径口径、缺失检查及独立夹具命令见[自动覆盖率门禁](../static-checks/coverage.md)。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。

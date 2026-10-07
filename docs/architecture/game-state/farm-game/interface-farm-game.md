@@ -4,6 +4,8 @@
 
 对应类型：FarmExchange.Gameplay.FarmGame，代码位于 scripts/gameplay/FarmGame.cs。调用方为主场景和地图；测试也通过该公开接口验证行为。当前只有一个实现，未声明 C# interface 类型。
 
+`FarmGame(seed?, logging?)` 默认不采集日志；显式传入 `RuntimeLog` 时通过公开 BindGame 在真实开局完成后绑定局身份与初始化基线。当前只对 `Buy(commodity, quantity, origin=Player)` 关联原指令、真实结算和结束结果；经营语义来源 `FarmExchange.Gameplay.CommandOrigin` 只有 Player/Scenario，其他值在记录与业务提交前抛出 `ArgumentOutOfRangeException(nameof(origin))`，资源零修改且不依赖采集开关。开发流程显式 Scenario，其他经营命令仍由后续议题接入。业务只开始公开观察、执行交易一次并完成/异常终结，不持有日志内部快照或指令凭据。输出失败不改业务结果、不重试命令，业务异常原样传播。`Dispose()` 幂等结束本局日志关联且不改变资源；宿主持有并在局之后关闭会话，具体约定见[日志 Interface](../../logging/interface-logging.md)。
+
 | 用途 | 公开成员 | 调用方需要知道的约定 |
 | --- | --- | --- |
 | 定义 | Crops、GetCrop、GetBuildingCostCents(building) | 作物定义委托 `CropCatalog`；七种作物的规则来自[作物表](../../../gameplay/production/crop-growth.md)。静态建造费查询为唯一类型价格入口：农田/加工场地 1000 分，道路 100 分；`None` 或未知类型抛 `ArgumentOutOfRangeException` |

@@ -52,6 +52,7 @@ internal partial class ScenarioEditorStep : VBoxContainer
         Profiles = new OptionButton
         {
             Name = "ScenarioProfileChoice",
+            AllowReselect = true,
             ClipText = true,
             FitToLongestItem = false,
             CustomMinimumSize = new Vector2(335, 39)
@@ -122,14 +123,14 @@ internal partial class ScenarioEditorStep : VBoxContainer
     internal void ShowProfiles(IReadOnlyList<ScenarioConfigurationEntry> entries, ScenarioConfigurationDraft? draft)
     {
         Profiles.Clear();
-        int selected = 0;
+        int selected = -1;
         for (int index = 0; index < entries.Count; index++)
         {
             ScenarioConfigurationEntry entry = entries[index];
             Profiles.AddItem(entry.CaseId + " · 修订" + entry.Revision + (entry.IsReadOnly ? " · 内置只读" : ""));
             if (entry.Id == draft?.Entry?.Id) selected = index;
         }
-        if (entries.Count > 0) Profiles.Select(selected);
+        Profiles.Select(selected);
         Profiles.TooltipText = draft?.Entry?.CaseId ?? "";
         _draft = draft;
         Form.Visible = draft != null;

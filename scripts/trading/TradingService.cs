@@ -46,17 +46,22 @@ internal sealed class TradingService
             return Failed(TradeFailure.InvalidQuantity);
         if (quantity > int.MaxValue - _inventory.Get(commodity))
             return Failed(TradeFailure.InventoryCapacityExceeded);
-        long totalCents = (long)quantity * _market.GetQuote(commodity).PriceCents;
+        int unitPriceCents = _market.GetQuote(commodity).PriceCents;
+        long totalCents = (long)quantity * unitPriceCents;
         long feeCents = chargeFee ? (totalCents + 99) / 100 : 0;
         long expenseCents = totalCents + feeCents;
         long availableCents = (long)_wallet.AvailableCents + frozenCents;
         if (expenseCents > availableCents)
-            return Failed(TradeFailure.InsufficientFunds);
+            return Failed(TradeFailure.InsufficientFunds, unitPriceCents);
         if (availableCents - expenseCents < reserveCents)
-            return Failed(TradeFailure.CashReserveNotMet);
+            return Failed(TradeFailure.CashReserveNotMet, unitPriceCents);
         _wallet.SpendForOrder((int)expenseCents, frozenCents);
         _inventory.Add(commodity, quantity);
-        return new TradeResult(TradeFailure.None, quantity, totalCents) { FeeCents = feeCents };
+        return new TradeResult(TradeFailure.None, quantity, totalCents)
+        {
+            FeeCents = feeCents,
+            UnitPriceCents = unitPriceCents,
+        };
     }
 
     internal TradeResult Sell(CommodityId commodity, int quantity) => SellCore(commodity, quantity, false, 0);
@@ -119,5 +124,6 @@ internal sealed class TradingService
         return new TradeResult(TradeFailure.None, sold, totalCents);
     }
 
-    private static TradeResult Failed(TradeFailure failure) => new(failure, 0, 0);
+    private static TradeResult Failed(TradeFailure failure, int? unitPriceCents = null) =>
+        new(failure, 0, 0) { UnitPriceCents = unitPriceCents };
 }

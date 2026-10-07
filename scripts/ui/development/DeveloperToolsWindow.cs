@@ -249,13 +249,32 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void SelectProfile(int index)
     {
-        if (IsRunning || index < 0 || index >= _entries.Count) return;
+        if (IsRunning || _confirmation.Visible || index < 0 || index >= _entries.Count) return;
+        ScenarioConfigurationEntry entry = _entries[index];
+        if (_draft?.IsDirty == true)
+        {
+            // OptionButton已先更新选择；确认前恢复原项，取消不重建表单或丢失非法输入。
+            for (int previous = 0; previous < _entries.Count; previous++)
+                if (_entries[previous].Id == _draft.Entry!.Id) _editor.Profiles.Select(previous);
+            _confirmation.Open("放弃当前配置的未保存修改，并重新加载「" + entry.CaseId + "」？", _ =>
+                ReloadProfile(entry), confirmText: "确认重新加载");
+            UpdateStep();
+            return;
+        }
+        ReloadProfile(entry);
+    }
+
+    private void ReloadProfile(ScenarioConfigurationEntry entry)
+    {
         ExecuteEdit(() =>
         {
-            ScenarioConfigurationDraft next = _library!.Open(_entries[index]);
-            if (_draft?.Entry != next.Entry) ResetResults();
-            _draft = next;
+            ScenarioConfigurationSelection selection = _library!.ReloadSelection(entry);
+            if (_draft?.Entry != selection.Draft?.Entry) ResetResults();
+            _entries = selection.Entries;
+            _draft = selection.Draft;
             _editor.ShowProfiles(_entries, _draft);
+            SetFeedback(string.Join("\n", new[] { selection.Error }.Where(message => message != null)
+                .Concat(_library.DiscoveryErrors)));
             RefreshSummary();
             UpdateStep();
         });

@@ -11,6 +11,11 @@ public enum TradeFailure
 public readonly record struct TradeResult(TradeFailure Failure, long Quantity, long TotalCents)
 {
     public long FeeCents { get; init; }
+    /**
+     * <summary>买入结算实际读取的单价，单位为分；未执行报价读取时为 null。</summary>
+     * <remarks>当前由 Buy 与 BuyOrder 提供；不是记录时另查的报价，其他交易路径本阶段保持 null。</remarks>
+     */
+    public int? UnitPriceCents { get; init; }
     public bool Success => Failure == TradeFailure.None;
     public string? ErrorMessage => Failure switch
     {

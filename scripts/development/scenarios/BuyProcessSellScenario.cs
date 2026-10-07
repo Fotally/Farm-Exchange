@@ -113,7 +113,8 @@ public sealed class BuyProcessSellScenario
         Check("受控准备", independent ? ScenarioCheckStatus.Passed : ScenarioCheckStatus.InsufficientEvidence,
             independent ? "显式种子新局通过正式命令拆除赠送设施、付费建造唯一场地、原料底线0；无其他生产或订单" : "绑定现场，保留已有设施、批次、订单与底线；无法保证受控归因");
         ScenarioSnapshot before = Capture();
-        TradeResult buy = Game.Buy(_configuration.RawCommodity, _configuration.Quantity);
+        TradeResult buy = Game.Buy(_configuration.RawCommodity, _configuration.Quantity,
+            CommandOrigin.Scenario);
         ScenarioSnapshot after = Capture();
         Report.Operations.Add(new ScenarioOperation("Buy", _lastTicks,
             new { commodity = _configuration.RawCommodity, quantity = _configuration.Quantity }, buy, before, after));

@@ -38,7 +38,7 @@ internal sealed class TradeOrderBook
 
     /**
      * <summary>查询是否必须在下一经营秒重新检查活动订单。</summary>
-     * <returns>有等待订单且新请求或上秒持续成交时返回 true。</returns>
+     * <returns>有等待订单且新请求或上秒任一订单成交时返回 true。</returns>
      */
     internal bool NeedsNextTickCheck => _nextCheckRequired &&
         _orders.Exists(order => order.Status == TradeOrderStatus.Waiting);
@@ -206,8 +206,7 @@ internal sealed class TradeOrderBook
             }
             order.LastFill = new TradeOrderFillSnapshot(request.Commodity, request.Side, result, _wallet.BalanceCents);
             order.WaitingReason = null;
-            if (request.Frequency == TradeOrderFrequency.Continuous)
-                _nextCheckRequired = true;
+            _nextCheckRequired = true;
             if (request.Frequency == TradeOrderFrequency.Once)
             {
                 order.FrozenCents = order.FrozenQuantity = 0;
