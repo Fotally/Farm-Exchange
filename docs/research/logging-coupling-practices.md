@@ -1,6 +1,6 @@
 # 日志接入怎样减少参数重构带来的维护
 
-调研日期：2026-10-07（北京时间）。关联 [issue #82](https://github.com/Fotally/Farm-Exchange/issues/82)。本记录依据官方文档、成熟开源源码及本项目当前实现，回答接入设计问题；建议尚未成为实施方案，不改变[现行日志 Interface](../architecture/logging/interface-logging.md)、同步输出或保存路径。
+调研日期：2026-10-07（北京时间）。关联 [issue #82](https://github.com/Fotally/Farm-Exchange/issues/82)。本记录依据官方文档、成熟开源源码及本项目当前实现，回答接入设计问题；保留调研时的候选比较，不把它们全部当作实施要求。后续已选定的方向以[已确认修正方案](runtime-logging.md#已确认的后续修正方向)及 #127 为准，代码尚未修正，当前成员仍见[日志 Interface](../architecture/logging/interface-logging.md)。同步输出与保存路径保持。
 
 ## 问题与结论
 

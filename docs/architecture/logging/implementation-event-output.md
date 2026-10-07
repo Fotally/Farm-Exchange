@@ -2,6 +2,8 @@
 
 本实现履行[日志 Interface](interface-logging.md)；事件字段和格式契约统一见 [schema v1](../../project/runtime-log-schema-v1.md)，不在本页复制字段表。
 
+本文描述 #126 已实现状态。当前 `RuntimeLog.EventNumber` 仍以固定表映射领域事件名称，公开 facade 同时负责局绑定与输出；[#127](https://github.com/Fotally/Farm-Exchange/issues/127) 内已确定先分离这些职责并明确共用观察终结机制，尚未实施。现行修正计划见[已确认方向](../../research/runtime-logging.md#已确认的后续修正方向)，不能把计划当作本文当前实现。
+
 `RuntimeLog` 先建立进程会话，通过公开 `BindGame` 在经营真实初始化完成后返回 `GameLog`。GameLog 的公开 Interface 收敛为开始买入观察与释放；开始观察内部完成指令身份、原输入和前快照，返回公开 `BuyLogOperation`，由调用方在真实业务之后 Complete 或 Faulted 一次。FarmGame 只持有公开类型，执行原交易一次，不拼接指令编号或资源快照。CommandOrigin 属于经营语义，两个公开入口均在记录或提交前拒绝未登记值，不替用户选择默认来源。
 
 GameLog 读取 FarmGame 的已有只读查询并投影专用字段，未启用采集时不构造局、库存或交易投影。合法来源 Buy 的原输入在业务验证前进入日志；业务提交独立执行，之后只观察真实结果，通用指令结果与领域结算分别承担关联和资源解释。单价由原 BuyCore 首次实际报价读取处保存到 TradeResult，日志直接消费这个可选事实，不能通过额外查询把读取前拒绝补成已经采用报价。GameLog 结束后不再输出该局事件；日志关闭也不改变已有经营状态。
