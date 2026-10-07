@@ -28,6 +28,14 @@ internal sealed class FarmingSystem
 
     internal int CellCount => _farms.Length;
     internal IReadOnlyList<int> Indices => _indicesSnapshot ??= Array.AsReadOnly(_indices.ToArray());
+    /**
+     * <summary>只读验证已成功作业仍属于当前农田轮次，不要求该动作再次可执行。</summary>
+     * <param name="completedWork">本模块曾确认成功的完整工作凭据。</param>
+     * <returns>原实例仍在且改种、拆建、收获、播种启停或换季未失效其版本。</returns>
+     */
+    internal bool IsWorkRevisionCurrent(FarmWorkRequest completedWork) =>
+        _farms[completedWork.CellIndex] != null &&
+        _farmRevisions[completedWork.CellIndex] == completedWork.Revision;
     internal bool HasFarm(int index) => _farms[index] != null;
 
     internal FarmSnapshot Get(int index)

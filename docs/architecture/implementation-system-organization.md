@@ -62,7 +62,7 @@ flowchart LR
     ProcessingSystem --> GameTimeUnits
     GameCalendar --> GameTimeUnits
     NpcPreview[NpcPreview：独立预览与输入] --> NpcCharacter
-    NpcCharacter --> NpcSheets[20 张 NPC 动画图]
+    NpcCharacter --> NpcSheets[20名角色的100张五动作合成图与SpriteFrames]
 ```
 
 | 状态或计算 | 当前拥有者 | 其他模块的使用方式 |
@@ -92,13 +92,16 @@ flowchart LR
 | 历史面粉曲线 | `MarketPriceCurve` | 保留独立曲线验证，正式经营不调用。 |
 | 格坐标范围与等距本地坐标换算 | `MapCoordinates` | `WorldMap` 用于选格、绘制和镜头限制；地图格数引用 `FarmGame.MapSize`。 |
 | 地图块缓存、选中格和可见性 | `WorldMap` | `Main` 同步外观；`CameraController` 发起选格与限制镜头。 |
+| 世界纹理、深度排序与局部动效 | `WorldMap` 及内部 `FacilityMotion` | 地面与土层固定在底部，建筑/人物/装饰按接触点排序，三动态作物逐株排序；可见实例按同局暂停和倍率推进视觉时间。 |
+| 纯环境落点与清除 | `WorldMap` 内部 `EnvironmentDecorations` | 独立固定种子生成32类环境，真实建造后按完整占地永久移除；离屏仅释放绘制节点，不恢复已清除落点。 |
+| 最近经营秒的成功结果 | `FarmGame` | 真实作业和入库路径生成非持久 `ProductionResult`；表现区分新消费时限与已经开始效果的原目标有效性，动画不参与结算。 |
 | 摆放模式与所选格 | `Main` | 分发窗口意图，调用 `FarmGame`，在命令完成后刷新。 |
 | 窗口位置与拖动 | `DraggableWindow` | 各窗口继承统一标题栏、层级抬升和视窗限制；只在本次运行保留位置。 |
 | 目录选择、未提交输入与固定控件 | 各 UI 窗口 | 只更新值和按钮状态，向 `Main` 发出选择、改种、底线设置、出售或移除意图；库存草稿与焦点保留，底线权威值属于库存模块。 |
 | 农田与加工详情状态原因 | `FarmGame` 聚合规则模块结果 | 加工复用 `ProcessingSystem` 与库存的实时可领取判断；通过两类详情快照给面板，UI 只映射可见文案。 |
-| 独立 NPC 预览的角色选择和键盘输入 | `NpcPreview` | 将图集与移动方向交给 `NpcCharacter`；不修改 `FarmGame`。 |
-| 工人视觉位置与插值段 | `WorkerPresentation` | 从经营快照换算位置并显示三人；没有到达、作业或库存权限，渲染帧率不改变经营结果。 |
-| NPC 图集帧、朝向与视觉移动 | `NpcCharacter` | 预览按输入移动；主地图通过 `ShowAt` 展示经营位置与朝向，停止自主物理移动。 |
+| 独立 NPC 预览的角色选择和键盘输入 | `NpcPreview` | 将角色编号、动作选择与移动方向交给 `NpcCharacter`；不修改 `FarmGame`。 |
+| 工人视觉位置、插值段与单次动作 | `WorkerPresentation` | 从快照和真实成功结果显示三人；按原实例及作业凭据取消失效动作，没有作业或库存权限，渲染帧率不改变经营。 |
+| NPC 动作帧、朝向与视觉移动 | `NpcCharacter` | 封装五动作四向、脚根与逐帧时长；预览按输入移动，主地图只展示真实位置和有效成功动作。 |
 
 | 要修改的现行行为 | 先查看 | 同时核对 |
 | --- | --- | --- |
@@ -113,7 +116,7 @@ flowchart LR
 | 日期边界与生产时间 | `GameCalendar`、`GameTimeUnits` | 同步核对 `FarmGame` 相位、生产模块和日历测试。 |
 | 共享耕作表、预备安排或手动接管 | `CultivationPlanBook`、`FarmGame`、`FarmingSystem` | 年度环绕、日期事件与精确完成时间、每条一轮、过期跳过、应用编辑保留当前轮；UI 草稿不能推进经营。 |
 | 窗口交互 | `Main`、`DraggableWindow`、对应具体窗口 | 玩家操作、固定控件刷新、场景节点名和端到端测试。 |
-| NPC 动画、角色图集或预览输入 | `NpcCharacter`、`NpcPreview` | 角色场景、20 张素材和预览集成测试；不要用动画回调推进经营。 |
+| NPC 动画、角色图集或预览输入 | `NpcCharacter`、`NpcPreview` | 角色场景、20人五动作资源和预览集成测试；动画结束仅结束视觉，不推进经营。 |
 
 T01/T02 已将窗口容器、目录、选种、库存、市场和详情从 `Main` 的构造与重建逻辑中抽出；经营刷新保留控件实例。T03 已统一坐标入口，T04A～T04C 已统一状态归属和放置规则。T05A 完成独立历法，T05B 已接管经营时间并切换七作物参数；T06A 的田块水分由 `FarmingSystem` 唯一持有，T06B 的播种判断由 `PlantingRules` 统一提供。T06C 的 `ClearDisallowedCrops(Season)` 把阶段筛选、适宜季节判断与本轮清理收在农田模块内；经营入口只在成熟结算后的换季相位调用。
 

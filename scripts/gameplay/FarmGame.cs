@@ -35,7 +35,7 @@ public readonly record struct CropDefinition(
     int PricePercent, int RawPricePercent, GrowingSeasons GrowingSeasons);
 public readonly record struct PlotSnapshot(
     BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingSeconds,
-    bool HasWater = false);
+    bool HasWater = false, double GrowthProgress = 0);
 public readonly record struct FarmDetailsSnapshot(
     CropDefinition Crop, FarmStatus Status, int RawPriceCents, int RawStock);
 public readonly record struct ProcessorDetailsSnapshot(
@@ -76,6 +76,8 @@ public sealed class FarmGame
     private readonly TradeOrderBook _tradeOrders;
     private readonly GameCalendar _calendar;
     private readonly CultivationPlanBook _cultivation;
+    private readonly List<ProductionResult> _presentationResults = new();
+    private IReadOnlyList<ProductionResult>? _presentationSnapshot;
 
     public int MoneyCents => _wallet.BalanceCents;
     public int AvailableMoneyCents => _wallet.AvailableCents;
@@ -188,7 +190,9 @@ public sealed class FarmGame
     {
         FarmSnapshot farm = _farming.Get(index);
         return new PlotSnapshot(BuildingKind.Farm, farm.CropKind, farm.Stage,
-            farm.RemainingSeconds, farm.HasWater);
+            farm.RemainingSeconds, farm.HasWater, farm.Stage == CropStage.Growing
+                ? 1d - (double)farm.RemainingTimeUnits /
+                    (GetCrop(farm.CropKind).GrowthDays * GameTimeUnits.PerDay) : 0);
     }
 
     private PlotSnapshot ProcessorPlot(int index)
@@ -477,6 +481,8 @@ public sealed class FarmGame
                 break;
         }
         _occupancy.Remove(index);
+        _presentationResults.RemoveAll(result => IndexOf(result.AnchorCell) == index);
+        _presentationSnapshot = null;
         return null;
     }
 
@@ -562,6 +568,7 @@ public sealed class FarmGame
 
     private bool AdvanceQuietSeconds(uint seconds)
     {
+        ClearPresentationResults();
         uint previousDay = Calendar.ElapsedDays;
         foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
         {
@@ -581,6 +588,7 @@ public sealed class FarmGame
 
     private TickResult AdvanceEventTick(bool isRaining)
     {
+        ClearPresentationResults();
         if (isRaining)
             ApplyRain();
         int harvested = 0;
@@ -597,6 +605,7 @@ public sealed class FarmGame
             else if (building == BuildingKind.Processor && _processing.Advance(i, out CropKind productCrop))
             {
                 _inventory.AddProduct(productCrop, 1);
+                RecordPresentationResult(i, productCrop, ProductionResultKind.Product, 1);
                 produced++;
             }
         }
@@ -606,7 +615,10 @@ public sealed class FarmGame
                 if (_farming.TryMatureBeforeDisallowedSeason(index, nextSeason, out CropKind rescuedCrop))
                     harvested += CollectHarvest(index, rescuedCrop, nextTimeUnits);
         StartIdleProcessors();
-        bool workerActed = _workerScheduler.AdvanceOneSecond(_farming, _calendar.Snapshot);
+        bool workerActed = _workerScheduler.AdvanceOneSecond(_farming, _calendar.Snapshot,
+            (number, work) => RecordPresentationResult(work.CellIndex, _farming.Get(work.CellIndex).CropKind,
+                work.Kind == FarmWorkKind.Sow ? ProductionResultKind.Sow : ProductionResultKind.Water,
+                0, number, work));
         _cultivation.RecordSownCrops();
         bool dayAdvanced = AdvanceDay();
         _cultivation.Synchronize(nextTimeUnits);
@@ -618,8 +630,60 @@ public sealed class FarmGame
     {
         int quantity = GetCrop(crop).HarvestQuantity;
         _inventory.AddRaw(crop, quantity);
+        RecordPresentationResult(index, crop, ProductionResultKind.Harvest, quantity);
         _cultivation.Harvested(index, nextTimeUnits);
         return quantity;
+    }
+
+    /**
+     * <summary>读取最近完整经营秒的逐实例真实结果，平静秒与下一秒覆盖旧结果。</summary>
+     * <remarks>不可修改的独立快照；初次挂接跳过已有秒，重复读取按秒去重，播放前重验有效性。</remarks>
+     * <returns>播种、浇水、自动收获及加工成功；不含等待、失败或历史队列。</returns>
+     */
+    public IReadOnlyList<ProductionResult> GetPresentationResults() =>
+        _presentationSnapshot ??= Array.AsReadOnly(_presentationResults.ToArray());
+
+    /**
+     * <summary>验证表现结果仍属于当前秒与原实例，农田动作仍属于原轮次。</summary>
+     * <param name="result">从本局最近结果快照读取的结果。</param>
+     * <returns>拆除重建、农田改种重启、换季清理或新经营秒使旧结果失效。</returns>
+     */
+    public bool IsPresentationResultCurrent(ProductionResult result)
+    {
+        if (result.ElapsedSeconds != Calendar.ElapsedSeconds || !_presentationResults.Contains(result))
+            return false;
+        return IsPresentationTargetCurrent(result);
+    }
+
+    /**
+     * <summary>验证已经开始播放的成功结果仍属于原设施及有效工作轮次，允许片段跨经营秒完成。</summary>
+     * <remarks>仅用于已经消费的片段；开始播放仍须使用最近秒结果及 IsPresentationResultCurrent，不补播历史。</remarks>
+     * <param name="result">本局已消费的真实成功结果。</param>
+     * <returns>原实例仍在且农田工作凭据有效；拆建、改种或换季清理使其失效。</returns>
+     */
+    public bool IsPresentationTargetCurrent(ProductionResult result)
+    {
+        if (result.Space == null || !ReferenceEquals(GetBuildingSpace(result.AnchorCell), result.Space))
+            return false;
+        return result.CompletedWork is not FarmWorkRequest work || _farming.IsWorkRevisionCurrent(work);
+    }
+
+    private void ClearPresentationResults()
+    {
+        _presentationResults.Clear();
+        _presentationSnapshot = null;
+    }
+
+    private void RecordPresentationResult(int index, CropKind crop, ProductionResultKind kind,
+        int quantity, int workerNumber = 0, FarmWorkRequest? completedWork = null)
+    {
+        _presentationResults.Add(new ProductionResult(Calendar.ElapsedSeconds + 1,
+            new Vector2I(index % MapSize, index / MapSize), crop, kind, quantity, workerNumber)
+        {
+            CompletedWork = completedWork,
+            Space = _occupancy.GetSpace(index),
+        });
+        _presentationSnapshot = null;
     }
 
     public TradeResult Buy(CommodityId commodity, int quantity) => _trading.Buy(commodity, quantity);

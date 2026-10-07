@@ -1,57 +1,72 @@
-using System.Collections.Generic;
 using Godot;
 
 namespace FarmExchange.Characters;
 
+public enum NpcAction { Idle, Walk, Run, Sow, Water }
+
 public partial class NpcCharacter : CharacterBody2D
 {
-    private const int FrameSize = 64;
-    private const int FramesPerDirection = 6;
-    private const float AnimationSpeed = 8f;
     private const float MoveSpeed = 180f;
-
-    [Export] public Texture2D CharacterSheet { get; set; } = null!;
-
-    private readonly List<AtlasTexture> _atlasFrames = new(18);
+    [Export] public SpriteFrames CharacterFrames { get; set; } = null!;
     private AnimatedSprite2D _sprite = null!;
     private Vector2 _moveDirection;
     private Vector2 _facingDirection = Vector2.Down;
     private bool _usesExternalPosition;
+    private bool _paused;
+    private bool _workAnimationFinished;
+
+    /**
+     * <summary>当前单次作业片段已自然播完；只表示视觉完成，不推进经营。</summary>
+     */
+    public bool WorkAnimationFinished => _workAnimationFinished;
 
     public override void _Ready()
     {
         _sprite = GetNode<AnimatedSprite2D>("AnimatedSprite2D");
-        var frames = new SpriteFrames();
-        frames.RemoveAnimation("default");
-        AddDirection(frames, "run_down", 7);
-        AddDirection(frames, "run_left", 8);
-        AddDirection(frames, "run_up", 9);
-        _sprite.SpriteFrames = frames;
-        UpdateAnimation(Vector2.Zero, moving: false);
-    }
-
-    public void SetCharacter(Texture2D sheet)
-    {
-        CharacterSheet = sheet;
-        foreach (AtlasTexture frame in _atlasFrames)
-            frame.Atlas = sheet;
-    }
-
-    public void SetMoveDirection(Vector2 direction)
-    {
-        _moveDirection = direction.LimitLength();
-        UpdateAnimation(_moveDirection, _moveDirection != Vector2.Zero);
+        _sprite.SpriteFrames = CharacterFrames;
+        _sprite.AnimationFinished += () => _workAnimationFinished = true;
+        UpdateAnimation(Vector2.Zero, NpcAction.Idle);
     }
 
     /**
-     * <summary>按外部位置和朝向显示角色，不推进自主移动。</summary>
-     * <param name="localPosition">父节点本地位置。</param>
-     * <param name="direction">画面朝向向量。</param>
-     * <param name="moving">是否播放行走。</param>
-     * <param name="paused">是否保留当前动画帧并暂停。</param>
-     * <param name="animationRate">调用方确认的正数动画播放倍率。</param>
+     * <summary>选择已接入的角色，加载四向合成帧及逐帧时长。</summary>
+     * <param name="characterId">来源目录中的角色编号；不连续编号按预览目录选择。</param>
      */
-    public void ShowAt(Vector2 localPosition, Vector2 direction, bool moving, bool paused, double animationRate = 1)
+    public void SetCharacter(int characterId)
+    {
+        CharacterFrames = GD.Load<SpriteFrames>(
+            $"res://assets/gameplay/npc/npc{characterId:D3}/npc{characterId:D3}_sprite_frames.tres");
+        if (_sprite != null)
+        {
+            _sprite.SpriteFrames = CharacterFrames;
+            UpdateAnimation(Vector2.Zero, NpcAction.Idle, restart: true);
+        }
+    }
+
+    /**
+     * <summary>独立预览按输入移动，并可检视指定合成动作。</summary>
+     * <param name="direction">预览移动方向，长度限制为一。</param>
+     * <param name="action">移动时的行走/跑步，或静态检视的播种/浇水。</param>
+     */
+    public void SetMoveDirection(Vector2 direction, NpcAction action = NpcAction.Run)
+    {
+        _moveDirection = direction.LimitLength();
+        UpdateAnimation(direction, action is NpcAction.Sow or NpcAction.Water ? action :
+            direction == Vector2.Zero ? NpcAction.Idle : action);
+    }
+
+    /**
+     * <summary>按外部位置、朝向与真实动作显示角色，不推进自主移动或经营。</summary>
+     * <param name="localPosition">脚根在父节点内的位置。</param>
+     * <param name="direction">画面朝向；零向量保留前次朝向。</param>
+     * <param name="moving">是否按真实位移播放跑步。</param>
+     * <param name="paused">冻结当前帧及进度。</param>
+     * <param name="animationRate">公共倍率；开发高倍率由调用方传一。</param>
+     * <param name="workAction">本次有效成功作业；空值根据位移选择移动或待机。</param>
+     * <param name="restartAction">首次消费新结果时从首帧播放一次。</param>
+     */
+    public void ShowAt(Vector2 localPosition, Vector2 direction, bool moving, bool paused,
+        double animationRate = 1, NpcAction? workAction = null, bool restartAction = false)
     {
         _usesExternalPosition = true;
         SetPhysicsProcess(false);
@@ -60,9 +75,12 @@ public partial class NpcCharacter : CharacterBody2D
         Position = localPosition;
         _sprite.SpeedScale = (float)animationRate;
         if (paused)
+        {
+            _paused = true;
             _sprite.Pause();
-        else
-            UpdateAnimation(direction, moving);
+            return;
+        }
+        UpdateAnimation(direction, workAction ?? (moving ? NpcAction.Run : NpcAction.Idle), restartAction);
     }
 
     public override void _PhysicsProcess(double delta)
@@ -73,46 +91,24 @@ public partial class NpcCharacter : CharacterBody2D
         MoveAndSlide();
     }
 
-    private void AddDirection(SpriteFrames frames, StringName name, int row)
-    {
-        frames.AddAnimation(name);
-        frames.SetAnimationSpeed(name, AnimationSpeed);
-        frames.SetAnimationLoopMode(name, SpriteFrames.LoopMode.Linear);
-        for (int column = 0; column < FramesPerDirection; column++)
-        {
-            var frame = new AtlasTexture
-            {
-                Atlas = CharacterSheet,
-                Region = new Rect2(column * FrameSize, row * FrameSize, FrameSize, FrameSize),
-            };
-            _atlasFrames.Add(frame);
-            frames.AddFrame(name, frame);
-        }
-    }
-
-    private void UpdateAnimation(Vector2 direction, bool moving)
+    private void UpdateAnimation(Vector2 direction, NpcAction action, bool restart = false)
     {
         if (direction != Vector2.Zero)
             _facingDirection = direction;
-
-        StringName animation = "run_down";
+        string facing = Mathf.Abs(_facingDirection.X) > Mathf.Abs(_facingDirection.Y)
+            ? (_facingDirection.X > 0 ? "right" : "left")
+            : (_facingDirection.Y < 0 ? "up" : "down");
+        StringName animation = $"{action.ToString().ToLowerInvariant()}_{facing}";
         _sprite.FlipH = false;
-        if (Mathf.Abs(_facingDirection.X) > Mathf.Abs(_facingDirection.Y))
+        if (_sprite.Animation != animation || restart)
         {
-            animation = "run_left";
-            _sprite.FlipH = _facingDirection.X > 0f;
-        }
-        else if (_facingDirection.Y < 0f)
-            animation = "run_up";
-
-        if (_sprite.Animation != animation)
+            _workAnimationFinished = false;
             _sprite.Play(animation);
-        if (!moving)
-        {
-            _sprite.Pause();
-            _sprite.Frame = 0;
+            if (restart)
+                _sprite.SetFrameAndProgress(0, 0);
         }
-        else
+        else if (_paused)
             _sprite.Play();
+        _paused = false;
     }
 }

@@ -98,12 +98,12 @@ public partial class TestRoadMap : Node
         Vector2I processor = new(187, 183);
         int beforeRedraws = map.ChunkRedrawCount;
         if (!game.TryPlace(farm, BuildingKind.Farm, CropKind.Wheat).Success ||
-            !game.TryPlace(processor, BuildingKind.Processor, CropKind.Wheat).Success)
+            !game.TryPlace(processor, BuildingKind.Processor, CropKind.Corn).Success)
             return Fail("多格地图夹具无法放置生产设施");
         map.SyncFromGame();
         await LayoutFrames(parent);
-        if (map.ChunkRedrawCount < beforeRedraws + 4)
-            return Fail("3×3农田跨四块建造未完整刷新");
+        if (map.ChunkRedrawCount != beforeRedraws)
+            return Fail("设施纹理变化不应重建草地/道路地面块");
         int builtRedraws = map.ChunkRedrawCount;
         Vector2I selected = new(-1, -1);
         map.SelectionChanged += cell => selected = cell;
@@ -122,20 +122,17 @@ public partial class TestRoadMap : Node
         bool graphical = DisplayServer.GetName() != "headless";
         if (graphical)
         {
+            map.ClearSelection();
+            await LayoutFrames(parent);
             Image image = parent.GetViewport().GetTexture().GetImage();
-            foreach (var space in new[] { game.GetBuildingSpace(farm)!, game.GetBuildingSpace(processor)! })
-                foreach (Vector2I offset in space.Footprint.Offsets)
-                {
-                    Vector2I child = space.AnchorCell + offset;
-                    Color pixel = PixelAt(image, map, child);
-                    if (child == space.WorkCell)
-                    {
-                        if (space.Building == BuildingKind.Farm ? pixel.G <= pixel.R + 0.2f : pixel.R < 0.8f)
-                            return Fail("生产实例工作中心缺少唯一作物/加工标记");
-                    }
-                    else if (space.Building == BuildingKind.Farm ? pixel.R <= pixel.G + 0.1f : pixel.B <= pixel.R + 0.1f)
-                        return Fail("生产子格出现重复标记或占地未完整着色");
-                }
+            if (!TestWorldArt.MatchesTexture(image, map, farm + Vector2I.One,
+                    "soil/field_dry_q0.png", new Vector2(112, 128), leftHalf: true) ||
+                !TestWorldArt.MatchesTexture(image, map, processor + Vector2I.One,
+                    "buildings/corn_workshop_q0.png", new Vector2(128, 176)))
+                return Fail("跨块农田土层或加工设施没有按工作中心绘制完整原图");
+            map.SelectAtScreenPosition(ScreenCenter(map, farm + new Vector2I(2, 2)));
+            await LayoutFrames(parent);
+            image = parent.GetViewport().GetTexture().GetImage();
             if (!HasGoldenOutline(image, map, farm, 3, 3))
                 return Fail("点击末端子格未绘制完整3×3金色选框");
             SaveScreenshot(image, "production-footprint-before.png");
@@ -146,9 +143,9 @@ public partial class TestRoadMap : Node
         await LayoutFrames(parent);
         if (graphical)
         {
-            Color marker = PixelAt(parent.GetViewport().GetTexture().GetImage(), map, farm + Vector2I.One);
-            if (marker.R <= marker.G + 0.3f)
-                return Fail("子格改种没有更新唯一中心作物标记");
+            if (!TestWorldArt.MatchesTexture(parent.GetViewport().GetTexture().GetImage(), map,
+                    farm + Vector2I.One, "soil/field_dry_q0.png", new Vector2(112, 128), leftHalf: true))
+                return Fail("未播种改种后没有保留土层，或出现虚假作物");
         }
         if (game.RemoveBuilding(farm + new Vector2I(2, 2)) != null)
             return Fail("末端子格整座拆除失败");
@@ -160,7 +157,7 @@ public partial class TestRoadMap : Node
                 Vector2I child = farm + new Vector2I(col, row);
                 if (game.GetPlot(child).Building != BuildingKind.None)
                     return Fail("跨块整座拆除残留占用");
-                if (graphical)
+                if (graphical && col < row)
                 {
                     Color pixel = PixelAt(parent.GetViewport().GetTexture().GetImage(), map, child);
                     if (pixel.G <= pixel.R + 0.05f)
@@ -170,8 +167,9 @@ public partial class TestRoadMap : Node
         if (graphical)
         {
             Image after = parent.GetViewport().GetTexture().GetImage();
-            if (PixelAt(after, map, processor + Vector2I.One).R < 0.8f)
-                return Fail("拆除农田清除了相邻加工场地标记");
+            if (!TestWorldArt.MatchesTexture(after, map, processor + Vector2I.One,
+                "buildings/corn_workshop_q0.png", new Vector2(128, 176)))
+                return Fail("拆除农田清除了相邻加工设施原图");
             SaveScreenshot(after, "production-footprint-after.png");
         }
         return true;
