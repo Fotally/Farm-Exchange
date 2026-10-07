@@ -37,8 +37,9 @@
 - [配置编辑接口](architecture/development/interface-scenario-configuration-editor.md)与[配置库实现](architecture/development/implementation-scenario-configuration-library.md)：可编辑字段元数据、严格扫描与草稿、Git持久配置、另存覆盖及两种删除的文件归属。
 - [开发窗口接口](architecture/ui/developer-tools-window/interface-developer-tools-window.md)：文件选择、启动/中止、当前局与独立数据局接入、真实进度及报告保存结果。
 - [MapCoordinates 接口](architecture/world/map-coordinates/interface-map-coordinates.md)：格坐标与地图本地坐标的统一换算。
-- [WorldMap 接口](architecture/world/world-map/interface-world-map.md)及[分块缓存实现](architecture/world/world-map/implementation-chunk-cache.md)。
-- [WorkerPresentation 接口](architecture/world/worker-presentation/interface-worker-presentation.md)：三人工人快照、坐标换算、动画与插值展示。
+- [WorldMap 接口](architecture/world/world-map/interface-world-map.md)及[分块缓存实现](architecture/world/world-map/implementation-chunk-cache.md)：清亮 v2 草地、干湿土、七作物三档、七设施、候选图和人物共同深度排序。
+- [局部动效实现](architecture/world/world-map/implementation-bright-motion.md)与[环境装饰实现](architecture/world/world-map/implementation-environment-decoration.md)：建筑内部层级、逐株根点、真实产出反馈及32类纯环境的建造清除。
+- [WorkerPresentation 接口](architecture/world/worker-presentation/interface-worker-presentation.md)：三人工人快照、真实成功作业、清亮 v2 动作、脚根排序、暂停与倍率插值；[FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)统一定义最近经营秒结果。
 - [镜头输入接口](architecture/world/camera-controller/interface-camera-controller.md)：内部封装玩家倍率、窗口适配和输入换算，场景与 UI 无需协调缩放步骤。
 - [主界面接口](architecture/ui/main/interface-main.md)、[可拖动窗口](architecture/ui/draggable-window/interface-draggable-window.md)、[建造目录](architecture/ui/build-catalog-window/interface-build-catalog-window.md)、[库存窗口](architecture/ui/inventory-window/interface-inventory-window.md)、[市场窗口](architecture/ui/market-window/interface-market-window.md)与[可点击 HTML 原型](architecture/ui/main/prototype-main.html)：场景命令分发、固定控件刷新、建造摆放、窗口拖动与位置记忆。选种及两类详情的接口由主界面文档继续导航。
 - [道路详情接口](architecture/ui/road-details-panel/interface-road-details-panel.md)：固定用途说明与移除意图，不读取作物或加工状态。
@@ -58,7 +59,11 @@
 - [多因素委托与自动交易实施方案](project/advanced-trading-proposal.md)：#36 已确认的条件组合、两种买单预算、冻结、现金保留、执行与 1% 成交费用。
 - [已完成系统设计与执行计划归档](archive/farm-exchange-system-design-and-execution-plan.md)：T00～T10 与 T12 的设计、实施和验收历史，PR #70 已人工合并。
 - [独立行情与即时交易实施方案](project/market-proposal.md)：T09 的价格、事件、节日排期与交易规则已确认并完成验收，PR #70 已人工合并。
-- [素材来源记录](project/asset-sources.md)：已纳入的角色素材授权信息及本项目原型 UI 图标、缩略来源。
+- [素材目录与管理约定](project/asset-organization.md)：原始交付与正式资源分开、按用途归类、命名、来源映射及迁移边界；本次不搬动现有素材。
+- [完整清亮 v2 分析](research/bright-complete-v2.md)：当前2.0.0素材基准，全量静态/人物/现有动效、入口迁移、实际校验与v1差别；接入范围由#105～#113维护。
+- 后续素材与玩法设计提案：[水域](project/water-terrain-proposal.md)、[设施朝向](project/facility-orientation-proposal.md)、[采收搬运](project/worker-harvest-transport-proposal.md)、[工人加工岗位](project/worker-processing-proposal.md)。四项新玩法均待确认，独立于首批表现接入。
+- [美术总包 v1 分析](research/art-agent-bundle-v1.md)：旧1.0.2核验与当时默认/参考差别的历史记录，当前接入改用v2。
+- [素材来源记录](project/asset-sources.md)：已纳入的角色素材授权信息、本项目原型 UI 图标与缩略来源，以及本地待评估总包的许可范围。
 - [macOS 构建与验收](project/macos-build.md)：Universal 2 导出、CI 和应用包启动。
 - [本地开发构建](project/development-build.md)：单项目开发源码排除、Windows/macOS dev导出、外部持久配置和包旁报告；CI不新增dev包。
 - [正式版本发布](project/release.md)：独立手动工作流、指定版本号、Windows 与 macOS 同提交成功 CI 产物共同发布及失败处理。

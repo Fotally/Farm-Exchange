@@ -583,7 +583,8 @@ public partial class TestCultivationWindow : Node
         FarmGame game = main.Game;
         WorldMap map = main.GetNode<WorldMap>("WorldMap");
         CultivationWindow window = Find<CultivationWindow>(main, "CultivationWindow");
-        Vector2I cell = new(186, 189);
+        // 主镜头内右侧空地，工作中心(197,187)不被开局屋顶、人物或固定环境树冠遮挡。
+        Vector2I cell = new(196, 186);
         if (!game.TryPlace(cell, BuildingKind.Farm, CropKind.Wheat).Success)
         { main.QueueFree(); return Fail("暂停保存地图夹具建造失败"); }
         Click(window, "NewCultivationPlanButton");
@@ -591,34 +592,81 @@ public partial class TestCultivationWindow : Node
         CultivationTimeline timeline = Find<CultivationTimeline>(window, "CultivationTimeline");
         Drop(timeline, CropKind.Wheat, 0);
         Click(window, "SaveCultivationPlanButton");
-        Find<CheckBox>(window, "CultivationFarm186_189").ButtonPressed = true;
+        Find<CheckBox>(window, "CultivationFarm196_186").ButtonPressed = true;
         Click(window, "ApplyCultivationPlanButton");
         main._UnhandledInput(new InputEventKey { Pressed = true, Keycode = Key.Escape });
         await Frames(parent);
         bool graphical = DisplayServer.GetName() != "headless";
-        Color before = graphical ? MarkerPixel(parent, map, cell + Vector2I.One) : default;
+        Image? before = graphical ? parent.GetViewport().GetTexture().GetImage() : null;
         int redraws = map.ChunkRedrawCount;
         uint elapsed = game.Calendar.ElapsedSeconds;
+        int planId = game.GetFarmCultivation(cell).PlanId!.Value;
         Click(main, "CultivationButton");
         int id = game.GetCultivationPlans()[0].Entries[0].Id;
         Drop(timeline, CropKind.Radish, 0, id);
         Click(window, "SaveCultivationPlanButton");
         bool passed = game.GetPlot(cell).CropKind == CropKind.Radish && game.GetPlot(cell).Crop == CropStage.None &&
-            game.Calendar.ElapsedSeconds == elapsed;
+            game.IsPaused && game.Calendar.ElapsedSeconds == elapsed &&
+            game.GetFarmCultivation(cell).PlanId == planId &&
+            game.GetCultivationPlans().Single(plan => plan.Id == planId).Entries.Single(entry => entry.Id == id).Crop == CropKind.Radish;
         main._UnhandledInput(new InputEventKey { Pressed = true, Keycode = Key.Escape });
         await Frames(parent);
-        if (map.ChunkRedrawCount <= redraws) passed = false;
-        if (!passed) Fail("暂停保存共享表没有同步当期空田地图外观");
-        if (graphical && MarkerPixel(parent, map, cell + Vector2I.One).IsEqualApprox(before))
-            passed = Fail("暂停保存改种后地图工作中心仍显示旧作物颜色");
+        if (map.ChunkRedrawCount != redraws) passed = false;
+        if (!passed) Fail("暂停保存共享表没有更新正式选种/原条与农田引用，或推进经营/重绘不变地面");
+        if (graphical && !SameEmptyField(before!, parent.GetViewport().GetTexture().GetImage(), map, cell + Vector2I.One))
+            passed = Fail("暂停空田改计划后出现虚假作物标记或改变既有空土画面");
+
+        // 种类在设施详情显示，空田不借旧彩点表达；恢复后检验工人实际播种的新作物。
+        map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+        if (Find<Label>(main, "FarmCropTitle").Text != FarmGame.GetCrop(CropKind.Radish).CropName ||
+            game.GetFarmDetails(cell).Crop.Kind != CropKind.Radish)
+            passed = Fail("暂停保存后设施详情没有同步萝卜选种");
+        Click(main, "PauseButton");
+        bool sowedRadish = false;
+        for (int tick = 0; tick < 60 && game.GetPlot(cell).Crop == CropStage.None; tick++)
+        {
+            main.AdvanceSimulation(1);
+            sowedRadish |= game.GetPresentationResults().Any(result => result.AnchorCell == cell &&
+                result.Kind == ProductionResultKind.Sow && result.CropKind == CropKind.Radish);
+        }
+        if (!sowedRadish || game.GetPlot(cell).CropKind != CropKind.Radish || game.GetPlot(cell).Crop == CropStage.None ||
+            game.GetFarmCultivation(cell).PlanId != planId)
+            passed = Fail("恢复经营后没有按保存的共享表真实播种萝卜");
         main.QueueFree();
         return passed;
     }
 
-    private static Color MarkerPixel(Node parent, WorldMap map, Vector2I cell)
+    private static bool SameEmptyField(Image before, Image after, WorldMap map, Vector2I cell)
     {
-        Vector2 pixel = map.GetGlobalTransformWithCanvas() * MapCoordinates.CellToLocalCenter(cell);
-        return parent.GetViewport().GetTexture().GetImage().GetPixel((int)pixel.X, (int)pixel.Y);
+        Vector2 center = MapCoordinates.CellToLocalCenter(cell);
+        Image soil = GD.Load<Texture2D>("res://assets/gameplay/soil/field_dry_q0.png").GetImage();
+        // 中心及周围9点分别与独立PNG基准核对；两帧都残留同一彩点也不能通过。
+        for (int y = 124; y <= 132; y += 4)
+            for (int x = 108; x <= 116; x += 4)
+            {
+                Color expected = soil.GetPixel(x, y);
+                if (expected.A < .99f) return false;
+                Vector2 soilPixel = map.GetViewport().GetStretchTransform() *
+                    (map.GetGlobalTransformWithCanvas() * (center + new Vector2(x + .5f - 112, y + .5f - 128)));
+                foreach (Image frame in new[] { before, after })
+                {
+                    Color actual = frame.GetPixel((int)soilPixel.X, (int)soilPixel.Y);
+                    if (Math.Abs(actual.R - expected.R) > .035f || Math.Abs(actual.G - expected.G) > .035f ||
+                        Math.Abs(actual.B - expected.B) > .035f) return false;
+                }
+            }
+        // 空田原图保持不变；共同深度层中的相邻屋顶也应保持相同遮挡。
+        // 取整座逻辑占地内部与中心，能发现新增彩点，不要求正确遮挡的区域露出土层。
+        for (int y = -32; y <= 32; y += 8)
+            for (int x = -64; x <= 64; x += 8)
+            {
+                if (Math.Abs(x) / 96f + Math.Abs(y) / 48f >= .9f) continue;
+                Vector2 pixel = map.GetViewport().GetStretchTransform() *
+                    (map.GetGlobalTransformWithCanvas() * (center + new Vector2(x, y)));
+                if (!before.GetPixel((int)pixel.X, (int)pixel.Y).IsEqualApprox(after.GetPixel((int)pixel.X, (int)pixel.Y)))
+                    return false;
+            }
+        return true;
     }
 
     private static void Drop(CultivationTimeline timeline, CropKind crop, int day, int id = 0)

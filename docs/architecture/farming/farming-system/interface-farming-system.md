@@ -27,3 +27,7 @@
 模块不解析占用子格或决定设施形状；`FarmGame` 在土地接口解析锚点后调用，`WorkerScheduler` 从 `Indices` 取得真实锚点。少量容量测试数组直接验证生产状态，完整空间几何由土地测试负责。
 
 批量内部接口 `GetNextEventSeconds(index)` 返回正常成熟的剩余完整秒数，未生长返回 `uint.MaxValue`；`AdvanceQuietSeconds(index, seconds)` 只累计严格位于成熟之前的区间，一次扣除 `7×seconds` 精确单位，不收获或更改凭据。换季仍是经营入口独立事件，促熟与清理沿用原操作。单秒与批量都在正常到期的事件秒调用原 `AdvanceGrowth`，不会对跨轮总时长统一取整。调用顺序见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。
+
+## 已完成工作凭据的表现校验
+
+`IsWorkRevisionCurrent(completedWork)` 只读验证本模块曾确认成功的 `FarmWorkRequest` 仍属于原农田及原轮次。它检查农田仍在和版本一致，不调用 `GetWorkNeed`，因此已成功播种不必仍是待播种任务。改种（含同种重启）、拆建、收获新轮、播种启停或禁生换季使旧凭据失效。FarmGame 仅将原凭据保留在非持久结果内部并委托本方法校验，不读取裸版本号、不成为版本拥有者。公开表现只看到成功结果及完整有效性判断。

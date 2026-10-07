@@ -50,3 +50,13 @@
 模块职责、整数口径和对照验证见[批量实现](implementation-batched-simulation.md)。
 
 满地图夹具以三格间距铺设锚点 `(0,0)` 到 `(381,381)`，按标准列奇偶交替农田/加工，保留 8,192+8,192 个生产实例与 147,456 个占用子格。生产、雨水与领取均按空间实例各处理一次。专用人物表现夹具将三座中心右上方农田改为空田并真实推进一秒，以采样移动；普通负载夹具不受影响。
+
+## 逐实例成功结果与精确生长比例（#105）
+
+`PlotSnapshot.GrowthProgress` 是农田实际生长精确单位除以本轮总单位所得的 0～1 比例；非生长状态为零。它与 RemainingSeconds 的向上取整剩余秒分别供表现选档和玩家时间展示，不从取整秒反推生长档。
+
+`GetPresentationResults()` 返回最近完整经营秒的独立只读 `IReadOnlyList<ProductionResult>`，字段为 ElapsedSeconds、AnchorCell、CropKind、Kind、Quantity、WorkerNumber。Kind 为 Sow、Water、Harvest、Product；播种/浇水只从实际成功回调记录，自动产出从实际入库路径记录，换季促熟共用 Harvest，工人动作 Quantity=0、自动产出 WorkerNumber=0。完成后立刻领取下一加工批次仍保留本秒 Product。
+
+`IsPresentationResultCurrent(result)` 是开始播放的完整校验：结果须属于本局当前秒及当前保留集合，工人动作还须通过农田原工作凭据版本检查。`IsPresentationTargetCurrent(result)` 单独验证已经开始的片段：内部保存 LandOccupancy 已有的不可变 BuildingSpaceSnapshot 引用，以引用一致性确认原设施仍在，并校验农田原工作凭据；它不限制秒数，让公共倍率的片段自然完成。拆除同格重建产生新引用，不使旧结果复活；改种/重启/换季等通过 FarmingSystem 失效原动作，不清空其他实例结果。没有新增永久 ID、事件历史或第二份土地状态，调用方不能修改集合或内部凭据。
+
+每个新事件秒先覆盖结果，平静秒也清空；批量请求结束仅留下最后经营秒，不是整个请求的历史。初次表现挂接记录当前秒并跳过已有结果，之后按经营秒去重；开发高倍率跳过过期动作不排队。暂停不推进经营或产生结果，表现冻结并在恢复时继续有效当前片段。此 Seam 只供人物和设施表现读取，不承担存档、审计或全局事件总线。测试为 TestProductionResults 与 TestWorkerPresentation。

@@ -26,18 +26,20 @@
 - `scripts/trading/TradingService.cs` 与 `TradeResult.cs`：完整即时与委托结算模块，先检查数量、执行时报价、可用及本单冻结资源、保留线和容量，再一次提交；即时零费，委托按实际成交额收 1% 向上取分费用，结果分别给出货值与费用。宽整数预检，失败资源零修改；调用方不拼装扣款和入库。
 - `scripts/trading/TradeOrderBook.cs`、`TradeOrderRequest.cs` 与 `TradeOrderSnapshot.cs`：订单模块唯一持有单据配置、创建顺序、原现金基准、生命周期和各单资源归属。组内全部/组间任一条件，季节仅读日历；一次限价数量或固定预算买单冻结，卖单冻结数量，持续策略不冻结。一次目标差额建单锁定、持续动态算，行情更新后每单检查一次；同 ID 编辑重验、撤销释放，查询返回独立只读快照。
 - `scripts/economy/Wallet.cs`：每局金币总余额与冻结金额的唯一拥有者，提供可用金额；建造与即时交易不能动用冻结，委托消费本单额度并释放差额，所有数值保持原整数容量。
-- `scripts/characters/NpcCharacter.cs` 与 `scenes/npc_character.tscn`：可复用的 NPC 动画角色。读取 64×64、每方向 6 帧的角色图集；预览模式按外部方向移动，主地图通过 `ShowAt` 只展示经营快照给定的位置、朝向和暂停，不执行自主物理移动或决定经营任务。
+- `scripts/characters/NpcCharacter.cs` 与 `scenes/npc_character.tscn`：可复用的清亮 v2 NPC 动画角色。加载20名角色的待机、走、跑、播种和浇水 SpriteFrames，保留64×64、脚根(32,60)、四向及逐帧时长；合成帧包含工具，单次作业不重复叠加特效。主地图只展示真实位置和成功结果，动画不执行经营任务。
 - `scripts/market/CommodityCatalog.cs` 与 `CommodityDefinition.cs`：唯一维护十四商品名称和初价，稳定排列，使用库存模块的统一商品标识。
 - `scripts/market/MarketQuotes.cs` 与 `MarketSnapshot.cs`：唯一持有正式报价、固定双周排期、事件与公告，封装供需、季节、成本、整数分限幅及节日改期；只接收日历推进并返回独立只读快照，玩家交易量不影响报价。`MarketPriceCurve.cs` 保留为历史独立曲线及测试，不再参与经营。
 - `scripts/time/GameCalendar.cs`、`GameDate.cs` 与 `GameTimeUnits.cs`：日历唯一维护累计 `uint32` 模拟秒与暂停，纯日期查询共用相同年月日与季节换算，为未来实际报价日生成不可变日期；比例模块统一生产和日历的整数比例及剩余秒数换算。`FarmGame` 持有日历，按单tick或平静区间推进并在事件边界完整结算。
 - `scripts/world/MapCoordinates.cs`：固定等距地图的格坐标与地图本地坐标换算入口，使用 `FarmGame.MapSize` 定义的同一地图范围；不读取节点或经营状态。
-- `scripts/world/WorldMap.cs`：地图表现模块。每空间实例读取一次生产快照，填入完整占地；按 8×8 基础格缓存网格，一个实例只在工作中心画一次标记。镜头只更新块可见性，外观变化时重建对应块；按占地偏移绘制完整设施外围选框。独立覆盖层显示候选占地、局部冲突与半透明类型标记，外围边由占地属性生成；输入转为本地基础格并限制镜头，不维护经营规则。
+- `scripts/world/WorldMap.cs`：地图表现模块。按 8×8 基础格缓存清亮 v2 草地与道路；每实例按真实快照选择干湿土、播种层、七作物三档或七加工建筑，土层固定低层，设施与工人按工作中心和脚根共同深度排序。资源映射、pivot、外观档及可见性留在模块内部，图片跨块不裁切；镜头移动不重建经营状态。候选使用同一设施图，冲突与整实例外围选框独立覆盖；输入转换和占地仍复用正式几何，不维护经营规则。
+- `scripts/world/FacilityMotion.cs` 与 `rooted_wind.gdshader`：世界内部局部动效，封装磨坊塔身/叶片/轮毂、制糖坊蒸汽、三作物逐株固定根风摆及真实产出短效果。地图统一输入可见性、暂停、倍率与成功结果；建筑局部分层不改变全场深度顺序，植株按根点与人物共同排序，不执行经营结算。
+- `scripts/world/EnvironmentDecorations.cs`：世界内部纯环境状态与可见节点缓存，固定独立种子生成27类自然散布与5类受控陈设；按实际完整占地永久清除落点，预览和失败不清除、拆除不复生。原画布控制跨格可见性，根点参与共同深度排序，不拥有正式占地或资源。
 - `scripts/world/PlacementPreviewGeometry.cs`：内部候选几何，读取同一占地偏移生成候选格与逐格阻塞，按相邻格生成外围边；只查询地图范围与真实占用，不复制正式放置规则或保存经营状态。
-- `scripts/world/WorkerPresentation.cs`：读取工人编号、经营格位置、目标与活动快照，复用角色场景显示三人，公共倍率按帧插值并同比调整行走动画，高倍率显示最新真实位置；位置换算复用地图接口，暂停立即对齐真实位置并保留动画帧，视觉帧率与动画不推进经营。
+- `scripts/world/WorkerPresentation.cs`：读取三名工人快照与真实成功结果，复用角色场景和地图共同深度排序；公共倍率插值并调整动画，高倍率显示最新真实位置而不积压动作。最近经营秒去重并重验原作业凭据，改种、拆除或换季使旧动作失效；暂停对齐位置并保留动画帧，动画不推进经营。
 - `scripts/world/CameraController.cs`：输入与镜头模块。唯一保存地图玩家倍率，窗口和全屏扩大时增加地图视野，保持农田与人物像素大小、镜头中心和玩家倍率。订阅尺寸变化并在退出时取消；缩放限制与输入换算保持内部，UI 倍率由 `UiScaling` 独立维护。区分左键点击与拖动，释放即结束拖动，界面收到释放时清除按下凭据；公开拖动及鼠标在窗口内状态供摆放隐藏预览，通过 `WorldMap` 选择格子及限制镜头。
 - `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。组装像素田园浮动布局：顶部日期、点击循环倍率与暂停、右上金币与工人、左侧真实经营近况、右侧设施详情、底部中央经营入口。倍率位于日期竖线右、暂停左，1×→2×→0.5×循环，高开发倍率点击回1×，均提交玩家意图且不解除暂停。唯一持有摆放类型和候选锚点，所有类型逐次建造后保持摆放，右键、Esc、按钮统一取消；每帧在镜头更新后定位，界面遮挡或拖动时隐藏预览，标准费用与可用资金反馈分开显示。分发窗口意图并通过唯一时间驱动推进经营，经营变化后统一刷新，并组装读取工人快照的表现；只在地块变化时同步地图。
 - `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs`、`RoadDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与可用区域、建造目录、固定的选种/库存/市场控件、三类详情及统一木框纸面主题。窗口避让顶部状态与底部入口，长内容可滚动；主题集中维护按钮、输入、勾选及列表各态字色。目录包含九种设施、分类和名称搜索并统一查询费用；道路连续铺设到 Esc/取消为止，详情仅发出拆除意图。库存显示总量、冻结、可用量并保留底线草稿与焦点；设施详情从快照显示实际进度、产量、报价及损失说明。窗口不持有经营状态。
-- `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`：独立角色预览，接收 WASD/方向键移动、Q/E 切换 20 位角色并显示名称与跟随镜头；不接入主经营场景。
+- `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`：独立角色预览，接收 WASD/方向键移动、Q/E 切换20位角色、数字1～5核验五种已接入动作，显示名称与跟随镜头；不接入主经营场景。
 - `scripts/development/configuration/`：可编辑字段类型与中文元数据、反射描述、严格JSON校验、配置库及独立草稿。配置库唯一负责文件来源、修订、另存/覆盖、单配置删除及流程目录持久移除；内置示例只读，项目内用户配置长期纳入Git。修改字段或保存删除约定时读取[配置编辑接口](docs/architecture/development/interface-scenario-configuration-editor.md)。
 - `scripts/ui/UiScaling.cs`：统一 UI 倍率模块，唯一记录控件原始排版与整体/字体倍率。两个公开设置接口支持独立子树与父子倍率组合，重复设置不累计，动态控件继承；字体变化触发真实重排，自绘时间图共用字号换算。默认1080P且关闭画布拉伸，扩大窗口不改设定倍率；不维护地图或经营状态。
 - `scripts/ui/UiIcons.cs` 与 `FacilityPreview.cs`：复用原型 SVG 的线条图标及设施/作物缩略，只读快照展示真实锚点。图标跟随整体倍率，字体倍率仅调整文字；素材来源见 `assets/ui/source_notes.md`，不替换世界地图与人物素材。
@@ -53,6 +55,7 @@
 - `.github/ISSUE_TEMPLATE/`：六类中文议题正文模板的唯一维护位置，供 GitHub 网页与 `.codex/skills/farm-exchange-submit-issue/SKILL.md` 共用；skill 负责查重、按模板填写与提交核对。模板在人工合入默认分支后供网页使用，来源说明见 `docs/research/issue-template-sources.md`。
 
 - `scripts/gameplay/SimulationAdvanceResult.cs`：完整经营检查点、实际推进与宽整数产出汇总。`FarmGame.AdvanceTicks` 请求无外部输入区间，各状态模块提供最近事件并累计平静数据，事件复用完整经营相位；显式降雨仍由单tick入口输入。
+- `scripts/gameplay/ProductionResult.cs`：最近完整经营秒的播种、浇水、收获及加工成功记录。`FarmGame` 唯一持有非持久只读结果，任务成功路径与正式入库路径写入；平静尾段清空，消费方去重并重验有效性，不能由待执行任务或动画推断成功。
 - `scripts/time/SimulationDriver.cs` 与 `SimulationRateSource.cs`：唯一拥有每局倍率与未完成tick进度，现实帧时间转为同一经营批量请求；暂停不累计，改速保留进度，提供玩家/流程来源通知。发布仅0.5/1/2，开发额外有限正整数；场景只组装唯一当前局驱动。
 - `scripts/development/scenarios/`：严格持久配置、共用买入→加工→一次卖出流程和JSON报告。流程只使用真实经营命令与稳定检查点，不拥有生产或交易状态；独立局准备受控数据，现场明确证据不足。报告引用原文件及加载时SHA-256，不保存配置副本。
 - `scripts/ui/development/DeveloperToolsWindow.cs`、`ScenarioCatalogStep.cs`、`ScenarioEditorStep.cs`、`ScenarioResultStep.cs` 与 `ScenarioConfigurationForm.cs`：C三步协调、换行分类按钮与双列目录、配置编辑和真实运行结果；视觉按已确认C原型逐项比对步骤选中态、卡片与间距。同一表单按描述生成字段与并排分组，窗口唯一维护选择与步骤，草稿及文件规则交给配置库。两种垃圾桶经确认后转交删除意图，运行中锁定编辑；当前局借主驱动、独立局只推进数据，报告引用已保存原文件。修改窗口操作时读取[开发窗口接口](docs/architecture/ui/developer-tools-window/interface-developer-tools-window.md)。
@@ -81,6 +84,8 @@
 3. 发布前必须在 `main` 对目标提交完成 Release 编译、自动化场景测试、导出程序启动验收；独立发布工作流要求同提交的 Windows 与 macOS CI 均成功，复用两平台产物；Windows 下载后再验收启动并打包，macOS 保留已在 CI 验收的原始 ZIP，无需本地上传。版本号由操作者指定，两平台准备成功后创建同版本 Git 标签与单个 GitHub Release，上传两份 ZIP。发布完成以标签、GitHub Release、两平台压缩包版本号一致为准。
 
 # 文档索引
+
+- 新增、迁移、替换素材或调整导入设置时读取 `docs/project/asset-organization.md`；当前完整清亮 v2 素材入口与使用约定见 `docs/research/bright-complete-v2.md`，v1 分析保留历史。素材规则经 `assets/AGENTS.md` 加载，原始包归档不代表已接入或获准公开分发。
 
 - 修改 UI 视觉或布局时读取 `docs/project/ui-visual-prototype.md`：#94 采用田园布局与像素木作主题，保留当前地图与人物素材；HTML 为设计示例，Godot 窗口接入真实经营状态。
 

@@ -69,11 +69,11 @@ public partial class Main : Node2D
         _worldMap = GetNode<WorldMap>("WorldMap");
         _camera = GetNode<CameraController>("Camera2D");
         ProcessPriority = 1;
-        _worldMap.SetGame(_game);
+        _worldMap.SetGame(_game, _driver);
         GetNode<Camera2D>("Camera2D").GlobalPosition = _worldMap.GetGridWorldPosition(
             new Vector2((FarmGame.MapSize - 1) / 2f, (FarmGame.MapSize - 1) / 2f));
         _workerPresentation = new WorkerPresentation();
-        _worldMap.AddChild(_workerPresentation);
+        _worldMap.AttachDepthSorted(_workerPresentation);
         _workerPresentation.SetGame(_game, _worldMap, _driver);
         _workerPresentation.ProcessPriority = 2;
         _worldMap.SelectionChanged += OnSelectionChanged;

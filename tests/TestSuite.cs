@@ -21,6 +21,8 @@ public partial class TestSuite : Node
         bool landPassed = TestLandOccupancy.RunChecks();
         GD.Print("单元测试：工人移动、完整动作与多人调度");
         bool workersPassed = TestWorkerScheduler.RunChecks();
+        GD.Print("单元测试：逐实例真实作业产出与过期失效");
+        bool productionResultsPassed = TestProductionResults.RunChecks();
         GD.Print("单元测试：市场价格与换日");
         bool marketPassed = TestMarketRules.RunChecks();
         GD.Print("单元测试：独立商品报价、节日排期与消息");
@@ -58,6 +60,12 @@ public partial class TestSuite : Node
         cameraPassed = await TestCameraInteraction.RunResizeChecksAsync(this) && cameraPassed;
         GD.Print("集成测试：NPC 动画与角色切换");
         bool npcPassed = TestNpcPreview.RunChecks(this);
+        GD.Print("集成测试：清亮静态纹理与人物建筑深度遮挡");
+        worldMapPassed = await TestWorldArt.RunChecksAsync(this) && worldMapPassed;
+        GD.Print("集成测试：设施真实生产动效与产出反馈");
+        worldMapPassed = await TestFacilityMotion.RunChecksAsync(this) && worldMapPassed;
+        GD.Print("集成测试：纯环境装饰与完整占地清除");
+        worldMapPassed = await TestEnvironmentDecorations.RunChecksAsync(this) && worldMapPassed;
         GD.Print("端到端测试：主场景经营流程");
         bool coreLoopPassed = TestCoreLoop.RunChecks(this);
         GD.Print("端到端测试：建造检索、选种信息与设施真实进度");
@@ -84,7 +92,7 @@ public partial class TestSuite : Node
         bool uiScalingPassed = await TestUiScaling.RunChecksAsync(this);
         GD.Print("端到端测试：共享年度表列表可读性、整表删除与引用解除");
         bool cultivationManagementPassed = await TestCultivationManagement.RunChecksAsync(this);
-        bool passed = driverPassed && batchPassed && scenarioPassed && scenarioSchemaPassed && scenarioLibraryPassed && rateButtonPassed && developerWindowPassed && developerEditorPassed && farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
+        bool passed = productionResultsPassed && driverPassed && batchPassed && scenarioPassed && scenarioSchemaPassed && scenarioLibraryPassed && rateButtonPassed && developerWindowPassed && developerEditorPassed && farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
             coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationDeletionPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed && uiScalingPassed && cultivationManagementPassed;
 
         if (passed)
