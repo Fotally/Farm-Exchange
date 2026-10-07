@@ -47,14 +47,15 @@
 | `Flows` | 只读可见流程摘要，名称、简介、分类和配置描述；删除后为空 |
 | `ListConfigurations(flowId)` | 自动发现合法只读示例及用户配置，按名称返回目录快照；未知/隐藏流程拒绝 |
 | `DiscoveryErrors` | 列出本轮扫描遇到的非法用户配置；UI须显示，不将其冒充成功配置 |
-| `Open(entry)` | 重验归属与原字节，返回独立草稿 |
+| `Open(entry)` | 重验归属与原字节，返回独立草稿；过期凭据仍拒绝 |
+| `ReloadSelection(entry)` | 用户显式重选后按稳定文件 `Id` 重新发现并打开；返回 `ScenarioConfigurationSelection`，含最新 `Entries`、新 `Draft` 和 `Error`。条目失效时草稿为空，错误明确说明；不退选其他文件，不修改传入条目或旧草稿 |
 | `SaveAs(draft,newCaseId)` | 新名称、新文件、修订1；原文件及原草稿保持；拒绝同名配置 |
 | `Overwrite(draft)` | 只针对可写条目，重验加载后文件未改变，成功覆盖才修订加一；修订到int32上限拒绝 |
 | `DeleteConfiguration(entry)` | UI确认后调用，仅删除所选可写文件；只读示例拒绝 |
 | `DeleteFlow(flowId)` | UI确认后调用，删该流程全部可写配置，再持久隐藏目录项；代码、示例与报告保持 |
 | `LoadForRun(draft)` | 只允许已保存可写配置且草稿无修改；一次读原字节，生成固定运行参数与摘要 |
 
-条目的`Id`只供库操作，界面显示`CaseId`、`Revision`与`IsReadOnly`。库在操作时验证条目、文件摘要、目录归属与符号链接；不得拿外部路径伪造删除目标。正常拒绝与文件失败抛`ScenarioConfigurationException`供窗口明确反馈。失败后UI重新查询真实列表，不假报成功或声称文件已回滚。
+条目的`Id`只供库操作，界面显示`CaseId`、`Revision`与`IsReadOnly`。库在操作时验证条目、文件摘要、目录归属与符号链接；不得拿外部路径伪造删除目标。正常拒绝与文件失败抛`ScenarioConfigurationException`供窗口明确反馈。删除失败后UI重新查询真实列表，不假报成功或声称文件已回滚。覆盖与启动冲突保留原草稿，提示用户显式重选；重选统一调用 `ReloadSelection`，不能以刷新后的条目替换旧脏草稿的凭据再覆盖。存在未保存输入时，UI须先取得放弃草稿的明确确认；取消保持原选择和输入。恢复结果一次给出真实目录及对应草稿，删除或非法配置清空选择并禁用运行；目录扫描错误仍由 `DiscoveryErrors` 显示。显式重选不会改变已启动流程的固定参数。
 
 ## 唯一可写位置
 

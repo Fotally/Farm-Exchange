@@ -53,13 +53,13 @@ internal partial class ScenarioConfirmationPanel : PanelContainer
         _name.TextSubmitted += _ => Confirm();
     }
 
-    internal void Open(string message, Action<string> action, bool enterName = false)
+    internal void Open(string message, Action<string> action, bool enterName = false, string confirmText = "确认删除")
     {
         _message.Text = message;
         _action = action;
         _name.Visible = enterName;
         _name.Text = "";
-        _confirm.Text = enterName ? "确认另存为" : "确认删除";
+        _confirm.Text = enterName ? "确认另存为" : confirmText;
         _confirm.Name = enterName ? "ScenarioSaveConfirmButton" : "ScenarioConfirmationConfirmButton";
         Show();
         if (enterName) _name.GrabFocus();

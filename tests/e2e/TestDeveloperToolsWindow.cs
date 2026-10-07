@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
 using FarmExchange.Development;
@@ -42,7 +45,7 @@ public partial class TestDeveloperToolsWindow : Node
                 {"schemaVersion":1,"caseId":"window-independent","revision":1,"flow":"buy-process-sell",
                  "run":{"target":"independent","seed":12345},
                  "execution":{"timePlan":[{"endDate":"01-04-01","rate":20}]},
-                 "parameters":{"rawCommodity":"Radish.Raw","quantity":3,"processorAnchor":{"x":0,"y":0},
+                 "parameters":{"rawCommodity":"Radish.Raw","quantity":1,"processorAnchor":{"x":0,"y":0},
                  "processingWaitLimitTicks":1000,"orderWaitLimitTicks":10}}
                 """;
             File.WriteAllText(file, independentJson);
@@ -77,7 +80,10 @@ public partial class TestDeveloperToolsWindow : Node
             File.WriteAllText(file, independentJson);
             start.EmitSignal(Button.SignalName.Pressed);
             if (!start.Disabled || abort.Disabled) return Fail("真实启动没有进入运行状态");
-            window.AdvanceIndependent(5);
+            byte[] runningBytes = File.ReadAllBytes(file);
+            string changedJson = independentJson.Replace("\"quantity\":1", "\"quantity\":4");
+            File.WriteAllText(file, changedJson);
+            window.AdvanceIndependent(100);
             if (DisplayServer.GetName() != "headless")
             {
                 await Frames(parent);
@@ -90,6 +96,21 @@ public partial class TestDeveloperToolsWindow : Node
             if (main.Game.MoneyCents != beforeBalance || main.Game.Calendar.ElapsedSeconds != beforeTicks)
                 return Fail("独立运行更换或推进了当前局");
 
+            if (!CheckReport(reportText[3..], runningBytes, 1)) return false;
+            start.EmitSignal(Button.SignalName.Pressed);
+            if (!Find<Label>(window, "ScenarioFeedbackLabel").Text.Contains("配置文件已改变") || start.Disabled)
+                return Fail("外部变更未拒绝旧凭据启动");
+            Find<Button>(window, "ScenarioResultBackButton").EmitSignal(Button.SignalName.Pressed);
+            SelectProfile(window, "window-independent");
+            if (Find<LineEdit>(window, "ScenarioField_parameters_quantity").Text != "4")
+                return Fail("外部quantity=1→4后显式重选仍使用旧目录凭据");
+            Find<Button>(window, "ScenarioEditorContinueButton").EmitSignal(Button.SignalName.Pressed);
+            byte[] reloadedBytes = File.ReadAllBytes(file);
+            start.EmitSignal(Button.SignalName.Pressed);
+            window.AdvanceIndependent(100);
+            reportText = Find<Label>(window, "ScenarioReportPathLabel").Text;
+            if (!reportText.StartsWith("报告：") || !CheckReport(reportText[3..], reloadedBytes, 4)) return false;
+            GD.Print("#118 真实窗口外部重选、固定参数与原字节报告摘要检查通过");
             Find<Button>(window, "ScenarioResultBackButton").EmitSignal(Button.SignalName.Pressed);
             SelectProfile(window, "window-current");
             Find<Button>(window, "ScenarioEditorContinueButton").EmitSignal(Button.SignalName.Pressed);
@@ -113,6 +134,43 @@ public partial class TestDeveloperToolsWindow : Node
             if (!Find<Label>(window, "ScenarioFeedbackLabel").Text.Contains("输出错误") ||
                 Find<Label>(window, "ScenarioReportPathLabel").Text.StartsWith("报告：") || start.Disabled || !abort.Disabled)
                 return Fail("报告落盘失败未明确反馈、伪报保存或丢失结束状态");
+            Find<Button>(window, "ScenarioResultBackButton").EmitSignal(Button.SignalName.Pressed);
+            SelectProfile(window, "window-independent");
+            var quantity = Find<LineEdit>(window, "ScenarioField_parameters_quantity");
+            quantity.Text = "2";
+            quantity.EmitSignal(LineEdit.SignalName.TextChanged, "2");
+            string newestJson = independentJson.Replace("\"quantity\":1", "\"quantity\":5");
+            File.WriteAllText(file, newestJson);
+            byte[] newestBytes = File.ReadAllBytes(file);
+            Find<Button>(window, "ScenarioOverwriteButton").EmitSignal(Button.SignalName.Pressed);
+            if (!Find<Label>(window, "ScenarioFeedbackLabel").Text.Contains("配置文件已改变") ||
+                quantity.Text != "2" || !File.ReadAllBytes(file).SequenceEqual(newestBytes))
+                return Fail("旧脏草稿覆盖外部文件，或冲突后丢失草稿");
+            var profiles = Find<OptionButton>(window, "ScenarioProfileChoice");
+            if (!profiles.AllowReselect) return Fail("配置下拉不允许真实用户重选当前项");
+            int originalSelection = profiles.Selected;
+            SelectProfile(window, "window-current");
+            if (!Find<Control>(window, "ScenarioConfirmationPanel").Visible || profiles.Selected != originalSelection ||
+                Find<Button>(window, "ScenarioConfirmationConfirmButton").Text != "确认重新加载")
+                return Fail("脏草稿重选缺少明确放弃确认，或确认前改变原选择");
+            await ClickNative(parent, Find<Button>(window, "ScenarioConfirmationCancelButton"));
+            if (!ReferenceEquals(quantity, Find<LineEdit>(window, "ScenarioField_parameters_quantity")) ||
+                quantity.Text != "2" || profiles.Selected != originalSelection)
+                return Fail("取消重新加载丢失草稿、控件或原选择");
+            SelectProfile(window, "window-independent");
+            await ClickNative(parent, Find<Button>(window, "ScenarioConfirmationConfirmButton"));
+            if (Find<LineEdit>(window, "ScenarioField_parameters_quantity").Text != "5" ||
+                !File.ReadAllBytes(file).SequenceEqual(newestBytes))
+                return Fail("确认重新加载未显示最新值或修改外部文件");
+            File.WriteAllText(file, "{}");
+            SelectProfile(window, "window-independent");
+            if (!CheckInvalidSelection(window, 1) || !Find<Label>(window, "ScenarioFeedbackLabel").Text.Contains("independent.json"))
+                return Fail("外部非法配置没有同步目录、清空选择与错误");
+            SelectProfile(window, "window-current");
+            File.Delete(current);
+            SelectProfile(window, "window-current");
+            if (!CheckInvalidSelection(window, 0)) return Fail("外部删除仍保留可运行的过期引用");
+            GD.Print("#118 脏草稿冲突保护、确认取消与重载、非法及删除目录同步检查通过");
             return true;
         }
         finally
@@ -120,6 +178,27 @@ public partial class TestDeveloperToolsWindow : Node
             main.QueueFree();
             await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
         }
+    }
+
+    private static bool CheckInvalidSelection(Node window, int count) =>
+        Find<OptionButton>(window, "ScenarioProfileChoice").ItemCount == count &&
+        Find<OptionButton>(window, "ScenarioProfileChoice").Selected == -1 &&
+        !Find<Control>(window, "ScenarioConfigurationForm").Visible &&
+        Find<Button>(window, "ScenarioEditorContinueButton").Disabled &&
+        Find<Button>(window, "ScenarioStartButton").Disabled &&
+        Find<Label>(window, "ScenarioFeedbackLabel").Text.Contains("不再合法");
+
+    private static bool CheckReport(string path, byte[] bytes, int quantity)
+    {
+        using JsonDocument report = JsonDocument.Parse(File.ReadAllBytes(path));
+        JsonElement root = report.RootElement;
+        if (root.GetProperty("outcome").GetString() != "Passed" ||
+            root.GetProperty("configuration").GetProperty("sha256").GetString() != Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant() ||
+            root.GetProperty("produced").GetInt64() != quantity ||
+            root.GetProperty("operations").EnumerateArray().First(operation => operation.GetProperty("name").GetString() == "Buy")
+                .GetProperty("request").GetProperty("quantity").GetInt32() != quantity)
+            return Fail("窗口报告未保持启动参数、实际产量或原文件SHA-256");
+        return true;
     }
 
     private static void SelectProfile(Node window, string caseId)

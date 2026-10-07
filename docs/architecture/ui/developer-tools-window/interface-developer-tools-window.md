@@ -34,3 +34,11 @@
 输出目录为仓库/编辑器的`build/test-runs/<run-id>/`，本地dev包的包外`reports/test-runs/<run-id>/`；Windows从exe位置解析，macOS从`.app`父目录解析，不依赖启动工作目录。用户配置保存在仓库`tests/scenario-configs/user/`或开发包旁`configs/scenario-configs/`；仓库配置可以长期纳入Git，保存不自动提交。报告不保存配置副本，用户配置和报告不进入导出包。
 
 `test_developer_tools_window.tscn`通过真实开发入口及隔离配置库验证运行重载、独立Q=3报告、现场暂停、玩家改速中断及报告输出失败；`test_developer_flow_editor.tscn`验证新目录、字段兼容、保存与确认删除。图形运行等待处理帧及`FramePostDraw`保存真实截图，headless不等待图形信号。配置及检查规则见[参数化设计](../../../project/developer-tools-parameterized-tests.md)，操作见[使用说明](../../../project/parameterized-tests-usage.md)，构建排除见[本地开发构建](../../../project/development-build.md)。
+
+## 外部配置冲突恢复（#118）
+
+配置下拉允许再次选择当前项，表示显式重新加载。窗口将原条目交给配置库 `ReloadSelection`，使用返回的最新目录、草稿和错误更新界面。覆盖或启动遇到外部变更时仍拒绝并保留原输入；脏草稿重选时复用确认弹层，明确显示「放弃未保存修改」和「确认重新加载」，取消或Esc恢复原下拉选择及草稿，确认后才读取最新文件。
+
+合法修改保持文件身份，刷新名称、修订和字段值；文件删除或非法时清空当前选择、隐藏旧表单并禁用继续/运行，显示真实错误，不自动改选另一文件。清空选择后仍可从最新下拉选择合法配置。重新加载更新输入版本时清空旧界面结果，历史报告保留；只切换步骤不重载。运行期间禁止重选，已启动流程继续使用原参数和原字节SHA-256。
+
+`TestDeveloperToolsWindow`通过真实窗口回归quantity从1到4、冲突、显式重选、运行及报告摘要，并检查旧脏草稿覆盖拒绝、重载确认取消与确认、外部非法/删除后的目录和禁用状态。库级测试通过同一恢复入口验证身份、原草稿隔离与失效结果。验证通过状态由本批次统一验收记录维护。

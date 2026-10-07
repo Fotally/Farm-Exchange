@@ -95,6 +95,8 @@ public partial class TestDeveloperFlowEditor : Node
             target.EmitSignal(OptionButton.SignalName.ItemSelected, 0L);
             if (!Find<LineEdit>(window, "ScenarioField_run_seed").IsVisibleInTree()) return Fail("条件字段未响应运行对象变化");
             Choose(profiles, "radish-three");
+            if (!Find<Control>(window, "ScenarioConfirmationPanel").Visible) return Fail("切换配置未确认放弃未保存修改");
+            await Click(parent, Find<Button>(window, "ScenarioConfirmationConfirmButton"));
             var quantity = Find<LineEdit>(window, "ScenarioField_parameters_quantity");
             SetText(quantity, "1.5");
             if (!Find<Label>(window, "ScenarioFeedbackLabel").Text.Contains("quantity")) return Fail("非法整数未定位到字段");
