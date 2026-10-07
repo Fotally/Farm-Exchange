@@ -17,14 +17,16 @@ public partial class TestWorkerPresentation : Node
 
     public static async Task<bool> RunChecksAsync(Node parent)
     {
-        bool passed = CheckInterpolation(parent) && CheckFrameIndependence(parent) && CheckRates(parent);
+        bool passed = CheckInterpolation(parent) && CheckFrameIndependence(parent) && CheckRates(parent) &&
+            CheckSuccessfulActions(parent);
         if (!passed) return false;
+        if (!await CheckCompleteActionClips(parent)) return false;
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
         parent.AddChild(main);
         main.SetProcess(false);
         main.Game.SetPaused(true);
         await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
-        WorkerPresentation presentation = main.GetNode<WorkerPresentation>("WorldMap/WorkerPresentation");
+        WorkerPresentation presentation = (WorkerPresentation)main.GetNode<WorldMap>("WorldMap").FindChild("WorkerPresentation", true, false);
         passed = presentation.GetChildCount() == 3 &&
             main.GetNode<Control>("CanvasLayer/UiRoot").FindChild("WorkerCountLabel", true, false)
                 is Label { Text: "3 名工人" };
@@ -71,15 +73,15 @@ public partial class TestWorkerPresentation : Node
             game.AdvanceTick();
             var moved = game.GetWorkers();
             presentation._Process(0.5);
-            string[] sheets = { "npc_animation_001.png", "npc_animation_002.png", "npc_animation_005.png" };
+            string[] sheets = { "npc001", "npc002", "npc005" };
             for (int i = 0; i < sheets.Length; i++)
             {
                 NpcCharacter character = presentation.GetNode<NpcCharacter>($"Worker{i + 1}");
                 AnimatedSprite2D sprite = character.GetNode<AnimatedSprite2D>("AnimatedSprite2D");
-                if (character.CharacterSheet.ResourcePath != $"res://assets/gameplay/npc/{sheets[i]}" ||
-                    !sprite.IsPlaying() || sprite.Position != new Vector2(0, -20) ||
+                if (character.CharacterFrames.ResourcePath != $"res://assets/gameplay/npc/{sheets[i]}/{sheets[i]}_sprite_frames.tres" ||
+                    !sprite.IsPlaying() || sprite.Position != new Vector2(0, -28) ||
                     ((AtlasTexture)sprite.SpriteFrames.GetFrameTexture("run_left", 0)).Region.Size != new Vector2(64, 64))
-                    return Fail("三名工人未使用既有三张不同图集，或移动动画没有播放");
+                    return Fail("三名工人未使用清亮版三套不同四向动作，或移动动画没有播放");
                 sprite.Frame = 3;
             }
             NpcCharacter first = presentation.GetNode<NpcCharacter>("Worker1");
@@ -119,8 +121,8 @@ public partial class TestWorkerPresentation : Node
                 return Fail("暂停恢复未保持对齐后的真实经营位置");
             presentation._Process(0.25);
             if (!first.GlobalPosition.IsEqualApprox(map.GetGridWorldPosition(moved[0].GridPosition)) ||
-                thirdSprite.IsPlaying() || thirdSprite.Frame != 0)
-                return Fail("插值结束未到快照位置或停步没有保留首帧");
+                !thirdSprite.IsPlaying() || thirdSprite.Animation != "idle_left")
+                return Fail("插值结束未到快照位置或停步没有播放独立待机");
             return true;
         }
         finally
@@ -205,6 +207,128 @@ public partial class TestWorkerPresentation : Node
                 parent.RemoveChild(map);
                 map.Free();
             }
+        }
+        return true;
+    }
+
+    private static bool CheckSuccessfulActions(Node parent)
+    {
+        var game = new FarmGame(12345);
+        foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
+        Vector2I farm = new(189, 189);
+        game.TryPlace(farm, BuildingKind.Farm, CropKind.Radish);
+        WorkerPresentation presentation = CreatePresentation(parent, game, out WorldMap map);
+        try
+        {
+            var sprite = presentation.GetNode<AnimatedSprite2D>("Worker1/AnimatedSprite2D");
+            presentation._Process(.1);
+            if (!sprite.Animation.ToString().StartsWith("idle_")) return Fail("待执行作业被当作成功");
+            game.AdvanceTick();
+            presentation._Process(.1);
+            if (!sprite.Animation.ToString().StartsWith("sow_")) return Fail("真正播种没有播放合成动作");
+            sprite.SetFrameAndProgress(3, .4f);
+            presentation._Process(.1);
+            if (sprite.Frame != 3 || !Mathf.IsEqualApprox(sprite.FrameProgress, .4f))
+                return Fail("同一真实结果被每帧重播");
+            game.SetPaused(true);
+            presentation._Process(10);
+            game.SetPaused(false);
+            presentation._Process(0);
+            if (sprite.Frame != 3 || !Mathf.IsEqualApprox(sprite.FrameProgress, .4f))
+                return Fail("暂停恢复重播了成功作业");
+            game.SetFarmCrop(farm, CropKind.Radish);
+            presentation._Process(0);
+            if (!sprite.Animation.ToString().StartsWith("idle_")) return Fail("改种后旧动作没有取消");
+            game.AdvanceTick();
+            presentation._Process(0);
+            game.AdvanceTick();
+            presentation._Process(0);
+            if (!sprite.Animation.ToString().StartsWith("water_")) return Fail("真正供水没有合成动作");
+            game.SetPaused(true);
+            game.RemoveBuilding(farm);
+            game.TryPlace(farm, BuildingKind.Farm, CropKind.Radish);
+            presentation._Process(0);
+            if (!sprite.Animation.ToString().StartsWith("idle_") || sprite.IsPlaying())
+                return Fail("暂停拆改后仍向新实例播旧浇水");
+            game.SetPaused(false);
+            game.AdvanceTicks(5);
+            presentation._Process(0);
+            if (!sprite.Animation.ToString().StartsWith("idle_")) return Fail("快速批量结束补播过期动作");
+            game.SetFarmCrop(farm, CropKind.Radish);
+            game.AdvanceTick();
+            var fresh = new WorkerPresentation();
+            map.AddChild(fresh);
+            fresh.SetGame(game, map);
+            fresh.SetProcess(false);
+            fresh._Process(0);
+            if (!fresh.GetNode<AnimatedSprite2D>("Worker1/AnimatedSprite2D").Animation.ToString().StartsWith("idle_"))
+                return Fail("初次挂接重播了之前的作业结果");
+            return true;
+        }
+        finally { parent.RemoveChild(map); map.Free(); }
+    }
+
+    private static async Task<bool> CheckCompleteActionClips(Node parent)
+    {
+        foreach (bool sow in new[] { true, false })
+        {
+            var game = new FarmGame(12345);
+            foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
+            Vector2I farm = new(189, 189);
+            game.TryPlace(farm, BuildingKind.Farm, CropKind.Radish);
+            var driver = new SimulationDriver();
+            driver.SetDevelopmentRate(2);
+            var presentation = CreatePresentation(parent, game, out WorldMap map, driver);
+            try
+            {
+                var character = presentation.GetNode<NpcCharacter>("Worker1");
+                var sprite = character.GetNode<AnimatedSprite2D>("AnimatedSprite2D");
+                game.AdvanceTick(isRaining: sow);
+                if (!sow) game.AdvanceTick();
+                presentation._Process(0);
+                string expected = sow ? "sow_down" : "water_down";
+                if (sprite.Animation != expected || sprite.Frame != 0)
+                    return Fail("完整片段验证没有从真正成功动作首帧开始");
+                bool crossed = false;
+                ulong start = Time.GetTicksMsec();
+                while (!character.WorkAnimationFinished && Time.GetTicksMsec() - start < 5000)
+                {
+                    await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
+                    // 真实引擎播放到末两帧时推进经营秒，不能因结果窗口更新截掉动作结尾。
+                    if (!crossed && sprite.Frame >= 6 && !character.WorkAnimationFinished)
+                    {
+                        int currentFrame = sprite.Frame;
+                        game.AdvanceTick();
+                        presentation._Process(0);
+                        crossed = true;
+                        if (sprite.Animation != expected || sprite.Frame != currentFrame || !sprite.IsPlaying())
+                            return Fail("新经营秒截断了已开始的成功动作尾帧");
+                    }
+                }
+                if (!crossed || !character.WorkAnimationFinished || sprite.Frame != 7)
+                    return Fail("成功动作没有跨经营秒自然播至 AnimationFinished");
+                presentation._Process(0);
+                if (sprite.Animation != "idle_down") return Fail("自然结束没有返回独立待机");
+                // 同一过期记录不能被开发高倍率补播或保留。
+                game.SetFarmCrop(farm, CropKind.Radish);
+                game.AdvanceTick(isRaining: true);
+                driver.SetDevelopmentRate(20);
+                presentation._Process(0);
+                if (sprite.Animation != "sow_down") return Fail("高倍率未呈现最新有效成功结果");
+                game.AdvanceTick();
+                presentation._Process(0);
+                if (sprite.Animation != "idle_down") return Fail("高倍率没有跳过过期动作");
+                driver.SetDevelopmentRate(2);
+                game.SetFarmCrop(farm, CropKind.Radish);
+                game.AdvanceTick(isRaining: true);
+                presentation._Process(0);
+                game.TryPlace(new Vector2I(186, 189), BuildingKind.Farm, CropKind.Radish);
+                game.AdvanceTick();
+                presentation._Process(.1);
+                if (!sprite.Animation.ToString().StartsWith("run_"))
+                    return Fail("真实移动到新目标时仍播放上一处成功作业");
+            }
+            finally { parent.RemoveChild(map); map.Free(); }
         }
         return true;
     }

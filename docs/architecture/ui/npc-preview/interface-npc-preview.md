@@ -1,16 +1,13 @@
 # NpcPreview 对外接口
 
-对应类型：`FarmExchange.UI.NpcPreview`，代码位于 `scripts/ui/NpcPreview.cs`；独立场景为 `scenes/npc_preview.tscn`。在仓库根目录用指定 Godot 控制台程序运行：
+对应 `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`，独立检视清亮 v2 的 20 位角色，不接入主经营或提供雇佣玩法。
 
-```powershell
-E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe --path . scenes/npc_preview.tscn
-```
-
-| 输入或输出 | 行为 |
+| 操作 | 行为 |
 | --- | --- |
-| WASD、方向键 | 将输入方向交给 `NpcCharacter.SetMoveDirection`，移动与动画一致。 |
-| Q、E | 按来源序号循环选择上一位或下一位角色；20 张图集共用同一套动画。 |
-| 跟随镜头 | 以角色位置为目标，沿用示例的平滑跟随和矩形边界；预览倍率为 2。 |
-| 页面标签 | 显示当前序号、总数和图集文件名。 |
+| WASD / 方向键 | 控制二维位移及四向朝向；角色根为脚根，预览速度保持每秒 180 本地像素。 |
+| Q / E | 按来源编号循环切换 001、002、005～007、009～023，共 20 位。 |
+| 1 / 2 / 3 | 选择待机、行走、跑步检视；无方向时自动待机。 |
+| 4 / 5 | 选择播种、浇水合成片段，包含对应道具与 FX；重复按键重新选择角色并重启检视。 |
+| 镜头与标签 | 镜头跟随脚根，保留 2× 预览倍率；标签显示角色序号、来源 ID、当前动作和按键。 |
 
-预览场景复现下载包的操作方式，使用本工程的 C# 与 Godot 场景。它独立于 `scenes/main.tscn`；主地图的镜头快捷键和经营循环不因预览发生变化。图片出处见[素材来源](../../../project/asset-sources.md)。
+每角色只接入实际采用的五动作、四行图集与重建 SpriteFrames，64×64 帧和来源逐帧秒数由[角色接口](../../characters/npc-character/interface-npc-character.md)封装。这里没有采收、搬运或加工任务，预览动作不会生成经营成功结果。TestNpcPreview 逐角色核验资源、帧时长、脚根和按键循环。

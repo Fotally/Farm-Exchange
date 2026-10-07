@@ -17,6 +17,7 @@ public partial class NpcPreview : Node2D
     private Camera2D _camera = null!;
     private Label _characterName = null!;
     private int _characterIndex;
+    private NpcAction _previewAction = NpcAction.Run;
 
     public override void _Ready()
     {
@@ -38,7 +39,7 @@ public partial class NpcPreview : Node2D
             direction.Y -= 1f;
         if (Input.IsPhysicalKeyPressed(Key.S) || Input.IsKeyPressed(Key.Down))
             direction.Y += 1f;
-        _character.SetMoveDirection(direction);
+        _character.SetMoveDirection(direction, _previewAction);
     }
 
     public override void _Process(double delta)
@@ -54,6 +55,11 @@ public partial class NpcPreview : Node2D
             ChangeCharacter(-1);
         else if (key.PhysicalKeycode == Key.E)
             ChangeCharacter(1);
+        else if (key.PhysicalKeycode is >= Key.Key1 and <= Key.Key5)
+        {
+            _previewAction = (NpcAction)((int)key.PhysicalKeycode - (int)Key.Key1);
+            ApplyCharacter();
+        }
         else
             return;
         GetViewport().SetInputAsHandled();
@@ -79,11 +85,8 @@ public partial class NpcPreview : Node2D
 
     private void ApplyCharacter()
     {
-        string fileName = $"npc_animation_{CharacterIds[_characterIndex]:D3}.png";
-        string path = $"res://assets/gameplay/npc/{fileName}";
-        Texture2D sheet = GD.Load<Texture2D>(path) ??
-            throw new InvalidOperationException($"无法加载 NPC 动画图：{path}");
-        _character.SetCharacter(sheet);
-        _characterName.Text = $"{_characterIndex + 1} / {CharacterIds.Length}  {fileName}";
+        int id = CharacterIds[_characterIndex];
+        _character.SetCharacter(id);
+        _characterName.Text = $"{_characterIndex + 1} / {CharacterIds.Length}  npc{id:D3}  {_previewAction}  1待机 2行走 3跑步 4播种 5浇水";
     }
 }

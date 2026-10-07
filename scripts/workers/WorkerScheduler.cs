@@ -24,7 +24,8 @@ internal sealed class WorkerScheduler
             _workers[i] = new WorkerState(startingCells[i]);
     }
 
-    internal bool AdvanceOneSecond(FarmingSystem farming, CalendarSnapshot calendar)
+    internal bool AdvanceOneSecond(FarmingSystem farming, CalendarSnapshot calendar,
+        Action<int, FarmWorkRequest>? completed = null)
     {
         if (calendar.IsPaused)
             return false;
@@ -37,8 +38,9 @@ internal sealed class WorkerScheduler
         }
 
         bool acted = false;
-        foreach (WorkerState worker in _workers)
+        for (int workerIndex = 0; workerIndex < _workers.Length; workerIndex++)
         {
+            WorkerState worker = _workers[workerIndex];
             if (worker.Work == null)
             {
                 FarmWorkRequest? selected = SelectNextWork(farming, calendar);
@@ -60,6 +62,7 @@ internal sealed class WorkerScheduler
                 continue;
             }
             acted = true;
+            completed?.Invoke(workerIndex + 1, current);
             FarmWorkRequest? next = farming.GetWorkNeed(current.CellIndex, calendar);
             if (current.Kind == FarmWorkKind.Sow && next is { Kind: FarmWorkKind.Water })
                 worker.Work = next;

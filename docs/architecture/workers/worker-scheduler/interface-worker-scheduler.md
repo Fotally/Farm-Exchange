@@ -29,3 +29,7 @@
 ## 批量行程
 
 `GetNextEventSeconds(farming, calendar)` 在本模块查询任务失效、空闲工人可认领、到达及动作边界；无事件为 `uint.MaxValue`，任务选择/失效/原地动作为下一秒。`AdvanceQuietSeconds(seconds)` 只推进严格位于下一事件之前的有效行程，不选择任务、不动作。单秒与批量共用“本段出发位置＋每秒位移×累计移动秒数”，抵达工作中心时对齐；改目标后从当时真实位置开启新段。起点、累计秒数、位移和最近事件都留在本模块，调用方不推断直线路程，也不新增路径策略或寻路插件。完整相位和比较测试见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。
+
+## 真实作业完成输出
+
+`AdvanceOneSecond(farming, calendar, completed=null)` 的可选完成回调由 FarmGame 在已有工人相位提供，参数为工人编号与原 `FarmWorkRequest`。只有 `TryCompleteWork` 成功后调用一次；移动、准备、失败重验、降雨使供水不再需要均不调用。返回 bool、认领释放、播种后同田供水与经营顺序保持。回调只汇集该经营秒结果，不修改任务或农田；表现不能订阅调度并驱动业务。`WorkerSnapshot.Activity` 继续代表下一步任务，不能代替此成功输出。

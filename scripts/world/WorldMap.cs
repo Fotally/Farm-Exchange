@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
+using FarmExchange.Time;
 
 namespace FarmExchange.World;
 
@@ -16,26 +17,29 @@ public partial class WorldMap : Node2D
     private const int ChunksPerSide = MapSize / ChunkSize;
     private const float SeamOverlap = 0.75f;
 
-    private static readonly Color TileColor = new(0.53f, 0.64f, 0.38f);
-    private static readonly Color FarmColor = new(0.53f, 0.36f, 0.22f);
-    private static readonly Color ProcessorColor = new(0.36f, 0.47f, 0.61f);
     private static readonly Color RoadColor = new(0.52f, 0.52f, 0.52f);
-    private static readonly Color ProcessorMarkerColor = new(0.86f, 0.90f, 0.93f);
-    private static readonly Color SeedColor = new(0.98f, 0.84f, 0.46f);
-    private static readonly Color[] GrowingColors =
-    {
-        new(0.39f, 0.84f, 0.39f),
-        new(0.93f, 0.76f, 0.24f),
-        new(0.48f, 0.82f, 0.43f),
-        new(0.70f, 0.57f, 0.40f),
-        new(0.95f, 0.78f, 0.28f),
-        new(0.54f, 0.88f, 0.57f),
-        new(0.94f, 0.43f, 0.28f),
-    };
+    private static readonly Vector2 FarmPivot = new(112, 128);
+    private static readonly Vector2 BuildingPivot = new(128, 176);
+    private static readonly string[] CropNames =
+        { "wheat", "corn", "rice", "potato", "sunflower", "sugarcane", "radish" };
     private static readonly Color SelectedColor = new(0.95f, 0.76f, 0.31f);
     private static readonly Color EdgeColor = new(0.91f, 0.86f, 0.66f);
 
-    private readonly PlotVisual[] _visuals = new PlotVisual[MapSize * MapSize];
+    private readonly bool[] _roads = new bool[MapSize * MapSize];
+    private readonly Dictionary<int, FacilityVisual> _facilities = new();
+    private readonly Texture2D[] _buildings = new Texture2D[7];
+    private readonly Texture2D[,] _crops = new Texture2D[7, 3];
+    private Texture2D _grass = null!;
+    private Texture2D _drySoil = null!;
+    private Texture2D _wetSoil = null!;
+    private Texture2D _seeds = null!;
+    private Node2D _soilLayer = null!;
+    private Node2D _depthLayer = null!;
+    private Rect2 _viewBounds;
+    private EnvironmentDecorations _environment = null!;
+    private readonly List<FacilityVisual> _visibleFacilities = new();
+    private SimulationDriver? _driver;
+    private uint _resultSecond;
     private readonly MapChunk[] _chunks = new MapChunk[ChunksPerSide * ChunksPerSide];
     private FarmGame _game = null!;
     private SelectionOverlay _overlay = null!;
@@ -53,10 +57,25 @@ public partial class WorldMap : Node2D
      */
     public Vector2I? PlacementPreviewAnchor => _placement?.AnchorCell;
 
-    public void SetGame(FarmGame game)
+    /**
+     * <summary>初始化本局世界表现及只读经营绑定。</summary>
+     * <param name="game">本局经营状态。</param>
+     * <param name="driver">同局倍率来源；独立场景省略时按1×表现。</param>
+     * <remarks>地图挂树后只调用一次；初始化不回播既有成功结果，环境以实际占地剔除。</remarks>
+     */
+    public void SetGame(FarmGame game, SimulationDriver? driver = null)
     {
         _game = game;
+        _driver = driver;
+        _resultSecond = game.Calendar.ElapsedSeconds;
         ProcessPriority = 1;
+        TextureFilter = TextureFilterEnum.Nearest;
+        LoadTextures();
+        _soilLayer = new Node2D { Name = "Soil", ZIndex = -1 };
+        _depthLayer = new Node2D { Name = "DepthSorted", YSortEnabled = true };
+        AddChild(_soilLayer);
+        AddChild(_depthLayer);
+        _environment = new EnvironmentDecorations(_depthLayer);
         for (int row = 0; row < ChunksPerSide; row++)
         {
             for (int col = 0; col < ChunksPerSide; col++)
@@ -66,37 +85,99 @@ public partial class WorldMap : Node2D
                 AddChild(chunk);
             }
         }
-        _overlay = new SelectionOverlay(this);
+        _overlay = new SelectionOverlay(this) { ZIndex = 10 };
         AddChild(_overlay);
-        _placementOverlay = new PlacementOverlay(this);
+        _placementOverlay = new PlacementOverlay(this) { ZIndex = 11 };
         AddChild(_placementOverlay);
         SyncFromGame();
         UpdateVisibleChunks();
     }
 
+    /**
+     * <summary>将人物表现容器挂入地图共同深度排序层。</summary>
+     * <param name="presentation">尚无父节点的表现容器，子节点原点必须位于各自脚根。</param>
+     * <remarks>在 SetGame 后调用；容器设为零位置并启用嵌套 YSort，由地图释放。不得给人物另设 ZIndex。</remarks>
+     */
+    public void AttachDepthSorted(Node2D presentation)
+    {
+        presentation.Position = Vector2.Zero;
+        presentation.YSortEnabled = true;
+        _depthLayer.AddChild(presentation);
+    }
+
     public void SyncFromGame()
     {
-        Array.Clear(_visuals);
-        foreach (BuildingSpaceSnapshot space in _game.GetBuildingSpaces())
+        Array.Clear(_roads);
+        var remaining = new HashSet<int>(_facilities.Keys);
+        var spaces = _game.GetBuildingSpaces();
+        _environment.Synchronize(spaces);
+        foreach (BuildingSpaceSnapshot space in spaces)
         {
+            int index = space.AnchorCell.Y * MapSize + space.AnchorCell.X;
+            if (space.Building == BuildingKind.Road)
+            {
+                _roads[index] = true;
+                continue;
+            }
             PlotSnapshot plot = _game.GetPlot(space.AnchorCell);
-            foreach (Vector2I offset in space.Footprint.Offsets)
+            var appearance = new FacilityAppearance(plot.Building, plot.CropKind, plot.Crop,
+                plot.HasWater, plot.Crop == CropStage.Growing ? Math.Min(2, (int)(plot.GrowthProgress * 3)) : 0);
+            remaining.Remove(index);
+            if (!_facilities.TryGetValue(index, out FacilityVisual? visual))
             {
-                Vector2I cell = space.AnchorCell + offset;
-                _visuals[cell.Y * MapSize + cell.X] = PlotVisual.FromSnapshot(plot, cell == space.WorkCell);
+                Vector2 position = MapCoordinates.CellToLocalCenter(space.WorkCell);
+                visual = new FacilityVisual(position);
+                _facilities.Add(index, visual);
+                _soilLayer.AddChild(visual.Soil);
+                _depthLayer.AddChild(visual.Surface);
+            }
+            visual.Snapshot = plot;
+            visual.Processing = plot.Building == BuildingKind.Processor &&
+                _game.GetProcessorDetails(space.AnchorCell).Status == ProcessorStatus.Processing;
+            if (visual.Appearance != appearance)
+            {
+                visual.Appearance = appearance;
+                visual.Soil.Texture = plot.Building == BuildingKind.Farm ? (plot.HasWater ? _wetSoil : _drySoil) : null;
+                visual.Surface.Offset = -(plot.Building == BuildingKind.Farm ? FarmPivot : BuildingPivot);
+                visual.Surface.Texture = plot.Building == BuildingKind.Processor ? _buildings[(int)plot.CropKind] :
+                    plot.Crop switch
+                    {
+                        CropStage.Seeded => _seeds,
+                        CropStage.Growing => _crops[(int)plot.CropKind, appearance.GrowthStage],
+                        _ => null,
+                    };
             }
         }
-        for (int row = 0; row < MapSize; row++)
+        foreach (int index in remaining)
         {
-            for (int col = 0; col < MapSize; col++)
-            {
-                MapChunk chunk = _chunks[(row / ChunkSize) * ChunksPerSide + col / ChunkSize];
-                chunk.SetVisual(col % ChunkSize, row % ChunkSize, _visuals[row * MapSize + col]);
-            }
+            FacilityVisual removed = _facilities[index];
+            removed.Soil.Free();
+            removed.Surface.Free();
+            removed.Motion?.Free();
+            _facilities.Remove(index);
         }
+        UpdateFacilityVisibility();
+        for (int row = 0; row < MapSize; row++)
+            for (int col = 0; col < MapSize; col++)
+                _chunks[(row / ChunkSize) * ChunksPerSide + col / ChunkSize]
+                    .SetRoad(col % ChunkSize, row % ChunkSize, _roads[row * MapSize + col]);
         _overlay.QueueRedraw();
         foreach (MapChunk chunk in _chunks)
             chunk.RedrawIfVisible();
+    }
+
+    private void LoadTextures()
+    {
+        _grass = GD.Load<Texture2D>("res://assets/gameplay/terrain/terrain_81_mesh.png");
+        _drySoil = GD.Load<Texture2D>("res://assets/gameplay/soil/field_dry_q0.png");
+        _wetSoil = GD.Load<Texture2D>("res://assets/gameplay/soil/field_wet_q0.png");
+        _seeds = GD.Load<Texture2D>("res://assets/gameplay/crops/field_seeded_q0.png");
+        for (int crop = 0; crop < CropNames.Length; crop++)
+        {
+            _buildings[crop] = GD.Load<Texture2D>($"res://assets/gameplay/buildings/{CropNames[crop]}_workshop_q0.png");
+            for (int stage = 0; stage < 3; stage++)
+                _crops[crop, stage] = GD.Load<Texture2D>($"res://assets/gameplay/crops/{CropNames[crop]}_growing_{stage + 1:D2}_q0.png");
+        }
     }
 
     public override void _Process(double delta)
@@ -107,6 +188,59 @@ public partial class WorldMap : Node2D
         Vector2 viewportSize = GetViewportRect().Size;
         if (canvasTransform != _lastCanvasTransform || viewportSize != _lastViewportSize)
             UpdateVisibleChunks();
+        AdvanceMotions(delta);
+    }
+
+    private void AdvanceMotions(double delta)
+    {
+        double rate = _driver?.Rate ?? 1;
+        double seconds = _game.IsPaused ? 0 : delta * (SimulationDriver.IsPublicRateAllowed(rate) ? rate : 1);
+        foreach (FacilityVisual visual in _visibleFacilities)
+        {
+            if (visual.ActiveResult is ProductionResult active && !_game.IsPresentationTargetCurrent(active))
+            {
+                visual.Motion!.ClearResult();
+                visual.ActiveResult = null;
+            }
+            visual.Motion!.Advance(seconds, visual.Processing);
+        }
+        uint second = _game.Calendar.ElapsedSeconds;
+        if (_resultSecond == second) return;
+        _resultSecond = second;
+        foreach (ProductionResult result in _game.GetPresentationResults())
+        {
+            if (result.Kind is not (ProductionResultKind.Harvest or ProductionResultKind.Product) ||
+                !_game.IsPresentationResultCurrent(result)) continue;
+            int index = result.AnchorCell.Y * MapSize + result.AnchorCell.X;
+            if (!_facilities.TryGetValue(index, out FacilityVisual? visual) || visual.Motion == null) continue;
+            visual.Motion.ShowResult(result);
+            visual.ActiveResult = result;
+        }
+    }
+
+    private void UpdateFacilityVisibility()
+    {
+        _visibleFacilities.Clear();
+        foreach (FacilityVisual visual in _facilities.Values)
+        {
+            bool visible = _viewBounds.Intersects(visual.Bounds);
+            visual.SetVisible(visible);
+            if (!visible)
+            {
+                visual.Motion?.Free();
+                visual.Motion = null;
+                visual.ActiveResult = null;
+                continue;
+            }
+            if (visual.Motion == null)
+            {
+                visual.Motion = new FacilityMotion { Position = visual.Position };
+                _depthLayer.AddChild(visual.Motion);
+            }
+            visual.Motion.Configure(visual.Snapshot, visual.Appearance!.Value.GrowthStage);
+            visual.SetSurfaceVisible(!FacilityMotion.ReplacesSurface(visual.Snapshot));
+            _visibleFacilities.Add(visual);
+        }
     }
 
     private void UpdateVisibleChunks()
@@ -133,6 +267,8 @@ public partial class WorldMap : Node2D
             maxY = Math.Max(maxY, corner.Y);
         }
         Rect2 viewBounds = new(new Vector2(minX, minY), new Vector2(maxX - minX, maxY - minY));
+        _viewBounds = viewBounds;
+        _environment.UpdateVisible(viewBounds);
         LastVisiblePlotCount = 0;
         foreach (MapChunk chunk in _chunks)
         {
@@ -144,6 +280,7 @@ public partial class WorldMap : Node2D
                 chunk.RedrawIfVisible();
             }
         }
+        UpdateFacilityVisibility();
     }
 
     public void SelectAtScreenPosition(Vector2 screenPosition)
@@ -227,13 +364,48 @@ public partial class WorldMap : Node2D
         return corners;
     }
 
-    private readonly record struct PlotVisual(BuildingKind Building, CropKind CropKind, CropStage Crop, bool Marker)
+    private readonly record struct FacilityAppearance(BuildingKind Building, CropKind Crop,
+        CropStage Stage, bool Wet, int GrowthStage);
+
+    private sealed class FacilityVisual
     {
-        public static PlotVisual FromSnapshot(PlotSnapshot plot, bool marker) => new(
-            plot.Building,
-            plot.Building == BuildingKind.Farm ? plot.CropKind : CropKind.Wheat,
-            plot.Building == BuildingKind.Farm ? plot.Crop : CropStage.None,
-            marker);
+        internal readonly Sprite2D Soil;
+        internal readonly Sprite2D Surface;
+        internal readonly Rect2 Bounds;
+        internal readonly Vector2 Position;
+        internal FacilityAppearance? Appearance;
+        internal PlotSnapshot Snapshot;
+        internal bool Processing;
+        internal FacilityMotion? Motion;
+        internal ProductionResult? ActiveResult;
+        private bool _visible = true;
+        private bool _surfaceVisible = true;
+
+        internal FacilityVisual(Vector2 position)
+        {
+            Position = position;
+            Soil = new Sprite2D { Position = position, Centered = false, Offset = -FarmPivot };
+            Surface = new Sprite2D { Position = position, Centered = false };
+            // 完整透明画布参与可见性，避免块外的屋顶、作物在视野边缘消失。
+            Bounds = new Rect2(position - new Vector2(128, 208), new Vector2(256, 272));
+        }
+
+        internal void SetVisible(bool visible)
+        {
+            if (_visible != visible)
+            {
+                Soil.Visible = visible;
+                _visible = visible;
+            }
+            if (!visible) SetSurfaceVisible(false);
+        }
+
+        internal void SetSurfaceVisible(bool visible)
+        {
+            if (_surfaceVisible == visible) return;
+            Surface.Visible = visible;
+            _surfaceVisible = visible;
+        }
     }
 
     private sealed record PlacementVisual(BuildingKind Building, CropKind Crop, Vector2I AnchorCell,
@@ -255,6 +427,14 @@ public partial class WorldMap : Node2D
             if (preview == null)
                 return;
             BuildingFootprint footprint = BuildingFootprint.Get(preview.Building);
+            Vector2 center = MapCoordinates.GridPositionToLocal((Vector2)(preview.AnchorCell + footprint.WorkOffset));
+            Color tint = new(1f, 1f, 1f, 0.65f);
+            if (preview.Building == BuildingKind.Farm)
+                DrawTexture(_map._drySoil, center - FarmPivot, tint);
+            else if (preview.Building == BuildingKind.Processor)
+                DrawTexture(_map._buildings[(int)preview.Crop], center - BuildingPivot, tint);
+            else
+                DrawLine(center - new Vector2(9f, 0f), center + new Vector2(9f, 0f), new Color(RoadColor, 0.65f), 4f);
             for (int index = 0; index < footprint.Offsets.Count; index++)
             {
                 Vector2I cell = preview.Cells[index].Cell;
@@ -273,19 +453,6 @@ public partial class WorldMap : Node2D
                 foreach ((Vector2 start, Vector2 end) in PlacementPreviewGeometry.GetCellOuterEdges(preview.AnchorCell, offset, offsets))
                     DrawLine(start, end, color, 2f);
             }
-            Vector2 center = MapCoordinates.GridPositionToLocal((Vector2)(preview.AnchorCell + footprint.WorkOffset));
-            Color marker = preview.Building switch
-            {
-                BuildingKind.Farm => new Color(GrowingColors[(int)preview.Crop], 0.65f),
-                BuildingKind.Processor => new Color(ProcessorMarkerColor, 0.65f),
-                _ => new Color(RoadColor, 0.65f),
-            };
-            if (preview.Building == BuildingKind.Farm)
-                DrawCircle(center, 6f, marker);
-            else if (preview.Building == BuildingKind.Processor)
-                DrawRect(new Rect2(center - new Vector2(6f, 6f), new Vector2(12f, 12f)), marker);
-            else
-                DrawLine(center - new Vector2(9f, 0f), center + new Vector2(9f, 0f), marker, 4f);
             Vector2 anchor = MapCoordinates.GridPositionToLocal((Vector2)preview.AnchorCell);
             DrawArc(anchor, 4f, 0f, MathF.Tau, 16, new Color(1f, 1f, 0.87f, 0.9f), 1.5f);
         }
@@ -296,7 +463,7 @@ public partial class WorldMap : Node2D
         private readonly WorldMap _map;
         private readonly int _firstCol;
         private readonly int _firstRow;
-        private readonly PlotVisual[] _plots = new PlotVisual[ChunkSize * ChunkSize];
+        private readonly bool[] _roads = new bool[ChunkSize * ChunkSize];
         private readonly ArrayMesh _mesh = new();
         private bool _dirty = true;
 
@@ -307,17 +474,18 @@ public partial class WorldMap : Node2D
             _map = map;
             _firstCol = firstCol;
             _firstRow = firstRow;
+            ZIndex = -2;
             Visible = false;
             Bounds = MapCoordinates.GridRectangleBounds(new Vector2I(firstCol, firstRow), ChunkSize, ChunkSize)
                 .Grow(SeamOverlap);
         }
 
-        public void SetVisual(int col, int row, PlotVisual visual)
+        public void SetRoad(int col, int row, bool road)
         {
             int index = row * ChunkSize + col;
-            if (_plots[index] == visual)
+            if (_roads[index] == road)
                 return;
-            _plots[index] = visual;
+            _roads[index] = road;
             _dirty = true;
         }
 
@@ -332,85 +500,36 @@ public partial class WorldMap : Node2D
         public override void _Draw()
         {
             _map.ChunkRedrawCount++;
-            var vertices = new List<Vector2>(ChunkSize * ChunkSize * 24);
-            var colors = new List<Color>(ChunkSize * ChunkSize * 24);
-            var indices = new List<int>(ChunkSize * ChunkSize * 54);
+            var vertices = new List<Vector2>(ChunkSize * ChunkSize * 4);
+            var uvs = new List<Vector2>(ChunkSize * ChunkSize * 4);
+            var indices = new List<int>(ChunkSize * ChunkSize * 6);
+            Vector2[] corners = { new(32, 0), new(64, 16), new(32, 32), new(0, 16) };
             for (int row = 0; row < ChunkSize; row++)
-            {
                 for (int col = 0; col < ChunkSize; col++)
                 {
                     int mapCol = _firstCol + col;
                     int mapRow = _firstRow + row;
-                    PlotVisual plot = _plots[row * ChunkSize + col];
-                    Color tileColor = plot.Building switch
-                    {
-                        BuildingKind.Farm => FarmColor,
-                        BuildingKind.Processor => ProcessorColor,
-                        BuildingKind.Road => RoadColor,
-                        _ => TileColor,
-                    };
-                    AddQuad(vertices, colors, indices, Outline(new Vector2I(mapCol, mapRow)), tileColor);
+                    int start = vertices.Count;
+                    vertices.AddRange(Outline(new Vector2I(mapCol, mapRow)));
+                    int variant = (mapCol * 73 + mapRow * 17) % 23 == 0 ? 1 : 0;
+                    int atlasIndex = 80 + 81 * variant; // 四角均为grass，保持全可经营地图。
+                    Vector2 uvBase = new((atlasIndex % 9) * 68 + 2, (atlasIndex / 9) * 36 + 2);
+                    foreach (Vector2 corner in corners)
+                        uvs.Add((uvBase + corner) / _map._grass.GetSize());
+                    indices.AddRange(new[] { start, start + 1, start + 2, start, start + 2, start + 3 });
                 }
-            }
-            for (int row = 0; row < ChunkSize; row++)
-            {
-                for (int col = 0; col < ChunkSize; col++)
-                {
-                    int mapCol = _firstCol + col;
-                    int mapRow = _firstRow + row;
-                    Vector2 center = MapCoordinates.CellToLocalCenter(new Vector2I(mapCol, mapRow));
-                    PlotVisual plot = _plots[row * ChunkSize + col];
-                    if (!plot.Marker)
-                        continue;
-                    if (plot.Building == BuildingKind.Farm && plot.Crop == CropStage.None)
-                        AddCircle(vertices, colors, indices, center, 4f, GrowingColors[(int)plot.CropKind]);
-                    else if (plot.Crop == CropStage.Seeded)
-                        AddCircle(vertices, colors, indices, center, 3f, SeedColor);
-                    else if (plot.Crop == CropStage.Growing)
-                        AddCircle(vertices, colors, indices, center, 6f, GrowingColors[(int)plot.CropKind]);
-                    if (plot.Building == BuildingKind.Processor)
-                        AddQuad(vertices, colors, indices, new[]
-                        {
-                            center + new Vector2(-5f, -5f), center + new Vector2(5f, -5f),
-                            center + new Vector2(5f, 5f), center + new Vector2(-5f, 5f),
-                        }, ProcessorMarkerColor);
-                }
-            }
             Godot.Collections.Array arrays = new();
             arrays.Resize((int)Mesh.ArrayType.Max);
             arrays[(int)Mesh.ArrayType.Vertex] = vertices.ToArray();
-            arrays[(int)Mesh.ArrayType.Color] = colors.ToArray();
+            arrays[(int)Mesh.ArrayType.TexUV] = uvs.ToArray();
             arrays[(int)Mesh.ArrayType.Index] = indices.ToArray();
             _mesh.ClearSurfaces();
             _mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-            DrawMesh(_mesh, null);
-        }
-
-        private static void AddQuad(List<Vector2> vertices, List<Color> colors, List<int> indices,
-            Vector2[] points, Color color)
-        {
-            int start = vertices.Count;
-            vertices.AddRange(points);
-            for (int i = 0; i < 4; i++)
-                colors.Add(color);
-            indices.AddRange(new[] { start, start + 1, start + 2, start, start + 2, start + 3 });
-        }
-
-        private static void AddCircle(List<Vector2> vertices, List<Color> colors, List<int> indices,
-            Vector2 center, float radius, Color color)
-        {
-            const int segments = 16;
-            int start = vertices.Count;
-            vertices.Add(center);
-            colors.Add(color);
-            for (int i = 0; i < segments; i++)
-            {
-                float angle = i * MathF.Tau / segments;
-                vertices.Add(center + new Vector2(MathF.Cos(angle), MathF.Sin(angle)) * radius);
-                colors.Add(color);
-            }
-            for (int i = 0; i < segments; i++)
-                indices.AddRange(new[] { start, start + i + 1, start + (i + 1) % segments + 1 });
+            DrawMesh(_mesh, _map._grass);
+            for (int row = 0; row < ChunkSize; row++)
+                for (int col = 0; col < ChunkSize; col++)
+                    if (_roads[row * ChunkSize + col])
+                        DrawColoredPolygon(Outline(new Vector2I(_firstCol + col, _firstRow + row)), RoadColor);
         }
     }
 

@@ -545,7 +545,8 @@ public partial class TestFarmGame : Node
         continuous.AdvanceTick(isRaining: true);
         continuous.AdvanceTick();
         if (continuous.GetPlot(farm) !=
-            new PlotSnapshot(BuildingKind.Farm, CropKind.Corn, CropStage.Growing, 1028, true))
+            new PlotSnapshot(BuildingKind.Farm, CropKind.Corn, CropStage.Growing, 1028, true,
+                1d - 7193d / 7200))
             return Fail("相邻适宜季节误清了生长中的玉米");
 
         // 春末剩 208 秒播种干田萝卜，下一秒浇水，恰好在夏季起点成熟。
