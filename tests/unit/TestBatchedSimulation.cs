@@ -21,6 +21,8 @@ public partial class TestBatchedSimulation : Node
             CheckWorkerCancellation();
             CheckFrozenResourcesAndCompetition();
             CheckDenseOrders();
+            CheckOnceOrderWakeups();
+            CheckWaitingOrdersStayQuiet();
             CheckExactCheckpointsAndCapacity();
             CheckQuietCost();
             GD.Print("等价批量经营、七作物、事件边界与实际跳段检查通过");
@@ -178,6 +180,108 @@ public partial class TestBatchedSimulation : Node
             game.CancelTradeOrder(2);
         }
         CompareAdvance(reference, batched, 3000);
+    }
+
+    private static void CheckOnceOrderWakeups()
+    {
+        CheckOnceOrderWakeup(() => OnceOrderWakeupGame(TradeOrderSide.Sell), 1, 4744);
+        CheckOnceOrderWakeup(() => OnceOrderWakeupGame(TradeOrderSide.Buy), 0, 4994);
+        CheckOnceOrderWakeup(() => OnceOrderWakeupGame(TradeOrderSide.Buy, true), 2, 4494);
+    }
+
+    private static FarmGame OnceOrderWakeupGame(TradeOrderSide onceSide, bool releaseCash = false)
+    {
+        FarmGame game = EmptyGame(117);
+        var raw = new CommodityId(CropKind.Wheat, CommodityKind.Raw);
+        TradeOrderRequest waiting;
+        if (releaseCash)
+        {
+            // 后单冻结4040分；前单可付505分，但付后低于500分现金保留。
+            waiting = Order(raw, TradeOrderSide.Buy, TradeOrderFrequency.Continuous, 2) with
+            {
+                QuantityMode = TradeOrderQuantityMode.BuyToTarget,
+                ReserveValue = 500,
+            };
+        }
+        else if (onceSide == TradeOrderSide.Sell)
+        {
+            Require(game.Buy(raw, 1).Success, "一次卖出唤醒夹具买入失败");
+            waiting = Order(raw, TradeOrderSide.Buy, TradeOrderFrequency.Continuous, 1,
+                new TradeOrderCondition(TradeConditionFactor.Stock, TradeConditionComparison.Less, 1)) with
+            {
+                QuantityMode = TradeOrderQuantityMode.BuyToTarget,
+            };
+        }
+        else
+        {
+            waiting = Order(raw, TradeOrderSide.Sell, TradeOrderFrequency.Continuous, 1,
+                new TradeOrderCondition(TradeConditionFactor.Stock, TradeConditionComparison.Greater, 0));
+        }
+        Require(game.CreateTradeOrder(waiting).Success, "前序等待策略创建失败");
+        TradeOrderRequest once = Order(raw, onceSide, TradeOrderFrequency.Once, 1);
+        if (onceSide == TradeOrderSide.Buy)
+            once = once with
+            {
+                BudgetMode = TradeOrderBudgetMode.LimitPrice,
+                LimitPriceCents = releaseCash ? 4000 : 250,
+            };
+        Require(game.CreateTradeOrder(once).Success, "后序一次委托创建失败");
+        Require(onceSide == TradeOrderSide.Sell
+            ? game.GetFrozenStock(raw) == 1 && game.GetAvailableStock(raw) == 0
+            : game.FrozenMoneyCents == (releaseCash ? 4040 : 253), "一次单冻结夹具不正确");
+        return game;
+    }
+
+    private static void CheckOnceOrderWakeup(Func<FarmGame> createGame, int stock, int moneyCents)
+    {
+        FarmGame reference = createGame();
+        FarmGame batched = createGame();
+        FarmGame segmented = createGame();
+        segmented.AdvanceTicks(1);
+        var firstOrders = segmented.GetTradeOrders();
+        Require(firstOrders[0].LastFill == null && firstOrders[1].Status == TradeOrderStatus.Completed,
+            "后序一次单成交后前单不应在同秒重试");
+        Require(segmented.FrozenMoneyCents == 0 && firstOrders[1].FrozenCents == 0 &&
+            firstOrders[1].FrozenQuantity == 0, "一次单成交未完整释放本单冻结归属");
+        SimulationAdvanceResult result = CompareAdvance(reference, batched, 2);
+        segmented.AdvanceTicks(1);
+        Compare(reference, segmented);
+        Require(result.EventTicks == 2 && result.QuietTicks == 0,
+            "一次单成交后下一秒被错误归为平静区间");
+        Require(batched.GetRawStock(CropKind.Wheat) == stock && batched.MoneyCents == moneyCents &&
+            batched.GetTradeOrders()[0].LastFill?.Trade.Quantity == 1,
+            "一次单唤醒后前序策略没有按下一秒资源完整成交一次");
+
+        // 相同总时长分别采用单个请求、不同切段和逐秒推进。
+        FarmGame whole = createGame();
+        CompareAdvance(createGame(), whole, 10);
+        foreach (uint[] segments in new[] { new uint[] { 1, 9 }, new uint[] { 2, 3, 5 } })
+        {
+            FarmGame split = createGame();
+            foreach (uint ticks in segments)
+                split.AdvanceTicks(ticks);
+            Compare(whole, split);
+        }
+    }
+
+    private static void CheckWaitingOrdersStayQuiet()
+    {
+        FarmGame reference = EmptyGame(117);
+        FarmGame batched = EmptyGame(117);
+        var raw = new CommodityId(CropKind.Wheat, CommodityKind.Raw);
+        foreach (FarmGame game in new[] { reference, batched })
+        {
+            Require(game.Buy(raw, 1).Success, "平静等待夹具买入失败");
+            Require(game.CreateTradeOrder(Order(raw, TradeOrderSide.Buy, TradeOrderFrequency.Continuous, 1,
+                new TradeOrderCondition(TradeConditionFactor.Stock, TradeConditionComparison.Less, 1))).Success,
+                "平静等待策略创建失败");
+            Require(game.CreateTradeOrder(Order(raw, TradeOrderSide.Sell, TradeOrderFrequency.Once, 1,
+                new TradeOrderCondition(TradeConditionFactor.Price, TradeConditionComparison.Greater, int.MaxValue))).Success,
+                "平静等待一次单创建失败");
+        }
+        SimulationAdvanceResult result = CompareAdvance(reference, batched, 10);
+        Require(result.EventTicks == 1 && result.QuietTicks == 9 && batched.GetFrozenStock(raw) == 1,
+            "所有订单等待且资源未变时没有保留平静优化或冻结资源");
     }
 
     private static void CheckExactCheckpointsAndCapacity()
