@@ -51,31 +51,15 @@
 
 ## 项目协作与依据
 
-- [UI 视觉升级原型](project/ui-visual-prototype.md)：#94 的田园布局与像素木作主稿、离线 HTML 设计及正式 Godot UI/UX 实施范围；本轮保留地图与人物素材。
-- [系统规划](project/roadmap.md)、[构建与验收](project/build-and-validation.md)、[GitHub 协作](project/contribution-workflow.md)：包含分类 issue 模板与提交入口。
-- [GitHub 议题模板](../.github/ISSUE_TEMPLATE/)：人工与 Agent 共用的六类中文模板；[开源参照与采用理由](research/issue-template-sources.md)记录字段来源和项目适配。
-- [后续功能计划](project/deferred-features-plan.md)：原 T11 的四项后续功能；#36 高级交易已验收并人工合并，#42 季节耕作表已实现并验收，其余两项继续暂缓。
-- [季节耕作表方案](project/seasonal-cultivation-proposal.md)：#42 的共享年度时间图、拖动编辑、两种表级模式与手动指令、预备安排、统一播种及内部换季成熟补救的已确认范围。
-- [多因素委托与自动交易实施方案](project/advanced-trading-proposal.md)：#36 已确认的条件组合、两种买单预算、冻结、现金保留、执行与 1% 成交费用。
-- [已完成系统设计与执行计划归档](archive/farm-exchange-system-design-and-execution-plan.md)：T00～T10 与 T12 的设计、实施和验收历史，PR #70 已人工合并。
-- [独立行情与即时交易实施方案](project/market-proposal.md)：T09 的价格、事件、节日排期与交易规则已确认并完成验收，PR #70 已人工合并。
-- [素材目录与管理约定](project/asset-organization.md)：原始交付与正式资源分开、按用途归类、命名、来源映射及迁移边界；本次不搬动现有素材。
-- [完整清亮 v2 分析](research/bright-complete-v2.md)：当前2.0.0素材基准，全量静态/人物/现有动效、入口迁移、实际校验与v1差别；接入范围由#105～#113维护。
-- 后续素材与玩法设计提案：[水域](project/water-terrain-proposal.md)、[设施朝向](project/facility-orientation-proposal.md)、[采收搬运](project/worker-harvest-transport-proposal.md)、[工人加工岗位](project/worker-processing-proposal.md)。四项新玩法均待确认，独立于首批表现接入。
-- [美术总包 v1 分析](research/art-agent-bundle-v1.md)：旧1.0.2核验与当时默认/参考差别的历史记录，当前接入改用v2。
-- [素材来源记录](project/asset-sources.md)：已纳入的角色素材授权信息、本项目原型 UI 图标与缩略来源，以及本地待评估总包的许可范围。
-- [macOS 构建与验收](project/macos-build.md)：Universal 2 导出、CI 和应用包启动。
-- [本地开发构建](project/development-build.md)：单项目开发源码排除、Windows/macOS dev导出、外部持久配置和包旁报告；CI不新增dev包。
-- [正式版本发布](project/release.md)：独立手动工作流、指定版本号、Windows 与 macOS 同提交成功 CI 产物共同发布及失败处理。
-- [市场曲线调研](research/market-price-curve.md)、[测试分类调研](research/test-taxonomy.md)。
-- [基础格细分调研](research/grid-subdivision.md)：用户最终选择 64×32 基础格与 3×3（192×96）生产设施，保留各轮比例示例和最小空间 Interface；#75 已完成新地图实现与完整验收。
-- [成熟作品的窗口、地图与 UI 缩放调研](research/window-size-and-map-zoom.md)：以一手资料区分窗口变大、分辨率、地图镜头与界面缩放，记录证实行为和证据边界；用于显示策略讨论。
-- [开发者工具与双构建设计草案](project/developer-tools-proposal.md)及[构建机制调研](research/developer-tools-builds.md)：#97的历史设计与构建依据；本次速率、固定流程和dev/release边界已由#100/#101实施，单步、诊断与日志等候选保持独立范围，现状见[主计划](project/developer-tools-parameterized-tests.md)。
-- [公开 C# 开发工具案例](research/developer-tools-csharp-cases.md)及[源码组织讨论](project/developer-tools-csharp-organization.md)：历史案例比较与单项目源码组织依据；本次development目录编译排除的实际配置见[本地开发构建](project/development-build.md)。
-- [跨模块自动调试设计补充](project/developer-tools-cross-module-debugging.md)：固定流程、两运行对象和报告的历史设计依据；现行接入与验收见[主计划](project/developer-tools-parameterized-tests.md)及[参数化流程接口](architecture/development/interface-parameterized-scenario.md)。
-- [固定流程与可变参数的开发测试设计](project/developer-tools-parameterized-tests.md)及[使用说明](project/parameterized-tests-usage.md)：#100 / #101 的主计划与长期用例、文件选择、两对象固定流程、开发窗口、持久配置引用和JSON报告；最新交付证据记在计划顶部。
-- [点击倍率与分类流程配置界面设计](project/developer-tools-flow-editor-design.md)：#103的C分步设计及#104实施计划，公共倍率按钮、分类检索、自动字段表单、另存覆盖与删除确认；功能验收与C原型视觉修正完成记录在计划顶部，原型仅保留独立来源分支。
-- [跨 tick 等价批量经营推进方案](project/batched-simulation-proposal.md)：#100 按平静区间累计、跳到事件 tick 完整结算，保留生产、工人、计划、行情和订单的时序；密集成交逐笔处理，统一工人位置公式及模块内部行程实现已确认。
-- [地图内容放置预览调研](research/build-placement-preview.md)与[设计方案](project/build-placement-preview-proposal.md)：#83 的设计来源与 #87 的实施：占地属性驱动预览、逐格冲突反馈、通用取消及镜头交互。
-- [EditorConfig 检查](static-checks/editorconfig.md)、[CI 静态检查](static-checks/ci.md)、[接口注释格式](static-checks/interface-comments.md)。
-- [规则加载与链接对应表](../.codex/rule-loading.md)。
+- [系统规划](project/roadmap.md)与[后续功能计划](project/deferred-features-plan.md)：当前范围、未确认事项及后续入口。
+- [UI视觉基准](project/ui-visual-prototype.md)：已采用的像素田园布局、1080P和固定倍率参考。
+- [构建与验收](project/build-and-validation.md)、[测试方法](project/testing.md)、[手工游玩验收](project/manual-playthrough.md)。
+- [GitHub协作](project/contribution-workflow.md)、[议题模板](../.github/ISSUE_TEMPLATE/)及[模板来源](research/issue-template-sources.md)。
+- [素材管理](project/asset-organization.md)、[素材来源](project/asset-sources.md)、[清亮v2基准](research/bright-complete-v2.md)。
+- 后续素材与玩法提案：[水域](project/water-terrain-proposal.md)、[设施朝向](project/facility-orientation-proposal.md)、[采收搬运](project/worker-harvest-transport-proposal.md)、[工人加工](project/worker-processing-proposal.md)。
+- [macOS构建](project/macos-build.md)、[本地开发构建](project/development-build.md)、[双平台正式发布](project/release.md)。
+- [参数化开发测试使用说明](project/parameterized-tests-usage.md)：三步操作、配置管理、长期用例、运行结果及报告；协议见[固定流程接口](architecture/development/interface-parameterized-scenario.md)。
+- [运行时日志设计 #82](https://github.com/Fotally/Farm-Exchange/issues/82)：尚未定稿，草稿保留在dev，不随本次归档进入main。
+- 研究依据：[市场曲线](research/market-price-curve.md)、[测试分类](research/test-taxonomy.md)、[基础格细分](research/grid-subdivision.md)、[窗口与地图缩放](research/window-size-and-map-zoom.md)、[建造预览案例](research/build-placement-preview.md)、[开发构建机制](research/developer-tools-builds.md)、[C#开发工具案例](research/developer-tools-csharp-cases.md)。研究记录保留当时证据，不覆盖现行专题规则。
+- [EditorConfig](static-checks/editorconfig.md)、[CI静态检查](static-checks/ci.md)、[接口注释格式](static-checks/interface-comments.md)、[规则加载对应表](../.codex/rule-loading.md)。
+- [历史归档](archive/index.md)：已完成方案、被替代设计和历次验收；内部路径镜像docs原分类。

@@ -1,8 +1,10 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#105；首批PR #122已合并，后续设计仍开放。现行入口：[当前说明](../../research/bright-complete-v2.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 # Farm Exchange 美术总包 v1 分析
 
-**历史记录：**2026-10-06 素材接入基准已切换为[完整清亮 v2.0.0](bright-complete-v2.md)。本文保留 v1 文件核验与当时的默认/参考区别，不作为当前素材选择。
+**历史记录：**2026-10-06 素材接入基准已切换为[完整清亮 v2.0.0](../../research/bright-complete-v2.md)。本文保留 v1 文件核验与当时的默认/参考区别，不作为当前素材选择。
 
-2026-10-06 检查用户提供的 `assets/FarmExchange-Art-Agent-Bundle-v1.zip`。本记录解释包的内容、使用方式和与现有项目的关系；不包含游戏视觉设计或接入实施方案。目录管理约定见[assets 组织规则](../project/asset-organization.md)。
+2026-10-06 检查用户提供的 `assets/FarmExchange-Art-Agent-Bundle-v1.zip`。本记录解释包的内容、使用方式和与现有项目的关系；不包含游戏视觉设计或接入实施方案。目录管理约定见[assets 组织规则](../../project/asset-organization.md)。
 
 ## 本次实际核验
 

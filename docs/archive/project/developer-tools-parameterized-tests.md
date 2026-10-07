@@ -1,3 +1,5 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#100、#101；PR #102已合并。现行入口：[当前说明](../../project/parameterized-tests-usage.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 # 固定流程与可变参数的开发测试设计
 
 ## 最新完成记录
@@ -45,13 +47,13 @@
 | 同一个 `FarmGame` 和全部业务模块实现 | 当前局绑定已有对象；独立局创建显式种子的新对象 |
 | 同一个流程的执行进度 | 现场观察Main的稳定经营检查点；独立数据局通过同一时间驱动受控推进公共经营入口 |
 
-两种对象已接入同一固定流程，没有分别复制“现场版”和“测试版”。运行上下文只提供目标对象、推进/观察约定与证据范围；差异收在对象准备与驱动接入处，业务模块不按运行模式改变规则。实际接口见[参数化流程接口](../architecture/development/interface-parameterized-scenario.md)。
+两种对象已接入同一固定流程，没有分别复制“现场版”和“测试版”。运行上下文只提供目标对象、推进/观察约定与证据范围；差异收在对象准备与驱动接入处，业务模块不按运行模式改变规则。实际接口见[参数化流程接口](../../architecture/development/interface-parameterized-scenario.md)。
 
 现场与独立模式已共用检查定义及开发窗口入口；受控条件不成立时，无法评估的检查明确记为“证据不足”，不能静默跳过并报全流程通过。现场已有库存、其他生产及同期操作的归因限制已在检查结果与报告中体现，独立局按受控条件执行严格检查。
 
 ## 共用时间能力的接入边界
 
-发布0.5×、1×、2×与开发高倍率共用 `SimulationDriver`，由[#100](https://github.com/Fotally/Farm-Exchange/issues/100)实现；实际成员及计时约定见[共用时间驱动接口](../architecture/time/simulation-driver/interface-simulation-driver.md)。公共玩家能力保留在release；开发额外权限、测试时间方案和工具入口遵循开发排除策略。
+发布0.5×、1×、2×与开发高倍率共用 `SimulationDriver`，由[#100](https://github.com/Fotally/Farm-Exchange/issues/100)实现；实际成员及计时约定见[共用时间驱动接口](../../architecture/time/simulation-driver/interface-simulation-driver.md)。公共玩家能力保留在release；开发额外权限、测试时间方案和工具入口遵循开发排除策略。
 
 固定测试流程提供日期目标与倍率意图，观察实际日期、速率和完整tick；当前局接入Main唯一经营驱动，独立局复用同一时间能力及FarmGame实现。流程不拥有计时器，不绕过暂停，不直接修改日历或分拆经营相位。每次操作后的UI、地图及工人表现由统一刷新路径协调。
 
@@ -196,6 +198,6 @@ JSON保存字段类型、单位和缺失值，独立存放在报告目录；不�
 
 参数化流程的字段与组织方案已纳入本次实施范围。游戏日期采用 `yy-MM-dd`、现场手动改速中断整个自动流程、报告先只输出JSON均已确认，`endDate`作为字段使用。#100等价批量推进及统一工人位置公式已确认，见本文顶部实施进度及[批量方案](batched-simulation-proposal.md)。
 
-配置引用与摘要已写入JSON报告，持久用例按修订保留，开发窗口已提供文件选择与路径输入；操作见[使用说明](parameterized-tests-usage.md)。时间接口和允许倍率已由#100实现，见[共用时间驱动接口](../architecture/time/simulation-driver/interface-simulation-driver.md)。两对象接入、现场证据不足及包外报告路径均已按上述语义实施并验收，不额外引入工具框架。候选诊断、单步等能力仍在首版范围外。
+配置引用与摘要已写入JSON报告，持久用例按修订保留，开发窗口已提供文件选择与路径输入；操作见[使用说明](../../project/parameterized-tests-usage.md)。时间接口和允许倍率已由#100实现，见[共用时间驱动接口](../../architecture/time/simulation-driver/interface-simulation-driver.md)。两对象接入、现场证据不足及包外报告路径均已按上述语义实施并验收，不额外引入工具框架。候选诊断、单步等能力仍在首版范围外。
 
 本次实现已由独立审查及完整运行验收核对，结果记录在本页顶部与[测试记录](testing.md)；CI继续只生成现有发布产物，不新增dev包。
