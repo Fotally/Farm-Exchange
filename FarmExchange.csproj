@@ -5,6 +5,13 @@
     <RootNamespace>FarmExchange</RootNamespace>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="build/**/*.cs" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.1" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
   <ItemGroup Condition="'$(Configuration)' != 'Debug' And '$(Configuration)' != 'ExportDebug'">
     <Compile Remove="scripts/**/development/**/*.cs" />
     <Compile Remove="tests/**/*.cs" />

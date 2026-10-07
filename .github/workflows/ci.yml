@@ -139,6 +139,8 @@ jobs:
               -not (Test-Path -LiteralPath $managedAssembly)) {
             throw "Godot 导出未生成完整的 C# 可执行构建，退出码：$LASTEXITCODE"
           }
+          New-Item -ItemType Directory -Path build/windows/logs -Force | Out-Null
+          Copy-Item -LiteralPath docs/project/runtime-log-schema-v1.md -Destination build/windows/logs/schema-v1.md -Force
 
       - name: 启动导出程序验收
         if: github.ref == 'refs/heads/main'

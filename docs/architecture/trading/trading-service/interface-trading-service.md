@@ -11,7 +11,9 @@
 | `BuyOrder(CommodityId, int quantity, int reserveCents, int frozenCents = 0)` | 委托买入路径；含费后可用现金不得低于锁定保留线。一次单可使用自身冻结资金，持续单传零。成功释放本单全部冻结差额。 |
 | `SellOrder(CommodityId, int quantity, int frozenQuantity = 0)` | 委托卖出路径；费用从货值扣除，钱包容量按净收入检查。可使用自身冻结库存；持续单传零；成功释放本单冻结。 |
 
-公开结果保留 `TradeResult(TradeFailure Failure, long Quantity, long TotalCents)` 三参数构造与解构，新增 `FeeCents` 结果属性，默认零。`TotalCents` 始终是未扣手续费的货值；买入支出为总额加费用，卖出入账为总额减费用。`Success` 仅在 `Failure.None` 时为真，`ErrorMessage` 给出中文原因。正常拒绝分为 `InvalidCommodity`、`InvalidQuantity`、`InsufficientFunds`、`InsufficientStock`、`InventoryCapacityExceeded`、`WalletCapacityExceeded`、`CashReserveNotMet`；失败数量、总额与费用均为零，金币、全部库存和冻结额度零修改。负现金保留金额是内部调用约定错误，抛参数异常。`SellAll` 的空库存与显式 `Sell(..., 0)` 含义不同，后者拒绝非法数量。
+公开结果保留 `TradeResult(TradeFailure Failure, long Quantity, long TotalCents)` 三参数构造与解构，`FeeCents` 结果属性默认零。`TotalCents` 始终是未扣手续费的货值；买入支出为总额加费用，卖出入账为总额减费用。`Success` 仅在 `Failure.None` 时为真，`ErrorMessage` 给出中文原因。正常拒绝分为 `InvalidCommodity`、`InvalidQuantity`、`InsufficientFunds`、`InsufficientStock`、`InventoryCapacityExceeded`、`WalletCapacityExceeded`、`CashReserveNotMet`；失败数量、总额与费用均为零，金币、全部库存和冻结额度零修改。负现金保留金额是内部调用约定错误，抛参数异常。`SellAll` 的空库存与显式 `Sell(..., 0)` 含义不同，后者拒绝非法数量。
+
+可选结果属性 `int? UnitPriceCents` 表示此次买入执行真正读取的单价，单位为分。`Buy/BuyOrder` 共用原判断顺序：非法商品、非正数量、库存容量提前拒绝尚未读取报价，属性为 null；首次真实读取价后只保存该次值，成功及后续资金不足/现金保留拒绝都携带它。拒绝仍没有成交量、货值或费用，已读取单价不表示成交。null 表示没有执行报价读取，与数值零有区别；现行真实行情单价至少 1 分，不为日志制造零价交易。日志直接投影该事实，有值才写字段，未取得时省略，禁止按失败码猜分支或另查记录时价格。其他卖出和全售路径本阶段保持此属性为 null，不扩展其日志范围。
 
 成交价不保存于库存，不按历史买入价结算；报价查询不会抽随机。即时买卖和全部出售仍零费；只有委托成交收取[委托手续费](../../../gameplay/trading/orders.md)，不设价差，交易量不影响外部报价。手动交易只能使用可用金币、可用库存，全部出售只卖可用部分。数量、费用和金额聚合用 `long`，钱包余额、单商品库存和建造费仍为 `int`；检查金额不超过可支付或可入账的整数容量后才转换并提交，无事务回滚层。全成品售出的累计数量也以 `long` 汇总，避免预检阶段溢出。
 

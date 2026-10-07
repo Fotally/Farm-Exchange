@@ -41,7 +41,9 @@
 
 - 农田、七种配套加工场地与道路以外的建筑类型与建造规则。
 - 存档与离线收益规则。
-- 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、设施朝向 #111、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[朝向](facility-orientation-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。日志 #82 仍在设计阶段，见[日志设计](../research/runtime-logging.md)及[schema草案](runtime-log-schema-v1.md)。这些待确认项不作为已实施功能。
+- 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、设施朝向 #111、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[朝向](facility-orientation-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。这些待确认项不作为已实施功能。
+
+日志 #82 的初版设计已确认，从 #126 的底层与单笔买入开始分阶段交付；完整交易/订单/行情、建造与生产、耕作与开发流程、有界诊断及性能分别由 #127～#130 承接。实际覆盖以[日志接口](../architecture/logging/interface-logging.md)为准，公共契约见[日志设计](../research/runtime-logging.md)及[schema v1](runtime-log-schema-v1.md)。后续事件尚未全部接入，普通日志不提供可靠重放。
 
 ## 系统划分
 

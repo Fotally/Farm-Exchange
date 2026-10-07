@@ -6,6 +6,7 @@ using FarmExchange.Economy;
 using FarmExchange.Farming;
 using FarmExchange.Inventory;
 using FarmExchange.Land;
+using FarmExchange.Logging;
 using FarmExchange.Market;
 using FarmExchange.Processing;
 using FarmExchange.Time;
@@ -48,7 +49,7 @@ public readonly record struct SaleResult(
     public string? ErrorMessage => new TradeResult(Failure, Quantity, RevenueCents).ErrorMessage;
 }
 
-public sealed class FarmGame
+public sealed class FarmGame : IDisposable
 {
     public const int MapSize = 384;
     public const int BuildingCostCents = 1000;
@@ -78,6 +79,7 @@ public sealed class FarmGame
     private readonly CultivationPlanBook _cultivation;
     private readonly List<ProductionResult> _presentationResults = new();
     private IReadOnlyList<ProductionResult>? _presentationSnapshot;
+    private readonly GameLog? _log;
 
     public int MoneyCents => _wallet.BalanceCents;
     public int AvailableMoneyCents => _wallet.AvailableCents;
@@ -89,9 +91,15 @@ public sealed class FarmGame
     public double DailyPriceChangePercent =>
         (double)GetQuote(new CommodityId(CropKind.Wheat, CommodityKind.Product)).ChangePercent;
 
-    public FarmGame(int? marketSeed = null) : this(marketSeed, 0) { }
+    /**
+     * <summary>创建真实中心设施与报价，并在日志启用时记录初始化基线。</summary>
+     * <param name="marketSeed">报价与初始设施随机种子；省略时沿用原随机来源。</param>
+     * <param name="logging">组装点持有的采集会话；省略时不采集或写文件。</param>
+     * <remarks>日志不拥有经营资源；调用方先释放局再关闭会话。</remarks>
+     */
+    public FarmGame(int? marketSeed = null, RuntimeLog? logging = null) : this(marketSeed, 0, logging) { }
 
-    internal FarmGame(int? marketSeed, uint elapsedSeconds)
+    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null)
     {
         _calendar = new GameCalendar(elapsedSeconds);
         _cultivation = new CultivationPlanBook(_farming);
@@ -100,6 +108,7 @@ public sealed class FarmGame
         _trading = new TradingService(_inventory, _wallet, _market);
         _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
         InitializeCenter(new Random(seed));
+        _log = logging?.BindGame(this, seed);
     }
 
     private void InitializeCenter(Random random)
@@ -686,7 +695,34 @@ public sealed class FarmGame
         _presentationSnapshot = null;
     }
 
-    public TradeResult Buy(CommodityId commodity, int quantity) => _trading.Buy(commodity, quantity);
+    /**
+     * <summary>按当前报价完整买入单商品，并关联原始指令和真实结算。</summary>
+     * <param name="commodity">请求商品，非法枚举保持原值并正常拒绝。</param>
+     * <param name="quantity">原请求份数，须为正整数。</param>
+     * <param name="origin">实际 Player 或 Scenario 来源；其他值在业务提交前抛出 ArgumentOutOfRangeException。</param>
+     * <returns>真实成交或资源零修改的正常拒绝；业务异常原样传播。</returns>
+     */
+    public TradeResult Buy(CommodityId commodity, int quantity, CommandOrigin origin = CommandOrigin.Player)
+    {
+        if (origin is not CommandOrigin.Player and not CommandOrigin.Scenario)
+            throw new ArgumentOutOfRangeException(nameof(origin));
+        BuyLogOperation? observation = _log?.BeginBuy(commodity, quantity, origin);
+        TradeResult result;
+        try { result = _trading.Buy(commodity, quantity); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
+
+    /**
+     * <summary>结束本局日志关联；重复释放不产生第二条结束事件。</summary>
+     * <remarks>经营状态保持原有唯一拥有者，释放不修改资金、库存或生产。</remarks>
+     */
+    public void Dispose() => _log?.Dispose();
     public TradeResult Sell(CommodityId commodity, int quantity) => _trading.Sell(commodity, quantity);
     public TradeResult SellCommodityAll(CommodityId commodity) => _trading.SellAll(commodity);
 

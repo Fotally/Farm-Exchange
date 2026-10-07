@@ -8,6 +8,8 @@ public partial class TestSuite : Node
         for (int frame = 0; frame < 2; frame++)
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         GD.Print("单元测试：农田、加工与交易");
+        bool loggingPassed = TestLogging.RunChecks();
+        loggingPassed = TestLoggingFiles.RunChecks() && loggingPassed;
         bool farmGamePassed = TestFarmGame.RunChecks();
         GD.Print("单元测试：共享年度耕作表、日期事件与手动接管");
         bool cultivationPassed = TestCultivationPlanBook.RunChecks();
@@ -92,7 +94,7 @@ public partial class TestSuite : Node
         bool uiScalingPassed = await TestUiScaling.RunChecksAsync(this);
         GD.Print("端到端测试：共享年度表列表可读性、整表删除与引用解除");
         bool cultivationManagementPassed = await TestCultivationManagement.RunChecksAsync(this);
-        bool passed = productionResultsPassed && driverPassed && batchPassed && scenarioPassed && scenarioSchemaPassed && scenarioLibraryPassed && rateButtonPassed && developerWindowPassed && developerEditorPassed && farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
+        bool passed = loggingPassed && productionResultsPassed && driverPassed && batchPassed && scenarioPassed && scenarioSchemaPassed && scenarioLibraryPassed && rateButtonPassed && developerWindowPassed && developerEditorPassed && farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
             coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationDeletionPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed && uiScalingPassed && cultivationManagementPassed;
 
         if (passed)
