@@ -39,4 +39,4 @@ gh api -H "Accept: application/vnd.github.raw+json" 'repos/Fotally/Farm-Exchange
 
 ## 版本发布
 
-版本发布只能在人工合并 `dev` → `main` 后从 `main` 发起。版本号判定、构建目录、正式压缩包命名和验收条件以项目根目录 `AGENTS.md` 的“版本发布”为唯一规则来源；实际构建命令见[构建与验收](build-and-validation.md)。发布者创建同版本 Git 标签和 GitHub Release，并上传唯一的 Windows x86_64 zip，不把 `build/` 内容提交进 Git。
+版本发布只能在人工合并 `dev` → `main` 后从 `main` 发起。版本号判定、构建目录、正式压缩包命名和验收条件以项目根目录 `AGENTS.md` 的“版本发布”为唯一规则来源。操作者指定版本号并手动触发独立发布工作流，复用触发时 `main` 同提交成功的 Windows 与 macOS CI 产物；两平台都准备成功后，由工作流创建版本标签和单个 GitHub Release，同时上传 Windows x86_64 与 macOS Universal 2 两份 ZIP。标签、GitHub Release 与两平台压缩包的版本号一致才算发布完成，`build/` 内容不提交进 Git。详细操作及失败处理统一见[正式版本发布](release.md)。
