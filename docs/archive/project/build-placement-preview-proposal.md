@@ -1,10 +1,12 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#83、#87；PR #84已合并。现行入口：[当前说明](../../gameplay/land/opening-and-building.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 # 地图内容放置预览设计方案
 
 - 设计来源：[#83](https://github.com/Fotally/Farm-Exchange/issues/83)；实施 issue：[#87](https://github.com/Fotally/Farm-Exchange/issues/87)。
 - 日期：2026-10-03（北京时间）。
 - 状态：交互设计与实现已完成，本地验收通过。2026-10-03 用户完成核心机制及详情窗口、镜头、界面遮挡、暂停行为的确认；授权按参考案例确定视觉样式，透明度、线宽与颜色深浅通过画面检查调整。
 - 授权更新：2026-10-03 用户通过工程统筹目标明确授权按本方案实现，完成开发、验收与 PR；#83 保留调研历史，#87 承接实施。验收结果见[测试记录](testing.md#2026-10-03-87-建筑放置预览验收)，交付使用 [PR #84](https://github.com/Fotally/Farm-Exchange/pull/84)。
-- 案例证据见[放置预览调研](../research/build-placement-preview.md)。
+- 案例证据见[放置预览调研](../../research/build-placement-preview.md)。
 
 ## 要解决的体验问题
 
@@ -31,7 +33,7 @@
 
 ## 实施前的规则与事实
 
-已确认规则见[开局与建造](../gameplay/land/opening-and-building.md)、[道路](../gameplay/land/roads.md)及[地图与镜头](../gameplay/world/map-and-camera.md)。
+已确认规则见[开局与建造](../../gameplay/land/opening-and-building.md)、[道路](../../gameplay/land/roads.md)及[地图与镜头](../../gameplay/world/map-and-camera.md)。
 
 - 当前农田、加工场地的占地属性为 3×3 基础格，道路为 1×1；这些是现有规格，不是预览机制的固定尺寸。任意基础格可作锚点，不要求对齐三格跨度。
 - 当前鼠标点击的格就是锚点；生产设施从该格沿两个格轴各延伸三格，中心工作格为锚点加 `(1,1)`。
@@ -57,7 +59,7 @@
 
 用户要求冲突格标红即可，并授权参考经典游戏确定可放置表现。设计采用简洁的半透明占地预览：正常候选格使用淡绿色覆盖与细格线，实际冲突格改用红色覆盖。建筑类型外观保持半透明，原地图与已有设施仍可辨认。半透明程度、线宽与颜色深浅以后通过画面检查调整，本轮不锁定数值。
 
-这是基于经典游戏的候选外观与红绿反馈进行的本项目适配；具体作品的一手证据及对象染色、局部染色的区别见[调研记录](../research/build-placement-preview.md)。不将全部作品描述为同样的逐格实现。
+这是基于经典游戏的候选外观与红绿反馈进行的本项目适配；具体作品的一手证据及对象染色、局部染色的区别见[调研记录](../../research/build-placement-preview.md)。不将全部作品描述为同样的逐格实现。
 
 | 状态 | 地图表现 | 简短文字示例 |
 | --- | --- | --- |
@@ -152,7 +154,7 @@
 
 ## 实施分工与状态
 
-真实窗口画面：[可放置预览](../architecture/ui/main/building-placement-valid.png)、[局部冲突](../architecture/ui/main/building-placement-conflict.png)、[地图边缘](../architecture/ui/main/building-placement-edge.png)。截图来自指定引擎的端到端摆放场景；完整测试、覆盖率、图形及导出启动证据见上述测试记录。
+真实窗口画面：[可放置预览](../../architecture/ui/main/building-placement-valid.png)、[局部冲突](../../architecture/ui/main/building-placement-conflict.png)、[地图边缘](../../architecture/ui/main/building-placement-edge.png)。截图来自指定引擎的端到端摆放场景；完整测试、覆盖率、图形及导出启动证据见上述测试记录。
 
 | 工作 | Issue | 负责人 | 依赖与验收 | 状态 |
 | --- | --- | --- | --- | --- |

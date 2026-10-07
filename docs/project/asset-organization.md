@@ -83,7 +83,7 @@ assets/
 
 原始清单留在 ZIP。运行目录只保存实际加载需要的元数据，迁移其路径字段时同步修复引用，不复制整个来源树去满足历史路径。暂不建立全项目素材注册器、动态扫描器或自定义资源加载框架。
 
-来源总览维护在[素材来源记录](asset-sources.md)；当前包的数量、入口和已知限制见[完整清亮 v2 分析](../research/bright-complete-v2.md)，[v1 分析](../research/art-agent-bundle-v1.md)保留为历史。配色与素材版本不作为建立第二套运行目录的理由。
+来源总览维护在[素材来源记录](asset-sources.md)；当前包的数量、入口和已知限制见[完整清亮 v2 分析](../research/bright-complete-v2.md)，[v1 分析](../archive/research/art-agent-bundle-v1.md)保留为历史。配色与素材版本不作为建立第二套运行目录的理由。
 
 ## 图像和资源使用规则
 

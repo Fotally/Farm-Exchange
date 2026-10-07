@@ -1,6 +1,8 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#36；PR #81已合并。现行入口：[当前说明](../../gameplay/trading/orders.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 # 多因素委托与自动交易：已确认实施方案
 
-关联 [#36](https://github.com/Fotally/Farm-Exchange/issues/36)，主计划为[后续功能计划](deferred-features-plan.md)。确认日期：2026-10-02。
+关联 [#36](https://github.com/Fotally/Farm-Exchange/issues/36)，主计划为[后续功能计划](../../project/deferred-features-plan.md)。确认日期：2026-10-02。
 
 本次实现委托功能，不调整报价公式、公告可预测性、商品保质期或纯交易盈利平衡。深入季节供给与价格设计另见 [#80](https://github.com/Fotally/Farm-Exchange/issues/80)，本项只读取现有日历作为条件，不追加增益。
 

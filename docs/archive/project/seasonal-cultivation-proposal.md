@@ -1,8 +1,10 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#42、#86；PR #84已合并。现行入口：[当前说明](../../gameplay/production/seasonal-cultivation.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 # 季节耕作表：已确认方案与交付范围
 
-关联 [#42](https://github.com/Fotally/Farm-Exchange/issues/42)，主计划为[后续功能计划](deferred-features-plan.md)。确认日期：2026-10-02。
+关联 [#42](https://github.com/Fotally/Farm-Exchange/issues/42)，主计划为[后续功能计划](../../project/deferred-features-plan.md)。确认日期：2026-10-02。
 
-**状态：2026-10-03 已按授权完成实现与完整验收，[PR #84](https://github.com/Fotally/Farm-Exchange/pull/84) 待人工合并。** 本文保留已确认目标规则；范围和验收标准已同步到 #42。完整验收与交付状态由[主计划](deferred-features-plan.md)维护，生效规则由[作物与选种](../gameplay/production/crop-growth.md)和对应玩法专题维护。
+**状态：2026-10-03 已按授权完成实现与完整验收，[PR #84](https://github.com/Fotally/Farm-Exchange/pull/84) 待人工合并。** 本文保留已确认目标规则；范围和验收标准已同步到 #42。完整验收与交付状态由[主计划](../../project/deferred-features-plan.md)维护，生效规则由[作物与选种](../../gameplay/production/crop-growth.md)和对应玩法专题维护。
 
 ## 2026-10-03 执行规则补充（#86）
 
@@ -133,7 +135,7 @@
 - 待水作物没有即将完成的生长进度，不获得该补救。
 - 不把该机制计入编辑器的作物条长度或可用时间预算。
 
-当前没有独立人工采集流程，本项不新增采集劳动。成熟、收获和入库的既有归属见[经营推进顺序](../architecture/game-state/farm-game/implementation-tick-order.md)；实施时同步相关接口与目标顺序。
+当前没有独立人工采集流程，本项不新增采集劳动。成熟、收获和入库的既有归属见[经营推进顺序](../../architecture/game-state/farm-game/implementation-tick-order.md)；实施时同步相关接口与目标顺序。
 
 ## 模块职责
 
@@ -164,4 +166,4 @@
 
 ## 当前交付边界
 
-原 #42 已完成实现与验收。#86 本轮仅交付上方已确认的结束预测、实际接续及休耕缓冲小单元，原七项界面问题和待确认的额外问题仍按 issue 管理，不能算作本次完成。验收和 `dev → main` 交付见[主计划顶部](deferred-features-plan.md)，等待人工合并。后续需要改变本方案的玩法选择时，先与用户沟通。
+原 #42 已完成实现与验收。#86 本轮仅交付上方已确认的结束预测、实际接续及休耕缓冲小单元，原七项界面问题和待确认的额外问题仍按 issue 管理，不能算作本次完成。验收和 `dev → main` 交付见[主计划顶部](../../project/deferred-features-plan.md)，等待人工合并。后续需要改变本方案的玩法选择时，先与用户沟通。

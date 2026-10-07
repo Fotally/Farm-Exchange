@@ -15,4 +15,4 @@
 
 日期终点、剩余等待预算、下一操作均由流程提供限额，经营内部再按真实事件拆段。驱动只拥有倍率及未完成 tick，小数进度暂停和改速时保留；日历、订单、生产与工人状态仍由原模块唯一维护。整数推进超过 uint32 请求容量，或经营日历不能接受完整请求时明确拒绝；不截断、不自动换倍率。界面显示真实拒绝并允许玩家调整倍率。
 
-`TestSimulationDriver.RunChecks()` 验证半 tick、暂停不累计、恢复改速、公共/开发允许规则、主动选择来源、途中换速、宿主终点及容量拒绝。表现连接约定见[工人表现](../../world/worker-presentation/interface-worker-presentation.md)，批量结算约定见[批量方案](../../../project/batched-simulation-proposal.md)。
+`TestSimulationDriver.RunChecks()` 验证半 tick、暂停不累计、恢复改速、公共/开发允许规则、主动选择来源、途中换速、宿主终点及容量拒绝。表现连接约定见[工人表现](../../world/worker-presentation/interface-worker-presentation.md)，批量结算约定见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。

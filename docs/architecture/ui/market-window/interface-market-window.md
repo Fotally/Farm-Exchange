@@ -10,7 +10,7 @@
 
 ![报价前一日消息](market-news.png)
 
-对应 `scripts/ui/MarketWindow.cs`，继承 `DraggableWindow`；关联 [issue #73](https://github.com/Fotally/Farm-Exchange/issues/73)，采用[已确认市场方案](../../../project/market-proposal.md)。
+对应 `scripts/ui/MarketWindow.cs`，继承 `DraggableWindow`；关联 [issue #73](https://github.com/Fotally/Farm-Exchange/issues/73)，采用[已确认市场方案](../../../gameplay/trading/market-quotes.md)。
 
 构造时创建十四商品固定行，按作物的原料、加工品相邻排列。每行包含商品选择按钮、当前报价、上次报价、实际涨跌百分比和公共库存；七个原料行另有真实可点击的按品种全部出售按钮。顶部显示本次和下次实际报价年月日，并在独立有界滚动区显示已公布消息：标明公布日期及对应报价日期，直接呈现经营快照的真实因素和改期理由。消息保留最近公告，不能把旧公告的因素解释为下一次报价。
 
