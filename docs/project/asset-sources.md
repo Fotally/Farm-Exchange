@@ -18,7 +18,7 @@
 ## 历史本地待评估：Farm Exchange 美术总包 v1
 
 - **文件**：用户提供的 `assets/FarmExchange-Art-Agent-Bundle-v1.zip`，当前未跟踪，内部版本为 `1.0.2`；本次只分析，不接入或公开上传。
-- **校验与范围**：ZIP SHA-256、1,283 个文件校验条目、默认与参考覆盖及使用方法见[素材包分析](../research/art-agent-bundle-v1.md)。包内 NPC 的 20 张原图与现有正式图集哈希一致，派生动作仍是新增评估内容。
+- **校验与范围**：ZIP SHA-256、1,283 个文件校验条目、默认与参考覆盖及使用方法见[素材包分析](../archive/research/art-agent-bundle-v1.md)。包内 NPC 的 20 张原图与现有正式图集哈希一致，派生动作仍是新增评估内容。
 - **来源记录**：包内 `docs/SOURCES_AND_LICENSES.md`、各模块来源清单和字体许可证。NPC 的具体公开及商用许可未核实，随包范围为私人评估；不能由现有角色的历史入库许可推导为整包公开授权。
 - **目录管理**：原始交付、正式运行资源、参考工程的归属见[assets 组织规则](asset-organization.md)，规则入口仍为 `assets/AGENTS.md`。
 

@@ -1,8 +1,10 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#97；已选范围由#100/#101实施并随PR #102合并，剩余候选见现行后续功能计划。现行入口：[当前说明](../../project/development-build.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 # 开发者工具的 C# 源码组织讨论
 
 历史设计说明：下文保留设计阶段的方案与当时接口事实；#100 / #101 已按[参数化测试主计划](developer-tools-parameterized-tests.md)恢复实施，现行代码与构建接入见主计划及其接口、使用文档。未选用的候选能力仍属于后续设计。
 
-关联 [#97](https://github.com/Fotally/Farm-Exchange/issues/97)。2026-10-05 补充讨论。用户已明确只维护一套代码，先定架构再选功能；dev 本地构建、不进入 CI，Windows 与 macOS 通过预设覆盖。本文是待讨论的源码组织建议，不创建 C# 文件、接口、导出配置或新功能。现有方案见[设计草案](developer-tools-proposal.md)，案例证据见[公开 C# 项目案例](../research/developer-tools-csharp-cases.md)，项目 SDK 配置见[构建调研](../research/developer-tools-builds.md)。
+关联 [#97](https://github.com/Fotally/Farm-Exchange/issues/97)。2026-10-05 补充讨论。用户已明确只维护一套代码，先定架构再选功能；dev 本地构建、不进入 CI，Windows 与 macOS 通过预设覆盖。本文是待讨论的源码组织建议，不创建 C# 文件、接口、导出配置或新功能。现有方案见[设计草案](developer-tools-proposal.md)，案例证据见[公开 C# 项目案例](../../research/developer-tools-csharp-cases.md)，项目 SDK 配置见[构建调研](../../research/developer-tools-builds.md)。
 
 本轮进一步区分模块专用能力与跨模块调试流程：前者由原模块维护，后者允许放在独立开发调试目录。可重复检查流程、运行对象、完整执行路径、接口现状和报告约束统一见[跨模块自动调试补充](developer-tools-cross-module-debugging.md)；具体工具功能仍未授权实施。
 
@@ -79,7 +81,7 @@ partial 不能保证业务一致性；即使调用了库存等原模块方法，
 </ItemGroup>
 ```
 
-本项目 SDK 的 `Debug` 和 `ExportDebug` 包含 `DEBUG`，分别对应编辑器开发与 dev 导出；`ExportRelease` 和普通 `Release` 不包含，见[实测配置表](../research/developer-tools-builds.md)。上述排除条件与入口使用的 `#if DEBUG` 对齐，避免普通 Release 编译检查残留开发类型引用。它不是新增一套游戏源码，只是选择当前项目的编译输入。
+本项目 SDK 的 `Debug` 和 `ExportDebug` 包含 `DEBUG`，分别对应编辑器开发与 dev 导出；`ExportRelease` 和普通 `Release` 不包含，见[实测配置表](../../research/developer-tools-builds.md)。上述排除条件与入口使用的 `#if DEBUG` 对齐，避免普通 Release 编译检查残留开发类型引用。它不是新增一套游戏源码，只是选择当前项目的编译输入。
 
 此目录模式同时覆盖模块内的 `development/` 和独立 `scripts/development/`。跨模块场景、报告类、专用入口和开发资源遵循同一排除策略；公共时间能力保留，release不能通过配置解锁开发倍率。运行报告目录已暂定，不能随正式包误带开发工件。本轮不修改真实构建配置。
 

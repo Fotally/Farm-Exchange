@@ -12,7 +12,7 @@
 
 配置选择行中的「配置」标签同样禁止换行，以自然约28px宽度显示；335×39px下拉和35px垃圾桶垂直居中，不被相邻文字撑高。此窗口配置下拉及自动生成的文本、数值、选项和日期输入使用16px深色文字、白纸`#fff7e3`与1px边框，禁用状态可淡色；局部主题不改变全局游戏控件。日期的三个输入为62×39px，不占满整列，单位文字保持单行。
 
-原[#101的1080P实测窗口](godot-developer-tools-1080.png)为文件选择版历史验收，不能作为当前分步布局的截图。2026-10-06本轮C修正已通过真实Godot图形场景及主Agent逐项视觉核对；[主计划](../../../project/developer-tools-flow-editor-design.md)保存原型尺寸比较、[真实单流程目录](godot-flow-catalog-1920.png)、[16条目容量](godot-flow-capacity-1920.png)、[配置编辑](godot-config-editor-1920.png)和[运行结果](godot-flow-result-1920.png)。完整自动化、图形性能、15模块覆盖率、两种Windows导出及实际程序启动也已通过，最终审查与交付状态以主计划顶部记录为准。
+当前三步布局、尺寸约束与代表性截图见[C分步实现](implementation-step-flow-editor.md)。#101早期文件选择窗口属于历史布局，不能作为当前分步界面的验收基准；历次验收通过[归档索引](../../../archive/index.md)查阅。
 
 | 界面或宿主入口 | 约定 |
 | --- | --- |
@@ -33,4 +33,4 @@
 
 输出目录为仓库/编辑器的`build/test-runs/<run-id>/`，本地dev包的包外`reports/test-runs/<run-id>/`；Windows从exe位置解析，macOS从`.app`父目录解析，不依赖启动工作目录。用户配置保存在仓库`tests/scenario-configs/user/`或开发包旁`configs/scenario-configs/`；仓库配置可以长期纳入Git，保存不自动提交。报告不保存配置副本，用户配置和报告不进入导出包。
 
-`test_developer_tools_window.tscn`通过真实开发入口及隔离配置库验证运行重载、独立Q=3报告、现场暂停、玩家改速中断及报告输出失败；`test_developer_flow_editor.tscn`验证新目录、字段兼容、保存与确认删除。图形运行等待处理帧及`FramePostDraw`保存真实截图，headless不等待图形信号。配置及检查规则见[参数化设计](../../../project/developer-tools-parameterized-tests.md)，操作见[使用说明](../../../project/parameterized-tests-usage.md)，构建排除见[本地开发构建](../../../project/development-build.md)。
+`test_developer_tools_window.tscn`通过真实开发入口及隔离配置库验证运行重载、独立Q=3报告、现场暂停、玩家改速中断及报告输出失败；`test_developer_flow_editor.tscn`验证新目录、字段兼容、保存与确认删除。图形运行等待处理帧及`FramePostDraw`保存真实截图，headless不等待图形信号。配置及检查规则见[参数化设计](../../../project/parameterized-tests-usage.md)，操作见[使用说明](../../../project/parameterized-tests-usage.md)，构建排除见[本地开发构建](../../../project/development-build.md)。

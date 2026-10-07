@@ -1,3 +1,5 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#100；PR #102已合并。现行入口：[当前说明](../../architecture/game-state/farm-game/implementation-batched-simulation.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 # 跨 tick 等价批量经营推进方案
 
 关联 [#100](https://github.com/Fotally/Farm-Exchange/issues/100) 和 [#101](https://github.com/Fotally/Farm-Exchange/issues/101)，主计划为[参数化测试设计](developer-tools-parameterized-tests.md)。2026-10-06 已恢复实施，沿用已确认的一次跨过多个 tick 直接计算数据终态、事件 tick 按原顺序结算及统一工人位置公式。此前移出的草稿不作为验收成果，进度以主计划为准。
@@ -84,9 +86,9 @@
 
 ## 代码依据
 
-- [经营相位与正式命令](../../scripts/gameplay/FarmGame.cs)：`AdvanceTick`、`CollectHarvest`、`StartIdleProcessors`、`AdvanceDay`。
-- [农田](../../scripts/farming/FarmingSystem.cs)与[加工](../../scripts/processing/ProcessingSystem.cs)：精确剩余时间、收获清水与每批重新取整。
-- [工人](../../scripts/workers/WorkerScheduler.cs)：任务、认领、到达和动作、当前浮点位移。
-- [年度表](../../scripts/cultivation/CultivationPlanBook.cs)与[行情](../../scripts/market/MarketQuotes.cs)：安排边界、年度凭据、公告及报价。
-- [订单](../../scripts/trading/TradeOrderBook.cs)与[结算](../../scripts/trading/TradingService.cs)：创建顺序、逐笔费用及真实资源约束。
-- [时间比例](../../scripts/time/GameTimeUnits.cs)与[日历](../../scripts/time/GameCalendar.cs)：经营秒和游戏日期的唯一换算。
+- [经营相位与正式命令](../../../scripts/gameplay/FarmGame.cs)：`AdvanceTick`、`CollectHarvest`、`StartIdleProcessors`、`AdvanceDay`。
+- [农田](../../../scripts/farming/FarmingSystem.cs)与[加工](../../../scripts/processing/ProcessingSystem.cs)：精确剩余时间、收获清水与每批重新取整。
+- [工人](../../../scripts/workers/WorkerScheduler.cs)：任务、认领、到达和动作、当前浮点位移。
+- [年度表](../../../scripts/cultivation/CultivationPlanBook.cs)与[行情](../../../scripts/market/MarketQuotes.cs)：安排边界、年度凭据、公告及报价。
+- [订单](../../../scripts/trading/TradeOrderBook.cs)与[结算](../../../scripts/trading/TradingService.cs)：创建顺序、逐笔费用及真实资源约束。
+- [时间比例](../../../scripts/time/GameTimeUnits.cs)与[日历](../../../scripts/time/GameCalendar.cs)：经营秒和游戏日期的唯一换算。

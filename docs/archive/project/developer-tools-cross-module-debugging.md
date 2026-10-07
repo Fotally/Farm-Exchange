@@ -1,3 +1,5 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#97；已选范围由#100/#101实施并随PR #102合并，剩余候选见现行后续功能计划。现行入口：[当前说明](../../project/development-build.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 # 跨模块自动调试流程设计补充
 
 历史设计说明：下文保留设计阶段的方案与当时接口事实；#100 / #101 已按[参数化测试主计划](developer-tools-parameterized-tests.md)恢复实施，现行代码与构建接入见主计划及其接口、使用文档。未选用的候选能力仍属于后续设计。
@@ -103,23 +105,23 @@ scripts/
 
 | 现状 | 接口及证据 | 对本设计的含义 |
 | --- | --- | --- |
-| 已有正式准备与业务命令 | [FarmGame](../../scripts/gameplay/FarmGame.cs) 的 `GetBuildingSpaces()`、`RemoveBuilding()`、`TryPlace()`、`SetRawReserve()`、`Buy()`、`CreateTradeOrder()`、`CancelTradeOrder()` | 独立局本例可通过现有入口准备和操作，不需要库存注入或强制成交 |
-| 已有加工状态与剩余时间 | `GetProcessorDetails()` 给状态/作物/商品库存等；`GetPlot()` 的加工快照给 `RemainingSeconds`，由 [ProcessingSystem](../../scripts/processing/ProcessingSystem.cs) 提供 | 观察一批开始和完成足够；若将来需要批次精确时间单位或唯一批次凭据，才另评估快照扩充 |
+| 已有正式准备与业务命令 | [FarmGame](../../../scripts/gameplay/FarmGame.cs) 的 `GetBuildingSpaces()`、`RemoveBuilding()`、`TryPlace()`、`SetRawReserve()`、`Buy()`、`CreateTradeOrder()`、`CancelTradeOrder()` | 独立局本例可通过现有入口准备和操作，不需要库存注入或强制成交 |
+| 已有加工状态与剩余时间 | `GetProcessorDetails()` 给状态/作物/商品库存等；`GetPlot()` 的加工快照给 `RemainingSeconds`，由 [ProcessingSystem](../../../scripts/processing/ProcessingSystem.cs) 提供 | 观察一批开始和完成足够；若将来需要批次精确时间单位或唯一批次凭据，才另评估快照扩充 |
 | 已有资金与库存关系 | `MoneyCents`、`AvailableMoneyCents`、`FrozenMoneyCents`；`GetStock()`、`GetAvailableStock()`、`GetFrozenStock()`、`GetRawReserve()` | 可以记录总量、可用、冻结与底线，检查守恒和冻结隔离 |
-| 已有订单与结算结果 | [订单快照](../../scripts/trading/TradeOrderSnapshot.cs) 的ID、Request、Status、FrozenQuantity/FrozenCents、WaitingReason、LastFill；[交易结果](../../scripts/trading/TradeResult.cs) 的Success、Quantity、TotalCents、FeeCents | 本例使用真实结果，不需要工具重算费用；`LastFill` 目前不带成交 tick，流程需自己记录观察到首次成交的检查点 |
+| 已有订单与结算结果 | [订单快照](../../../scripts/trading/TradeOrderSnapshot.cs) 的ID、Request、Status、FrozenQuantity/FrozenCents、WaitingReason、LastFill；[交易结果](../../../scripts/trading/TradeResult.cs) 的Success、Quantity、TotalCents、FeeCents | 本例使用真实结果，不需要工具重算费用；`LastFill` 目前不带成交 tick，流程需自己记录观察到首次成交的检查点 |
 | 已有真实完整 tick 与时间/行情快照 | `AdvanceTick()`、`Calendar`、`GetMarketSnapshot()`、`GetWorkers()`、年度表与农田排程查询 | 能解释 tick 结束后的结果；`TickResult` 是本秒汇总，不是逐实例或逐订单事件，复杂现场不能只凭汇总确定归属 |
 | 可传入种子，但未公开实际种子 | `FarmGame(int? marketSeed)`；内部构造可传初始秒，但正式主场景无此启动入口 | 独立局可记录显式输入；当前随机种子无法直接查询。若选现场可复现报告，实际种子查询是候选缺口，指定初始秒不等于回放过去 |
 | 现有快照分散读取 | 各模块独立只读快照；暂无一次性全局诊断快照 | 简单流程可在稳定检查点顺序读取并记录同一经营秒；需要更复杂现场一致视图时再讨论最小聚合快照，不先开放整个内部对象图 |
-| 当前无流程宿主与暂停单步 | `Main.OnTick()` / `RefreshAfterGameChange()` 为私有；`AdvanceTick()` 暂停即返回；[工人表现](../../scripts/world/WorkerPresentation.cs) 暂停先返回 | 如选择当前局流程，需要接入统一驱动和刷新；如选择暂停单步，还需完整暂停协调与表现同步，不能宣称这些能力已经存在 |
+| 当前无流程宿主与暂停单步 | `Main.OnTick()` / `RefreshAfterGameChange()` 为私有；`AdvanceTick()` 暂停即返回；[工人表现](../../../scripts/world/WorkerPresentation.cs) 暂停先返回 | 如选择当前局流程，需要接入统一驱动和刷新；如选择暂停单步，还需完整暂停协调与表现同步，不能宣称这些能力已经存在 |
 | 没有现场完整复制/恢复 | 当前没有存档与状态导出/导入；内部满地图夹具并非完整现场克隆 | 现场转独立局的完整复制不是现成功能；不把无此能力视为必须先建设完整存档系统 |
 
 ## 衔接现有测试
 
-现有[测试汇总](../../tests/TestSuite.cs)按 `RunChecks()` / `RunChecksAsync()` 调用单元、集成和 e2e，最终以退出码反馈；[现有测试脚本](../../tools/Run-Tests.ps1)运行指定 Godot headless 场景并生成覆盖率。本设计不替换这些入口，不把整个 TestSuite 搬进玩家正在运行的主场景。
+现有[测试汇总](../../../tests/TestSuite.cs)按 `RunChecks()` / `RunChecksAsync()` 调用单元、集成和 e2e，最终以退出码反馈；[现有测试脚本](../../../tools/Run-Tests.ps1)运行指定 Godot headless 场景并生成覆盖率。本设计不替换这些入口，不把整个 TestSuite 搬进玩家正在运行的主场景。
 
-- 单元层继续验证规则本身，例如 [TestTradingService](../../tests/unit/TestTradingService.cs) 的真实结算与容量、[TestTradeOrders](../../tests/unit/TestTradeOrders.cs) 的冻结与成交；其 `CheckGameplayPhases()` 已覆盖暂停不自动执行、订单买入晚于加工领取、冻结原料不能加工等关键时点。场景不重复写这些算法的断言大全。
-- 经营路径的现有检查，如 [TestFarmGame](../../tests/unit/TestFarmGame.cs) 的加工保留线/建造领取与公共推进，仍是本例依赖的规则依据；跨模块流程只检查本流程的可观察结果及状态关系。
-- 集成层继续检查驱动、地图与 [TestWorkerPresentation](../../tests/integration/TestWorkerPresentation.cs) 等表现联动；e2e 的 [TestCoreLoop](../../tests/e2e/TestCoreLoop.cs) 已通过真实 Main、按钮和 Timer 信号检查经营界面，后续仅在选定工具入口后增加对应启动/进度/中止/刷新验收。
+- 单元层继续验证规则本身，例如 [TestTradingService](../../../tests/unit/TestTradingService.cs) 的真实结算与容量、[TestTradeOrders](../../../tests/unit/TestTradeOrders.cs) 的冻结与成交；其 `CheckGameplayPhases()` 已覆盖暂停不自动执行、订单买入晚于加工领取、冻结原料不能加工等关键时点。场景不重复写这些算法的断言大全。
+- 经营路径的现有检查，如 [TestFarmGame](../../../tests/unit/TestFarmGame.cs) 的加工保留线/建造领取与公共推进，仍是本例依赖的规则依据；跨模块流程只检查本流程的可观察结果及状态关系。
+- 集成层继续检查驱动、地图与 [TestWorkerPresentation](../../../tests/integration/TestWorkerPresentation.cs) 等表现联动；e2e 的 [TestCoreLoop](../../../tests/e2e/TestCoreLoop.cs) 已通过真实 Main、按钮和 Timer 信号检查经营界面，后续仅在选定工具入口后增加对应启动/进度/中止/刷新验收。
 - 如果此具体流程以后成为稳定回归需求，可以由现有测试入口调用同一流程逻辑并读取报告，测试侧只负责夹具、受控推进和映射成功/失败；不再实现一份不同的买入加工卖出脚本。共享规则断言若确有重复，再提取最小检查函数，不先迁移全部测试。
 
 测试在无 Main 计时器的独立夹具中顺序调用公共 tick，和工具在当前局通过统一驱动推进，是同一执行路径的不同调用环境。测试可控驱动的存在不允许现场工具并行推进。现有覆盖率/性能/构建验收继续保持；dev 流程可被 Debug 测试调用，不要求把 dev 产物加入 CI。

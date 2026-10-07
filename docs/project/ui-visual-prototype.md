@@ -1,12 +1,10 @@
 # UI 视觉升级原型
 
-关联 [#94](https://github.com/Fotally/Farm-Exchange/issues/94)。HTML 设计阶段已交付可操作的视觉工件；2026-10-04 已完成正式 Godot UI/UX 实现与本地运行验收，独立复核及 PR 状态见 #94。采用田园版元素布局，搭配复古像素、木质面板和更强的游戏感；删除原左上角英文标题、中文标语及下方小字整组文案，不添加替代标语。本轮保留当前地图与人物素材。
+关联 [#94](https://github.com/Fotally/Farm-Exchange/issues/94)，已由 [PR #95](https://github.com/Fotally/Farm-Exchange/pull/95) 合并。当前采用田园布局与像素木作主题，本页维护已选视觉基准和1080P参考；世界与人物素材以[清亮v2基准](../research/bright-complete-v2.md)为准。
 
 ## 比例与倍率修订
 
-上一轮实测仅完成布局方向与配色，线条图标、品牌、设施缩略和详情信息排列仍与主稿不一致；默认1280×720的视口拉伸会把UI随窗口一同放大。本轮继续由 #94 修正，不另建 issue：默认及以后主要视觉验收以至少1920×1080为基准，按主稿补齐视觉细节；统一整体UI倍率与独立字体倍率接口，各窗口/面板可单独调整，窗口扩大保持设定的像素大小并重新定位。原图示意地图与人物不进入本轮素材替换。
-
-2026-10-05 已完成本轮实现、截图和运行验收，独立复查未发现待修问题；最终交付状态见 #94。下方早期1280×720/1600×900的图保留为上一轮历史，不作为本轮复刻验收结果。
+默认配置、设计与主要图形验收至少为1920×1080。整体UI倍率与独立字体倍率分开设置，扩大窗口保持设定的像素大小并重新定位。历史候选与低分辨率验收通过[归档索引](../archive/index.md)查阅。
 
 原型参照图按 1080 像素高度归一，正式默认整体/字体倍率均为 1。主界面采用以下像素基准；扩大窗口只改变锚点位置，尺寸不再由窗口拉伸。对单一窗口或子面板的调节方式见[统一倍率接口](../architecture/ui/ui-scaling/interface-ui-scaling.md)。
 
@@ -69,7 +67,7 @@ B 主稿采用深木色框 `#846848`、纸面 `#f6e8c6`、正文深棕 `#53452f`
 
 正式实现由 `UiElements` 集中维护木框、纸面、字色、按钮与输入控件状态；`Main` 组装浮动状态、近况、底部经营入口与右侧详情。目录、选种、库存、市场、委托及年度表复用主题，窗口读取真实快照并提交原有经营意图，控件刷新继续保留未提交输入。地图美术不在本轮范围，复用现有地图、人物、坐标与占地，不从原型复制第二套经营状态。
 
-布局、像素木作主题与移除标语已确认；正式实施范围覆盖现有游戏窗口与操作反馈，保留 A / C 作为设计对照。原型仍只运行浏览器内示例状态。Godot 的编译、场景测试、覆盖率、图形检查及 Windows 导出启动已通过，结果记入[测试记录](testing.md)；下方浏览器验收记录仅描述 HTML 阶段。
+布局、像素木作主题与移除标语已确认；正式实施范围覆盖现有游戏窗口与操作反馈，保留 A / C 作为设计对照。原型仍只运行浏览器内示例状态。Godot 的编译、场景测试、覆盖率、图形检查及 Windows 导出启动已通过，结果见[历史测试记录](../archive/project/testing.md#2026-10-05-94-原型比例ui-倍率与-1080p-修订验收)；[浏览器验收记录](../archive/project/ui-visual-prototype.md#浏览器验收记录)仅描述HTML阶段。
 
 ## 1080P 与固定倍率实测图
 
@@ -86,45 +84,4 @@ B 主稿采用深木色框 `#846848`、纸面 `#f6e8c6`、正文深棕 `#53452f`
 | [委托](../architecture/ui/main/godot-scale-orders-1920.png) / [年度表](../architecture/ui/main/godot-scale-cultivation-1920.png) | 现有管理入口及自绘时间图 |
 | [详情字体 1.2 倍](../architecture/ui/main/godot-scale-farm-font-1.2.png) | 独立放大字体后的真实重排、单行指标与滚动 |
 
-完整验收结果及独立审查状态在[测试记录](testing.md)与 #94 维护。以下历史截图仍描述上一轮交付，不作为当前默认分辨率。
-
-## 上一轮 Godot 界面实测图
-
-正式界面以真实主场景读取当前局状态；下图分别来自 1280×720 和 1600×900 窗口，地图与人物使用既有素材。两尺寸的建造末项、七作物末项与详情拆除可滚动到达，输入与勾选沿用统一主题。完整验收结果见[测试记录](testing.md)，最终独立审查及交付状态以 #94 为准。
-
-![正式主界面 1280×720](../architecture/ui/main/godot-visual-main-1280.png)
-
-![扩大窗口的主界面](../architecture/ui/main/godot-visual-main-1600.png)
-
-| 工件 | 实际经营入口 |
-| --- | --- |
-| [农田详情](../architecture/ui/main/godot-visual-farm-detail-1280.png) | 作物状态、实际剩余、产量、报价和两种手动接管 |
-| [建造目录](../architecture/ui/main/godot-visual-build-1280.png) | 九项设施、名称搜索、费用与连续摆放 |
-| [库存](../architecture/ui/main/godot-visual-inventory-1280.png) | 十四商品、总量/可用/冻结及底线草稿 |
-| [市场](../architecture/ui/main/godot-visual-market-1280.png) | 实时报价、消息与数量交易 |
-| [委托](../architecture/ui/main/godot-visual-orders-1280.png) | 条件、预算、真实单据与草稿 |
-| [年度表](../architecture/ui/main/godot-visual-cultivation-1280.png) | 共享配置、四季时间图与农田引用 |
-
-## 浏览器验收记录
-
-2026-10-04 使用本机 Microsoft Edge 无头浏览器检查离线 HTML：
-
-- A / B / C × 1440×900 / 1280×720 × 建造 / 库存 / 市场 / 年度表 / 委托，共 30 组窗口边界与横向溢出检查通过。
-- 目录九项、名称搜索、连续建造扣费、重复占地拒绝、退出摆放通过。
-- 实际鼠标预览、道路建造、重复占地拒绝、拖动不建造、右键取消及键盘 Enter 选择设施通过。
-- 买卖、余额不足、非整数拒绝、暂停交易、输入框方向键不切换方案通过。
-- 库存底线合法 / 非法输入、两种改种动作、标题拖动、Esc 关闭通过。
-- 浏览器 JavaScript 异常为零；截图人工检查 1280×720 主稿、市场、年度图与 1440×900 建造目录。长窗口内部滚动，较矮窗口中详情末尾操作可滚动到达。
-- 田园布局＋像素风格修订后重跑上述 30 组检查及交互，全部通过；主稿弹窗默认避开顶部日期／暂停和底部操作栏，基准窗口的地图缩放位于详情下方。三行标语及对应节点已删除，七张截图同步更新。
-
-| 工件 | 用途 |
-| --- | --- |
-| [B 主稿 1440×900](../architecture/ui/main/prototype-visual-pixel.png) | 默认像素田园全景，采用田园布局 |
-| [B 主稿 1280×720](../architecture/ui/main/prototype-visual-pixel-1280.png) | 基准窗口适配 |
-| [A 田园](../architecture/ui/main/prototype-visual-pastoral.png) | 圆角浮动布局对比 |
-| [C 轻简](../architecture/ui/main/prototype-visual-minimal.png) | 纵向工具栏布局对比 |
-| [建造目录](../architecture/ui/main/prototype-visual-build.png) | 建筑卡片与费用 |
-| [市场](../architecture/ui/main/prototype-visual-market.png) | 表格密度与交易操作 |
-| [年度表](../architecture/ui/main/prototype-visual-cultivation.png) | 四季轨道与共享应用层级 |
-
-本轮静态检查通过，共检查 91 份文档、规则链接与脚本路径；`git diff --check` 通过。仅设计工件，未修改 C#、Godot 场景或正式玩法；不适用业务模块覆盖率、Windows 导出验收和功能 PR 闭环。独立审查结果在 #94 记录。
+完整验收结果见[历史测试记录](../archive/project/testing.md#2026-10-05-94-原型比例ui-倍率与-1080p-修订验收)；[上一轮截图](../archive/project/ui-visual-prototype.md#上一轮-godot-界面实测图)仅描述历史交付，不作为当前默认分辨率。
