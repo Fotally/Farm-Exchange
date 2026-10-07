@@ -1,6 +1,6 @@
 # 清亮 v2 局部动效实现与验收约定
 
-履行 [WorldMap Interface](interface-world-map.md)，关联 [#108](https://github.com/Fotally/Farm-Exchange/issues/108)。**状态：2026-10-07 已完成WorldMap整合、独立审查及实际像素/性能/引擎验收。** 结果见[验收记录](../../../project/testing.md)，下述参数对应源码。
+履行 [WorldMap Interface](interface-world-map.md)，关联 [#108](https://github.com/Fotally/Farm-Exchange/issues/108)。**状态：2026-10-07 已完成WorldMap整合、独立审查及实际像素/性能/引擎验收。** 结果见[验收记录](../../../archive/project/testing.md#2026-10-07-105-清亮-v2-首批素材动作动效与环境验收)，下述参数对应源码。
 
 ## 已确认范围与实际 Seam
 

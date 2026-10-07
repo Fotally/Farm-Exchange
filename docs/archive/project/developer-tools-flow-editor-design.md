@@ -1,3 +1,5 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#103、#104；PR #102已合并。现行入口：[当前说明](../../architecture/ui/developer-tools-window/interface-developer-tools-window.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 ## 最新完成记录
 
 ### 2026-10-06 — C原型视觉修正（#104）
@@ -163,7 +165,7 @@
 
 ## 自动扫描的来源
 
-采用「可编辑配置类型 + 字段元数据」，通过反射扫描已登记配置类型的序列化成员及嵌套类型。中文名、简介、分组、单位、可选值及特殊编辑方式附在配置字段定义上；同一份定义用于生成表单和基础结构校验。实际描述、草稿及配置库约定见[配置编辑接口](../architecture/development/interface-scenario-configuration-editor.md)。
+采用「可编辑配置类型 + 字段元数据」，通过反射扫描已登记配置类型的序列化成员及嵌套类型。中文名、简介、分组、单位、可选值及特殊编辑方式附在配置字段定义上；同一份定义用于生成表单和基础结构校验。实际描述、草稿及配置库约定见[配置编辑接口](../../architecture/development/interface-scenario-configuration-editor.md)。
 
 `ScenarioConfiguration` 是加载后的运行参数，同时包含 `SourcePath`、`Sha256`、`ProductCommodity`、日期换算等内容。不能直接把它的所有公开属性做成编辑项。`ScenarioEditableConfiguration`专门对应JSON形状；文件引用、摘要与推导值继续留在加载结果，窗口读取描述而不自行猜测它们。
 
@@ -204,7 +206,7 @@ public int Quantity { get; set; }
 
 ## 按codebase-design划分Module
 
-以下是已确定的Module职责；实际Interface见[配置编辑接口](../architecture/development/interface-scenario-configuration-editor.md)与[开发窗口接口](../architecture/ui/developer-tools-window/interface-developer-tools-window.md)。仅有一个Implementation的Module不预先声明C# interface。
+以下是已确定的Module职责；实际Interface见[配置编辑接口](../../architecture/development/interface-scenario-configuration-editor.md)与[开发窗口接口](../../architecture/ui/developer-tools-window/interface-developer-tools-window.md)。仅有一个Implementation的Module不预先声明C# interface。
 
 | Module | 唯一拥有的状态与Implementation | 对调用方的Interface |
 | --- | --- | --- |
@@ -266,9 +268,9 @@ public int Quantity { get; set; }
 
 以下为本轮C视觉修正后的Godot 4.7.2 Mono实际截图。定向图形场景Exit0；三个步骤、保存、删除、分类搜索、另一字段形状及2K/4K/字体1.2回归已通过。主Agent已直接查看目录、配置、结果和删除弹窗；完整验收与交付状态以顶部最新记录为准。
 
-![C分步流程目录](../architecture/ui/developer-tools-window/godot-flow-catalog-1920.png)
+![C分步流程目录](../../architecture/ui/developer-tools-window/godot-flow-catalog-1920.png)
 
-[同原型16条目容量截图](../architecture/ui/developer-tools-window/godot-flow-capacity-1920.png)仅使用测试目录条目，检验多分类与双列密度；不登记假流程到正式目录。[2K容量](../architecture/ui/developer-tools-window/godot-flow-capacity-2560.png)、[4K容量](../architecture/ui/developer-tools-window/godot-flow-capacity-3840.png)和[字体1.2容量](../architecture/ui/developer-tools-window/godot-flow-capacity-font-1-2.png)另用12条功能夹具。
+[同原型16条目容量截图](../../architecture/ui/developer-tools-window/godot-flow-capacity-1920.png)仅使用测试目录条目，检验多分类与双列密度；不登记假流程到正式目录。[2K容量](../../architecture/ui/developer-tools-window/godot-flow-capacity-2560.png)、[4K容量](../../architecture/ui/developer-tools-window/godot-flow-capacity-3840.png)和[字体1.2容量](../../architecture/ui/developer-tools-window/godot-flow-capacity-font-1-2.png)另用12条功能夹具。
 
 | C原型项目（整体/字体倍率1） | 原型 | Godot实际核对 |
 | --- | --- | --- |
@@ -282,6 +284,6 @@ public int Quantity { get; set; }
 
 Godot与浏览器字体字形、字号取整和真实滚动条不同，以上明确记录差异；不把业务通过、未越界或测试夹具当成逐像素一致。
 
-[配置编辑](../architecture/ui/developer-tools-window/godot-config-editor-1920.png)、[另存为](../architecture/ui/developer-tools-window/godot-config-save-as-1920.png)、[流程删除确认](../architecture/ui/developer-tools-window/godot-flow-delete-confirm-1920.png)、[配置删除确认](../architecture/ui/developer-tools-window/godot-config-delete-confirm-1920.png)与[运行结果](../architecture/ui/developer-tools-window/godot-flow-result-1920.png)来自1920×1080。
+[配置编辑](../../architecture/ui/developer-tools-window/godot-config-editor-1920.png)、[另存为](../../architecture/ui/developer-tools-window/godot-config-save-as-1920.png)、[流程删除确认](../../architecture/ui/developer-tools-window/godot-flow-delete-confirm-1920.png)、[配置删除确认](../../architecture/ui/developer-tools-window/godot-config-delete-confirm-1920.png)与[运行结果](../../architecture/ui/developer-tools-window/godot-flow-result-1920.png)来自1920×1080。
 
-[2560×1440](../architecture/ui/developer-tools-window/godot-config-editor-2560.png)、[3840×2160](../architecture/ui/developer-tools-window/godot-config-editor-3840.png)与[字体1.2倍](../architecture/ui/developer-tools-window/godot-config-editor-font-1-2.png)检查固定操作区、滚动表单及窗口可用区域。保存、删除与异常夹具只使用本次隔离测试目录，未修改仓库用户配置。
+[2560×1440](../../architecture/ui/developer-tools-window/godot-config-editor-2560.png)、[3840×2160](../../architecture/ui/developer-tools-window/godot-config-editor-3840.png)与[字体1.2倍](../../architecture/ui/developer-tools-window/godot-config-editor-font-1-2.png)检查固定操作区、滚动表单及窗口可用区域。保存、删除与异常夹具只使用本次隔离测试目录，未修改仓库用户配置。

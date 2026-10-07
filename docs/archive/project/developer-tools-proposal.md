@@ -1,3 +1,5 @@
+> 历史归档（2026-10-07，整理任务 [#123](https://github.com/Fotally/Farm-Exchange/issues/123)）。关联：#97；已选范围由#100/#101实施并随PR #102合并，剩余候选见现行后续功能计划。现行入口：[当前说明](../../project/development-build.md)。正文中的“当前”“待确认”“待合并”描述写作当时，不作为现行规则或交付状态。
+
 # 开发者工具与 dev / release 双构建设计草案
 
 历史设计说明：下文保留设计阶段的方案与当时接口事实；#100 / #101 已按[参数化测试主计划](developer-tools-parameterized-tests.md)恢复实施，现行代码与构建接入见主计划及其接口、使用文档。未选用的候选能力仍属于后续设计。
@@ -40,7 +42,7 @@ flowchart TD
 
 架构的验收依据应是：两种构建使用相同公共源文件；相同初始化与操作序列得到相同经营结果；开发工具只维护显示、输入和诊断状态；release 无开发专用入口。具体工具功能待这组约束讨论完成后再确定。
 
-后续根据用户要求补充[公开 C# 案例](../research/developer-tools-csharp-cases.md)与[C# 源码组织讨论](developer-tools-csharp-organization.md)，比较 partial 分文件、同项目编译范围及运行时工具开关。具体源码布局与剔除方式保持待讨论，不将案例或配置片段当作已批准实现。
+后续根据用户要求补充[公开 C# 案例](../../research/developer-tools-csharp-cases.md)与[C# 源码组织讨论](developer-tools-csharp-organization.md)，比较 partial 分文件、同项目编译范围及运行时工具开关。具体源码布局与剔除方式保持待讨论，不将案例或配置片段当作已批准实现。
 
 ## 目标与当前事实
 
@@ -48,14 +50,14 @@ flowchart TD
 
 | 当前事实 | 证据与含义 |
 | --- | --- |
-| 每次调用推进一个经营秒，经营阶段集中执行 | [FarmGame](../../scripts/gameplay/FarmGame.cs) 的 `AdvanceTick()`；工具应复用这一完整路径 |
-| 暂停有多处门禁 | `FarmGame.AdvanceTick()`、[WorkerScheduler](../../scripts/workers/WorkerScheduler.cs) 和 [GameCalendar](../../scripts/time/GameCalendar.cs) 都检查暂停；不能仅绕过最外层检查 |
-| 场景计时器负责每秒调用并刷新 | [主场景](../../scenes/main.tscn) 的 `TickTimer` 和 [Main](../../scripts/ui/Main.cs) 的 `OnTick()` / `RefreshAfterGameChange()` |
+| 每次调用推进一个经营秒，经营阶段集中执行 | [FarmGame](../../../scripts/gameplay/FarmGame.cs) 的 `AdvanceTick()`；工具应复用这一完整路径 |
+| 暂停有多处门禁 | `FarmGame.AdvanceTick()`、[WorkerScheduler](../../../scripts/workers/WorkerScheduler.cs) 和 [GameCalendar](../../../scripts/time/GameCalendar.cs) 都检查暂停；不能仅绕过最外层检查 |
+| 场景计时器负责每秒调用并刷新 | [主场景](../../../scenes/main.tscn) 的 `TickTimer` 和 [Main](../../../scripts/ui/Main.cs) 的 `OnTick()` / `RefreshAfterGameChange()` |
 | 已有多数业务只读快照 | `GetFarmDetails()`、`GetProcessorDetails()`、`GetWorkers()`、`GetFarmCultivation()`、`GetCultivationPlans()`、`GetTradeOrders()`、`GetMarketSnapshot()`，以及库存、余额查询 |
 | 可以指定新局随机种子 | `FarmGame(int? marketSeed)` 将实际种子同时交给开局布局与市场；`Main` 当前直接 `new()`，没有玩家可用的种子入口，也未保存抽到的实际种子供查询 |
-| 当前没有存档与业务日志实现 | [路线](roadmap.md) 将存档列为待确认；[#82](https://github.com/Fotally/Farm-Exchange/issues/82) 及[日志设计](https://github.com/Fotally/Farm-Exchange/issues/82)仍是设计阶段 |
+| 当前没有存档与业务日志实现 | [路线](../../project/roadmap.md) 将存档列为待确认；[#82](https://github.com/Fotally/Farm-Exchange/issues/82) 及[日志设计](https://github.com/Fotally/Farm-Exchange/issues/82)仍是设计阶段 |
 | 已有满地图性能夹具 | `FillWorldForBenchmark()`、`FillWorldForPresentationBenchmark()` 是内部测试入口，不是可以直接作用于任意运行中游戏的工具命令 |
-| 导出目前没有开发工具专用预设 | [导出配置](../../export_presets.cfg)有 Windows / macOS 两个预设，两个平台工作流当前导出 release；详见[构建证据](../research/developer-tools-builds.md) |
+| 导出目前没有开发工具专用预设 | [导出配置](../../../export_presets.cfg)有 Windows / macOS 两个预设，两个平台工作流当前导出 release；详见[构建证据](../../research/developer-tools-builds.md) |
 
 ## 候选入口比较
 
@@ -111,7 +113,7 @@ flowchart TD
 
 ## dev / release 构建方案
 
-建议两种产物来自同一提交和同一套经营代码，分别使用 Godot 的 debug / release 导出；以 C# 编译配置排除开发实现，以导出过滤排除开发资源。普通 `dotnet build -c Release` 与 Godot 的 `ExportRelease` 不能混为一谈；具体配置、编译符号及官方证据见[构建调研](../research/developer-tools-builds.md)。
+建议两种产物来自同一提交和同一套经营代码，分别使用 Godot 的 debug / release 导出；以 C# 编译配置排除开发实现，以导出过滤排除开发资源。普通 `dotnet build -c Release` 与 Godot 的 `ExportRelease` 不能混为一谈；具体配置、编译符号及官方证据见[构建调研](../../research/developer-tools-builds.md)。
 
 | 项目 | dev 产物（建议） | release 产物（建议） |
 | --- | --- | --- |
@@ -125,7 +127,7 @@ flowchart TD
 
 建议保留当前正式预设 `Windows` / `macOS`，新增 `Windows Dev` / `macOS Dev`，共四个预设。保留 release 的 `build/windows/`、`build/macos/` 输出约定，dev 另放 `build/dev/windows/`、`build/dev/macos/`，避免改动已确认的正式发布包目录。两种产物在本地分别导出完整包，不能只复制 exe 或混用程序集。覆盖 Windows 与 macOS 是平台预设配置，不为两个平台维护不同的开发工具实现；各平台的实际启动由对应环境验收。
 
-用户已明确 dev 目前仅在本地生成，不进入 CI，也不上传 CI 开发工件；撤回前轮双包 CI 的建议。现有 CI 与正式发布继续生成和使用 release，保持 main、同提交、两平台成功、版本号及 macOS ZIP 字节约定。[现有正式发布规则](release.md)
+用户已明确 dev 目前仅在本地生成，不进入 CI，也不上传 CI 开发工件；撤回前轮双包 CI 的建议。现有 CI 与正式发布继续生成和使用 release，保持 main、同提交、两平台成功、版本号及 macOS ZIP 字节约定。[现有正式发布规则](../../project/release.md)
 
 这里的 dev 是产物类型，不等于 Git 的 dev 分支。C# `DEBUG`、Godot 运行时 debug feature、自定义 feature 分别属于编译和运行层，不能互相替代；只隐藏按钮不能证明 release 移除了工具。测试资源的 `exclude_filter` 也不能证明测试 C# 已从程序集移除，后续需核对实际编译项。
 

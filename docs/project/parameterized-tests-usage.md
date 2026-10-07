@@ -1,6 +1,6 @@
 # 参数化开发测试使用说明
 
-关联 [#101](https://github.com/Fotally/Farm-Exchange/issues/101) 与 [#104](https://github.com/Fotally/Farm-Exchange/issues/104)。固定流程与配置协议见[设计文档](developer-tools-parameterized-tests.md)，分步界面见[窗口接口](../architecture/ui/developer-tools-window/interface-developer-tools-window.md)。工具仅在编辑器Debug与本地dev导出可用，release不包含开发窗口、流程或配置资源。
+关联 [#101](https://github.com/Fotally/Farm-Exchange/issues/101) 与 [#104](https://github.com/Fotally/Farm-Exchange/issues/104)。固定流程与配置协议见[固定流程接口](../architecture/development/interface-parameterized-scenario.md)，分步界面见[窗口接口](../architecture/ui/developer-tools-window/interface-developer-tools-window.md)。工具仅在编辑器Debug与本地dev导出可用，release不包含开发窗口、流程或配置资源。
 
 ## 选择配置并运行
 
@@ -8,7 +8,7 @@
 
 三个步骤来回切换保持同一草稿和表单控件；未保存修改不会写入文件，也不能直接运行。运行中锁定本窗口的导航、配置、编辑、保存和删除；中止保留已有买入、生产与订单。关闭窗口只隐藏界面，不代替中止。独立局创建新种子数据对象，当前地图继续显示当前局；现场使用当前真实对象，遵守暂停、资金、底线、冻结和其他玩家操作。
 
-长期用例位于 [tests/scenario-configs/buy-process-sell](../../tests/scenario-configs/buy-process-sell/)：
+长期用例位于 [tests/scenario-configs/buy-process-sell](../../tests/scenario-configs/buy-process-sell)：
 
 | 文件 | 用途 |
 | --- | --- |

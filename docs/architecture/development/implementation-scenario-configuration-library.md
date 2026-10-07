@@ -1,6 +1,6 @@
 # 配置库的严格输入、持久修订与删除
 
-履行[流程配置编辑接口](interface-scenario-configuration-editor.md)，计划来源为[C分步设计](../../project/developer-tools-flow-editor-design.md)与[#104](https://github.com/Fotally/Farm-Exchange/issues/104)。
+履行[流程配置编辑接口](interface-scenario-configuration-editor.md)，计划来源为[C分步设计](../ui/developer-tools-window/implementation-step-flow-editor.md)与[#104](https://github.com/Fotally/Farm-Exchange/issues/104)。
 
 ## 单一字段来源
 

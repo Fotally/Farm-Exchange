@@ -23,51 +23,25 @@
 - 工人横纵斜向每秒移动 3 基础格，即一个标准田跨度，直线穿越占用，到田中间格工作，不受道路连通影响；播种与浇水各占完整 1 秒。三人共享稳定锚点轮转与实例独占认领，完成或失效释放。两日目标从空田具备条件开始计经过时间；三人和 24 田在同一 8×8 标准田范围内验收，超范围仍照料但不承诺两日达标，详见[实施方案](../architecture/workers/worker-scheduler/implementation-movement-proposal.md)。
 - 道路独占一格、每格 1.00 金币；目录选择后逐格连续点击铺设，Esc 或取消退出。路面灰色，详情可拆除且不退款；当前只影响布局与外观，不进入生产或改变工人速度。规则见[道路铺设与移除](../gameplay/land/roads.md)。
 
-## 已确认新增范围
+## 当前已确认范围入口
 
-2026-10-01 用户在 [#74 调研](../research/grid-subdivision.md)后选择 64×32 世界像素基础格；农田和加工场地各占 3×3（192×96），每座一个生产实例、10.00 金币，道路占 1×1、每格 1.00。地图 384×384 基础格，保留 128×128 座标准设施的面积容量；任意空小格可作锚点，任一子格操作同一整座。工人每秒走 3 小格，标准田布局的原两日预算保持，人物尺寸保持。已由 [#75](https://github.com/Fotally/Farm-Exchange/issues/75) 实施，独立审查复查、完整场景/覆盖率、图形与 Windows 导出启动全部通过，并通过 [PR #70](https://github.com/Fotally/Farm-Exchange/pull/70) 于北京时间 2026-10-02 00:17 人工合并。已完成的设计与执行记录见[归档计划](../archive/farm-exchange-system-design-and-execution-plan.md)。
+| 范围 | 现行规则与操作依据 |
+| --- | --- |
+| 基础格、多格设施、连续建造与预览 | [建造](../gameplay/land/opening-and-building.md)、[道路](../gameplay/land/roads.md)、[地图镜头](../gameplay/world/map-and-camera.md) |
+| 行情、即时交易与委托 | [报价](../gameplay/trading/market-quotes.md)、[即时交易](../gameplay/trading/sales.md)、[委托](../gameplay/trading/orders.md) |
+| 季节耕作与共享年度表 | [作物](../gameplay/production/crop-growth.md)、[年度表规则](../gameplay/production/seasonal-cultivation.md)、[窗口操作](../gameplay/production/seasonal-cultivation-ui.md) |
+| 1080P界面、整体和字体倍率 | [视觉基准](ui-visual-prototype.md)、[统一倍率接口](../architecture/ui/ui-scaling/interface-ui-scaling.md) |
+| 清亮v2首批素材、真实动作、局部动效与环境 | [素材基准](../research/bright-complete-v2.md)、[地图接口](../architecture/world/world-map/interface-world-map.md)；#106～#109已由PR #122合并，#105仍跟踪后续设计 |
+| 公共倍率、批量经营、参数化开发流程 | [经营倍率](../gameplay/world/simulation-rate.md)、[批量实现](../architecture/game-state/farm-game/implementation-batched-simulation.md)、[开发测试使用说明](parameterized-tests-usage.md)；#100/#101/#104已由PR #102合并 |
+| 本地开发包与双平台正式发布 | [开发构建](development-build.md)、[正式发布](release.md) |
 
-## 已确认显示策略
-
-2026-10-02 用户在[成熟作品调研](../research/window-size-and-map-zoom.md)后选择先实现“全屏显示更多地图、农田保持大小”，关联 [#78](https://github.com/Fotally/Farm-Exchange/issues/78)。同显示器、同系统 DPI 下，镜头自动抵消地图画布拉伸，窗口扩大时增加地图视野并保持对象大小、镜头中心与玩家倍率；UI 继续沿用既有窗口适配。开局与滚轮范围仍为 1.25 和 1.25～2，未调整至 1；具体玩家行为见[地图与镜头](../gameplay/world/map-and-camera.md)。这是显示策略选择，不是缺陷修复。
-
-## 已确认放置预览设计与实施授权
-
-2026-10-03 用户在 [#83](https://github.com/Fotally/Farm-Exchange/issues/83) 完成放置预览的交互对齐，随后明确授权由 [#87](https://github.com/Fotally/Farm-Exchange/issues/87) 承接开发、验收与 PR：跟随鼠标、沿用锚点、点击即建并保持摆放；占地由建筑属性动态生成，冲突仅标红对应格；所有建筑共用右键、Esc、按钮取消入口，道路继续逐次点击。摆放期间不弹详情，保留左键拖镜头，界面遮挡时隐藏预览并拦截建造，暂停状态保持。视觉参数按参考案例设计并通过画面检查调整。完整约定及验收见[设计方案](build-placement-preview-proposal.md)，证据见[案例调研](../research/build-placement-preview.md)。已完成本地验收，逐模块覆盖率、真实图形及 Windows 导出启动结果见[测试记录](testing.md#2026-10-03-87-建筑放置预览验收)。交付使用 [PR #84](https://github.com/Fotally/Farm-Exchange/pull/84)，合并状态以该 PR 为准。
-
-## 已确认 UI/UX 升级范围
-
-2026-10-05 的 #94 后续修订包括共享年度表选中、悬停及焦点字色可读性，以及整表删除入口。删除表时解除全部农田引用，保留当前作物、阶段、水分和生长进度，恢复按当前作物自动复种；空田休耕同样恢复播种。不改变其他表、手动预备、库存、金币或日期，表编号不回退。整表删除与移除草稿中的作物条分别操作，仅已保存表可删除。
-
-本轮后续修订继续由 #94 承接：以后以至少1920×1080作为UI设计、默认配置与主要图形验收基准，扩大窗口不再随视口拉伸放大UI。按主稿补齐图标、品牌、木框层次、设施缩略与信息布局；统一整体倍率和独立字体倍率两个接口，允许各UI分别调整，整体倍率同步几何、图标与文字，字体倍率另外调整文字。倍率只影响运行中表现，不增加经营规则、设置窗口或存档。
-
-2026-10-04 在 [#94](https://github.com/Fotally/Farm-Exchange/issues/94) 授权将已设计的 HTML 主稿落实为正式 Godot UI/UX：采用田园布局与像素木作风格，顶部日期与暂停、右上资源、左侧经营近况、右侧设施详情及底部中央经营入口。统一主题和建造、选种、库存、市场、委托、年度表窗口，保留真实经营接口、输入草稿与焦点。已确认本轮保留当前地图和人物素材，生产、交易与排程规则继续按现行文档执行。设计依据与阶段边界见[视觉原型说明](ui-visual-prototype.md)，实施状态以 #94 为准。
-
-## 已确认素材接入分期与清亮 v2 基准
-
-2026-10-06，素材基准切换为 `FarmExchange-Bright-Complete-v2.zip` 内部版本2.0.0，采用完整清亮静态、人物及已有局部动效；v1只保留历史，不混用默认资产。实际覆盖、清单入口和校验见[素材分析](../research/bright-complete-v2.md)，目录沿用[素材管理规则](asset-organization.md)。
-
-总入口为 [#105](https://github.com/Fotally/Farm-Exchange/issues/105)：首批 #106～#109 接入现有地表/七作物/七加工设施、真实工人动作、已有生产动效和纯环境装饰。生长按实际进度等分三档；装饰不参与占地或通行，成功建造后清除对应完整占地的装饰。接受不同设施动效丰富程度不同，现有动效仍仅覆盖q0两建筑与三作物。Module状态唯一归属、完整简洁Interface和真实结果驱动的表现规范写入各子议题。
-
-2026-10-07 确认首批特效：播种和浇水使用人物合成帧，收获和加工仅在可见实例显示短促产出效果；开发高倍率只呈现最新有效结果，跳过过期动作、不排队补播。图片层级作为专项验收：地表与土层在底部，建筑、作物和人物依据工作中心或脚根统一深度排序，建筑内部活动层保留自身前后顺序；选框和候选提示保持可读。
-
-水域 #110、设施旋转 #111、采收搬运 #112、工人加工 #113 先完成后续设计，新功能与对应素材一起明确范围，不阻塞首批。已有 #43 人力扩充继续关联原议题。首批已于2026-10-07完成本地接入、独立审查和完整引擎验收，证据见[验收记录](testing.md)。四份后续提案仍待选择规则，未实施新玩法；现行生产、交易与调度规则保持。2026-10-07维护者已授权公开所有素材，并明确本次采用`codex/issue105 → main`独立PR、创建后由Agent合并；这是本次交付例外，#82日志设计及其他任务改动仍留在dev。实际PR与合并状态以#105完成记录为准。
-
-## 已确认版本发布范围
-
-2026-10-05 在 [#96](https://github.com/Fotally/Farm-Exchange/issues/96) 确认保留独立的发布工作流，版本号暂由操作者指定；从触发时 main 同提交成功的 Windows 与 macOS CI 下载两平台产物，Windows 验收启动并完整打包，macOS 检查 Universal 2 ZIP 后保留原包内容，再创建版本标签和同一个 GitHub Release，同时上传两份带版本号的 ZIP，无需本地构建或上传。两平台必须都准备成功，保持当前 macOS 签名与未配置 Apple 公证的状态。操作与失败处理见[正式版本发布](release.md)，交付状态以关联 PR 为准。
-
-## 已确认参数化开发测试范围
-
-2026-10-06 按[参数化测试设计](developer-tools-parameterized-tests.md)恢复 #100 / #101 实施。#100提供发布0.5×/1×/2×、开发正整数倍率、暂停及改速保留半tick进度、按真实事件拆段的等价批量数据推进与工人表现；#101提供严格持久JSON配置、当前局与独立数据局共用的买入→加工→一次卖出流程、开发窗口和仅JSON报告。现场保持真实玩家经营，手动改速中断整个自动流程；报告引用原文件与加载时SHA-256，不保存配置副本。独立局不切换地图，开发源码及入口从release排除，CI不新增dev包。时序和验收详见[批量方案](batched-simulation-proposal.md)，实施状态见主计划顶部。
-
-2026-10-06 已授权按[#103设计](developer-tools-flow-editor-design.md)由[#104](https://github.com/Fotally/Farm-Exchange/issues/104)接入C分步界面：流程选择、自动字段配置、运行结果独立维护；分类搜索、两列小字号卡片、另存与覆盖、流程及配置二次确认删除。删除流程移除目录和所有可写配置，删除单个配置移除选中文件；内置只读示例与历史报告保留。用户配置长期保存在仓库的`tests/scenario-configs/user/`并纳入Git管理，开发包可写配置留在程序旁；另存修订1、覆盖递增，高开发倍率公共按钮点击回1×，公共循环1×→2×→0.5×→1×。
+当前玩法、接口和操作以上述专题为准。已完成方案、授权经过和交付结果统一通过[归档索引](../archive/index.md)查阅。
 
 ## 待用户确认
 
 - 农田、七种配套加工场地与道路以外的建筑类型与建造规则。
 - 存档与离线收益规则。
-- 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。#42 季节耕作表已于 2026-10-03 授权实施，已确认规则见[实施方案](seasonal-cultivation-proposal.md)，验收状态见主计划；#36 高级交易已验收且 PR #81 人工合并。T09 的[行情与交易方案](market-proposal.md)已于 2026-10-01 全部确认并完成闭环验收，PR #70 已人工合并。未来道路速度属性另行确认，当前道路只影响布局与外观。
+- 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、设施朝向 #111、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[朝向](facility-orientation-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。日志 #82 仍在设计阶段，见[日志设计](../research/runtime-logging.md)及[schema草案](runtime-log-schema-v1.md)。这些待确认项不作为已实施功能。
 
 ## 系统划分
 

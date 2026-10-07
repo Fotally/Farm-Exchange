@@ -62,7 +62,7 @@
 
 # 工作约定
 
-1. 每次代码修改完成后，在同一任务中及时更新 `docs/` 对应的中文文档与本文件的系统结构；代码、规则、操作说明和验收步骤一致后，才视为修改完成。
+1. 每次代码修改完成后，在同一任务中及时更新 `docs/` 对应的中文文档与本文件的系统结构；代码、规则、操作说明和验收步骤一致后，才视为修改完成。功能合并后按 `docs/AGENTS.md` 的持续整理约定检查并归档历史方案，现行规则和待办先保留在对应专题。
 2. 实施前核对 `docs/project/roadmap.md` 中的已确认范围。具体数值和操作规则未确认前仅做不依赖它们的工作；需要变更已沟通的实施方案时，先与用户沟通。
 3. 保持模块接口简洁；只为实际出现的需求建立模块与接缝，不为假想情况增加兜底或抽象层。
 4. 使用项目指定的 Godot 引擎验证场景与脚本。引擎可执行文件位于上述目录。
@@ -85,14 +85,15 @@
 
 # 文档索引
 
-- 新增、迁移、替换素材或调整导入设置时读取 `docs/project/asset-organization.md`；当前完整清亮 v2 素材入口与使用约定见 `docs/research/bright-complete-v2.md`，v1 分析保留历史。素材规则经 `assets/AGENTS.md` 加载，原始包归档不代表已接入或获准公开分发。
+- 新增、迁移、替换素材或调整导入设置时读取 `docs/project/asset-organization.md`；当前完整清亮 v2 素材入口与使用约定见 `docs/research/bright-complete-v2.md`，v1 分析归入 `docs/archive/research/` 保留历史。素材规则经 `assets/AGENTS.md` 加载，原始包归档不代表已接入或获准公开分发。
 
 - 修改 UI 视觉或布局时读取 `docs/project/ui-visual-prototype.md`：#94 采用田园布局与像素木作主题，保留当前地图与人物素材；HTML 为设计示例，Godot 窗口接入真实经营状态。
 
 - `docs/README.md`：玩法、架构、项目协作、调研与静态检查的中文导航。
 - `docs/gameplay/`：玩家可观察的作物、加工、交易、土地和地图操作规则。
 - `docs/architecture/`：按模块整理的具名接口与对应实现说明。
-- `docs/project/roadmap.md`：已确认背景、待确认事项和交付阶段。
+- `docs/project/roadmap.md`：当前已确认范围、待确认事项和后续阶段。
+- `docs/archive/index.md`：历史材料统一入口，内部镜像 `docs/` 原分类；已完成方案与阶段验收不作为现行规则。
 - `docs/project/build-and-validation.md`：Windows 与 macOS 构建、测试、导出与启动验收。
 - `docs/project/contribution-workflow.md`：issue、dev、main 与人工合并流程。
 - `docs/research/`：市场曲线与测试分类的调研依据。

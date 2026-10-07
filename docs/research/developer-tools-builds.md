@@ -1,6 +1,6 @@
 # 开发者工具与双版本构建证据
 
-历史调研说明：本文保留2026-10-05的实测事实及研究判断；#100 / #101 的现行接入与验收以[参数化测试主计划](../project/developer-tools-parameterized-tests.md)为准。
+历史调研说明：本文保留2026-10-05的实测事实及研究判断；#100 / #101 的现行操作以[参数化测试使用说明](../project/parameterized-tests-usage.md)为准。
 
 调研日期：2026-10-05（北京时间）。关联 [#97](https://github.com/Fotally/Farm-Exchange/issues/97)，用于讨论设计；本次没有修改代码、构建配置或工作流，也没有执行导出。日志边界沿用 [#82 的设计](https://github.com/Fotally/Farm-Exchange/issues/82)及[日志 schema](https://github.com/Fotally/Farm-Exchange/issues/82)。用户已明确先讨论一套代码的架构，dev 仅本地构建、不进入 CI，可覆盖 Windows 与 macOS；具体工具与源码组织仍待讨论。
 
