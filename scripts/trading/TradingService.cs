@@ -85,14 +85,15 @@ internal sealed class TradingService
             return Failed(TradeFailure.InvalidQuantity);
         if (quantity > (long)_inventory.GetAvailable(commodity) + frozenQuantity)
             return Failed(TradeFailure.InsufficientStock);
-        long totalCents = (long)quantity * _market.GetQuote(commodity).PriceCents;
+        int unitPriceCents = _market.GetQuote(commodity).PriceCents;
+        long totalCents = (long)quantity * unitPriceCents;
         long feeCents = chargeFee ? (totalCents + 99) / 100 : 0;
         long incomeCents = totalCents - feeCents;
         if (incomeCents > int.MaxValue - _wallet.BalanceCents)
-            return Failed(TradeFailure.WalletCapacityExceeded);
+            return Failed(TradeFailure.WalletCapacityExceeded, unitPriceCents);
         _inventory.RemoveForOrder(commodity, quantity, frozenQuantity);
         _wallet.Credit((int)incomeCents);
-        return new TradeResult(TradeFailure.None, quantity, totalCents) { FeeCents = feeCents };
+        return new TradeResult(TradeFailure.None, quantity, totalCents) { FeeCents = feeCents, UnitPriceCents = unitPriceCents };
     }
 
     internal TradeResult SellAll(CommodityId commodity)
@@ -103,9 +104,16 @@ internal sealed class TradingService
         return quantity == 0 ? new TradeResult(TradeFailure.None, 0, 0) : Sell(commodity, quantity);
     }
 
-    internal TradeResult SellAllProducts()
+    internal TradeResult SellAllProducts() => SellAllProductsDetailed().Trade;
+
+    /**
+     * <summary>完整结算全部加工品并返回原汇总过程取得的七商品实际明细。</summary>
+     * <returns>真实合计和只读明细；容量拒绝保持资源不变、逐行实际数量与货值为零。</returns>
+     */
+    internal ProductSaleResult SellAllProductsDetailed()
     {
         var quantities = new int[CropCatalog.Crops.Count];
+        var prices = new int[CropCatalog.Crops.Count];
         long sold = 0;
         long totalCents = 0;
         foreach (var crop in CropCatalog.Crops)
@@ -114,14 +122,24 @@ internal sealed class TradingService
             int quantity = _inventory.GetAvailable(commodity);
             quantities[(int)crop.Kind] = quantity;
             sold += quantity;
-            totalCents += (long)quantity * _market.GetQuote(commodity).PriceCents;
+            int unitPriceCents = _market.GetQuote(commodity).PriceCents;
+            prices[(int)crop.Kind] = unitPriceCents;
+            totalCents += (long)quantity * unitPriceCents;
         }
-        if (totalCents > int.MaxValue - _wallet.BalanceCents)
-            return Failed(TradeFailure.WalletCapacityExceeded);
+        var lines = new TradeLineResult[CropCatalog.Crops.Count];
+        bool rejected = totalCents > int.MaxValue - _wallet.BalanceCents;
+        foreach (var crop in CropCatalog.Crops)
+        {
+            int index = (int)crop.Kind;
+            int quantity = rejected ? 0 : quantities[index];
+            lines[index] = new(new(crop.Kind, CommodityKind.Product), quantity, prices[index], (long)quantity * prices[index]);
+        }
+        if (rejected)
+            return new(Failed(TradeFailure.WalletCapacityExceeded), Array.AsReadOnly(lines));
         foreach (var crop in CropCatalog.Crops)
             _inventory.Remove(new CommodityId(crop.Kind, CommodityKind.Product), quantities[(int)crop.Kind]);
         _wallet.Credit((int)totalCents);
-        return new TradeResult(TradeFailure.None, sold, totalCents);
+        return new(new TradeResult(TradeFailure.None, sold, totalCents), Array.AsReadOnly(lines));
     }
 
     private static TradeResult Failed(TradeFailure failure, int? unitPriceCents = null) =>

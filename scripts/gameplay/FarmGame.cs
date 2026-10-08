@@ -109,6 +109,7 @@ public sealed class FarmGame : IDisposable
         _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
         InitializeCenter(new Random(seed));
         _log = logging?.BindGame(this, seed);
+        _tradeOrders.AttachLog(_log?.Orders);
     }
 
     private void InitializeCenter(Random random)
@@ -591,7 +592,7 @@ public sealed class FarmGame : IDisposable
             throw new InvalidOperationException("模拟时间已达到上限");
         if (Calendar.ElapsedDays == previousDay)
             return false;
-        _market.Advance(Calendar);
+        _market.Advance(Calendar, _log?.Market);
         return true;
     }
 
@@ -704,11 +705,14 @@ public sealed class FarmGame : IDisposable
      */
     public TradeResult Buy(CommodityId commodity, int quantity, CommandOrigin origin = CommandOrigin.Player)
     {
-        if (origin is not CommandOrigin.Player and not CommandOrigin.Scenario)
-            throw new ArgumentOutOfRangeException(nameof(origin));
-        BuyLogOperation? observation = _log?.BeginBuy(commodity, quantity, origin);
+        ValidateCommandOrigin(origin);
+        return ExecuteTrade(_log?.Trading.BeginBuy(commodity, quantity, origin), () => _trading.Buy(commodity, quantity));
+    }
+
+    private static TradeResult ExecuteTrade(TradeLogOperation? observation, Func<TradeResult> execute)
+    {
         TradeResult result;
-        try { result = _trading.Buy(commodity, quantity); }
+        try { result = execute(); }
         catch (Exception error)
         {
             observation?.Faulted(error);
@@ -718,13 +722,42 @@ public sealed class FarmGame : IDisposable
         return result;
     }
 
+    private static void ValidateCommandOrigin(CommandOrigin origin)
+    {
+        if (origin is not CommandOrigin.Player and not CommandOrigin.Scenario)
+            throw new ArgumentOutOfRangeException(nameof(origin));
+    }
+
     /**
      * <summary>结束本局日志关联；重复释放不产生第二条结束事件。</summary>
      * <remarks>经营状态保持原有唯一拥有者，释放不修改资金、库存或生产。</remarks>
      */
     public void Dispose() => _log?.Dispose();
-    public TradeResult Sell(CommodityId commodity, int quantity) => _trading.Sell(commodity, quantity);
-    public TradeResult SellCommodityAll(CommodityId commodity) => _trading.SellAll(commodity);
+
+    /**
+     * <summary>按执行时报价完整卖出指定数量，观察真实提交结果。</summary>
+     * <param name="commodity">原请求商品。</param>
+     * <param name="quantity">原请求份数。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源；非法来源在提交前抛参数异常。</param>
+     * <returns>真实结算或资源零修改的拒绝。</returns>
+     */
+    public TradeResult Sell(CommodityId commodity, int quantity, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        return ExecuteTrade(_log?.Trading.BeginSell(commodity, quantity, origin), () => _trading.Sell(commodity, quantity));
+    }
+
+    /**
+     * <summary>完整卖出某商品可用库存；空库存成功返回零。</summary>
+     * <param name="commodity">原请求商品。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <returns>实际全售结果；不出售冻结库存。</returns>
+     */
+    public TradeResult SellCommodityAll(CommodityId commodity, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        return ExecuteTrade(_log?.Trading.BeginSellAll(commodity, origin), () => _trading.SellAll(commodity));
+    }
 
     /**
      * <summary>读取按建单顺序排列的独立只读委托快照。</summary>
@@ -735,37 +768,94 @@ public sealed class FarmGame : IDisposable
     /**
      * <summary>创建委托；一次单冻结资源，持续策略不冻结。</summary>
      * <param name="request">商品、完整条件组、数量、预算和现金保留设置。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
      * <returns>新委托 ID 或零修改的中文拒绝原因。</returns>
      * <remarks>锁定当前现金基准，不立即执行；暂停时仍可提交。</remarks>
      */
-    public TradeOrderCommandResult CreateTradeOrder(TradeOrderRequest request) => _tradeOrders.Create(request);
+    public TradeOrderCommandResult CreateTradeOrder(TradeOrderRequest request, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        return ExecuteOrder(_log?.Orders.BeginCreate(request, origin), () => _tradeOrders.Create(request));
+    }
 
     /**
      * <summary>完整替换活动委托并重验冻结，保持原 ID、顺序和现金基准。</summary>
      * <param name="id">原活动委托 ID。</param>
      * <param name="request">新的完整设置。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
      * <returns>成功或零修改的正常拒绝。</returns>
      */
-    public TradeOrderCommandResult UpdateTradeOrder(int id, TradeOrderRequest request) => _tradeOrders.Update(id, request);
+    public TradeOrderCommandResult UpdateTradeOrder(int id, TradeOrderRequest request, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        return ExecuteOrder(_log?.Orders.BeginEdit(id, request, origin), () => _tradeOrders.Update(id, request));
+    }
 
     /**
      * <summary>撤销活动委托并释放该单资源；结束记录仍保留。</summary>
      * <param name="id">活动委托 ID。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
      * <returns>成功或已经结束的正常拒绝。</returns>
      */
-    public TradeOrderCommandResult CancelTradeOrder(int id) => _tradeOrders.Cancel(id);
+    public TradeOrderCommandResult CancelTradeOrder(int id, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        return ExecuteOrder(_log?.Orders.BeginCancel(id, origin), () => _tradeOrders.Cancel(id));
+    }
 
     /**
      * <summary>启用或停用持续策略，不推进经营。</summary>
      * <param name="id">活动持续策略 ID。</param>
      * <param name="enabled">是否启用。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
      * <returns>成功或不支持该操作的正常拒绝。</returns>
      */
-    public TradeOrderCommandResult SetTradeOrderEnabled(int id, bool enabled) => _tradeOrders.SetEnabled(id, enabled);
+    public TradeOrderCommandResult SetTradeOrderEnabled(int id, bool enabled, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        return ExecuteOrder(_log?.Orders.BeginSetEnabled(id, enabled, origin), () => _tradeOrders.SetEnabled(id, enabled));
+    }
 
-    public SaleResult SellAll() => LegacySale(_trading.SellAllProducts());
-    public SaleResult SellRaw(CropKind crop) =>
-        LegacySale(SellCommodityAll(new CommodityId(crop, CommodityKind.Raw)));
+    private static TradeOrderCommandResult ExecuteOrder(OrderLogOperation? observation, Func<TradeOrderCommandResult> execute)
+    {
+        TradeOrderCommandResult result;
+        try { result = execute(); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
+
+    /**
+     * <summary>一次完整出售七种加工品的可用库存；日志消费同次结算的逐商品明细。</summary>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <returns>原兼容接口的真实合计或资源零修改的拒绝。</returns>
+     */
+    public SaleResult SellAll(CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        ProductSaleLogOperation? observation = _log?.Trading.BeginSellAllProducts(origin);
+        ProductSaleResult result;
+        try { result = _trading.SellAllProductsDetailed(); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return LegacySale(result.Trade);
+    }
+    /**
+     * <summary>经同一单商品全售入口卖出指定原料，保持旧返回格式。</summary>
+     * <param name="crop">请求原料作物。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <returns>实际成交合计或资源零修改的拒绝。</returns>
+     */
+    public SaleResult SellRaw(CropKind crop, CommandOrigin origin = CommandOrigin.Player) =>
+        LegacySale(SellCommodityAll(new CommodityId(crop, CommodityKind.Raw), origin));
 
     private static SaleResult LegacySale(TradeResult result) =>
         new((int)result.Quantity, (int)result.TotalCents, result.Failure);
@@ -780,7 +870,7 @@ public sealed class FarmGame : IDisposable
             _farming.ClearDisallowedCrops(calendar.Season);
         if (calendar.ElapsedDays == previousCalendar.ElapsedDays)
             return false;
-        _market.Advance(calendar);
+        _market.Advance(calendar, _log?.Market);
         return true;
     }
 

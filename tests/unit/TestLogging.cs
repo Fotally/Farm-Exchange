@@ -26,6 +26,7 @@ public static class TestLogging
             CheckFailureAndRecovery();
             CheckTextAndExceptionBudgets();
             CheckProviderEnvironment();
+            CheckGenericSubmission();
             return true;
         }
         catch (Exception error) { GD.PrintErr("日志公开接口测试失败：" + error); return false; }
@@ -171,12 +172,12 @@ public static class TestLogging
         using var log = RuntimeLog.Capture(output);
         using var game = new FarmGame(17);
         using var context = log.BindGame(game, 17)!;
-        var successful = context.BeginBuy(Wheat, 2, CommandOrigin.Scenario)!;
+        var successful = context.Trading.BeginBuy(Wheat, 2, CommandOrigin.Scenario)!;
         var actual = game.Buy(Wheat, 2, CommandOrigin.Scenario);
         successful.Complete(actual);
         successful.Complete(actual);
         successful.Faulted(new InvalidOperationException("已经完成"));
-        var faulted = context.BeginBuy(Wheat, 1)!;
+        var faulted = context.Trading.BeginBuy(Wheat, 1)!;
         var original = new InvalidOperationException("公开观察原异常\r\n保留关联");
         Exception? received = null;
         try { ThrowObserved(faulted, original); }
@@ -193,21 +194,21 @@ public static class TestLogging
         Require(lines.Count(line => HasEvent(line, "TradeFinished")) == 1 && game.GetStock(Wheat) == 2,
             "异常观察伪造结算或执行业务");
         int beforeInvalid = output.ToString().Length;
-        try { context.BeginBuy(Wheat, 1, (CommandOrigin)42); Require(false, "观察入口接受非法来源"); }
+        try { context.Trading.BeginBuy(Wheat, 1, (CommandOrigin)42); Require(false, "观察入口接受非法来源"); }
         catch (ArgumentOutOfRangeException) { }
         Require(output.ToString().Length == beforeInvalid, "观察入口输出非法来源事件");
-        var unfinished = context.BeginBuy(Wheat, 1)!;
+        var unfinished = context.Trading.BeginBuy(Wheat, 1)!;
         context.Dispose();
         int released = output.ToString().Length;
         context.Dispose();
         unfinished.Complete(actual);
-        Require(context.BeginBuy(Wheat, 1) == null && output.ToString().Length == released,
+        Require(context.Trading.BeginBuy(Wheat, 1) == null && output.ToString().Length == released,
             "释放后的观察仍有结果或无法关闭");
         using var disabled = RuntimeLog.Disabled();
         Require(disabled.BindGame(game, 17) == null, "关闭采集仍绑定或投影局");
     }
 
-    private static void ThrowObserved(BuyLogOperation observation, Exception original)
+    private static void ThrowObserved(TradeLogOperation observation, Exception original)
     {
         try { throw original; }
         catch (Exception error) { observation.Faulted(error); throw; }
@@ -280,6 +281,34 @@ public static class TestLogging
         string known = Lines(available.ToString())[0];
         Require(known.Contains("GameVersion: \"v0.2.1\"") && known.Contains("WindowSize: { Width: 1920, Height: 1080 }"),
             "实际版本或正尺寸被错误归一化");
+    }
+
+    private static void CheckGenericSubmission()
+    {
+        using var output = new StringWriter();
+        using var log = LogOutput.Capture(output, diagnostic: _ => { });
+        var description = new LogEventDescriptor(9001, "TestObservation", "Tests.Logging",
+            Microsoft.Extensions.Logging.LogLevel.Debug, RuntimeIncluded: false);
+        log.Submit(description, "合法测试事件", new()
+        {
+            ["ObservedCount"] = 0,
+            ["UnknownValue"] = null,
+            ["NestedObservation"] = new System.Collections.Generic.Dictionary<string, object?> { ["Label"] = "中文" },
+            ["SessionId"] = "不可覆盖会话",
+            ["Sequence"] = -10,
+            ["EventName"] = "不可覆盖事件描述",
+        });
+        string line = Lines(output.ToString()).Single();
+        Require(HasEvent(line, "TestObservation") && line.Contains("[DBG]") &&
+            line.Contains("SourceContext=Tests.Logging") && line.Contains("ObservedCount: 0") &&
+            line.Contains("UnknownValue: null") && line.Contains("NestedObservation: { Label: \"中文\" }"),
+            "合法独立事件不能通过通用提交输出");
+        Require(Field(line, "Sequence") == "1" && !line.Contains("不可覆盖") &&
+            !line.Contains("RuntimeIncluded") && !line.Contains("EventId:"), "公共头被覆盖或内部路由属性泄漏");
+        log.Observe(() => throw new InvalidOperationException("测试领域投影失败"));
+        Require(log.Health.FailureCount == 1, "通用观察未隔离领域投影失败");
+        log.Submit(description with { Number = 9002, Name = "TestFollowup" }, "继续观察", new());
+        Require(HasEvent(Lines(output.ToString()).Last(), "TestFollowup"), "投影失败阻止后续合法事件");
     }
 
     internal static string[] Lines(string text) => text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);

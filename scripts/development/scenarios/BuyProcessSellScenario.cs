@@ -228,7 +228,7 @@ public sealed class BuyProcessSellScenario
         _orderRequest = new TradeOrderRequest(_configuration.ProductCommodity, TradeOrderSide.Sell, TradeOrderFrequency.Once,
             TradeOrderQuantityMode.Fixed, _configuration.Quantity, TradeOrderBudgetMode.None, 0, 0, CashReserveMode.Amount, 0,
             new IReadOnlyList<TradeOrderCondition>[] { new[] { new TradeOrderCondition(TradeConditionFactor.Stock, TradeConditionComparison.GreaterOrEqual, _configuration.Quantity) } });
-        TradeOrderCommandResult result = Game.CreateTradeOrder(_orderRequest);
+        TradeOrderCommandResult result = Game.CreateTradeOrder(_orderRequest, CommandOrigin.Scenario);
         ScenarioSnapshot after = Capture();
         Report.Operations.Add(new ScenarioOperation("CreateTradeOrder", _lastTicks, _orderRequest, result, before, after));
         if (!result.Success)

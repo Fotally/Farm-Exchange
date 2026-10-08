@@ -21,6 +21,7 @@ public static class TestLoggingFiles
             CheckUnavailable(Path.Combine(root, "blocked"));
             CheckRuntimeFileFailure(Path.Combine(root, "runtime-failure"));
             CheckIndependentInitialization(Path.Combine(root, "independent-initialization"));
+            CheckDescriptorRouting(Path.Combine(root, "descriptor-routing"));
             using var invalidConfiguration = RuntimeLog.OpenFile(Path.Combine(root, "invalid"), false,
                 new LogEnvironment(), new LogFileRetention(RuntimeBytes: 0), _ => { });
             using var game = new FarmGame(17, invalidConfiguration);
@@ -81,6 +82,35 @@ public static class TestLoggingFiles
         AssertSequence(lines);
     }
 
+    private static void CheckDescriptorRouting(string directory)
+    {
+        var included = new LogEventDescriptor(9001, "TestRuntimeObservation", "Tests.Logging");
+        var diagnostic = new LogEventDescriptor(9002, "TestDiagnosticObservation", "Tests.Logging", RuntimeIncluded: false);
+        var verbose = included with { Number = 9003, Name = "TestVerboseObservation", Level = Microsoft.Extensions.Logging.LogLevel.Trace };
+        using (var log = LogOutput.OpenFile(directory, true))
+        {
+            log.Submit(included, "两目标事件", new());
+            log.Submit(diagnostic, "仅开发事件", new());
+            log.Submit(verbose, "详细事件", new());
+            Require(log.Health.Health == LoggingHealth.Healthy, "领域描述导致输出故障");
+        }
+        string[] runtime = ReadFiles(Path.Combine(directory, "runtime"));
+        string[] debug = ReadFiles(Path.Combine(directory, "debug"));
+        Require(runtime.Length == 1 && HasEvent(runtime[0], included.Name) && debug.Length == 3 &&
+            runtime[0] == debug[0] && HasEvent(debug[1], diagnostic.Name) && HasEvent(debug[2], verbose.Name),
+            "事件采集资格和级别没有独立控制真实 File 路由");
+        string releaseDirectory = Path.Combine(directory, "release");
+        using (var log = LogOutput.OpenFile(releaseDirectory, false))
+        {
+            log.Submit(diagnostic, "禁止发布事件", new());
+            log.Submit(verbose, "禁止发布详细事件", new());
+            log.Submit(included, "发布事件", new());
+        }
+        string[] released = ReadFiles(Path.Combine(releaseDirectory, "runtime"));
+        Require(released.Length == 1 && Field(released[0], "Sequence") == "1" &&
+            !Directory.Exists(Path.Combine(releaseDirectory, "debug")), "发布过滤前分配序号或创建开发文件");
+    }
+
     private static void CheckUnavailable(string directory)
     {
         File.WriteAllText(directory, "不可作为目录");
@@ -108,6 +138,9 @@ public static class TestLoggingFiles
         long failures = log.Health.FailureCount;
         Require(log.Health.Health == LoggingHealth.Degraded && failures > 0 && diagnostics == 1,
             "runtime 运行中写入/滚动失败未独立报告，或假称两目标健康");
+        log.Output.Submit(new(9002, "TestDiagnosticObservation", "Tests.Logging", RuntimeIncluded: false),
+            "仅可写开发目标的事件", new());
+        Require(log.Health.Health == LoggingHealth.Degraded, "被过滤的目标被误判为恢复");
         log.InitializationFailed(new InvalidOperationException("失效目标的后续真实输出"));
         Require(log.Health.Health == LoggingHealth.Degraded && log.Health.FailureCount > failures && diagnostics == 1,
             "失败目标内部通知未接通、误判恢复或重复无界通知");

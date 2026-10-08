@@ -4,7 +4,7 @@
 
 对应类型：FarmExchange.Gameplay.FarmGame，代码位于 scripts/gameplay/FarmGame.cs。调用方为主场景和地图；测试也通过该公开接口验证行为。当前只有一个实现，未声明 C# interface 类型。
 
-`FarmGame(seed?, logging?)` 默认不采集日志；显式传入 `RuntimeLog` 时通过公开 BindGame 在真实开局完成后绑定局身份与初始化基线。当前只对 `Buy(commodity, quantity, origin=Player)` 关联原指令、真实结算和结束结果；经营语义来源 `FarmExchange.Gameplay.CommandOrigin` 只有 Player/Scenario，其他值在记录与业务提交前抛出 `ArgumentOutOfRangeException(nameof(origin))`，资源零修改且不依赖采集开关。开发流程显式 Scenario，其他经营命令仍由后续议题接入。业务只开始公开观察、执行交易一次并完成/异常终结，不持有日志内部快照或指令凭据。输出失败不改业务结果、不重试命令，业务异常原样传播。`Dispose()` 幂等结束本局日志关联且不改变资源；宿主持有并在局之后关闭会话，具体约定见[日志 Interface](../../logging/interface-logging.md)。
+`FarmGame(seed?, logging?)` 默认不采集日志；显式传入 `RuntimeLog` 时通过公开 BindGame 在真实开局完成后绑定局身份与初始化基线。#127 对主动交易（含全部出售）与创建/编辑/撤销/启停订单关联原指令、真实结果和一次结束，相关命令均接受可选 `origin=Player`。经营语义来源 `FarmExchange.Gameplay.CommandOrigin` 只有 Player/Scenario，其他值在记录与业务提交前抛出 `ArgumentOutOfRangeException(nameof(origin))`，资源零修改且不依赖采集开关。开发流程买入与一次卖单创建显式传 Scenario；自动订单成交、实际等待与行情由所属领域观察，不伪造玩家命令。建造、生产、耕作和流程生命周期仍由后续议题接入。经营层局部收敛重复调用手续，仍只执行原业务一次，不持有日志内部快照、协议字段或指令凭据；日志不执行业务回调。输出失败不改业务结果、不重试命令，业务异常原样传播。`Dispose()` 幂等结束本局日志关联，先封存订单等待尾段且不改变资源；宿主持有并在局之后关闭会话，具体约定见[日志 Interface](../../logging/interface-logging.md)。
 
 | 用途 | 公开成员 | 调用方需要知道的约定 |
 | --- | --- | --- |

@@ -12,8 +12,8 @@ public readonly record struct TradeResult(TradeFailure Failure, long Quantity, l
 {
     public long FeeCents { get; init; }
     /**
-     * <summary>买入结算实际读取的单价，单位为分；未执行报价读取时为 null。</summary>
-     * <remarks>当前由 Buy 与 BuyOrder 提供；不是记录时另查的报价，其他交易路径本阶段保持 null。</remarks>
+     * <summary>单商品买卖结算实际读取的单价，单位为分；未执行报价读取时为 null。</summary>
+     * <remarks>主动及委托交易均保留实际价；空库存单商品全售未读取价格，批量全售各价保存在逐商品明细。</remarks>
      */
     public int? UnitPriceCents { get; init; }
     public bool Success => Failure == TradeFailure.None;

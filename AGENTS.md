@@ -23,13 +23,13 @@
 - `scripts/processing/ProcessingSystem.cs`：加工场地匹配作物与批次进度的唯一拥有者，负责按旧顺序从公共库存领取匹配原料。
 - `scripts/workers/WorkerScheduler.cs` 与 `WorkerSnapshot.cs`：工人位置、任务、按实例独占认领与稳定锚点轮转游标的唯一拥有者。三人每经营秒推进 3 小格，到农田定义的工作中心播种浇水，执行前重验版本凭据；按单tick或平静区间推进，最近事件距离、行程起点与累计移动公式封装在工人模块；选择算法保持私有以便替换复杂调度。
 - `scripts/inventory/CommodityId.cs` 与 `Inventory.cs`：前者统一十四商品标识与合法性；后者唯一拥有两类公共库存、逐作物底线和冻结数量。总查询含冻结，可用量扣除一次卖单冻结，加工仅从可用原料领取超过底线的一份；买入与自产共用存储，主动出售不受加工底线限制但不能用冻结量。
-- `scripts/trading/TradingService.cs` 与 `TradeResult.cs`：完整即时与委托结算模块，先检查数量、执行时报价、可用及本单冻结资源、保留线和容量，再一次提交；即时零费，委托按实际成交额收 1% 向上取分费用，结果分别给出货值与费用。宽整数预检，失败资源零修改；调用方不拼装扣款和入库。
-- `scripts/logging/`：独立日志模块，唯一拥有进程/经营局日志身份、指令关联、统一序号、字段投影、串行分流、可读转义与输出健康状态；文件轮转交给 Serilog。#126 只接入真实生命周期及单商品买入，业务继续拥有资金、库存和判断。修改记录入口、生命周期、分流或字段时读取 `docs/architecture/logging/interface-logging.md` 与 `docs/project/runtime-log-schema-v1.md`；其余领域按 #127～#130 接入。
-- `scripts/trading/TradeOrderBook.cs`、`TradeOrderRequest.cs` 与 `TradeOrderSnapshot.cs`：订单模块唯一持有单据配置、创建顺序、原现金基准、生命周期和各单资源归属。组内全部/组间任一条件，季节仅读日历；一次限价数量或固定预算买单冻结，卖单冻结数量，持续策略不冻结。一次目标差额建单锁定、持续动态算，行情更新后每单检查一次；同 ID 编辑重验、撤销释放，查询返回独立只读快照。任意一次或持续成交且仍有等待单时要求下一经营秒重检；依赖不变且全部等待时保留批量平静推进。
+- `scripts/trading/TradingService.cs`、`TradeResult.cs` 与 `ProductSaleResult.cs`：完整即时与委托结算模块，先检查数量、执行时报价、可用及本单冻结资源、保留线和容量，再一次提交；即时零费，委托按实际成交额收 1% 向上取分费用，结果分别给出货值与费用。单商品结果保留实际读取的可选单价，全部加工品出售由原结算过程给出七商品明细；宽整数预检，失败资源零修改，调用方不拼装扣款和入库。
+- `scripts/logging/`：独立日志模块。`RuntimeLog` 组装会话与局，`GameLog` 维护局上下文及 Trading/Orders/Market 入口，`CommandObservation` 共用指令关联与一次终结；领域 Adapter 拥有事件描述、真实资源投影和订单等待去重/有界合并，`LogOutput` 接收通用描述并拥有进程身份、序号、过滤、串行分流及健康，转义及截断元数据合并由 formatter 维护、文件轮转交给 Serilog。#127 覆盖主动买卖/全部出售、订单命令/真实成交/等待及实际公告/正式报价，业务继续拥有资金、库存、执行和判断。修改记录入口、生命周期、分流或字段时读取 `docs/architecture/logging/interface-logging.md` 与 `docs/project/runtime-log-schema-v1.md`；生产、耕作、流程与专项诊断按 #128～#130 接入。
+- `scripts/trading/TradeOrderBook.cs`、`TradeOrderRequest.cs`、`TradeOrderSnapshot.cs` 与 `TradeOrderEvaluation.cs`：订单模块唯一持有单据配置、创建顺序、原现金基准、生命周期和各单资源归属。组内全部/组间任一条件，季节仅读日历；一次限价数量或固定预算买单冻结，卖单冻结数量，持续策略不冻结。一次目标差额建单锁定、持续动态算，行情更新后每单检查一次；同 ID 编辑重验、撤销释放，查询返回独立只读快照。实际判断分支提供稳定阻塞事实，日志不从中文原因逆推或补做判断；实际成交在冻结与状态更新后记录一次。任意一次或持续成交且仍有等待单时要求下一经营秒重检；依赖不变且全部等待时保留批量平静推进。
 - `scripts/economy/Wallet.cs`：每局金币总余额与冻结金额的唯一拥有者，提供可用金额；建造与即时交易不能动用冻结，委托消费本单额度并释放差额，所有数值保持原整数容量。
 - `scripts/characters/NpcCharacter.cs` 与 `scenes/npc_character.tscn`：可复用的清亮 v2 NPC 动画角色。加载20名角色的待机、走、跑、播种和浇水 SpriteFrames，保留64×64、脚根(32,60)、四向及逐帧时长；合成帧包含工具，单次作业不重复叠加特效。主地图只展示真实位置和成功结果，动画不执行经营任务。
 - `scripts/market/CommodityCatalog.cs` 与 `CommodityDefinition.cs`：唯一维护十四商品名称和初价，稳定排列，使用库存模块的统一商品标识。
-- `scripts/market/MarketQuotes.cs` 与 `MarketSnapshot.cs`：唯一持有正式报价、固定双周排期、事件与公告，封装供需、季节、成本、整数分限幅及节日改期；只接收日历推进并返回独立只读快照，玩家交易量不影响报价。`MarketPriceCurve.cs` 保留为历史独立曲线及测试，不再参与经营。
+- `scripts/market/MarketQuotes.cs` 与 `MarketSnapshot.cs`：唯一持有正式报价、固定双周排期、事件与公告，封装供需、季节、成本、整数分限幅及节日改期；接收日历推进并返回独立只读快照，玩家交易量不影响报价。可选本局 `MarketLog` 在实际公告/报价提交处观察已锁定因素，不增加随机抽取或价格计算；构造历史只建立基线。`MarketPriceCurve.cs` 保留为历史独立曲线及测试，不再参与经营。
 - `scripts/time/GameCalendar.cs`、`GameDate.cs` 与 `GameTimeUnits.cs`：日历唯一维护累计 `uint32` 模拟秒与暂停，纯日期查询共用相同年月日与季节换算，为未来实际报价日生成不可变日期；比例模块统一生产和日历的整数比例及剩余秒数换算。`FarmGame` 持有日历，按单tick或平静区间推进并在事件边界完整结算。
 - `scripts/world/MapCoordinates.cs`：固定等距地图的格坐标与地图本地坐标换算入口，使用 `FarmGame.MapSize` 定义的同一地图范围；不读取节点或经营状态。
 - `scripts/world/WorldMap.cs`：地图表现模块。按 8×8 基础格缓存清亮 v2 草地与道路；每实例按真实快照选择干湿土、播种层、七作物三档或七加工建筑，土层固定低层，设施与工人按工作中心和脚根共同深度排序。资源映射、pivot、外观档及可见性留在模块内部，图片跨块不裁切；镜头移动不重建经营状态。候选使用同一设施图，冲突与整实例外围选框独立覆盖；输入转换和占地仍复用正式几何，不维护经营规则。

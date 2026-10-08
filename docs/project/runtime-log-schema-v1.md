@@ -2,7 +2,7 @@
 
 关联 [#82](https://github.com/Fotally/Farm-Exchange/issues/82)；记录范围、框架及轮转方案见[日志设计](../research/runtime-logging.md)。2026-10-02 用户确认：两类业务日志均输出可读 `.log`，字段含义必须明确，供人和 AI 分析。本文件是字段与事件语义的唯一维护入口；事件登记包括分阶段接入的约定，只有实际覆盖表中的事件可作为当前程序已产生的证据。
 
-2026-10-07 修订：初版设计已确认，先以 #126 接入生命周期与单商品买入；后续等待、生产、年度表、倍率和流程仍由 #127～#130 分阶段实现。格式与初始预算由实施选择并验证，具体实现范围以[日志接口](../architecture/logging/interface-logging.md)为准。设计示意不作为实际验收样例。
+2026-10-08 修订：保留 #126 生命周期与单商品买入契约，#127 扩展主动交易、订单等待与行情，并登记跨商品编辑快照和集合截断计数。生产、年度表、倍率、流程与专项诊断仍由 #128～#130 分阶段实现。格式与初始预算由实施选择并验证，具体实现范围以[日志接口](../architecture/logging/interface-logging.md)为准；登记不代替该阶段审查与运行验收。设计示意不作为实际验收样例。
 
 已确认的采集粒度：玩家命令、交易、订单变化与异常逐条记录；自动播种、浇水、收获、加工按时间窗口汇总，对象级详细记录按需、有界开启。该原则不保证普通日志可还原每座设施的每次动作；汇总字段和具体预算仍依照下文草案收敛。
 
@@ -32,6 +32,8 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 自由文本和对象样本超限须标明截断字段及原数量，不能截断 UTF-8 字符或结构。当前文本预算与有界拒绝已由 #126 落实；后续对象采集预算见文末。若核心字段也无法保留，用有界拒绝事件报告原事件无法完整输出，不生成貌似完整的成功结算。日志尺寸限制不能反向拒绝原本合法的业务命令；订单验证器没有条件组/条件项数量硬上限，#127 接入时必须验证大合法配置。
 
 实际截断的事件输出 `Truncated: true`、`TruncatedFields` 字段路径数组及 `TruncatedOriginalCounts` 路径到原计数对象的字典。普通字符串和摘要对象含 `ScalarCount`（原 Unicode 标量总数，非负 int64）；`Exception` 另含 `Utf8Bytes`（原 UTF-8 字节总数，非负 int64）与 `LineCount`（原文本 LF 数量加一，正 int64，CRLF 计一次换行）。计数针对截断前文本，不能用转义后长度或物理日志行数代替。未截断的字段不输出计数；整事件超过预算改写为 `EventPayloadRejected` 时不保留貌似完整的原事件。
+
+#127 增加集合采样计数：被截断数组的计数对象含 `ItemCount`（原数组元素数量，非负 int64），不是输出样本长度或递归叶子总数。领域投影提供集合采样路径和原数量，formatter 将其与文本截断合并为一份 `TruncatedFields/TruncatedOriginalCounts`；同一事件不出现重复元数据键。字符串计数含义保持不变。
 
 ## 通用字段
 
@@ -79,15 +81,27 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 
 ## 玩家指令契约
 
-记录玩家语义指令并便于未来复用。初版采用 `CommandReceived` / `CommandFinished` 配对，与中间的实际领域结果关联。#126 首先实现 `BuyCommodity`，其原参数为 `Commodity`、`RequestMode="Fixed"`、`RequestedQuantity`；`CommandOrigin` 为 `Player/Scenario`。无效商品仍按 `<Crop>.<Kind>` 保留位置，其中未定义枚举用原十进制整数，例如 `"123.456"`；负数量原样记录。领域结果另说明拒绝，不能用执行后的合法值覆盖请求。其他命令随所属子议题登记参数并接入，不表示已经覆盖。
+记录玩家语义指令并便于未来复用。采用 `CommandReceived` / `CommandFinished` 配对，与中间的实际领域结果关联；`CommandOrigin` 为 `Player/Scenario`。#126 的 `BuyCommodity` 参数语义保持，#127 增加下表交易与订单命令。无效商品仍按 `<Crop>.<Kind>` 保留位置，其中未定义枚举用原十进制整数，例如 `"123.456"`；负数量原样记录。领域结果另说明拒绝，不能用执行后的合法值覆盖请求。后续建造、耕作和流程等命令随所属子议题登记参数并接入。
 
 | 字段 | 含义 |
 | --- | --- |
 | `CommandId` | 每局内递增的正 int64 指令编号，与 SessionId/GameInstanceId 共同解释；不使用玩法随机源，不替代日志事件 Sequence |
-| `CommandName` | 稳定语义命令名；#126 为 `BuyCommodity`，其余随逐项参数登记，不使用 UI 控件名 |
+| `CommandName` | 稳定语义命令名，交易与订单取下表登记值；其余随逐项参数登记，不使用 UI 控件名 |
 | `CommandOrigin` | `Player/Scenario`，区分玩家与开发流程的实际调用来源；自动成交/生产不伪装为玩家再次下令 |
 | `CommandArguments` | 按命令分别定义的原始请求结构，不是任意属性字典或完整对象序列化；复用已定义的商品、请求模式、格坐标、订单/计划配置等字段语义 |
 | `CommandStatus` | `Succeeded/Rejected/Faulted`；真实完成/业务拒绝/抛出异常，独立于领域事件的 Outcome，不把收到输入当成功 |
+
+| CommandName | CommandArguments 原始参数 |
+| --- | --- |
+| `BuyCommodity`、`SellCommodity` | Commodity、RequestMode=Fixed、RequestedQuantity |
+| `SellCommodityAll` | Commodity、RequestMode=AllCommodity；不伪造 RequestedQuantity |
+| `SellAllProducts` | RequestMode=AllProducts；不附单一 Commodity 或 RequestedQuantity |
+| `CreateTradeOrder` | RequestedOrderRequest；创建前没有已分配 OrderId |
+| `UpdateTradeOrder` | OrderId、RequestedOrderRequest |
+| `CancelTradeOrder` | OrderId |
+| `SetTradeOrderEnabled` | OrderId、Enabled（布尔原输入） |
+
+`CommandArguments.OrderId` 属于原输入域，允许记录请求中的 0 或负数；领域事件的 `OrderId` 仍只表示已经存在或成功分配的正整数身份。订单原配置按下文投影和有界截断约定记录，不将拒绝输入解释为生效配置。
 
 runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入口取得实际输入后、业务验证/修改前提交，带命令身份、来源、原参数及通用头/经营上下文。Finished 在真实完成、拒绝或异常边界提交，带同一 CommandId 与状态，正常拒绝复用实际原因，异常保持原传播。中间的 TradeFinished、BuildingPlaced 等领域事件携带 CommandId 关联且各自记录一次资源结果；通用 Finished 不复制资金库存收支。高频内部调用不作为新玩家命令记录，不为日志建立新的命令执行总线。
 
@@ -130,6 +144,7 @@ runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入
 | `OrderStatusBefore`、`OrderStatusAfter` | 订单状态字符串 | `Waiting/Disabled/Completed/Cancelled`＝等待/停用/完成/撤销；创建前状态为 null |
 | `OrderFrozenCentsBefore`、`OrderFrozenCentsAfter` | 非负 int32，分 | 本单拥有的资金冻结，不是所有订单冻结总额 |
 | `OrderFrozenQuantityBefore`、`OrderFrozenQuantityAfter` | 非负 int32，份 | 本单拥有的库存冻结，不是全部商品的冻结量 |
+| `OrderCommodityStocks` | 最多两项商品库存对象数组 | #127 新增：创建/编辑观察涉及的商品，每项含 Commodity 与 Stock/AvailableStock/FrozenStock 的 Before/After 六字段；同商品仅一项，跨商品先原订单商品、后请求商品。非法商品的六个库存值为 null，不查询库存；不与顶层快照重复计量 |
 | `RequestedOrderRequest` | 订单配置对象 | 创建/编辑命令收到的完整原始配置，可能非法或被拒绝，不能当作已经生效；形状见下一表 |
 | `OrderRequestBefore`、`OrderRequestAfter` | 订单配置对象或 null | 真正提交前/后的有效单据配置；创建的 Before 为 null；成功才必填，拒绝时若记录合法已有订单则前后相同，不用拒绝的输入冒充 After |
 | `CashBasisCents`、`ReserveCents` | 非负 int32，分 | 原建单现金基准、实际现金保留门槛；同 ID 编辑不重置原基准 |
@@ -167,6 +182,10 @@ runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入
 
 模式不适用的配置字段仍原样记录完整配置，但 AI 不应把其值当作生效限制。拒绝的配置允许带不合法输入；其合法性由真实结果说明。
 
+创建命令的顶层 `Commodity` 与库存前后观察请求商品；已有订单的编辑命令观察原订单商品。跨商品编辑用 `OrderCommodityStocks` 同时解释旧商品冻结释放与新商品冻结建立。拒绝编辑的 `OrderRequestBefore/After` 均为原生效配置，所有已取得资源的前后值保持；不存在订单时不伪造有效配置、原冻结或已有对象身份。输入非法商品仍保留原标识，未知库存为 null。
+
+每份配置最多记录前 8 个条件组及合计前 32 条条件，保持原顺序；预算不参与业务验证或求值。外层组被截断时记录 `*.ConditionGroups` 的原组数，某个保留组被截断时记录 `*.ConditionGroups[i]` 的原条件数，均使用 `ItemCount`。条件预算耗尽而省略后续组时也标记外层截断，不用未标记空组冒充原输入。路径前缀分别为 `CommandArguments.RequestedOrderRequest`、`RequestedOrderRequest`、`OrderRequestBefore`、`OrderRequestAfter`；只标记实际截断路径。原 null 请求、组或条件保留 null，非法枚举保留其原数值表示，不由日志修复输入。
+
 ### 等待观察的记录时点
 
 OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际求值或成交结束此前等待时记录。订单刚创建的“等待下一经营秒检查”不等于已经判定阻塞；暂停和平静批量秒不能补造检查。AND/OR 保持原语义，某个 OR 分支失败不能独自证明整单阻塞，日志只记录真实业务判断的依据。
@@ -174,6 +193,8 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 相同原因数值波动不生成新变化；高倍率下中间变化超预算可合并成 OrderWaitSummary。合并字段为 Coalesced=true、SuppressedTransitionCount（非负 int64，省略的变化次数）、FirstObservedSimulationSeconds/LastObservedSimulationSeconds（uint32）、ReasonObservationCounts（上述原因到非负 int64 的实际观察次数）及 LastWaitingState/LastWaitingCategories（最后真实观察）。次数不是经营秒数，不推算精确等待时长。
 
 首次等待、成交恢复、取消和停用不受中间变化预算影响；终止或封窗前先输出尚未输出的合并尾段。取消/停用只通过对应生命周期事件结束观察，不伪造 Resolved。重新启用后首次实际求值重新建立基线。去重状态按局/订单隔离，订单终结和局释放后删除。
+
+成功编辑订单时，在 `OrderEdited` 前封存旧配置尚未输出的等待尾段并清理原观察，下一次实际求值为新配置建立基线；编辑本身不代表等待已恢复，不伪造 `Resolved`。拒绝编辑保留原配置的观察与合并计数。
 
 ## 汇总、行情与诊断字段
 
@@ -253,7 +274,7 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 | `LoggingHealth` | Healthy/Degraded/Unavailable，仅日志健康，不是游戏健康 |
 | `FirstFailureUptimeMs`、`FailureCount`、`KnownLostCount` | 非负 int64 或 null；故障首次时点/已观察故障数/可确定丢失数，不能确定则 null |
 | `Truncated`、`TruncatedFields` | 布尔、字段路径数组；只承认明确截断的内容，不缩减金额等核心字段后冒充完整 |
-| `TruncatedOriginalCounts` | 字段路径到原文本计数对象的字典；ScalarCount/Utf8Bytes/LineCount 的单位及出现条件见文本布局，#126 已接入 |
+| `TruncatedOriginalCounts` | 字段路径到原数量对象的字典；ScalarCount/Utf8Bytes/LineCount 为 #126 文本计数，#127 新增数组 ItemCount；单位及出现条件见文本布局 |
 | `OriginalItemCount` | 字段路径到原集合数量的字典；后续集合样本截断时使用，当前未接入 |
 | `OriginalEventName` | 无法完整输出时原事件名，关联身份沿用原事件；不代表原事件已写盘 |
 
@@ -310,7 +331,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `SessionEnded` | 两类/INF | 各局结束和尾段输出后、关闭文件前的进程事件；时长由 UptimeMs 表达，不代表字节已耐断电持久化 |
 | `GameInitialized` | 两类/INF | 真实初始化完成；GamePurpose、Seed、InitialFacilities、Inventory、MoneyCents、AvailableMoneyCents、FrozenMoneyCents |
 | `GameEnded` | 两类/INF | 本局尾段和捕获结束后；EndReason、IsPaused；不因原地流程结束而发出 |
-| `CommandReceived` | 两类/INF | 语义请求收到后、业务验证和修改前；CommandId、CommandName、CommandOrigin、CommandArguments；#126 仅 BuyCommodity，其参数含原 Commodity 与 RequestedQuantity |
+| `CommandReceived` | 两类/INF | 语义请求收到后、业务验证和修改前；CommandId、CommandName、CommandOrigin、CommandArguments；原参数形状见玩家指令契约 |
 | `CommandFinished` | 两类/INF | 真实完成、拒绝或异常后；同一 CommandId、CommandName、CommandOrigin、CommandStatus；拒绝加 RejectionReason，异常另关联 BusinessException 并保持传播；不重复输出资金库存收支 |
 | `BuildingPlaced`、`BuildingRemoved` | 两类/INF | 实际命令完成；Outcome、RejectionReason、Cell、Anchor、BuildingKind、ChargedCents、资金前后；生产建筑加 Crop，失败无法解析的建筑信息可 null；有枚举时加 FailureCode |
 | `FarmManualControlChanged` | 两类/INF | 两种接管命令完成；Outcome、RejectionReason、Cell、Anchor、Crop（请求）、TakeoverMode、PreviousPlanId、PlanDetached、CurrentCyclePreserved、PreviousSelectedCrop、EffectiveSelectedCrop、NextCycleCrop；无法取得的状态为 null；替代旧 CropChanged，不重复发出 |
@@ -326,7 +347,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `TradeFinished` | 两类/INF | 单商品主动交易完成；Outcome、FailureCode、RejectionReason、Commodity、Side、RequestMode、Quantity、ValueCents、FeeCents、资金前后及库存前后；Fixed 加 RequestedQuantity；合法报价已取得时加 UnitPriceCents；非法商品时库存前后为 null |
 | `AllProductsSold` | 两类/INF | 一次全部加工品出售完成；Outcome、FailureCode、RejectionReason、RequestMode=AllProducts、Quantity、ValueCents、FeeCents=0、资金前后、TradeLines；Quantity/ValueCents 为各行实际成交的合计，拒绝时各行实际量/货值为 0，不把合计货值除以合计数量假装单价 |
 | `OrderCreated`、`OrderEdited` | 两类/INF | 命令完成；Outcome、RejectionReason、RequestedOrderRequest（请求原值）；成功加 OrderId、OrderRequestBefore、OrderRequestAfter、订单前后、资金/商品库存前后、CashBasisCents、ReserveCents、LockedQuantity；创建拒绝没有已分配 ID 时省略，不把失败的编辑输入当作生效配置 |
-| `OrderCancelled`、`OrderEnabledChanged` | 两类/INF | 命令完成；Outcome、RejectionReason、OrderId；有合法订单时加订单前后、资金与库存前后 |
+| `OrderCancelled`、`OrderEnabledChanged` | 两类/INF | 命令完成；Outcome、RejectionReason；有合法订单时加 OrderId、订单前后、资金与库存前后；不存在订单的原输入编号由关联 CommandArguments.OrderId 保留 |
 | `OrderFilled` | 两类/INF | 完成结算、冻结差额释放、订单状态更新后；OrderId、Commodity、Side、Quantity、UnitPriceCents、ValueCents、FeeCents、资金/库存前后、订单前后；仅实际成交，不能用本事件表达等待 |
 | `OrderWaitChanged` | 两类/INF | 本节定义的真实等待观察变化；OrderId、WaitingState、PrimaryReason、WaitingCategories、PreviousWaitingCategories、EvaluationCoverage；Resolved 加 Resolution，季节原因加 Season；不附第二笔资金变动 |
 | `OrderWaitSummary` | 两类/INF | 等待观察封窗/终止前的已合并尾段；OrderId、IntervalStartUptimeMs/IntervalEndUptimeMs、Coalesced、SuppressedTransitionCount、ReasonObservationCounts、FirstObservedSimulationSeconds/LastObservedSimulationSeconds、LastWaitingState/LastWaitingCategories |
@@ -377,14 +398,14 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 
 ### 初始采集与格式预算
 
-初版允许工程实施选择并验证限额，不将它们用作业务限制。#126 采用摘要 256、自由字符串 512 个 Unicode 标量、异常 64 行/16 KiB、整事件 32 KiB；其余汇总窗口、等待合并、对象范围和集合样本预算随所属阶段实际接入，不能将下表视为这些能力已经存在。满图、高倍率、连续交易和大合法配置下的预算调整遵守已确认的采集语义。
+初版允许工程实施选择并验证限额，不将它们用作业务限制。#126 采用摘要 256、自由字符串 512 个 Unicode 标量、异常 64 行/16 KiB、整事件 32 KiB。#127 采用每订单每现实 60 秒最多 8 条中间等待变化、每配置前 8 组且共 32 条条件的样本预算；首次等待、真实成交恢复、取消与停用不被预算抑制。生产/性能窗口和专项对象诊断仍待后续阶段接入，不能将下表视为全部能力已经存在。满图、高倍率、连续交易和大合法配置下的预算调整遵守已确认的采集语义。
 
-| 项目 | 候选初值 | 必须保持的语义 |
+| 项目 | 初值及所属阶段 | 必须保持的语义 |
 | --- | --- | --- |
-| 生产/性能窗口 | 60 个现实秒 | 实际安全边界封窗，可超时，不拆批次 |
-| 单订单中间等待变化 | 每现实 60 秒最多 8 条 | 首次/终止不漏，超限有合并尾段，业务求值次数不变 |
-| 专项诊断 | 最多 32 个锚点、8 个订单或 3 个工人，120 秒或 5000 条 | 对象、时间和总条数同时有限，到限自动结束 |
-| 自由文本/集合 | 摘要 256、自由字符串 512 个 Unicode 标量；样本集合 32 项 | 固定七/十四商品结构完整保留，大合法配置不能被日志限制拒绝 |
+| 生产/性能窗口 | 候选 60 个现实秒，#128/#130 | 实际安全边界封窗，可超时，不拆批次 |
+| 单订单中间等待变化 | 每现实 60 秒最多 8 条，#127 | 首次/终止不漏，超限有合并尾段，业务求值次数不变 |
+| 专项诊断 | 候选最多 32 个锚点、8 个订单或 3 个工人，120 秒或 5000 条，#130 | 对象、时间和总条数同时有限，到限自动结束 |
+| 自由文本/集合 | 摘要 256、自由字符串 512 个 Unicode 标量，#126；订单配置前 8 组且合计 32 条条件，#127；其他样本集合候选 32 项 | 固定七/十四商品结构完整保留，大合法配置不能被日志限制拒绝 |
 | 异常/整事件 | 异常最多 64 行/16 KiB，整事件 32 KiB | 可见截断、结构完整；核心信息保不住则报告证据缺失 |
 
 附件的 SlowBatch 告警、全场停工原因统计、计划修订号暂不登记为首版必需事件或字段；若后续确认实际诊断需求，再补独立契约。性能验收仍按项目已有标准，不把建议慢批次阈值解释成玩法实时保证。

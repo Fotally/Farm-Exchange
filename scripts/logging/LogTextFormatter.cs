@@ -16,19 +16,19 @@ internal sealed class LogTextFormatter : ITextFormatter
     private static readonly JsonSerializerOptions StringOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     private static readonly HashSet<string> HeaderFields = new()
     {
-        "SchemaVersion", "SessionId", "Sequence", "UptimeMs", "SourceContext", "EventName", "Message", "EventId",
+        "SchemaVersion", "SessionId", "Sequence", "UptimeMs", "SourceContext", "EventName", "Message", "EventId", "RuntimeIncluded",
     };
 
     public void Format(LogEvent logEvent, TextWriter output)
     {
-        var truncated = new Dictionary<string, OriginalCounts>();
+        var truncated = ReadProjectedTruncation(logEvent);
         using var text = new StringWriter(CultureInfo.InvariantCulture);
         Header(logEvent, text, StringValue(logEvent, "EventName"), StringValue(logEvent, "Message"), truncated);
         text.Write(" | { ");
         bool first = true;
         foreach (var property in logEvent.Properties)
         {
-            if (HeaderFields.Contains(property.Key)) continue;
+            if (HeaderFields.Contains(property.Key) || property.Key is "Truncated" or "TruncatedFields" or "TruncatedOriginalCounts") continue;
             if (!first) text.Write(", ");
             first = false;
             text.Write(property.Key + ": ");
@@ -45,12 +45,21 @@ internal sealed class LogTextFormatter : ITextFormatter
             {
                 if (!firstCount) text.Write(", ");
                 firstCount = false;
-                text.Write(field.Key + ": { ScalarCount: " + field.Value.ScalarCount.ToString(CultureInfo.InvariantCulture));
-                if (field.Value.Utf8Bytes.HasValue)
-                    text.Write(", Utf8Bytes: " + field.Value.Utf8Bytes.Value.ToString(CultureInfo.InvariantCulture));
-                if (field.Value.LineCount.HasValue)
-                    text.Write(", LineCount: " + field.Value.LineCount.Value.ToString(CultureInfo.InvariantCulture));
+                text.Write(field.Key + ": { ");
+                bool firstDimension = true;
+                WriteCount("ScalarCount", field.Value.ScalarCount);
+                WriteCount("Utf8Bytes", field.Value.Utf8Bytes);
+                WriteCount("LineCount", field.Value.LineCount);
+                WriteCount("ItemCount", field.Value.ItemCount);
                 text.Write(" }");
+
+                void WriteCount(string name, long? value)
+                {
+                    if (!value.HasValue) return;
+                    if (!firstDimension) text.Write(", ");
+                    firstDimension = false;
+                    text.Write(name + ": " + value.Value.ToString(CultureInfo.InvariantCulture));
+                }
             }
             text.Write(" }");
         }
@@ -71,6 +80,20 @@ internal sealed class LogTextFormatter : ITextFormatter
             line = rejected.ToString();
         }
         output.WriteLine(line);
+    }
+
+    private static Dictionary<string, OriginalCounts> ReadProjectedTruncation(LogEvent entry)
+    {
+        var result = new Dictionary<string, OriginalCounts>();
+        if (!entry.Properties.TryGetValue("TruncatedOriginalCounts", out var projected)) return result;
+        foreach (var field in ((DictionaryValue)projected).Elements)
+        {
+            var counts = ((DictionaryValue)field.Value).Elements;
+            result.Add((string)field.Key.Value!, new(Read("ScalarCount"), Read("Utf8Bytes"), Read("LineCount"), Read("ItemCount")));
+            long? Read(string name) => counts.TryGetValue(new ScalarValue(name), out var count)
+                ? Convert.ToInt64(((ScalarValue)count).Value, CultureInfo.InvariantCulture) : null;
+        }
+        return result;
     }
 
     private static void Header(LogEvent entry, TextWriter writer, string eventName, string message,
@@ -190,5 +213,5 @@ internal sealed class LogTextFormatter : ITextFormatter
         return exception ? new(scalars, bytes, lines) : new(scalars, null, null);
     }
 
-    private readonly record struct OriginalCounts(long ScalarCount, long? Utf8Bytes, long? LineCount);
+    private readonly record struct OriginalCounts(long? ScalarCount, long? Utf8Bytes, long? LineCount, long? ItemCount = null);
 }
