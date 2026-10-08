@@ -24,7 +24,7 @@
 - `scripts/workers/WorkerScheduler.cs` 与 `WorkerSnapshot.cs`：工人位置、任务、按实例独占认领与稳定锚点轮转游标的唯一拥有者。三人每经营秒推进 3 小格，到农田定义的工作中心播种浇水，执行前重验版本凭据；按单tick或平静区间推进，最近事件距离、行程起点与累计移动公式封装在工人模块；选择算法保持私有以便替换复杂调度。
 - `scripts/inventory/CommodityId.cs` 与 `Inventory.cs`：前者统一十四商品标识与合法性；后者唯一拥有两类公共库存、逐作物底线和冻结数量。总查询含冻结，可用量扣除一次卖单冻结，加工仅从可用原料领取超过底线的一份；买入与自产共用存储，主动出售不受加工底线限制但不能用冻结量。
 - `scripts/trading/TradingService.cs`、`TradeResult.cs` 与 `ProductSaleResult.cs`：完整即时与委托结算模块，先检查数量、执行时报价、可用及本单冻结资源、保留线和容量，再一次提交；即时零费，委托按实际成交额收 1% 向上取分费用，结果分别给出货值与费用。单商品结果保留实际读取的可选单价，全部加工品出售由原结算过程给出七商品明细；宽整数预检，失败资源零修改，调用方不拼装扣款和入库。
-- `scripts/logging/`：独立日志模块。`RuntimeLog` 组装会话与局，`GameLog` 维护局上下文及具名领域入口，`CommandObservation` 共用指令关联与一次终结；领域 Adapter 拥有事件描述、真实资源投影和订单等待去重/有界合并，`LogOutput` 仅处理通用身份、序号、过滤、串行分流及健康，转义及截断元数据合并由 formatter 维护、文件轮转交给 Serilog。#127 覆盖交易/订单/行情；#128 的 `GameplayLog` 观察建拆/底线，`ProductionLog` 统一实际生产增量、资源边界和60秒目标窗口，完整推进结束才封窗、正常局结束补尾。公开手动绑定不冒充自动生产采集，缺口与夹具变更降低覆盖；业务继续拥有资金、库存、执行和判断。修改记录入口、生命周期、分流或字段时读取 `docs/architecture/logging/interface-logging.md` 与 `docs/project/runtime-log-schema-v1.md`；耕作、流程与专项诊断按 #129～#130 接入。
+- `scripts/logging/`：独立日志模块。`RuntimeLog` 组装会话与局，`GameLog` 维护局上下文及具名领域入口，`CommandObservation` 共用指令关联与一次终结；领域 Adapter 拥有事件描述、真实资源投影和订单等待去重/有界合并，`LogOutput` 仅处理通用身份、序号、过滤、串行分流及健康，转义及截断元数据合并由 formatter 维护、文件轮转交给 Serilog。#127 覆盖交易/订单/行情；#128 的 `GameplayLog` 观察建拆/底线，`ProductionLog` 统一实际生产增量、资源边界和60秒目标窗口，完整推进结束才封窗、正常局结束补尾。公开手动绑定不冒充自动生产采集，缺口与夹具变更降低覆盖；业务继续拥有资金、库存、执行和判断。修改记录入口、生命周期、分流或字段时读取 `docs/architecture/logging/interface-logging.md` 与 `docs/project/runtime-log-schema-v1.md`；#129 的 `CultivationLog`、`TimeLog`、`ScenarioLog` 分别观察真实耕作结果、已接受时间意图和流程生命周期，专项诊断按 #130 接入。
 - `scripts/trading/TradeOrderBook.cs`、`TradeOrderRequest.cs`、`TradeOrderSnapshot.cs` 与 `TradeOrderEvaluation.cs`：订单模块唯一持有单据配置、创建顺序、原现金基准、生命周期和各单资源归属。组内全部/组间任一条件，季节仅读日历；一次限价数量或固定预算买单冻结，卖单冻结数量，持续策略不冻结。一次目标差额建单锁定、持续动态算，行情更新后每单检查一次；同 ID 编辑重验、撤销释放，查询返回独立只读快照。实际判断分支提供稳定阻塞事实，日志不从中文原因逆推或补做判断；实际成交在冻结与状态更新后记录一次。任意一次或持续成交且仍有等待单时要求下一经营秒重检；依赖不变且全部等待时保留批量平静推进。
 - `scripts/economy/Wallet.cs`：每局金币总余额与冻结金额的唯一拥有者，提供可用金额；建造与即时交易不能动用冻结，委托消费本单额度并释放差额，所有数值保持原整数容量。
 - `scripts/characters/NpcCharacter.cs` 与 `scenes/npc_character.tscn`：可复用的清亮 v2 NPC 动画角色。加载20名角色的待机、走、跑、播种和浇水 SpriteFrames，保留64×64、脚根(32,60)、四向及逐帧时长；合成帧包含工具，单次作业不重复叠加特效。主地图只展示真实位置和成功结果，动画不执行经营任务。
@@ -57,8 +57,8 @@
 
 - `scripts/gameplay/SimulationAdvanceResult.cs`：完整经营检查点、实际推进与宽整数产出汇总。`FarmGame.AdvanceTicks` 请求无外部输入区间，各状态模块提供最近事件并累计平静数据，事件复用完整经营相位；显式降雨仍由单tick入口输入。
 - `scripts/gameplay/ProductionResult.cs`：最近完整经营秒的播种、浇水、收获及加工成功记录。`FarmGame` 唯一持有非持久只读结果，任务成功路径与正式入库路径写入；平静尾段清空，消费方去重并重验有效性，不能由待执行任务或动画推断成功。
-- `scripts/time/SimulationDriver.cs` 与 `SimulationRateSource.cs`：唯一拥有每局倍率与未完成tick进度，现实帧时间转为同一经营批量请求；暂停不累计，改速保留进度，提供玩家/流程来源通知。发布仅0.5/1/2，开发额外有限正整数；场景只组装唯一当前局驱动。
-- `scripts/development/scenarios/`：严格持久配置、共用买入→加工→一次卖出流程和JSON报告。流程只使用真实经营命令与稳定检查点，不拥有生产或交易状态；独立局准备受控数据，现场明确证据不足。报告引用原文件及加载时SHA-256，不保存配置副本。
+- `scripts/time/SimulationDriver.cs` 与 `SimulationRateSource.cs`：唯一拥有每局倍率与未完成tick进度，现实帧时间转为同一经营批量请求；暂停不累计，改速保留进度，提供玩家/流程来源通知。发布仅0.5/1/2，开发额外有限正整数；场景只组装唯一当前局驱动；可选时间观察在已接受倍率赋值后、原通知前记录，同值选择仍保留来源。
+- `scripts/development/scenarios/`：严格持久配置、共用买入→加工→一次卖出流程和JSON报告。流程只使用真实经营命令与稳定检查点，不拥有生产或交易状态；独立局准备受控数据，现场明确证据不足。报告引用原文件及加载时SHA-256，不保存配置副本；首个业务命令前绑定实际报告目录RunId，独立局与主局共享日志会话但拥有不同局身份，真实终结与报告保存分别记录。
 - `scripts/ui/development/DeveloperToolsWindow.cs`、`ScenarioCatalogStep.cs`、`ScenarioEditorStep.cs`、`ScenarioResultStep.cs` 与 `ScenarioConfigurationForm.cs`：C三步协调、换行分类按钮与双列目录、配置编辑和真实运行结果；视觉按已确认C原型逐项比对步骤选中态、卡片与间距。同一表单按描述生成字段与并排分组，窗口唯一维护选择与步骤，草稿及文件规则交给配置库。两种垃圾桶经确认后转交删除意图；脏草稿重选需确认放弃，取消保留选择和输入，失效文件清空选择并禁用运行；运行中锁定编辑；当前局借主驱动、独立局只推进数据，报告引用已保存原文件。修改窗口操作时读取[开发窗口接口](docs/architecture/ui/developer-tools-window/interface-developer-tools-window.md)。
 
 # 工作约定

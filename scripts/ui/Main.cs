@@ -17,7 +17,7 @@ public partial class Main : Node2D
     private FarmGame? _currentGame;
     private RuntimeLog? _logging;
     private FarmGame GameState => InitializeGame();
-    private readonly SimulationDriver _driver = new();
+    private SimulationDriver _driver = null!;
     private WorkerPresentation _workerPresentation = null!;
     private Button _rateButton = null!;
     private long _tickHarvested;
@@ -65,7 +65,14 @@ public partial class Main : Node2D
     }
 
     internal FarmGame Game => GameState;
-    internal SimulationDriver Driver => _driver;
+    internal SimulationDriver Driver
+    {
+        get
+        {
+            InitializeGame();
+            return _driver;
+        }
+    }
 
     private FarmGame InitializeGame()
     {
@@ -90,7 +97,11 @@ public partial class Main : Node2D
                 diagnostic: message => GD.PushWarning(message));
         }
         else _logging = RuntimeLog.Disabled();
-        try { _currentGame = new FarmGame(logging: _logging); }
+        try
+        {
+            _currentGame = new FarmGame(logging: _logging);
+            _driver = new SimulationDriver(_currentGame.Log?.Time);
+        }
         catch (System.Exception error)
         {
             _logging.InitializationFailed(error);
@@ -123,7 +134,10 @@ public partial class Main : Node2D
 
     public override void _ExitTree()
     {
-        _driver.RateChanged -= RefreshSimulationRate;
+        if (_driver != null) _driver.RateChanged -= RefreshSimulationRate;
+#if DEBUG
+        if (GodotObject.IsInstanceValid(_developerWindow)) _developerWindow.ShutdownScenario();
+#endif
         _currentGame?.Dispose();
         _logging?.Dispose();
     }
@@ -340,7 +354,7 @@ public partial class Main : Node2D
         AddWindow(_cultivationWindow);
 #if DEBUG
         _developerWindow = new DeveloperToolsWindow(GameState, _driver,
-            () => RefreshAfterGameChange(worldChanged: true));
+            () => RefreshAfterGameChange(worldChanged: true), logging: _logging);
         AddWindow(_developerWindow);
         var developerButton = MakeQuietButton("开发测试", 115, 36);
         developerButton.Name = "DeveloperToolsButton";

@@ -1,22 +1,37 @@
-# 运行时日志 Interface（#126～#128）
+# 运行时日志 Interface（#126～#129）
 
-代码位于 `scripts/logging/`；字段与单位只在 [schema v1](../../project/runtime-log-schema-v1.md) 维护。当前覆盖会话、经营局、完整主动交易、订单命令/等待/成交、实际公告及正式报价、建拆与底线命令、每局生产窗口，并包含对应指令关联、初始化异常和日志健康。耕作表、流程生命周期和受控诊断仍按后续阶段接入。
+代码位于 `scripts/logging/`；字段与单位只在 [schema v1](../../project/runtime-log-schema-v1.md) 维护。当前覆盖会话、经营局、完整主动交易、订单命令/等待/成交、实际公告及正式报价、建拆与底线命令、每局生产窗口、耕作表和手动接管、暂停与倍率选择及开发流程生命周期，并包含对应指令关联、初始化异常和日志健康。受控诊断与性能汇总按 #130 接入。
 
 ## 当前职责与通用提交
 
 [#127](https://github.com/Fotally/Farm-Exchange/issues/127) 先完成领域 Adapter 与通用输出的职责修正，再接入完整交易、订单与行情。本文说明当前接口，测试实际结果以统一验收记录为准。职责方向见[已确认安排](../../research/runtime-logging.md#已确认的后续修正方向)。
 
 - `RuntimeLog` 是公开组装 facade，负责进程生命周期、已绑定局的集合和关闭顺序；不维护交易字段或业务事件名称名单。
-- `GameLog` 拥有局身份、局内命令编号、日历上下文与局生命周期，公开 `Trading`、`Orders`、`Market`、`Gameplay`，内部组装 `Production`。初始化设施和库存基线属于其生命周期投影，关闭前封存订单等待和生产窗口尾段。
+- `GameLog` 拥有局身份、局内命令编号、日历上下文与局生命周期，公开 `Trading`、`Orders`、`Market`、`Gameplay`、`Cultivation`、`Time`、`Scenario`，内部组装 `Production`。初始化设施和库存基线属于其生命周期投影，关闭前封存订单等待和生产窗口尾段。
 - `TradingLog` 直接承担主动交易 Adapter，拥有请求、事件描述、前后资源快照及真实结果投影；`TradeLogOperation` 与 `ProductSaleLogOperation` 保存本次观察所需原输入与前快照。
 - `TradeOrderLog` 拥有订单配置投影、命令和成交资源观察及有界等待记录；`MarketLog` 投影实际公告、已提交报价和本轮真实因素，不重新求值或消费随机数。
 - `GameplayLog` 观察建拆与原料底线命令；[建拆实现](implementation-building-observation.md)说明真实子格、锚点和费用投影。`ProductionLog` 只拥有逐局生产累计、资源边界与封窗状态，业务继续拥有生产、库存和资金。
+- `CultivationLog` 观察年度表创建、更新、删除、批量应用和两种手动接管；`TimeLog` 观察暂停命令与实际接受的倍率选择；`ScenarioLog` 关联开发流程的启动、终结和报告保存结果。三个 Adapter 只维护日志投影与观察状态，不拥有耕作安排、倍率、流程执行或报告文件。
 - 内部 `CommandObservation` 拥有收到/结束配对、共同命令字段、异常关联和幂等终结。其完成回调只生成日志投影；从不接受、执行或重试业务命令。
 - 内部 `LogOutput` 提供统一 `Submit(description, message, fields)`，拥有会话标识、单调时间、序号、过滤、格式、输出和健康。`LogEventDescriptor` 由所属记录入口给出编号、稳定名称、来源、级别和 `RuntimeIncluded`，通用底座没有领域名称分支。新合法描述无需修改底座即可通过同一提交 Interface 输出。
 
 通用提交属于日志模块内部 seam，业务调用方仍只使用具名领域入口。字段使用已有标量、列表及具名嵌套字典；事件描述、字段名与含义须遵守 schema，不能借任意业务对象自动序列化增加字段。会话公共头由输出统一赋值，领域不能覆盖身份、序号、名称或来源。内部路由属性 `RuntimeIncluded` 和 MEL 的传输字段不进入文件文本。runtime 只接收有 runtime 资格且级别至少 INF 的事件；开发 debug 接收全部已提交事件；发布入口在分配序号前排除不具资格或低于 INF 的描述。
 
 ## 低侵入接入与维护约定
+
+### 耕作、时间和开发流程（#129）
+
+`GameLog.Cultivation.BeginCreate/BeginUpdate/BeginDelete/BeginApply/BeginManualControl` 只开始观察原请求；真实经营调用完成后传入原结果，异常经 `Faulted` 关联后继续原样抛出。`FarmGame` 六个耕作命令接受默认 Player 的来源，并在业务或记录前拒绝非法来源。预检与快照查询不形成命令。`GetCultivationPlan(id)` 直接返回指定表的独立快照或 null，日志不为单表观察复制整套表目录。
+
+创建和更新区分原请求、正式 Before 与 After；删除在真实解除引用完成后投影实际结果。批量应用沿用原业务全列表校验和子格去重，只在完整校验后把同一目标索引列表交给观察入口；提前拒绝不补跑剩余校验，未知去重数为 null，实际检查到空列表时为 0。目标和作物条各最多采样 32 项并标明原数量，采样不限制可提交的业务集合。手动接管从真实前后快照描述引用解除、当前轮保留和下一轮安排，同种立即重启仍是丢弃当前轮，不因选种相同声称保留。
+
+`FarmGame.SetPaused(paused, origin)` 每次形成完整命令对，`PauseChanged` 只在真实状态变化时输出。`SimulationDriver` 接收可选 `GameLog.Time`，在原倍率校验和接受路径记录 `SimulationRateSelected`；合法同值选择仍保留来源和 `ValueChanged=false`，不声称解除了暂停。日志不拥有倍率和未完成 tick。
+
+`FarmGame(seed?, logging?, purpose?)` 的 `purpose` 默认为 `GamePurpose.Main`，独立流程显式使用 `ScenarioIndependent`；该枚举没有开发模块依赖。`FarmGame.Log` 只读提供已有局上下文，关闭采集为 null。原地流程复用主局，独立流程复用宿主日志会话并拥有独立局标识；公开手动 `BindGame` 仍仅供手动领域观察，不接入自动生产累计。
+
+配置成功加载且运行局已关联后、首个流程命令前记录 `ScenarioStarted`；终结、报告成功或保存异常在各自真实路径记录。RunId 只进入流程事件和报告，其他经营记录通过同一 GameInstanceId、Sequence 及显式 Scenario 命令来源关联，不建立环境隐式 scope。流程结束不结束原地玩家局；窗口退出先幂等中断运行流程并尝试报告保存，再结束独立局；Main 最后关闭主局与会话。报告保存失败保留实际异常，独立于流程已产生的 Outcome。
+
+`TestCultivationLogging`、`TestTimeLogging`、`TestScenarioLogging` 注册到统一 `TestSuite`，验收覆盖真实成功/拒绝、前后语义、批量去重、来源与一次终结、主局/独立局关联、报告保存及关闭顺序；实际运行结果以统一验收记录为准。
 
 ### 建拆、底线和生产窗口（#128）
 
@@ -90,7 +105,7 @@ observation?.Complete(result); // 原请求、真实正常拒绝与结束在内�
 
 ## Main 的组装约定
 
-主场景通过私有 `GameState` 在首次访问经营局时先建立日志，再创建真实局。测试在 `_Ready` 之前读取 `Main.Game` 仍取得同一个局；`_Ready` 不替换它、不补造开局记录。编辑器引擎运行使用项目 `build/logs`；Windows 导出使用 `OS.GetExecutablePath()` 所在目录的 `logs`。其他平台导出明确使用 Disabled；macOS 业务日志尚未确认和接入，不向 `.app` 内写入，也不另选备用路径，经营照常运行。退出先释放已有局，再关闭日志；未创建局的场景退出不额外初始化。启动失败记录实际初始化异常并关闭已建立目标，异常继续抛出。
+主场景通过私有 `GameState` 在首次访问经营局时先建立日志，再创建真实局及注入本局 TimeLog 的唯一 SimulationDriver。测试在 `_Ready` 之前读取 `Main.Game` 或 `Main.Driver` 仍取得同一组对象；`_Ready` 不替换它们、不补造开局记录。编辑器引擎运行使用项目 `build/logs`；Windows 导出使用 `OS.GetExecutablePath()` 所在目录的 `logs`。其他平台导出明确使用 Disabled；macOS 业务日志尚未确认和接入，不向 `.app` 内写入，也不另选备用路径，经营照常运行。开发窗口共享会话；退出先由窗口幂等中断流程并保存报告，再释放已有主局，最后关闭日志；未创建局的场景退出不额外初始化。启动失败记录实际初始化异常并关闭已建立目标，异常继续抛出。
 
 ## 输出实现与健康
 

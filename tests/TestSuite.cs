@@ -15,6 +15,9 @@ public partial class TestSuite : Node
         loggingPassed = TestMarketLogging.RunChecks() && loggingPassed;
         loggingPassed = TestProductionLogging.RunChecks() && loggingPassed;
         loggingPassed = TestBuildingLogging.RunChecks() && loggingPassed;
+        loggingPassed = TestCultivationLogging.RunChecks() && loggingPassed;
+        loggingPassed = TestTimeLogging.RunChecks() && loggingPassed;
+        loggingPassed = TestScenarioLogging.RunChecks() && loggingPassed;
         bool farmGamePassed = TestFarmGame.RunChecks();
         GD.Print("单元测试：共享年度耕作表、日期事件与手动接管");
         bool cultivationPassed = TestCultivationPlanBook.RunChecks();

@@ -14,21 +14,26 @@ public sealed class GameLog : IDisposable
     private const string Source = "FarmExchange.Gameplay.FarmGame";
     private readonly RuntimeLog _owner;
     private readonly FarmGame _game;
+    private readonly GamePurpose _purpose;
     private readonly string _gameId = Guid.NewGuid().ToString("N");
     private long _commandId;
     private static readonly LogEventDescriptor InitializedEvent = new(3, "GameInitialized", Source);
     private static readonly LogEventDescriptor EndedEvent = new(4, "GameEnded", Source);
     private bool _ended;
 
-    internal GameLog(RuntimeLog owner, FarmGame game, bool collectProduction, Func<long>? productionUptime = null)
+    internal GameLog(RuntimeLog owner, FarmGame game, bool collectProduction, GamePurpose purpose, Func<long>? productionUptime = null)
     {
         _owner = owner;
         _game = game;
+        _purpose = purpose;
         Trading = new TradingLog(this, game);
         Orders = new TradeOrderLog(this, game);
         Market = new MarketLog(this);
         Production = collectProduction ? new ProductionLog(this, game, productionUptime) : null;
         Gameplay = new GameplayLog(this, game);
+        Cultivation = new CultivationLog(this, game);
+        Time = new TimeLog(this, game);
+        Scenario = new ScenarioLog(this);
     }
 
     /**
@@ -51,6 +56,21 @@ public sealed class GameLog : IDisposable
      */
     public GameplayLog Gameplay { get; }
 
+    /**
+     * <summary>本局共享年度表与手动接管命令观察入口。</summary>
+     */
+    public CultivationLog Cultivation { get; }
+
+    /**
+     * <summary>本局暂停和已接受倍率选择的观察入口。</summary>
+     */
+    public TimeLog Time { get; }
+
+    /**
+     * <summary>关联本局的开发流程生命周期观察入口。</summary>
+     */
+    public ScenarioLog Scenario { get; }
+
     internal ProductionLog? Production { get; }
 
     internal bool CanObserve => !_ended && _owner.Output.IsEnabled;
@@ -61,7 +81,7 @@ public sealed class GameLog : IDisposable
     internal void Initialized(int seed) => Observe(() =>
     {
         var fields = Context("Initialization");
-        fields["GamePurpose"] = "Main";
+        fields["GamePurpose"] = _purpose.ToString();
         fields["Seed"] = seed;
         var facilities = new List<Dictionary<string, object?>>();
         foreach (var space in _game.GetBuildingSpaces())

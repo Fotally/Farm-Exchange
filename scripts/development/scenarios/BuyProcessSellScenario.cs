@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
 using FarmExchange.Land;
+using FarmExchange.Logging;
 using FarmExchange.Trading;
 
 namespace FarmExchange.Development;
@@ -14,6 +16,8 @@ namespace FarmExchange.Development;
 public sealed class BuyProcessSellScenario
 {
     private readonly ScenarioConfiguration _configuration;
+    private readonly string _reportDirectory;
+    private readonly ScenarioRunLog? _logging;
     private uint _lastTicks;
     private int _timePlanIndex;
     private ScenarioSnapshot? _beforeOrder;
@@ -28,13 +32,15 @@ public sealed class BuyProcessSellScenario
     public double CurrentRateIntent => _configuration.TimePlan[_timePlanIndex].Rate;
     public string Progress => $"{StageText()}；完成{Report.AdvancedTicks} tick；加工等待{Report.ProcessingWaitTicks}，订单等待{Report.OrderWaitTicks}；{Report.Reason}";
 
-    private BuyProcessSellScenario(ScenarioConfiguration configuration, FarmGame game, int? actualSeed)
+    private BuyProcessSellScenario(ScenarioConfiguration configuration, string reportDirectory, FarmGame game, int? actualSeed)
     {
         _configuration = configuration;
+        _reportDirectory = reportDirectory;
         Game = game;
         _lastTicks = game.Calendar.ElapsedSeconds;
         Report = new ScenarioReport
         {
+            RunId = Path.GetFileName(Path.TrimEndingDirectorySeparator(reportDirectory)),
             Configuration = new ScenarioConfigurationReference(configuration.SourcePath, configuration.CaseId, configuration.Revision, configuration.Sha256),
             Target = configuration.Target,
             ActualSeed = actualSeed,
@@ -44,22 +50,38 @@ public sealed class BuyProcessSellScenario
             _checkIndices.Add(name, Report.Checks.Count);
             Report.Checks.Add(new ScenarioCheck(name, ScenarioCheckStatus.NotExecuted, "尚未执行"));
         }
+        _logging = game.Log?.Scenario.Begin(Report.RunId, configuration.Target == "current" ? "Current" : "Independent",
+            configuration.Revision, configuration.Sha256);
     }
 
     /**
      * <summary>准备目标并记录基准，提交真实买入；拒绝保存在报告中。</summary>
      * <param name="configuration">已严格加载并固定的本次参数。</param>
+     * <param name="reportDirectory">宿主已创建并验证可写的唯一报告目录。</param>
      * <param name="currentGame">current模式必需的真实对象；独立模式忽略。</param>
      * <param name="actualSeed">现场已知的实际种子；未知传空。</param>
+     * <param name="logging">与主局共享的日志会话；独立局使用，现场沿用原局关联。</param>
      * <returns>同一流程运行器；独立局仅运行新数据对象。</returns>
      */
-    public static BuyProcessSellScenario Start(ScenarioConfiguration configuration, FarmGame? currentGame = null, int? actualSeed = null)
+    public static BuyProcessSellScenario Start(ScenarioConfiguration configuration, string reportDirectory,
+        FarmGame? currentGame = null, int? actualSeed = null, RuntimeLog? logging = null)
     {
+        string directory = Path.GetFullPath(reportDirectory);
+        if (!Directory.Exists(directory)) throw new DirectoryNotFoundException("运行前创建的报告目录不存在：" + directory);
         bool independent = configuration.Target == "independent";
-        FarmGame game = independent ? new FarmGame(configuration.Seed) : currentGame ?? throw new ArgumentNullException(nameof(currentGame));
-        var scenario = new BuyProcessSellScenario(configuration, game, independent ? configuration.Seed : actualSeed);
-        scenario.Prepare(independent);
-        return scenario;
+        FarmGame game = independent ? new FarmGame(configuration.Seed, logging, GamePurpose.ScenarioIndependent) :
+            currentGame ?? throw new ArgumentNullException(nameof(currentGame));
+        try
+        {
+            var scenario = new BuyProcessSellScenario(configuration, directory, game, independent ? configuration.Seed : actualSeed);
+            scenario.Prepare(independent);
+            return scenario;
+        }
+        catch
+        {
+            if (independent) game.Dispose();
+            throw;
+        }
     }
 
     private void Prepare(bool independent)
@@ -72,7 +94,7 @@ public sealed class BuyProcessSellScenario
         }
         if (independent)
         {
-            Game.SetPaused(true);
+            Game.SetPaused(true, CommandOrigin.Scenario);
             var cells = new List<Godot.Vector2I>();
             foreach (BuildingSpaceSnapshot space in Game.GetBuildingSpaces())
                 cells.Add(space.AnchorCell);
@@ -136,7 +158,7 @@ public sealed class BuyProcessSellScenario
         Stage = ScenarioStage.ObservingProcessing;
         ObserveProcessor();
         if (independent)
-            Game.SetPaused(false);
+            Game.SetPaused(false, CommandOrigin.Scenario);
     }
 
     /**
@@ -335,14 +357,23 @@ public sealed class BuyProcessSellScenario
 
     /**
      * <summary>仅写入终止时捕获的数据；I/O失败不重新读取现场或更换路径。</summary>
-     * <param name="reportDirectory">运行前已检查可写的唯一目录。</param>
      * <returns>report.json绝对路径；尚未终止为调用错误。</returns>
      */
-    public string WriteReport(string reportDirectory)
+    public string WriteReport()
     {
         if (IsRunning)
             throw new InvalidOperationException("流程尚未终止，不能写最终报告");
-        return Report.Write(reportDirectory);
+        try
+        {
+            string file = Report.Write(_reportDirectory);
+            _logging?.ReportSaved(Report.RunId + "/" + Path.GetFileName(file));
+            return file;
+        }
+        catch (Exception error)
+        {
+            _logging?.ReportSaveFailed(error);
+            throw;
+        }
     }
 
     private void Finish(ScenarioOutcome outcome, string reason)
@@ -352,6 +383,7 @@ public sealed class BuyProcessSellScenario
         Report.Reason = reason;
         Report.Final = Capture();
         Stage = ScenarioStage.Finished;
+        _logging?.Finish(outcome.ToString(), reason);
     }
 
     private ScenarioSnapshot Capture()

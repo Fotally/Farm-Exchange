@@ -87,6 +87,11 @@ public sealed class FarmGame : IDisposable
     public int CurrentDay => (int)_calendar.Snapshot.ElapsedDays + 1;
     public CalendarSnapshot Calendar => _calendar.Snapshot;
     public bool IsPaused => _calendar.IsPaused;
+
+    /**
+     * <summary>查询本局已绑定的日志观察上下文；未启用采集时为空。</summary>
+     */
+    public GameLog? Log => _log;
     public int CurrentFlourPriceCents => GetProductPriceCents(CropKind.Wheat);
     public double DailyPriceChangePercent =>
         (double)GetQuote(new CommodityId(CropKind.Wheat, CommodityKind.Product)).ChangePercent;
@@ -95,12 +100,15 @@ public sealed class FarmGame : IDisposable
      * <summary>创建真实中心设施与报价，并在日志启用时记录初始化基线。</summary>
      * <param name="marketSeed">报价与初始设施随机种子；省略时沿用原随机来源。</param>
      * <param name="logging">组装点持有的采集会话；省略时不采集或写文件。</param>
+     * <param name="purpose">本局的真实用途，默认玩家主局。</param>
      * <remarks>日志不拥有经营资源；调用方先释放局再关闭会话。</remarks>
      */
-    public FarmGame(int? marketSeed = null, RuntimeLog? logging = null) : this(marketSeed, 0, logging) { }
+    public FarmGame(int? marketSeed = null, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main) : this(marketSeed, 0, logging, purpose) { }
 
-    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null)
+    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main)
     {
+        if (purpose is not (GamePurpose.Main or GamePurpose.ScenarioIndependent))
+            throw new ArgumentOutOfRangeException(nameof(purpose));
         _calendar = new GameCalendar(elapsedSeconds);
         _cultivation = new CultivationPlanBook(_farming);
         int seed = marketSeed ?? Random.Shared.Next();
@@ -108,7 +116,7 @@ public sealed class FarmGame : IDisposable
         _trading = new TradingService(_inventory, _wallet, _market);
         _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
         InitializeCenter(new Random(seed));
-        _log = logging?.BindGame(this, seed, collectProduction: true);
+        _log = logging?.BindGame(this, seed, collectProduction: true, purpose);
         _tradeOrders.AttachLog(_log?.Orders);
     }
 
@@ -386,7 +394,29 @@ public sealed class FarmGame : IDisposable
     public string? BuildProcessor(Vector2I cell, CropKind crop, CommandOrigin origin = CommandOrigin.Player) =>
         PlacementError(TryPlace(cell, BuildingKind.Processor, crop, origin));
 
-    public string? SetFarmCrop(Vector2I cell, CropKind crop)
+    /**
+     * <summary>立即手动改种并解除本田共享年度表，强制重启当前轮。</summary>
+     * <param name="cell">任一农田子格。</param>
+     * <param name="crop">合法作物品种。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <returns>成功为空，正常拒绝为中文原因。</returns>
+     */
+    public string? SetFarmCrop(Vector2I cell, CropKind crop, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Cultivation.BeginManualControl(cell, crop, CultivationMode.Immediate, origin);
+        string? result;
+        try { result = SetFarmCropCore(cell, crop); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
+
+    private string? SetFarmCropCore(Vector2I cell, CropKind crop)
     {
         if (!MapCoordinates.ContainsCell(cell))
             return PlacementRules.ErrorMessage(LandFailure.OutOfBounds);
@@ -404,9 +434,25 @@ public sealed class FarmGame : IDisposable
      * <remarks>保留已播种或生长中的本轮；空田立即设置目标。命令不推进经营。</remarks>
      * <param name="cell">任一农田子格。</param>
      * <param name="crop">合法作物品种。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
      * <returns>成功为空，正常拒绝为中文原因。</returns>
      */
-    public string? PrepareFarmCrop(Vector2I cell, CropKind crop)
+    public string? PrepareFarmCrop(Vector2I cell, CropKind crop, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Cultivation.BeginManualControl(cell, crop, CultivationMode.PrepareNext, origin);
+        string? result;
+        try { result = PrepareFarmCropCore(cell, crop); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
+
+    private string? PrepareFarmCropCore(Vector2I cell, CropKind crop)
     {
         if (!MapCoordinates.ContainsCell(cell))
             return PlacementRules.ErrorMessage(LandFailure.OutOfBounds);
@@ -439,6 +485,12 @@ public sealed class FarmGame : IDisposable
      */
     public IReadOnlyList<CultivationPlanSnapshot> GetCultivationPlans() => _cultivation.GetSnapshots();
     /**
+     * <summary>只读查询指定共享年度表及其引用数量。</summary>
+     * <param name="id">共享表编号。</param>
+     * <returns>独立只读快照；不存在时为空。</returns>
+     */
+    public CultivationPlanSnapshot? GetCultivationPlan(int id) => _cultivation.GetSnapshot(id);
+    /**
      * <summary>只读检查作物条年度排程，允许在未命名草稿中编辑。</summary>
      * <param name="entries">完整候选年度作物条。</param>
      * <returns>正常拒绝或风险条编号，不要求耕作表名称。</returns>
@@ -454,36 +506,98 @@ public sealed class FarmGame : IDisposable
     /**
      * <summary>创建共享年度耕作表，不推进经营。</summary>
      * <param name="request">完整表设置。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
      * <returns>新表编号或正常拒绝。</returns>
      */
-    public CultivationCommandResult CreateCultivationPlan(CultivationPlanRequest request) => _cultivation.Create(request);
+    public CultivationCommandResult CreateCultivationPlan(CultivationPlanRequest request, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Cultivation.BeginCreate(request, origin);
+        CultivationCommandResult result;
+        try { result = _cultivation.Create(request); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
     /**
      * <summary>完整更新共享表，保留全部引用田的当前轮并重算安排。</summary>
      * <param name="id">共享表编号。</param>
      * <param name="request">完整表设置。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
      * <returns>同一编号或零修改的正常拒绝。</returns>
      */
-    public CultivationCommandResult UpdateCultivationPlan(int id, CultivationPlanRequest request) =>
-        _cultivation.Update(id, request, (long)Calendar.ElapsedSeconds * GameTimeUnits.PerSecond);
+    public CultivationCommandResult UpdateCultivationPlan(int id, CultivationPlanRequest request, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Cultivation.BeginUpdate(id, request, origin);
+        CultivationCommandResult result;
+        try { result = _cultivation.Update(id, request, (long)Calendar.ElapsedSeconds * GameTimeUnits.PerSecond); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
     /**
      * <summary>删除共享年度表并解除全部引用田的计划安排。</summary>
      * <remarks>保留各田当前作物、当前轮和水分，恢复按当前作物自动复种；不推进经营或改变资源。</remarks>
      * <param name="id">共享年度表编号。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
      * <returns>成功为空；表不存在时返回中文原因且零修改。</returns>
      */
-    public string? DeleteCultivationPlan(int id) => _cultivation.Delete(id);
+    public string? DeleteCultivationPlan(int id, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Cultivation.BeginDelete(id, origin);
+        string? result;
+        try { result = _cultivation.Delete(id); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
     /**
      * <summary>对选定农田原子应用同一共享表，保留正在种植的本轮。</summary>
      * <param name="id">共享表编号。</param>
      * <param name="cells">农田任意子格列表，重复引用同一实例仅应用一次。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
      * <returns>成功为空；任一目标无效时全部不修改。</returns>
      */
-    public string? ApplyCultivationPlan(int id, IReadOnlyList<Vector2I> cells)
+    public string? ApplyCultivationPlan(int id, IReadOnlyList<Vector2I> cells, CommandOrigin origin = CommandOrigin.Player)
     {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Cultivation.BeginApply(id, cells, origin);
+        string? result;
+        IReadOnlyList<int>? resolvedIndices;
+        try { result = ApplyCultivationPlanCore(id, cells, out resolvedIndices); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result, resolvedIndices);
+        return result;
+    }
+
+    private string? ApplyCultivationPlanCore(int id, IReadOnlyList<Vector2I> cells, out IReadOnlyList<int>? resolvedIndices)
+    {
+        resolvedIndices = null;
         if (!_cultivation.Contains(id))
             return "耕作表不存在";
         if (cells.Count == 0)
+        {
+            resolvedIndices = Array.Empty<int>();
             return "请先选择农田";
+        }
         var indices = new SortedSet<int>();
         foreach (Vector2I cell in cells)
         {
@@ -494,7 +608,8 @@ public sealed class FarmGame : IDisposable
                 return "所选土地没有农田";
             indices.Add(index);
         }
-        _cultivation.Apply(id, new List<int>(indices), (long)Calendar.ElapsedSeconds * GameTimeUnits.PerSecond);
+        resolvedIndices = new List<int>(indices);
+        _cultivation.Apply(id, resolvedIndices, (long)Calendar.ElapsedSeconds * GameTimeUnits.PerSecond);
         return null;
     }
     /**
@@ -963,7 +1078,24 @@ public sealed class FarmGame : IDisposable
         return true;
     }
 
-    public void SetPaused(bool paused) => _calendar.SetPaused(paused);
+    /**
+     * <summary>设置经营暂停状态，不推进时间或改变未完成秒进度。</summary>
+     * <param name="paused">目标暂停状态。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <remarks>重复设置仍是一次命令，仅实际变化产生暂停变化事件。</remarks>
+     */
+    public void SetPaused(bool paused, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Time.BeginPause(paused, origin);
+        try { _calendar.SetPaused(paused); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(IsPaused);
+    }
 
     private void ApplyRain()
     {

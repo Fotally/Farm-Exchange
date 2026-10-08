@@ -58,6 +58,10 @@ public partial class TestParameterizedScenario : Node
         return ScenarioConfiguration.Load(path);
     }
 
+    private static BuyProcessSellScenario Start(string directory, ScenarioConfiguration configuration,
+        FarmGame? current = null, int? actualSeed = null) => BuyProcessSellScenario.Start(configuration,
+            ScenarioReport.CreateRunDirectory(Path.Combine(directory, "runs")), current, actualSeed);
+
     private static bool CheckConfiguration(string directory)
     {
         string valid = Config();
@@ -145,7 +149,7 @@ public partial class TestParameterizedScenario : Node
         foreach (string name in new[] { "wheat-basic-r1.json", "radish-three-r1.json" })
         {
             ScenarioConfiguration config = ScenarioConfiguration.Load(ProjectSettings.GlobalizePath("res://tests/scenario-configs/buy-process-sell/" + name));
-            BuyProcessSellScenario scenario = BuyProcessSellScenario.Start(config);
+            BuyProcessSellScenario scenario = Start(directory, config);
             var driver = Driver(scenario);
             Advance(driver, scenario);
             if (scenario.Outcome != ScenarioOutcome.Passed || scenario.Report.Produced != config.Quantity ||
@@ -163,7 +167,7 @@ public partial class TestParameterizedScenario : Node
         }
         foreach (CropDefinition crop in FarmGame.Crops)
         {
-            var scenario = BuyProcessSellScenario.Start(Load(directory, Config(quantity: 2, processingLimit: 1800, crop: crop.Kind + ".Raw")));
+            var scenario = Start(directory, Load(directory, Config(quantity: 2, processingLimit: 1800, crop: crop.Kind + ".Raw")));
             Advance(Driver(scenario), scenario);
             if (scenario.Outcome != ScenarioOutcome.Passed || scenario.Report.Produced != 2 || scenario.Game.GetBuildingSpaces().Count != 1)
                 return Fail("七原料Q=2共用流程未通过：" + crop.Kind + " " + scenario.Progress);
@@ -187,7 +191,7 @@ public partial class TestParameterizedScenario : Node
         FarmGame game = Current();
         game.SetPaused(true);
         ScenarioConfiguration config = Load(directory, Config("current"));
-        BuyProcessSellScenario scenario = BuyProcessSellScenario.Start(config, game);
+        BuyProcessSellScenario scenario = Start(directory, config, game);
         var driver = Driver(scenario);
         Advance(driver, scenario);
         if (scenario.Report.AdvancedTicks != 0 || scenario.Report.ProcessingWaitTicks != 0 || !game.IsPaused || !scenario.IsRunning)
@@ -200,7 +204,7 @@ public partial class TestParameterizedScenario : Node
         game = Current();
         game.Buy(new CommodityId(CropKind.Radish, CommodityKind.Product), 1);
         game.SetRawReserve(CropKind.Radish, 100);
-        scenario = BuyProcessSellScenario.Start(config, game);
+        scenario = Start(directory, config, game);
         Advance(Driver(scenario), scenario);
         if (scenario.Outcome != ScenarioOutcome.CompletedWithInsufficientEvidence || scenario.Report.Produced != 0 || game.GetRawReserve(CropKind.Radish) != 100)
             return Fail("现场已有产品被伪认作目标加工产出");
@@ -212,7 +216,7 @@ public partial class TestParameterizedScenario : Node
             TradeOrderFrequency.Continuous, TradeOrderQuantityMode.Fixed, 1, TradeOrderBudgetMode.None, 0, 0,
             CashReserveMode.Amount, 0, new IReadOnlyList<TradeOrderCondition>[] { new[] {
                 new TradeOrderCondition(TradeConditionFactor.Price, TradeConditionComparison.Less, 0) } }));
-        scenario = BuyProcessSellScenario.Start(config, game, 12345);
+        scenario = Start(directory, config, game, 12345);
         driver = Driver(scenario);
         Advance(driver, scenario);
         if (scenario.Outcome != ScenarioOutcome.CompletedWithInsufficientEvidence || scenario.Report.Baseline!.Orders.Count != 1 ||
@@ -220,7 +224,7 @@ public partial class TestParameterizedScenario : Node
             return Fail("现场已有批次或他单被清理/未记录");
 
         game = Current();
-        scenario = BuyProcessSellScenario.Start(config, game);
+        scenario = Start(directory, config, game);
         driver = Driver(scenario);
         Advance(driver, scenario, 27);
         if (scenario.Stage != ScenarioStage.WaitingForOrder)
@@ -240,53 +244,53 @@ public partial class TestParameterizedScenario : Node
     private static bool CheckBoundaries(string directory)
     {
         ScenarioConfiguration config = Load(directory, Config("current", date: "01-01-02"));
-        var scenario = BuyProcessSellScenario.Start(config, Current(24));
+        var scenario = Start(directory, config, Current(24));
         Advance(Driver(scenario), scenario);
         if (scenario.Outcome != ScenarioOutcome.CompletedWithInsufficientEvidence || scenario.Report.Final!.Calendar.ElapsedSeconds != 52)
             return Fail("末日期已有本单成交未获准完成");
-        scenario = BuyProcessSellScenario.Start(config, Current(25));
+        scenario = Start(directory, config, Current(25));
         Advance(Driver(scenario), scenario);
         if (scenario.Outcome != ScenarioOutcome.TimeRangeExhausted || scenario.Report.OrderId != null || scenario.Game.GetTradeOrders().Count != 0)
             return Fail("末日期产品达到Q仍创建新单");
-        scenario = BuyProcessSellScenario.Start(config, Current(52));
+        scenario = Start(directory, config, Current(52));
         if (scenario.Outcome != ScenarioOutcome.PreconditionsRejected || scenario.Report.Operations.Count != 0)
             return Fail("日期已过仍执行买入");
-        scenario = BuyProcessSellScenario.Start(Load(directory, Config(processingLimit: 26)));
+        scenario = Start(directory, Load(directory, Config(processingLimit: 26)));
         Advance(Driver(scenario), scenario);
         if (scenario.Outcome != ScenarioOutcome.WaitLimitExceeded || scenario.Report.ProcessingWaitTicks != 26)
             return Fail("加工预算未按完整tick限制");
-        scenario = BuyProcessSellScenario.Start(Load(directory, Config(processingLimit: 27)));
+        scenario = Start(directory, Load(directory, Config(processingLimit: 27)));
         Advance(Driver(scenario), scenario);
         return scenario.Outcome == ScenarioOutcome.Passed && scenario.Report.ProcessingWaitTicks == 27 || Fail("恰好预算最后tick达Q未通过");
     }
 
     private static bool CheckFailures(string directory)
     {
-        var scenario = BuyProcessSellScenario.Start(Load(directory, Config(quantity: 1000)));
+        var scenario = Start(directory, Load(directory, Config(quantity: 1000)));
         if (scenario.Outcome != ScenarioOutcome.OperationRejected || scenario.Game.GetRawStock(CropKind.Radish) != 0 || scenario.Game.MoneyCents != 4000)
             return Fail("正式买入拒绝后补资源或继续操作");
-        scenario = BuyProcessSellScenario.Start(Load(directory, Config(anchor: "383")));
+        scenario = Start(directory, Load(directory, Config(anchor: "383")));
         if (scenario.Outcome != ScenarioOutcome.PreconditionsRejected || scenario.Report.Operations.Count != 0)
             return Fail("独立场地非法占地未正常拒绝");
         ScenarioConfiguration current = Load(directory, Config("current"));
         var game = new FarmGame(12345);
-        scenario = BuyProcessSellScenario.Start(current, game);
+        scenario = Start(directory, current, game);
         if (scenario.Outcome != ScenarioOutcome.PreconditionsRejected || scenario.Report.Operations.Count != 0)
             return Fail("现场目标不存在仍买入");
         game = Current();
         game.SetRawReserve(CropKind.Radish, 100);
-        scenario = BuyProcessSellScenario.Start(current, game);
+        scenario = Start(directory, current, game);
         Advance(Driver(scenario), scenario);
         if (scenario.Outcome != ScenarioOutcome.WaitLimitExceeded || game.GetRawReserve(CropKind.Radish) != 100)
             return Fail("现场底线被自动修复或预算重置");
         game = Current();
-        scenario = BuyProcessSellScenario.Start(current, game);
+        scenario = Start(directory, current, game);
         game.RemoveBuilding(Vector2I.Zero);
         Advance(Driver(scenario), scenario, 1);
         if (scenario.Outcome != ScenarioOutcome.PreconditionsRejected)
             return Fail("运行中目标移除未停止");
         game = Current();
-        scenario = BuyProcessSellScenario.Start(current, game);
+        scenario = Start(directory, current, game);
         var driver = Driver(scenario);
         Advance(driver, scenario, 27);
         game.CancelTradeOrder(scenario.Report.OrderId!.Value);
@@ -294,7 +298,7 @@ public partial class TestParameterizedScenario : Node
         if (scenario.Outcome != ScenarioOutcome.OperationRejected || game.GetTradeOrders().Count != 1)
             return Fail("本单撤销后自动重建");
         game = Current();
-        scenario = BuyProcessSellScenario.Start(current, game);
+        scenario = Start(directory, current, game);
         driver = Driver(scenario);
         Advance(driver, scenario, 27);
         TradeOrderSnapshot existing = game.GetTradeOrders()[0];
@@ -308,7 +312,7 @@ public partial class TestParameterizedScenario : Node
         Advance(driver, scenario, 1);
         if (scenario.Outcome != ScenarioOutcome.OperationRejected || game.GetTradeOrders()[0].Request.ConditionGroups[0][0] != changed.ConditionGroups[0][0])
             return Fail("本单编辑后流程恢复了旧配置");
-        scenario = BuyProcessSellScenario.Start(current, Current());
+        scenario = Start(directory, current, Current());
         scenario.ObserveTime(1, "Scenario", true);
         scenario.Abort("人工中止");
         scenario.Abort("第二次");
@@ -325,13 +329,13 @@ public partial class TestParameterizedScenario : Node
             ScenarioReport.ResolveRoot("ignored", Path.Combine(directory, "Game.app", "Contents", "MacOS", "FarmExchange"), true) != Path.Combine(directory, "reports", "test-runs"))
             return Fail("报告路径依赖工作目录或写进.app");
         string output = ScenarioReport.CreateRunDirectory(root);
-        var scenario = BuyProcessSellScenario.Start(Load(directory, Config()));
-        try { scenario.WriteReport(output); return Fail("运行中写了最终报告"); }
+        var scenario = BuyProcessSellScenario.Start(Load(directory, Config()), output);
+        try { scenario.WriteReport(); return Fail("运行中写了最终报告"); }
         catch (InvalidOperationException) { }
         Advance(Driver(scenario), scenario);
         int money = scenario.Report.Final!.BalanceCents;
         scenario.Game.Buy(new CommodityId(CropKind.Radish, CommodityKind.Raw), 1);
-        string path = scenario.WriteReport(output);
+        string path = scenario.WriteReport();
         using JsonDocument json = JsonDocument.Parse(File.ReadAllText(path));
         JsonElement report = json.RootElement;
         if (Directory.GetFiles(output).Length != 1 || Path.GetFileName(path) != "report.json" ||
@@ -343,7 +347,7 @@ public partial class TestParameterizedScenario : Node
             report.GetProperty("initialization")[5].GetProperty("result").GetProperty("spentCents").GetInt32() != FarmGame.BuildingCostCents ||
             report.GetProperty("final").GetProperty("balanceCents").GetInt32() != money)
             return Fail("报告非唯一JSON、复制参数或落盘时重读现场");
-        try { scenario.WriteReport(output); return Fail("输出冲突没有显式报错"); }
+        try { scenario.WriteReport(); return Fail("输出冲突没有显式报错"); }
         catch (IOException) { }
         string blocked = Path.Combine(directory, "blocked");
         File.WriteAllText(blocked, "file");

@@ -2,6 +2,10 @@
 
 实现位于 `scripts/cultivation/CultivationPlanBook.cs`，请求和值快照分别位于 `CultivationPlanRequest.cs`、`CultivationPlanSnapshot.cs`。外部调用方通过 [FarmGame](../game-state/farm-game/interface-farm-game.md) 提交命令；计划 Module 直接使用 [FarmingSystem](../farming/farming-system/interface-farming-system.md) 的精确生长时间和播种启停，不创建第二份作物生产状态。
 
+`GetSnapshot(id)` 供 `FarmGame.GetCultivationPlan(id)` 按编号读取单张现存表，不存在时返回 null。它与全表查询使用相同的独立只读快照：只克隆目标表的条目，遍历现有绑定字典统计真实引用数，不创建计数缓存或反向索引。成本为目标表条目数加绑定数；不因一次命令观察而克隆其他表或遍历整张地图。原全表查询仍服务年度表管理列表。
+
+创建、完整更新、删除、原子批量应用及两种手动接管的 [日志观察](../logging/implementation-cultivation-observation.md) 在 `FarmGame` 语义入口组装。日志只消费原请求、此处的真实结果与只读快照，不改动本 Module 的验证顺序、年度凭据、原子提交或当前轮规则。批量应用的完整解析列表来自原调用方验证循环；提前拒绝不为日志补做目标检查。
+
 `Delete(id)` 由 `FarmGame.DeleteCultivationPlan` 调用：删除共享配置，并解除全部引用田的绑定、执行凭据、预备目标和日期事件。保留各田当前作物、当前轮阶段、精确剩余时长及水分，只恢复播种许可；空田和收获后的农田按当前作物自动复种，仍遵守原有季节判断并等待工人实际播种、供水。删除不推进经营、不收费、不修改金币或库存，不改变其他表、其他农田或手动预备安排；已分配的表编号不回收。成功返回 `null`；未知或已删除表返回“耕作表不存在”，全部状态保持。删除后旧表不能更新或再次应用，旧只读快照保持原值。
 
 | 公开值 | 调用方约定 |

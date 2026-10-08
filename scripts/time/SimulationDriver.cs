@@ -1,5 +1,6 @@
 using System;
 using FarmExchange.Gameplay;
+using FarmExchange.Logging;
 
 namespace FarmExchange.Time;
 
@@ -10,6 +11,13 @@ namespace FarmExchange.Time;
 public sealed class SimulationDriver
 {
     private double _progress;
+    private readonly TimeLog? _logging;
+
+    /**
+     * <summary>为一局组装唯一驱动及可选时间观察。</summary>
+     * <param name="logging">同一经营局的时间日志入口；省略时不采集。</param>
+     */
+    public SimulationDriver(TimeLog? logging = null) => _logging = logging;
     /**
      * <summary>当前每现实秒推进的经营 tick 数。</summary>
      */
@@ -65,7 +73,9 @@ public sealed class SimulationDriver
 
     private void ChangeRate(double rate, SimulationRateSource source)
     {
+        SimulationRateLogOperation? observation = _logging?.BeginRate(rate, Rate, source);
         Rate = rate;
+        observation?.Complete(Rate);
         RateChanged?.Invoke(rate, source);
     }
 

@@ -2,7 +2,7 @@
 
 本实现履行[日志 Interface](interface-logging.md)；事件字段和格式契约统一见 [schema v1](../../project/runtime-log-schema-v1.md)，不在本页复制字段表。
 
-本文描述 #126～#128 的实现：覆盖生命周期、完整主动交易、订单、行情、建拆与底线、生产窗口。`RuntimeLog` 是公开组装 facade，建立 `LogOutput`、记录进程生命周期，在真实经营初始化后通过 `BindGame` 返回 `GameLog`；关闭时先结束局及订单等待和生产尾段，再提交会话结束，最后释放输出。
+本文描述 #126～#129 的实现：覆盖生命周期、完整主动交易、订单、行情、建拆与底线、生产窗口、耕作命令、暂停与倍率及开发流程。`RuntimeLog` 是公开组装 facade，建立 `LogOutput`、记录进程生命周期，在真实经营初始化后通过 `BindGame` 返回 `GameLog`；关闭时先结束局及订单等待和生产尾段，再提交会话结束，最后释放输出。
 
 ## 生产累计与安全封窗
 
@@ -17,6 +17,10 @@ ProductionLog 在初始化后捕获14商品和钱包真实边界，每60现实�
 初始化生产窗先采集日历和资源，再读取窗口时钟，现实起点使用可空整数。首次时钟失败不会抹掉已取得的非零经营时间和资源；下一成功安全边界以 null 现实起点输出 Partial，明确 CollectorFailure/BoundaryMissing，而不是填默认 0 或改用另一时钟。封窗后从真实期末重新开始计时，已取得的真实 0 毫秒与未知 null 保持区别。
 
 ## 通用领域观察与输出
+
+#129 继续使用同一 CommandObservation：CultivationLog 保存有界原请求投影和真实前快照，Complete 读取正式后快照；FarmGame 保留原业务判断及提交顺序，批量应用只把正式校验已得到的目标列表交给 Adapter，不由日志重跑判断或扫描剩余输入。TimeLog 观察暂停设置与 SimulationDriver 原接受路径，未变化的暂停不发变化事件，合法同值倍率选择仍保留一次选择事实。
+
+GameLog 组装 Cultivation、Time 和 Scenario 三个具名入口，并从真实构造用途投影 Main 或 ScenarioIndependent。GamePurpose 为发布可用的纯枚举，日志不引用开发流程执行类型。独立流程创建局时复用 RuntimeLog，原地流程使用 FarmGame.Log；RunId 的保存和使用局限于流程事件及报告，不把流程 ID 塞入其他业务字段或采用隐式全局上下文。Main 把同一 TimeLog 接入唯一驱动，开发窗口先终结流程和报告，再释放独立局，主场景最后结束主局与会话。窗口和主场景退出入口可重复到达，流程终结及日志关闭各自保持幂等。
 
 `GameLog` 拥有局身份、递增命令编号和日历上下文，维护初始化设施/库存基线及 `Trading`、`Orders`、`Market` 领域入口。`TradingLog` 保存原交易输入和真实前快照，返回 `TradeLogOperation` 或 `ProductSaleLogOperation`；订单命令返回 `OrderLogOperation`。真实业务执行后由调用方 Complete 或 Faulted，共用 `CommandObservation` 管理共同字段、收到/结束配对、异常关联及一次终结，领域回调只投影日志事实。FarmGame 在经营层局部收敛单商品与订单命令的执行手续，仍只执行原业务一次并原样传播异常；日志不执行这些回调，也没有泛用业务执行容器。所有主动命令及领域观察均在记录或提交前拒绝未登记来源。
 

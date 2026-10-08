@@ -26,6 +26,12 @@
 
 加载固定原文件引用和原始字节SHA-256，报告写入这些引用及真实运行记录，不复制参数。独立准备逐次记录正式拆除、建造、实际扣费和底线操作；现场记录绑定且未清理。暂停/倍率观察由唯一驱动宿主传入。
 
-`Finish` 当场捕获最终公开状态。序列化不重新查询游戏。输出 `FileMode.CreateNew` 防止覆盖已有报告；失败由窗口显示“输出失败”，不替换目录或将执行通过假称为已保存。
+启动时接收已创建的唯一报告目录，将目录名固定为 `RunId`，创建局/报告关联后、调用 `Prepare` 前发出 `ScenarioStarted`。开始事件使用实际加载的修订和 SHA-256，之后外部文件变化不影响本次证据。独立局共享主场景 `RuntimeLog`，新建独立局身份；原地流程使用主局身份。
+
+`Finish` 当场捕获最终公开状态，再发出一次 `ScenarioFinished`。序列化不重新查询游戏。`WriteReport()` 只使用启动时的目录，输出 `FileMode.CreateNew` 防止覆盖已有报告；成功记录 `ScenarioReportSaved`，异常记录 `ScenarioReportSaveFailed` 后原样抛出。窗口显示真实输出错误，不替换目录或将执行通过假称为已保存。报告保存失败不改变 `Outcome/Reason/Final`，也不生成第二条流程终结。
+
+窗口用同一幂等报告尝试入口处理正常完成、中止和宿主退出；退出入口不再访问子控件。独立局在保存成功或失败后释放日志，确保报告事件先于 `GameEnded`；原地流程始终保留主局。公共 Adapter 只持流程日志关联和终结去重，不拥有执行、配置或报告文件操作，见[时间与流程日志](../logging/implementation-time-scenario-observation.md)。
 
 [TestParameterizedScenario](../../../tests/unit/TestParameterizedScenario.cs) 通过真实共用驱动及公开经营接口验证严格配置、文件修改后参数固定、原始BOM摘要、Q=1与Q=3、倍率变段、暂停、现场已有批次/订单、手动改速中断、预算与日期边界、正式拒绝、底线阻塞、目标移除、撤单、中止、终止快照及路径/输出错误。长期用例保存在 [tests/scenario-configs/buy-process-sell](../../../tests/scenario-configs/buy-process-sell/)，复用现有TestSuite。
+
+`TestScenarioLogging` 补充八种真实终结结果、实际加载凭据固定、提前 RunId、主局/独立局身份、同值选择中断顺序、报告成功/冲突失败及采集开关/写入故障等价；真实双文件样例保存在 `build/logging-samples/issue-129-flow-*`。实际通过状态以本 issue 的统一验收记录为准。

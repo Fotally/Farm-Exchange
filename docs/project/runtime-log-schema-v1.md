@@ -2,7 +2,7 @@
 
 关联 [#82](https://github.com/Fotally/Farm-Exchange/issues/82)；记录范围、框架及轮转方案见[日志设计](../research/runtime-logging.md)。2026-10-02 用户确认：两类业务日志均输出可读 `.log`，字段含义必须明确，供人和 AI 分析。本文件是字段与事件语义的唯一维护入口；事件登记包括分阶段接入的约定，只有实际覆盖表中的事件可作为当前程序已产生的证据。
 
-2026-10-08 修订：保留 #126 生命周期与单商品买入契约，#127 扩展主动交易、订单等待与行情，并登记跨商品编辑快照和集合截断计数；#128 接入建拆、原料底线与生产窗口。年度表、倍率、流程与专项诊断仍由 #129～#130 分阶段实现。格式与初始预算由实施选择并验证，具体实现范围以[日志接口](../architecture/logging/interface-logging.md)为准；登记不代替该阶段审查与运行验收。设计示意不作为实际验收样例。
+2026-10-09 修订：保留 #126 生命周期与单商品买入契约，#127 扩展主动交易、订单等待与行情，并登记跨商品编辑快照和集合截断计数；#128 接入建拆、原料底线与生产窗口。#129 接入年度表、两种手动接管、暂停/倍率与开发流程；专项诊断和性能仍由 #130 实现。格式与初始预算由实施选择并验证，具体实现范围以[日志接口](../architecture/logging/interface-logging.md)为准；登记不代替该阶段审查与运行验收。设计示意不作为实际验收样例。
 
 已确认的采集粒度：玩家命令、交易、订单变化与异常逐条记录；自动播种、浇水、收获、加工按时间窗口汇总，对象级详细记录按需、有界开启。该原则不保证普通日志可还原每座设施的每次动作；汇总字段和具体预算仍依照下文草案收敛。
 
@@ -64,7 +64,7 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 
 同一个 tick 内日历在换日阶段推进；早期阶段可能读到推进前的经营秒，订单阶段读到推进后的经营秒。以 `Sequence` 和 `Phase` 判断顺序，不把相同秒值的多个事件视为重复。日期换算入口为 [GameCalendar](../../scripts/time/GameCalendar.cs)，比例见[经营与生产时间](../architecture/time/game-time-units/interface-game-time-units.md)。
 
-跨局关联使用 SessionId + GameInstanceId + 业务对象标识；同进程两个 OrderId=1 不属于同一单。主局 GamePurpose=Main，独立开发局为 ScenarioIndependent；原地流程仍使用主局身份。RunId 只关联一次开发流程和其 JSON 报告；当前报告到保存时才赋值，后续须在 CreateRunDirectory 后、Start/Prepare 发出命令前绑定同一目录标识，不另造一套 ID。流程开始/结束和局创建/释放是不同生命周期。进程序号表达接收顺序，不证明不同经营局的因果关系。
+跨局关联使用 SessionId + GameInstanceId + 业务对象标识；同进程两个 OrderId=1 不属于同一单。主局 GamePurpose=Main，独立开发局为 ScenarioIndependent；原地流程仍使用主局身份。RunId 只关联一次开发流程和其 JSON 报告；在 CreateRunDirectory 后、Start/Prepare 发出首个业务命令前绑定实际目录名，不另造一套 ID。其他业务事件不隐式携带 RunId，通过同一 GameInstanceId、Sequence 与显式 Scenario 命令来源关联。流程开始/结束和局创建/释放是不同生命周期。进程序号表达接收顺序，不证明不同经营局的因果关系。
 
 统一日志直接接收各模块事件，不先分模块写文件再合并；建议首版把 Sequence 分配与两个文件目标的提交串行化，验证单会话成功输出的物理记录顺序。现实时钟回退不改变序号顺序；多个线程同毫秒到达时，序号仅表示日志接收先后。周期 Summary 的序号表示封窗记录的提交位置，内部累计量属于它注明的整个窗口，不能把所有产出都当作封窗瞬间发生。实施分阶段及顺序验收见[日志设计](../research/runtime-logging.md#后续实施顺序与待讨论决策)。
 
@@ -81,7 +81,7 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 
 ## 玩家指令契约
 
-记录玩家语义指令并便于未来复用。采用 `CommandReceived` / `CommandFinished` 配对，与中间的实际领域结果关联；`CommandOrigin` 为 `Player/Scenario`。#126 的 `BuyCommodity` 参数语义保持，#127 增加交易与订单命令，#128 增加建拆与原料底线命令，参数统一见下表。无效商品仍按 `<Crop>.<Kind>` 保留位置，其中未定义枚举用原十进制整数，例如 `"123.456"`；负数量原样记录。领域结果另说明拒绝，不能用执行后的合法值覆盖请求。耕作、倍率和流程等命令随所属子议题继续登记并接入。
+记录玩家语义指令并便于未来复用。采用 `CommandReceived` / `CommandFinished` 配对，与中间的实际领域结果关联；`CommandOrigin` 为 `Player/Scenario`。#126 的 `BuyCommodity` 参数语义保持，#127 增加交易与订单命令，#128 增加建拆与原料底线命令，参数统一见下表。无效商品仍按 `<Crop>.<Kind>` 保留位置，其中未定义枚举用原十进制整数，例如 `"123.456"`；负数量原样记录。领域结果另说明拒绝，不能用执行后的合法值覆盖请求。#129 增加耕作、暂停和已接受倍率命令；开发流程的开始/终结/报告是独立生命周期事件。
 
 | 字段 | 含义 |
 | --- | --- |
@@ -103,10 +103,19 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 | `PlaceBuilding` | Cell、BuildingKind、Crop；道路的原 Crop 输入也保留在参数域，不解释为道路种植 |
 | `RemoveBuilding` | Cell；保留输入子格，实际整座锚点由领域结果说明 |
 | `SetRawReserve` | Crop、RequestedQuantity（原请求原料保留份数，负数仍原样记录） |
+| `CreateCultivationPlan` | RequestedPlan；创建前无有效 PlanId |
+| `UpdateCultivationPlan` | PlanId、RequestedPlan |
+| `DeleteCultivationPlan` | PlanId |
+| `ApplyCultivationPlan` | PlanId、Cells（原输入子格数组，不先去重） |
+| `SetFarmCrop`、`PrepareFarmCrop` | Cell、Crop；分别立即重启与保留当前轮接管 |
+| `SetPaused` | IsPaused（原请求布尔值，通用上下文仍说明记录时实际暂停状态） |
+| `SelectSimulationRate` | RequestedRate、Source；仅已通过原倍率检查的选择 |
 
-`CommandArguments.OrderId` 属于原输入域，允许记录请求中的 0 或负数；领域事件的 `OrderId` 仍只表示已经存在或成功分配的正整数身份。订单原配置按下文投影和有界截断约定记录，不将拒绝输入解释为生效配置。
+`CommandArguments.OrderId` 与 `CommandArguments.PlanId` 属于原输入域，允许记录请求中的 0 或负数；领域事件的 `OrderId`、`PlanId` 仍只表示已经存在或成功分配的正整数身份。订单原配置按下文投影和有界截断约定记录，不将拒绝输入解释为生效配置。
 
 runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入口取得实际输入后、业务验证/修改前提交，带命令身份、来源、原参数及通用头/经营上下文。Finished 在真实完成、拒绝或异常边界提交，带同一 CommandId 与状态，正常拒绝复用实际原因，异常保持原传播。中间的 TradeFinished、BuildingPlaced 等领域事件携带 CommandId 关联且各自记录一次资源结果；通用 Finished 不复制资金库存收支。高频内部调用不作为新玩家命令记录，不为日志建立新的命令执行总线。
+
+倍率原入口只校验倍率值，未校验强转的非法来源枚举。该调用仍按原行为接受时，`SelectSimulationRate` 的 CommandOrigin 和 Source 都保留原十进制字符串（如 "99"），不虚构 Player/Scenario，也不因日志新增业务异常；其他正式命令的来源验证保持。`RunMode` 同样出现在报告成功/失败事件中，用于说明所属流程方式。
 
 同一经营秒可以有多条指令，使用 Received 的 Sequence 区分接收顺序，Finished 的 Sequence 表示结束记录位置。收到但未见结束只说明结尾证据缺失，不能推断成功或失败。同值暂停/倍率选择等无状态变化请求仍可有成功结束记录，不强制捏造 PauseChanged 等状态变化事件。
 
@@ -256,13 +265,13 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 | `EndReason` | `Shutdown/Replaced/Released` | GameEnded 的真实释放原因；流程结束用独立事件 |
 | `PlanId` | 正 int32 | 共享年度表 ID，创建拒绝未分配时省略 |
 | `RequestedPlan`、`PlanBefore`、`PlanAfter` | 计划配置或 null | 原始请求与实际前后；配置仅含 Name（字符串）、Mode（Immediate/PrepareNext）、Entries 数组（Id 正整数、Crop、StartDay 年内 0～335）；非法请求原值保留，删除后为 null；不新造 Revision |
-| `InputCellCount`、`ResolvedUniqueTargetCount`、`AppliedTargetCount` | 非负整数；解析数可 null | 原输入数、完整解析去重数、实际应用数；中途拒绝未解析完时去重数未知，整批拒绝应用数为 0 |
+| `InputCellCount`、`ResolvedUniqueTargetCount`、`AppliedTargetCount` | 非负整数；输入数和解析数可 null | 原输入数、完整解析去重数、实际应用数；原集合为 null 时输入数未知，中途拒绝未解析完时去重数未知；实际检查到空集合为0，整批拒绝应用数为0 |
 | `TargetAnchors`、`TargetsTruncated` | 锚点数组及布尔 | 应用的已解析目标样本；截断时明确只是一部分，不能据此恢复所有农田引用 |
 | `DetachedFarmCount` | 非负整数 | 删除年度表时真实解除引用的农田数量；拒绝为 0 |
 | `TakeoverMode` | `Immediate/PrepareNext` | 立即重启选种/保留当前轮后安排下一轮，按真实命令区分 |
 | `PreviousPlanId`、`PlanDetached`、`CurrentCyclePreserved` | 正整数或 null、布尔、布尔 | 接管前引用、是否实际解除、本轮是否实际保留；拒绝/无有效农田时未能确认的结果为 null |
 | `PreviousSelectedCrop`、`EffectiveSelectedCrop`、`NextCycleCrop` | 作物或 null | 前选种、命令后选种、预备下一轮；没有预备安排为 null，不用下一轮覆盖本轮 |
-| `Source` | `Player/Scenario` | 倍率意图来源，复用 SimulationRateSource；不是文件来源 |
+| `Source` | `Player/Scenario` 或原十进制枚举字符串 | 倍率意图来源，复用 SimulationRateSource；不是文件来源。原驱动不验证强转的非法来源值，日志保留如 "99"，不能将其解释为已知来源 |
 | `RequestedRate`、`PreviousRate`、`EffectiveRate`、`ValueChanged` | 正有限小数及布尔 | 已接受选择的请求/前值/生效值及数值是否变化；同值玩家选择也记录，可能实际中断开发流程 |
 | `RunId`、`RunMode` | 字符串、`Current/Independent` | 已创建报告目录的同一运行标识及原地/独立方式，不包含用户绝对路径 |
 | `ConfigurationRevision`、`ConfigurationHash` | 整数、SHA-256 字符串 | 实际加载配置的修订及哈希，不记录整份配置或未保存草稿 |
@@ -270,7 +279,7 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 | `FinishReason` | 字符串或 null | 原流程实际结束说明；不能据中文文本推断新的稳定原因码 |
 | `ReportFile` | 相对路径字符串 | 保存成功的实际报告；保存失败用 ExceptionType/Exception 表达，不改流程结果 |
 
-耕作表应用沿用全部验证后原子提交；日志不得为凑完整目标数继续执行已短路的检查。立即接管同种作物仍可能重启本轮，不能按选种值相同过滤。开发事件仅在相应功能存在的开发构建产生，若发生则属于关键记录；日志公共模块不依赖发布构建排除的开发类型，由开发侧投影纯值。
+年度表原请求/前后配置的 Entries、命令原 Cells、解析 TargetAnchors 各最多32项，超限使用统一 ItemCount 元数据说明完整原数量；采样不限制业务合法配置。名称修剪、条目排序只体现在生效配置中，拒绝不把请求当作 After。`PlanId` 只在实际表存在或成功删除的前态存在时给出；未知原请求编号仅留命令参数。耕作表应用沿用全部验证后原子提交；日志不得为凑完整目标数继续执行已短路的检查。立即接管同种作物仍可能重启本轮，不能按选种值相同过滤。开发事件仅在相应功能存在的开发构建产生，若发生则属于关键记录；日志公共模块不依赖发布构建排除的开发类型，由开发侧投影纯值。
 
 ### 采集与输出健康字段
 
@@ -345,8 +354,8 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `BuildingPlaced`、`BuildingRemoved` | 两类/INF | 实际命令完成；Outcome、RejectionReason、Cell、Anchor、BuildingKind、ChargedCents、资金前后；生产建筑加 Crop，失败无法解析的建筑信息可 null；有枚举时加 FailureCode |
 | `FarmManualControlChanged` | 两类/INF | 两种接管命令完成；Outcome、RejectionReason、Cell、Anchor、Crop（请求）、TakeoverMode、PreviousPlanId、PlanDetached、CurrentCyclePreserved、PreviousSelectedCrop、EffectiveSelectedCrop、NextCycleCrop；无法取得的状态为 null；替代旧 CropChanged，不重复发出 |
 | `CultivationPlanCreated`、`CultivationPlanUpdated` | 两类/INF | 正式保存完成；Outcome、RejectionReason、RequestedPlan、PlanBefore、PlanAfter；已有 ID 时加 PlanId，拒绝不把请求当 After |
-| `CultivationPlanDeleted` | 两类/INF | 删除及解除全部引用后；Outcome、RejectionReason、PlanId、PlanBefore、PlanAfter、DetachedFarmCount；保留当前轮的规则由真实结果解释 |
-| `CultivationPlanApplied` | 两类/INF | 批量命令完成；Outcome、RejectionReason、PlanId、InputCellCount、ResolvedUniqueTargetCount、AppliedTargetCount、TargetAnchors、TargetsTruncated；输入提前拒绝未完整解析时去重数 null |
+| `CultivationPlanDeleted` | 两类/INF | 删除及解除全部引用后；Outcome、RejectionReason、已有时的 PlanId、PlanBefore、PlanAfter、DetachedFarmCount；保留当前轮的规则由真实结果解释 |
+| `CultivationPlanApplied` | 两类/INF | 批量命令完成；Outcome、RejectionReason、已有时的 PlanId、InputCellCount、ResolvedUniqueTargetCount、AppliedTargetCount、TargetAnchors、TargetsTruncated；输入提前拒绝未完整解析时去重数 null |
 | `RawReserveChanged` | 两类/INF | 底线命令完成；Outcome、FailureCode、RejectionReason、Crop、PreviousReserveQuantity、ReserveQuantity；成功 FailureCode=RawReserveFailure.None，拒绝使用该枚举实际原因；无效输入须另记录 RequestedQuantity，未取得合法品种时前后值 null |
 | `PauseChanged` | 两类/INF | 暂停状态真正变化后；IsPaused 为新值，不为 UI 刷新重复写 |
 | `SimulationRateSelected` | 两类/INF | 每次已接受倍率选择，包括同值选择；Source、RequestedRate、PreviousRate、EffectiveRate、ValueChanged，不声称一定改变数值或解除暂停 |
@@ -415,7 +424,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | 性能窗口 | 候选 60 个现实秒，#130 | 实际安全边界封窗，可超时，不拆批次 |
 | 单订单中间等待变化 | 每现实 60 秒最多 8 条，#127 | 首次/终止不漏，超限有合并尾段，业务求值次数不变 |
 | 专项诊断 | 候选最多 32 个锚点、8 个订单或 3 个工人，120 秒或 5000 条，#130 | 对象、时间和总条数同时有限，到限自动结束 |
-| 自由文本/集合 | 摘要 256、自由字符串 512 个 Unicode 标量，#126；订单配置前 8 组且合计 32 条条件，#127；其他样本集合候选 32 项 | 固定七/十四商品结构完整保留，大合法配置不能被日志限制拒绝 |
+| 自由文本/集合 | 摘要 256、自由字符串 512 个 Unicode 标量，#126；订单配置前 8 组且合计 32 条条件，#127；年度表条目/输入子格/解析目标各前 32 项，#129；诊断样本由 #130 限定 | 固定七/十四商品结构完整保留，大合法配置不能被日志限制拒绝 |
 | 异常/整事件 | 异常最多 64 行/16 KiB，整事件 32 KiB | 可见截断、结构完整；核心信息保不住则报告证据缺失 |
 
 附件的 SlowBatch 告警、全场停工原因统计、计划修订号暂不登记为首版必需事件或字段；若后续确认实际诊断需求，再补独立契约。性能验收仍按项目已有标准，不把建议慢批次阈值解释成玩法实时保证。

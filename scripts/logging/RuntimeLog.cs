@@ -104,14 +104,14 @@ public sealed class RuntimeLog : IDisposable
      * <returns>该局的领域观察上下文；关闭采集时为 null。</returns>
      * <remarks>每局只绑定一次；本入口仅供手动领域观察，不反向接入经营自动生产。局释放时关闭上下文，会话持有尚未结束的关联。</remarks>
      */
-    public GameLog? BindGame(FarmGame game, int seed) => BindGame(game, seed, collectProduction: false);
+    public GameLog? BindGame(FarmGame game, int seed) => BindGame(game, seed, collectProduction: false, GamePurpose.Main);
 
-    internal GameLog? BindGame(FarmGame game, int seed, bool collectProduction)
+    internal GameLog? BindGame(FarmGame game, int seed, bool collectProduction, GamePurpose purpose)
     {
         lock (_sync)
         {
             if (_disposed || !_output.IsEnabled) return null;
-            var context = new GameLog(this, game, collectProduction, _productionUptime);
+            var context = new GameLog(this, game, collectProduction, purpose, _productionUptime);
             _games.Add(context);
             context.Initialized(seed);
             context.Production?.Start();
