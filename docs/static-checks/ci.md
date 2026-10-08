@@ -9,3 +9,5 @@
 业务脚本命名空间检查递归覆盖模块子目录。`scripts/development/` 及其流程子目录使用 `FarmExchange.Development`，模块内 `development/` 子目录沿用所属模块命名空间，与编译排除约定一致。
 
 dotnet format whitespace FarmExchange.sln --verify-no-changes 根据 .editorconfig 验证可格式化的 C# 空白风格；具体配置见[EditorConfig](editorconfig.md)。业务规则正确性由 Godot 场景测试负责，FPS、覆盖率、导出和启动要求仍以[构建与验收](../project/build-and-validation.md)为准。PR 模板中的变更类型与验收文字须对应真实改动，由提 PR skill 收集并供人工审查；CI 不假装理解其语义。
+
+多行字典初始化中的字段按格式器要求逐项换行。定位单文件格式错误时，运行 `dotnet format whitespace FarmExchange.sln --verify-no-changes --include scripts/logging/TradeOrderLog.cs`；修复可对同一文件去掉 `--verify-no-changes` 执行，再运行不带 `--include` 的完整检查。格式检查通过不替代编译和测试。若 CI 在静态检查阶段退出，随后报告覆盖率文件缺失，应先修复最早失败步骤，再完整重跑以生成报告。

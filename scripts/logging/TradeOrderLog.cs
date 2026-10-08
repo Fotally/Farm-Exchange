@@ -274,9 +274,13 @@ public sealed class TradeOrderLog
         TradeObservation after = _context.Trading.Snapshot(commodity);
         return new()
         {
-            ["Commodity"] = CommodityName(commodity), ["StockBefore"] = before.Stock, ["StockAfter"] = after.Stock,
-            ["AvailableStockBefore"] = before.AvailableStock, ["AvailableStockAfter"] = after.AvailableStock,
-            ["FrozenStockBefore"] = before.FrozenStock, ["FrozenStockAfter"] = after.FrozenStock,
+            ["Commodity"] = CommodityName(commodity),
+            ["StockBefore"] = before.Stock,
+            ["StockAfter"] = after.Stock,
+            ["AvailableStockBefore"] = before.AvailableStock,
+            ["AvailableStockAfter"] = after.AvailableStock,
+            ["FrozenStockBefore"] = before.FrozenStock,
+            ["FrozenStockAfter"] = after.FrozenStock,
         };
     }
 
@@ -316,11 +320,16 @@ public sealed class TradeOrderLog
         }
         return new()
         {
-            ["Commodity"] = CommodityName(request.Commodity), ["Side"] = request.Side.ToString(),
-            ["Frequency"] = request.Frequency.ToString(), ["QuantityMode"] = request.QuantityMode.ToString(),
-            ["Quantity"] = request.Quantity, ["BudgetMode"] = request.BudgetMode.ToString(),
-            ["BudgetCents"] = request.BudgetCents, ["LimitPriceCents"] = request.LimitPriceCents,
-            ["ReserveMode"] = request.ReserveMode.ToString(), ["ReserveValue"] = request.ReserveValue,
+            ["Commodity"] = CommodityName(request.Commodity),
+            ["Side"] = request.Side.ToString(),
+            ["Frequency"] = request.Frequency.ToString(),
+            ["QuantityMode"] = request.QuantityMode.ToString(),
+            ["Quantity"] = request.Quantity,
+            ["BudgetMode"] = request.BudgetMode.ToString(),
+            ["BudgetCents"] = request.BudgetCents,
+            ["LimitPriceCents"] = request.LimitPriceCents,
+            ["ReserveMode"] = request.ReserveMode.ToString(),
+            ["ReserveValue"] = request.ReserveValue,
             ["ConditionGroups"] = groups,
         };
     }

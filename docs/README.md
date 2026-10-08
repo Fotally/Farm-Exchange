@@ -63,5 +63,5 @@
 - [运行时日志设计](research/runtime-logging.md)及[schema v1](project/runtime-log-schema-v1.md)：#82 初版基线、模块职责、分阶段覆盖与字段释义；交易、等待与行情见 #127，生产汇总、耕作和诊断按 #128～#130 接入。
 - [日志参数与分层耦合调研](research/logging-coupling-practices.md)：业界如何减少重复传参、集中领域投影，并隔离日志底座与子系统的修改；研究保留当时候选，现行实现见日志接口。
 - 研究依据：[市场曲线](research/market-price-curve.md)、[测试分类](research/test-taxonomy.md)、[基础格细分](research/grid-subdivision.md)、[窗口与地图缩放](research/window-size-and-map-zoom.md)、[建造预览案例](research/build-placement-preview.md)、[开发构建机制](research/developer-tools-builds.md)、[C#开发工具案例](research/developer-tools-csharp-cases.md)。研究记录保留当时证据，不覆盖现行专题规则。
-- [EditorConfig](static-checks/editorconfig.md)、[CI静态检查](static-checks/ci.md)、[逐模块覆盖率门禁](static-checks/coverage.md)、[接口注释格式](static-checks/interface-comments.md)、[规则加载对应表](../.codex/rule-loading.md)。
+- [EditorConfig](static-checks/editorconfig.md)、[CI静态检查与格式错误定位](static-checks/ci.md)、[逐模块覆盖率门禁](static-checks/coverage.md)、[接口注释格式](static-checks/interface-comments.md)、[规则加载对应表](../.codex/rule-loading.md)。
 - [历史归档](archive/index.md)：已完成方案、被替代设计和历次验收；内部路径镜像docs原分类。
