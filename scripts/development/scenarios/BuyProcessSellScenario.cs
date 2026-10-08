@@ -78,7 +78,7 @@ public sealed class BuyProcessSellScenario
                 cells.Add(space.AnchorCell);
             foreach (Godot.Vector2I cell in cells)
             {
-                string? removal = Game.RemoveBuilding(cell);
+                string? removal = Game.RemoveBuilding(cell, CommandOrigin.Scenario);
                 Report.Initialization.Add(new ScenarioPreparation("RemoveBuilding", new { x = cell.X, y = cell.Y }, new { success = removal == null, reason = removal }));
                 if (removal != null)
                 {
@@ -87,7 +87,7 @@ public sealed class BuyProcessSellScenario
                 }
             }
             int balanceBefore = Game.MoneyCents;
-            string? error = Game.BuildProcessor(_configuration.ProcessorAnchor, _configuration.RawCommodity.Crop);
+            string? error = Game.BuildProcessor(_configuration.ProcessorAnchor, _configuration.RawCommodity.Crop, CommandOrigin.Scenario);
             Report.Initialization.Add(new ScenarioPreparation("BuildProcessor", new { x = _configuration.ProcessorAnchor.X, y = _configuration.ProcessorAnchor.Y, crop = _configuration.RawCommodity.Crop },
                 new { success = error == null, reason = error, spentCents = balanceBefore - Game.MoneyCents }));
             if (error != null)
@@ -95,7 +95,7 @@ public sealed class BuyProcessSellScenario
                 Finish(ScenarioOutcome.PreconditionsRejected, error);
                 return;
             }
-            RawReserveFailure reserveResult = Game.SetRawReserve(_configuration.RawCommodity.Crop, 0);
+            RawReserveFailure reserveResult = Game.SetRawReserve(_configuration.RawCommodity.Crop, 0, CommandOrigin.Scenario);
             Report.Initialization.Add(new ScenarioPreparation("SetRawReserve", new { crop = _configuration.RawCommodity.Crop, quantity = 0 }, reserveResult));
             if (reserveResult != RawReserveFailure.None)
                 throw new InvalidOperationException("合法原料底线设置被拒绝");

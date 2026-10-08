@@ -50,7 +50,8 @@ public static class TestLoggingFiles
         }
         string[] runtime = ReadFiles(Path.Combine(directory, "runtime"));
         string[] debug = ReadFiles(Path.Combine(directory, "debug"));
-        Require(runtime.Length == 190 && debug.Length == runtime.Length, "File 共享丢失/重复事件");
+        Require(runtime.Length == 193 && debug.Length == runtime.Length &&
+            runtime.Count(line => HasEvent(line, "ProductionSummary")) == 3, "File 共享丢失/重复事件");
         Require(runtime.OrderBy(line => line).SequenceEqual(debug.OrderBy(line => line)), "两目标不是同一事件头/时间/内容");
         Require(runtime.All(line => !line.Contains("EventState:") && !line.Contains("OriginalFormat")) &&
             runtime.Where(line => HasEvent(line, "SessionStarted")).All(line =>

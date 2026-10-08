@@ -2,7 +2,21 @@
 
 本实现履行[日志 Interface](interface-logging.md)；事件字段和格式契约统一见 [schema v1](../../project/runtime-log-schema-v1.md)，不在本页复制字段表。
 
-本文描述 #126 及 #127 的实现：覆盖生命周期、完整主动交易、订单和行情。`RuntimeLog` 是公开组装 facade，建立 `LogOutput`、记录进程生命周期，在真实经营初始化后通过 `BindGame` 返回 `GameLog`；关闭时先结束局及订单等待尾段，再提交会话结束，最后释放输出。
+本文描述 #126～#128 的实现：覆盖生命周期、完整主动交易、订单、行情、建拆与底线、生产窗口。`RuntimeLog` 是公开组装 facade，建立 `LogOutput`、记录进程生命周期，在真实经营初始化后通过 `BindGame` 返回 `GameLog`；关闭时先结束局及订单等待和生产尾段，再提交会话结束，最后释放输出。
+
+## 生产累计与安全封窗
+
+公开 BindGame 是手动领域观察入口，不反向修改已存在 FarmGame 的关联。内部自动绑定通路由 FarmGame 构造器显式声明已接入生产事实；GameLog 仅在此通路组装 ProductionLog，手动关联保持空生产入口，关闭时也不生成生产窗口。该区别不改变公开签名、不额外保存业务状态。
+
+建拆投影单独见[建拆与底线观察](implementation-building-observation.md)。生产窗口履行[日志 Interface](interface-logging.md)：Harvested、Consumed、Produced、WorkerCompleted 和 Cleared 在原成功提交点累计固定大小计数；不创建逐实例明细。FarmingSystem 原清理遍历返回 CropClearResult，处理器沿用 TryStart 的真实成功值，事件秒和暂停新建共用 StartIdleProcessors，因此无额外全图扫描。
+
+ProductionLog 在初始化后捕获14商品和钱包真实边界，每60现实秒到期后只在命令或完整推进请求结束处输出。FarmGame 用 try/finally 围住原单秒和批量入口，以局日志内部布尔推进标记延后 checkpoint 内命令的检查；原业务不允许嵌套推进，本实现不新增嵌套推进兜底。非正常返回把当前窗标为缺少完整边界，原异常保持传播。局退出先封存订单等待，再输出生产尾段，最后 GameEnded。
+
+提交字段和窗口重置全部在日志内部；成功构造的期末作为下窗期初，输出目标失败不重试或重复累计。采集器失败保留 CollectorFailure，未知资源快照为 null 并标记 BoundaryMissing；不把未知数量填零。满图夹具绕开真实播种和开工，受影响窗口标 UnregisteredMutation；下一真实边界只重新证明后续区间，旧投入历史仍未知。窗口编号和实际计数器切换确定增量归属，同毫秒封窗不重新按时间戳分配。窗口内商品守恒依赖同一区间交易事件齐全；汇总和逐次成交不能重复入账。
+
+初始化生产窗先采集日历和资源，再读取窗口时钟，现实起点使用可空整数。首次时钟失败不会抹掉已取得的非零经营时间和资源；下一成功安全边界以 null 现实起点输出 Partial，明确 CollectorFailure/BoundaryMissing，而不是填默认 0 或改用另一时钟。封窗后从真实期末重新开始计时，已取得的真实 0 毫秒与未知 null 保持区别。
+
+## 通用领域观察与输出
 
 `GameLog` 拥有局身份、递增命令编号和日历上下文，维护初始化设施/库存基线及 `Trading`、`Orders`、`Market` 领域入口。`TradingLog` 保存原交易输入和真实前快照，返回 `TradeLogOperation` 或 `ProductSaleLogOperation`；订单命令返回 `OrderLogOperation`。真实业务执行后由调用方 Complete 或 Faulted，共用 `CommandObservation` 管理共同字段、收到/结束配对、异常关联及一次终结，领域回调只投影日志事实。FarmGame 在经营层局部收敛单商品与订单命令的执行手续，仍只执行原业务一次并原样传播异常；日志不执行这些回调，也没有泛用业务执行容器。所有主动命令及领域观察均在记录或提交前拒绝未登记来源。
 

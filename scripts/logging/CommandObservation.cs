@@ -49,6 +49,7 @@ internal sealed class CommandObservation
             finished["RejectionReason"] = outcome.RejectionReason;
             _context.Output.Submit(new(6, "CommandFinished", _description.Source), _description.FinishedMessage, finished);
         });
+        _context.Production?.CheckBoundary();
     }
 
     internal void Faulted(Exception error)
@@ -66,6 +67,7 @@ internal sealed class CommandObservation
             finished["CommandStatus"] = "Faulted";
             _context.Output.Submit(new(6, "CommandFinished", _description.Source), _description.FaultFinishedMessage, finished);
         });
+        _context.Production?.CheckBoundary();
     }
 
     private Dictionary<string, object?> Fields()

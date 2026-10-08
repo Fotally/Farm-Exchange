@@ -246,8 +246,14 @@ internal sealed class FarmingSystem
     internal bool TryWork(int index, CalendarSnapshot calendar) =>
         GetWorkNeed(index, calendar) is FarmWorkRequest work && TryCompleteWork(work, calendar);
 
-    internal void ClearDisallowedCrops(Season season)
+    /**
+     * <summary>清理当前季节禁生且尚未结束的作物轮次。</summary>
+     * <param name="season">日历已切换到的季节。</param>
+     * <returns>原遍历实际清理的逐作物轮数，不包含空田或已收获轮次。</returns>
+     */
+    internal CropClearResult ClearDisallowedCrops(Season season)
     {
+        var result = new CropClearResult();
         GrowingSeasons currentSeason = (GrowingSeasons)(1 << (int)season);
         foreach (int index in _indices)
         {
@@ -259,7 +265,9 @@ internal sealed class FarmingSystem
             farm.RemainingTimeUnits = 0;
             farm.HasWater = false;
             _farmRevisions[index]++;
+            result.Record(farm.CropKind);
         }
+        return result;
     }
 
     private static void StartGrowth(FarmState farm)

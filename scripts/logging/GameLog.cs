@@ -20,13 +20,15 @@ public sealed class GameLog : IDisposable
     private static readonly LogEventDescriptor EndedEvent = new(4, "GameEnded", Source);
     private bool _ended;
 
-    internal GameLog(RuntimeLog owner, FarmGame game)
+    internal GameLog(RuntimeLog owner, FarmGame game, bool collectProduction, Func<long>? productionUptime = null)
     {
         _owner = owner;
         _game = game;
         Trading = new TradingLog(this, game);
         Orders = new TradeOrderLog(this, game);
         Market = new MarketLog(this);
+        Production = collectProduction ? new ProductionLog(this, game, productionUptime) : null;
+        Gameplay = new GameplayLog(this, game);
     }
 
     /**
@@ -43,6 +45,13 @@ public sealed class GameLog : IDisposable
      * <summary>本局实际公告与正式报价观察入口。</summary>
      */
     public MarketLog Market { get; }
+
+    /**
+     * <summary>本局建拆及库存底线命令观察入口。</summary>
+     */
+    public GameplayLog Gameplay { get; }
+
+    internal ProductionLog? Production { get; }
 
     internal bool CanObserve => !_ended && _owner.Output.IsEnabled;
     internal LogOutput Output => _owner.Output;
@@ -82,6 +91,7 @@ public sealed class GameLog : IDisposable
     {
         if (_ended) return;
         Orders.End();
+        Production?.End();
         _ended = true;
         _owner.Output.Observe(() =>
         {

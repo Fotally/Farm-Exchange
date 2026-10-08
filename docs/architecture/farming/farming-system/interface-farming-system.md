@@ -1,5 +1,7 @@
 # FarmingSystem 对外接口
 
+`ClearDisallowedCrops(season)` 在原清理遍历中返回 `CropClearResult`，逐作物查询真实清理轮数；空田、仍适季作物和已通过促熟收获的轮次不计入。结果仅描述本次状态提交，不修改清理顺序、不读取库存、不持有日志计数。FarmGame 将结果交给[生产窗口](../../logging/interface-logging.md)，清理轮数不能解释成库存损失份数。
+
 对应类型：`FarmExchange.Farming.FarmingSystem`，代码位于 `scripts/farming/FarmingSystem.cs`。它唯一维护每块农田的所选作物、水分、播种或生长阶段、剩余精确时间单位和本实例工作凭据版本；状态数组只有锚点有值，九个子格不复制状态。空地与加工格不创建农田状态。
 
 | 成员 | 约定 |

@@ -108,7 +108,7 @@ public sealed class FarmGame : IDisposable
         _trading = new TradingService(_inventory, _wallet, _market);
         _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
         InitializeCenter(new Random(seed));
-        _log = logging?.BindGame(this, seed);
+        _log = logging?.BindGame(this, seed, collectProduction: true);
         _tradeOrders.AttachLog(_log?.Orders);
     }
 
@@ -145,7 +145,30 @@ public sealed class FarmGame : IDisposable
     public int GetRawStock(CropKind crop) => _inventory.GetRaw(crop);
     public int GetRawReserve(CropKind crop) => _inventory.GetRawReserve(crop);
 
-    public RawReserveFailure SetRawReserve(CropKind crop, int quantity)
+    /**
+     * <summary>设置指定原料的自动加工保留底线。</summary>
+     * <remarks>设置不触发领取，也不影响已经投入的原料。</remarks>
+     * <param name="crop">原料所属的作物品种。</param>
+     * <param name="quantity">要保留的原料份数，须为非负整数。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <returns>成功返回 None；无效作物返回 InvalidCrop，负数数量返回 InvalidQuantity；失败时底线不变。</returns>
+     */
+    public RawReserveFailure SetRawReserve(CropKind crop, int quantity, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Gameplay.BeginSetRawReserve(crop, quantity, origin);
+        RawReserveFailure result;
+        try { result = SetRawReserveCore(crop, quantity); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
+
+    private RawReserveFailure SetRawReserveCore(CropKind crop, int quantity)
     {
         if (!CropCatalog.IsDefined(crop))
             return RawReserveFailure.InvalidCrop;
@@ -248,6 +271,7 @@ public sealed class FarmGame : IDisposable
 
     internal void FillWorldForBenchmark()
     {
+        _log?.Production?.UnregisteredMutation();
         _cultivation.Clear();
         _occupancy.Clear();
         _farming.Clear();
@@ -326,7 +350,22 @@ public sealed class FarmGame : IDisposable
             GetBuildingCostCents(building));
     }
 
-    public PlacementResult TryPlace(Vector2I cell, BuildingKind building, CropKind crop)
+    public PlacementResult TryPlace(Vector2I cell, BuildingKind building, CropKind crop, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Gameplay.BeginPlace(cell, building, crop, origin);
+        PlacementResult result;
+        try { result = TryPlaceCore(cell, building, crop); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
+
+    private PlacementResult TryPlaceCore(Vector2I cell, BuildingKind building, CropKind crop)
     {
         PlacementCheck check = CheckPlacement(cell, building, crop);
         if (!check.Allowed)
@@ -341,11 +380,11 @@ public sealed class FarmGame : IDisposable
         return new PlacementResult(LandFailure.None, check.CostCents);
     }
 
-    public string? BuildFarm(Vector2I cell) =>
-        PlacementError(TryPlace(cell, BuildingKind.Farm, CropKind.Wheat));
+    public string? BuildFarm(Vector2I cell, CommandOrigin origin = CommandOrigin.Player) =>
+        PlacementError(TryPlace(cell, BuildingKind.Farm, CropKind.Wheat, origin));
 
-    public string? BuildProcessor(Vector2I cell, CropKind crop) =>
-        PlacementError(TryPlace(cell, BuildingKind.Processor, crop));
+    public string? BuildProcessor(Vector2I cell, CropKind crop, CommandOrigin origin = CommandOrigin.Player) =>
+        PlacementError(TryPlace(cell, BuildingKind.Processor, crop, origin));
 
     public string? SetFarmCrop(Vector2I cell, CropKind crop)
     {
@@ -470,7 +509,22 @@ public sealed class FarmGame : IDisposable
         return _cultivation.GetFarm(_occupancy.ResolveAnchorIndex(IndexOf(cell)));
     }
 
-    public string? RemoveBuilding(Vector2I cell)
+    public string? RemoveBuilding(Vector2I cell, CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        var observation = _log?.Gameplay.BeginRemove(cell, origin);
+        string? result;
+        try { result = RemoveBuildingCore(cell); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
+
+    private string? RemoveBuildingCore(Vector2I cell)
     {
         if (!MapCoordinates.ContainsCell(cell))
             return PlacementRules.ErrorMessage(LandFailure.OutOfBounds);
@@ -498,6 +552,19 @@ public sealed class FarmGame : IDisposable
 
     public TickResult AdvanceTick(bool isRaining = false)
     {
+        _log?.Production?.BeginAdvance();
+        bool completed = false;
+        try
+        {
+            TickResult result = AdvanceTickCore(isRaining);
+            completed = true;
+            return result;
+        }
+        finally { _log?.Production?.EndAdvance(completed); }
+    }
+
+    private TickResult AdvanceTickCore(bool isRaining)
+    {
         if (_calendar.IsPaused)
             return default;
         if (_calendar.Snapshot.ElapsedSeconds == uint.MaxValue)
@@ -513,6 +580,19 @@ public sealed class FarmGame : IDisposable
      * <returns>实际秒数、宽整数产出、事件/平静秒数及检查点停止标识。</returns>
      */
     public SimulationAdvanceResult AdvanceTicks(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint = null)
+    {
+        _log?.Production?.BeginAdvance();
+        bool completed = false;
+        try
+        {
+            SimulationAdvanceResult result = AdvanceTicksCore(maxTicks, checkpoint);
+            completed = true;
+            return result;
+        }
+        finally { _log?.Production?.EndAdvance(completed); }
+    }
+
+    private SimulationAdvanceResult AdvanceTicksCore(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint)
     {
         if (_calendar.IsPaused || maxTicks == 0)
             return default;
@@ -615,6 +695,7 @@ public sealed class FarmGame : IDisposable
             else if (building == BuildingKind.Processor && _processing.Advance(i, out CropKind productCrop))
             {
                 _inventory.AddProduct(productCrop, 1);
+                _log?.Production?.Produced(productCrop);
                 RecordPresentationResult(i, productCrop, ProductionResultKind.Product, 1);
                 produced++;
             }
@@ -626,9 +707,13 @@ public sealed class FarmGame : IDisposable
                     harvested += CollectHarvest(index, rescuedCrop, nextTimeUnits);
         StartIdleProcessors();
         bool workerActed = _workerScheduler.AdvanceOneSecond(_farming, _calendar.Snapshot,
-            (number, work) => RecordPresentationResult(work.CellIndex, _farming.Get(work.CellIndex).CropKind,
-                work.Kind == FarmWorkKind.Sow ? ProductionResultKind.Sow : ProductionResultKind.Water,
-                0, number, work));
+            (number, work) =>
+            {
+                _log?.Production?.WorkerCompleted(work.Kind);
+                RecordPresentationResult(work.CellIndex, _farming.Get(work.CellIndex).CropKind,
+                    work.Kind == FarmWorkKind.Sow ? ProductionResultKind.Sow : ProductionResultKind.Water,
+                    0, number, work);
+            });
         _cultivation.RecordSownCrops();
         bool dayAdvanced = AdvanceDay();
         _cultivation.Synchronize(nextTimeUnits);
@@ -640,6 +725,7 @@ public sealed class FarmGame : IDisposable
     {
         int quantity = GetCrop(crop).HarvestQuantity;
         _inventory.AddRaw(crop, quantity);
+        _log?.Production?.Harvested(crop, quantity);
         RecordPresentationResult(index, crop, ProductionResultKind.Harvest, quantity);
         _cultivation.Harvested(index, nextTimeUnits);
         return quantity;
@@ -867,7 +953,10 @@ public sealed class FarmGame : IDisposable
             throw new InvalidOperationException("模拟时间已达到上限");
         CalendarSnapshot calendar = _calendar.Snapshot;
         if (calendar.Season != previousCalendar.Season)
-            _farming.ClearDisallowedCrops(calendar.Season);
+        {
+            CropClearResult cleared = _farming.ClearDisallowedCrops(calendar.Season);
+            _log?.Production?.Cleared(cleared);
+        }
         if (calendar.ElapsedDays == previousCalendar.ElapsedDays)
             return false;
         _market.Advance(calendar, _log?.Market);
@@ -899,8 +988,8 @@ public sealed class FarmGame : IDisposable
     private void StartIdleProcessors()
     {
         foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
-            if (space.Building == BuildingKind.Processor)
-                _processing.TryStart(space.AnchorIndex, _inventory);
+            if (space.Building == BuildingKind.Processor && _processing.TryStart(space.AnchorIndex, _inventory))
+                _log?.Production?.Consumed(_processing.Get(space.AnchorIndex).CropKind);
     }
 
     private void PlaceFarm(int index, CropKind crop)

@@ -62,3 +62,6 @@
 `IsPresentationResultCurrent(result)` 是开始播放的完整校验：结果须属于本局当前秒及当前保留集合，工人动作还须通过农田原工作凭据版本检查。`IsPresentationTargetCurrent(result)` 单独验证已经开始的片段：内部保存 LandOccupancy 已有的不可变 BuildingSpaceSnapshot 引用，以引用一致性确认原设施仍在，并校验农田原工作凭据；它不限制秒数，让公共倍率的片段自然完成。拆除同格重建产生新引用，不使旧结果复活；改种/重启/换季等通过 FarmingSystem 失效原动作，不清空其他实例结果。没有新增永久 ID、事件历史或第二份土地状态，调用方不能修改集合或内部凭据。
 
 每个新事件秒先覆盖结果，平静秒也清空；批量请求结束仅留下最后经营秒，不是整个请求的历史。初次表现挂接记录当前秒并跳过已有结果，之后按经营秒去重；开发高倍率跳过过期动作不排队。暂停不推进经营或产生结果，表现冻结并在恢复时继续有效当前片段。此 Seam 只供人物和设施表现读取，不承担存档、审计或全局事件总线。测试为 TestProductionResults 与 TestWorkerPresentation。
+
+
+建拆及底线入口 `TryPlace/BuildFarm/BuildProcessor/RemoveBuilding/SetRawReserve` 接受默认 Player 的 `CommandOrigin`，开发流程显式传 Scenario；非法来源在修改前抛参数异常。已启用日志时，预检无命令记录，实际提交记录原输入和真实结果。`AdvanceTick/AdvanceTicks` 请求结束及完整命令结束作为生产汇总安全边界，生命周期尾段先于 GameEnded；详见[日志 Interface](../../logging/interface-logging.md)。这些观察不修改生产推进、领取时点或资源结算。

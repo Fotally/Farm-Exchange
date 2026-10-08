@@ -1,21 +1,44 @@
-# 运行时日志 Interface（#126、#127）
+# 运行时日志 Interface（#126～#128）
 
-代码位于 `scripts/logging/`；字段与单位只在 [schema v1](../../project/runtime-log-schema-v1.md) 维护。当前覆盖会话、经营局、完整主动交易、订单命令/等待/成交、实际公告及正式报价，并包含对应指令关联、初始化异常和日志健康。建造、生产汇总、耕作表、流程生命周期和受控诊断仍按后续阶段接入。
+代码位于 `scripts/logging/`；字段与单位只在 [schema v1](../../project/runtime-log-schema-v1.md) 维护。当前覆盖会话、经营局、完整主动交易、订单命令/等待/成交、实际公告及正式报价、建拆与底线命令、每局生产窗口，并包含对应指令关联、初始化异常和日志健康。耕作表、流程生命周期和受控诊断仍按后续阶段接入。
 
 ## 当前职责与通用提交
 
 [#127](https://github.com/Fotally/Farm-Exchange/issues/127) 先完成领域 Adapter 与通用输出的职责修正，再接入完整交易、订单与行情。本文说明当前接口，测试实际结果以统一验收记录为准。职责方向见[已确认安排](../../research/runtime-logging.md#已确认的后续修正方向)。
 
 - `RuntimeLog` 是公开组装 facade，负责进程生命周期、已绑定局的集合和关闭顺序；不维护交易字段或业务事件名称名单。
-- `GameLog` 拥有局身份、局内命令编号、日历上下文与局生命周期，公开 `Trading`、`Orders`、`Market`。初始化设施和库存基线属于其生命周期投影，关闭前封存订单等待尾段。
+- `GameLog` 拥有局身份、局内命令编号、日历上下文与局生命周期，公开 `Trading`、`Orders`、`Market`、`Gameplay`，内部组装 `Production`。初始化设施和库存基线属于其生命周期投影，关闭前封存订单等待和生产窗口尾段。
 - `TradingLog` 直接承担主动交易 Adapter，拥有请求、事件描述、前后资源快照及真实结果投影；`TradeLogOperation` 与 `ProductSaleLogOperation` 保存本次观察所需原输入与前快照。
 - `TradeOrderLog` 拥有订单配置投影、命令和成交资源观察及有界等待记录；`MarketLog` 投影实际公告、已提交报价和本轮真实因素，不重新求值或消费随机数。
+- `GameplayLog` 观察建拆与原料底线命令；[建拆实现](implementation-building-observation.md)说明真实子格、锚点和费用投影。`ProductionLog` 只拥有逐局生产累计、资源边界与封窗状态，业务继续拥有生产、库存和资金。
 - 内部 `CommandObservation` 拥有收到/结束配对、共同命令字段、异常关联和幂等终结。其完成回调只生成日志投影；从不接受、执行或重试业务命令。
 - 内部 `LogOutput` 提供统一 `Submit(description, message, fields)`，拥有会话标识、单调时间、序号、过滤、格式、输出和健康。`LogEventDescriptor` 由所属记录入口给出编号、稳定名称、来源、级别和 `RuntimeIncluded`，通用底座没有领域名称分支。新合法描述无需修改底座即可通过同一提交 Interface 输出。
 
 通用提交属于日志模块内部 seam，业务调用方仍只使用具名领域入口。字段使用已有标量、列表及具名嵌套字典；事件描述、字段名与含义须遵守 schema，不能借任意业务对象自动序列化增加字段。会话公共头由输出统一赋值，领域不能覆盖身份、序号、名称或来源。内部路由属性 `RuntimeIncluded` 和 MEL 的传输字段不进入文件文本。runtime 只接收有 runtime 资格且级别至少 INF 的事件；开发 debug 接收全部已提交事件；发布入口在分配序号前排除不具资格或低于 INF 的描述。
 
 ## 低侵入接入与维护约定
+
+### 建拆、底线和生产窗口（#128）
+
+公开 `RuntimeLog.BindGame(game, seed)` 保留手动领域观察语义，不把日志重新安装到已存在的 FarmGame，也不启动生产窗口。手动调用交易/建拆观察仍有生命周期及真实领域记录，但不能据此声称自动生产覆盖。只有 `new FarmGame(seed, logging)` 在真实初始化后通过内部自动绑定启动生产累计；其 Dispose 和宿主关闭才补生产尾段。`TestProductionLogging.CheckManualBinding` 验证手动绑定后真实推进不会产生貌似完整的生产汇总。
+
+`GameLog.Gameplay.BeginPlace/BeginRemove/BeginSetRawReserve` 记录原请求并返回一次观察；经营仍按原顺序执行，真实结果传给 `Complete`，异常传给 `Faulted` 后原样传播。`FarmGame.TryPlace/BuildFarm/BuildProcessor/RemoveBuilding/SetRawReserve` 增加默认 `Player` 的 `CommandOrigin`，开发流程准备显式传 `Scenario`；非法来源在记录和业务修改前抛出。建造预检不形成命令。建造实际扣款来自 `PlacementResult.ChargedCents`，拆除和拒绝为零；拆除前保存真实子格对应的实例，库存底线不触发领取。建造触发的全场加工领取归生产流量，不混入资金事件。
+
+`ProductionLog` 内部入口只接收真实事实：`Harvested(crop, quantity)`、`Consumed(crop)`、`Produced(crop)`、`WorkerCompleted(kind)`、`Cleared(CropClearResult)`。收获和完工均在库存提交成功后累计；开工只在 `TryStart` 成功后计一份；工人只消费调度器成功回调，降雨、等待、重复供水不计入。清理结果由农田原遍历返回逐作物实际轮数，未成熟清除不是库存损失份数。没有从表现结果缓存或额外全场扫描推导事实。
+
+换季事件秒中，促熟收获先于工人阶段，日期清理又在工人阶段之后：一块田可能先收获上一轮，随后工人播下新一轮，最后新一轮被禁生换季清理。此时收获份数、播种次数、清理轮数都应累计；同秒出现收获和清理不等于同一轮重复记账。测试同时检查真实库存与这三个事实，不改变已有相位顺序。
+
+初始化完成后建立首个资源边界；现实预算为 60 秒。生产累计与资源快照只由本局日志持有，`CommandObservation` 终结后请求检查窗口，`AdvanceTick/AdvanceTicks` 完整请求返回后检查窗口。推进内的 checkpoint 可以提交命令，日志内部推进标记让命令检查延后至外层请求结束；不拆 quiet，也不补造多个整齐的超时窗口。暂停且没有调用可延长窗口，暂停交易和新建仍在真实命令结束后封窗。`GameLog.End` 在 `GameEnded` 前补一次 `IsPartialWindow=true` 尾段，重复关闭不重复输出。
+
+每窗包含七作物完整流量字典、14 商品 Total/Available/Frozen 和钱包三种金额的 Start/End。同一实际期末快照作为下一窗期初；编号按本局递增。交易通过独立成交事件解释，冻结不是流量，跨窗投入与完工分别计入各自窗口。尾段短不代表覆盖不完整。日志累计异常标 `CollectorFailure`，边界缺失或非完整推进退出标 `BoundaryMissing`，开发满图/表现夹具在真实修改前标 `UnregisteredMutation`；有已知边界的缺失窗为 `Partial`，起终边界均未知为 `Unknown`。新真实边界之后可重新声明本区间采集 `Complete`，不补齐旧窗或夹具注入在制品的历史投入。单纯写盘失败由输出健康与缺失记录解释，不能混同为进程内累计丢失；任何 Complete 都不保证提供的文件完整。
+
+内部 `RuntimeLog.Capture(writer, productionUptime, diagnostic)` 用于真实 FarmGame 的可控窗口测试，生产窗口读取该单调测试时钟，公共事件头仍读取 LogOutput 的真实单调时钟；公开 Capture/OpenFile 的时钟和 Interface 不变。生产测试不等待 60 秒、不反射内部状态。
+
+首次读取窗口时钟失败时，仍保留先采集的真实日历和资源期初，`IntervalStartUptimeMs` 为 null，不用 0 冒充未知时间。下一次取得真实时钟的安全边界立即封存该窗，`CoverageStatus=Partial` 并标记 `CollectorFailure/BoundaryMissing`；真实期末时间和资源作为下一窗期初，后续区间可恢复 Complete。这一空值条件只属于新生产事件，不改变订单等待窗口等其他事件的时间契约。测试以非零经营秒开局，验证未知现实起点、真实经营起点和真实的 0 毫秒恢复时点彼此不同。
+
+`TestProductionLogging` 验证暂停新建触发全场领取、底线与冻结阻挡、跨窗投入完工及交易等式、工人成功/降雨、换季清理与促熟、单秒批量及关闭采集等价、checkpoint 内命令不拆窗、多局与正常关闭、夹具覆盖、采集和输出故障区别，并经真实 OpenFile 留下双文件样例。`TestBuildingLogging` 验证原始输入、成功拒绝、子格锚点、实际费用与来源、预检无事件和日志故障隔离。实际执行结果由统一验收记录确认。
+
+### 领域接入约定
 
 后续领域接入集中在已有命令入口、真实状态提交点和局生命周期，通过少量具名领域 Interface 传递原请求与真实结果。字段投影、日志身份与关联、前后资源快照、汇总去重、采集开关、分流、格式与故障处理由日志 Module 拥有；业务调用方不拼属性字典，不选择事件级别、文件或第三方框架类型，也不维护日志专用状态。
 
@@ -89,4 +112,4 @@ File 使用成熟 `Serilog.Sinks.File 7.0.0`：UTF-8 无 BOM、同步逐事件 f
 
 `TestTradeLogging` 验证固定卖出、空库存与冻结下全售、批量七条明细与合计、容量拒绝实际价、来源、关闭日志等价以及集合/文本截断合并；真实 OpenFile 样例覆盖买卖、全售、订单等待至成交/取消、公告与报价，并检查双目标同一事件。`TestOrderLogging` 验证订单资源、短路覆盖、有界合并、尾段、跨商品编辑、大配置与跨局隔离；`TestMarketLogging` 核对实际公告和报价因素、随机序列等价及初始化回放不补造。领域采样的 ItemCount 和 formatter 的文本计数按路径合并，根 Truncated、TruncatedFields、TruncatedOriginalCounts 各出现一次，整事件仍受原尺寸预算。
 
-上述测试注册到 `TestSuite`。跨滚动文件读取按日期和编号的 Ordinal 文件名顺序，不重新排序事件掩盖回退。单商品正常业务仍没有可由合法公开调用构造的抛出分支；不增加异常注入开关。公开 TradeLogOperation 的异常测试保留原异常引用及关联，实际经营 catch/throw 同时由代码审查核对。系统时钟回拨、真正跨进程同时启动、磁盘耗尽、强杀和断电需另做环境验收。生产汇总、受控详细诊断和重放执行器未实现。
+上述测试注册到 `TestSuite`。跨滚动文件读取按日期和编号的 Ordinal 文件名顺序，不重新排序事件掩盖回退。单商品正常业务仍没有可由合法公开调用构造的抛出分支；不增加异常注入开关。公开 TradeLogOperation 的异常测试保留原异常引用及关联，实际经营 catch/throw 同时由代码审查核对。系统时钟回拨、真正跨进程同时启动、磁盘耗尽、强杀和断电需另做环境验收。受控详细诊断和重放执行器未实现。

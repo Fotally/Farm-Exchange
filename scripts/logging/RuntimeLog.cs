@@ -21,6 +21,7 @@ public sealed class RuntimeLog : IDisposable
     private readonly List<GameLog> _games = new();
     private readonly object _sync = new();
     private bool _disposed;
+    private Func<long>? _productionUptime;
 
     private RuntimeLog(LogOutput output) => _output = output;
 
@@ -65,6 +66,14 @@ public sealed class RuntimeLog : IDisposable
         return log;
     }
 
+    // 测试窗口预算的组装接缝；不替换公共事件头的真实单调时间。
+    internal static RuntimeLog Capture(TextWriter writer, Func<long> productionUptime, Action<string>? diagnostic = null)
+    {
+        var log = Capture(writer, diagnostic: diagnostic);
+        log._productionUptime = productionUptime;
+        return log;
+    }
+
     /**
      * <summary>查询通用输出已观察的故障及恢复；未知丢失数量保持 null。</summary>
      */
@@ -93,16 +102,19 @@ public sealed class RuntimeLog : IDisposable
      * <param name="game">已完成真实初始化的局；调用方在同一经营线程绑定和使用。</param>
      * <param name="seed">该局实际使用的初始化种子，不重新抽取。</param>
      * <returns>该局的领域观察上下文；关闭采集时为 null。</returns>
-     * <remarks>每局只绑定一次；调用方在局释放时关闭上下文，会话持有尚未结束的关联。</remarks>
+     * <remarks>每局只绑定一次；本入口仅供手动领域观察，不反向接入经营自动生产。局释放时关闭上下文，会话持有尚未结束的关联。</remarks>
      */
-    public GameLog? BindGame(FarmGame game, int seed)
+    public GameLog? BindGame(FarmGame game, int seed) => BindGame(game, seed, collectProduction: false);
+
+    internal GameLog? BindGame(FarmGame game, int seed, bool collectProduction)
     {
         lock (_sync)
         {
             if (_disposed || !_output.IsEnabled) return null;
-            var context = new GameLog(this, game);
+            var context = new GameLog(this, game, collectProduction, _productionUptime);
             _games.Add(context);
             context.Initialized(seed);
+            context.Production?.Start();
             return context;
         }
     }
