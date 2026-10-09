@@ -164,6 +164,21 @@ public sealed class TradingLog
         commodity.IsDefined ? _game.GetAvailableStock(commodity) : null,
         commodity.IsDefined ? _game.GetFrozenStock(commodity) : null);
 
+    /**
+     * <summary>先检查开发采集资格，再开始一次真实交易规则观察。</summary>
+     * <param name="commodity">原输入商品。</param>
+     * <param name="buy">真实买入或卖出方向。</param>
+     * <param name="order">是否处于自动委托结算阶段。</param>
+     * <param name="scope">原入口的数量范围；默认固定数量。</param>
+     * <returns>入选时的有界观察；未选择或关闭时为 null。</returns>
+     */
+    internal TradeRuleObservation? BeginRuleCheck(CommodityId? commodity, bool buy, bool order,
+        TradeRuleScope scope = TradeRuleScope.Fixed)
+    {
+        if (!_context.Diagnostics.ShouldCapture("RuleChecked")) return null;
+        return new TradeRuleObservation(_context, commodity, buy, order, scope);
+    }
+
     private static string CommodityName(CommodityId commodity) => commodity.Crop + "." + commodity.Kind;
 
     internal static void AddResources(Dictionary<string, object?> fields, TradeObservation before, TradeObservation after)

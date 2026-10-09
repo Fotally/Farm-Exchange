@@ -44,3 +44,5 @@ WorldMap唯一持有表现缓存、环境剩余落点、最近消费经营秒与
 每个新经营秒至多读取一次`GetPresentationResults`，只播放Harvest/Product，并用`IsPresentationResultCurrent`确认新结果仍有效；已开始短效果用`IsPresentationTargetCurrent`验证原实例，失效立即清除。不会将批量推进汇总变成逐条积压播放，不推测搬运、采收工人或额外产量。初始历史不播放、离屏不保存待播队列，重进视野不重放；短效果只存在于可见实例。改种、拆除及同锚点重建必须及时调用SyncFromGame，让实例外观和原结果共同失效。
 
 环境初始化使用独立固定视觉种子，不消费开局作物随机数。每次SyncFromGame对真实BuildingSpaceSnapshot的完整Footprint.Offsets清除环境根点，包含开局免费设施；预览、失败建造和选择不产生新占地，因此不清环境。已清根点永久删除，拆除不复生；视野开关只释放/恢复剩余根点的绘制节点。环境没有碰撞、正式占地、费用或产物。分布参数及32类采用表见[环境实现](implementation-environment-decoration.md)，局部动效层级与根点见[动效实现](implementation-bright-motion.md)。
+
+#130 的 ViewChanged 以既有 ChunkRedrawCount（MapChunk._Draw 实际执行）计算本次观察区间的 RebuiltChunkCount，QueueRedraw 调度不计作已重建。Main 读取该累计和地图本地镜头中心，由日志模块去重；地图不维护诊断预算或日志对象状态。

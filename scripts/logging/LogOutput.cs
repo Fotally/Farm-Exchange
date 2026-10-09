@@ -93,7 +93,9 @@ internal sealed class LogOutput : IDisposable
         log.Connect(new LoggerConfiguration().MinimumLevel.Verbose()
             .WriteTo.Fallible(sink => sink.Sink(new TextSink(writer)), target));
         target.IsConfigured = true;
+#if DEBUG
         log._development = true;
+#endif
         return log;
     }
 
@@ -116,6 +118,7 @@ internal sealed class LogOutput : IDisposable
         }
     }
 
+    internal bool DevelopmentEnabled => IsEnabled && _development;
     internal bool IsEnabled => _logger != null && !_disposed;
     internal long UptimeMs => _clock.ElapsedMilliseconds;
 

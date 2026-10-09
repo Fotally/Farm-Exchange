@@ -90,12 +90,28 @@ public sealed class SimulationDriver
     public uint Advance(double delta, FarmGame game, Func<SimulationCheckpoint, bool>? checkpoint = null,
         Func<uint>? maxTicks = null)
     {
+        using var observation = _logging?.BeginAdvance();
+        try
+        {
+            return AdvanceCore(delta, game, checkpoint, maxTicks, observation);
+        }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+    }
+
+    private uint AdvanceCore(double delta, FarmGame game, Func<SimulationCheckpoint, bool>? checkpoint,
+        Func<uint>? maxTicks, SimulationLogOperation? observation)
+    {
         if (!double.IsFinite(delta) || delta < 0) throw new ArgumentOutOfRangeException(nameof(delta));
         if (game.IsPaused) return 0;
         double remainingSeconds = delta;
         uint advanced = 0;
         while (!game.IsPaused)
         {
+            observation?.EnterPhase(SimulationLogPhase.DriverValidation);
             double startRate = Rate;
             double progress = _progress + remainingSeconds * startRate;
             if (!double.IsFinite(progress) || progress > uint.MaxValue)
@@ -106,14 +122,20 @@ public sealed class SimulationDriver
                 _progress = progress;
                 break;
             }
-            if (maxTicks != null) ticks = Math.Min(ticks, maxTicks());
+            if (maxTicks != null)
+            {
+                observation?.EnterPhase(SimulationLogPhase.DriverBudget);
+                ticks = Math.Min(ticks, maxTicks());
+            }
             if (ticks == 0) break;
+            observation?.EnterPhase(SimulationLogPhase.AdvanceValidation);
             SimulationAdvanceResult result = game.AdvanceTicks(ticks, point =>
             {
                 bool keepGoing = checkpoint?.Invoke(point) ?? true;
                 return keepGoing && Rate == startRate && !game.IsPaused;
             });
             if (result.AdvancedTicks == 0) break;
+            observation?.EnterPhase(SimulationLogPhase.DriverProgress);
             remainingSeconds = Math.Max(0, remainingSeconds -
                 (result.AdvancedTicks - _progress) / startRate);
             _progress = 0;

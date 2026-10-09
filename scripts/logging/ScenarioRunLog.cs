@@ -66,8 +66,7 @@ public sealed class ScenarioRunLog
     public void ReportSaveFailed(Exception error) => _context.Observe(() =>
     {
         var fields = Fields();
-        fields["ExceptionType"] = error.GetType().FullName;
-        fields["Exception"] = error.ToString();
+        ExceptionProjection.Add(fields, error);
         _context.Output.Submit(FailedEvent, "开发流程报告保存失败", fields);
     });
 

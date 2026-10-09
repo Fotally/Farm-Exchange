@@ -1,5 +1,7 @@
 # WorkerScheduler 对外接口
 
+内部可选 `Diagnostics` 由经营局组装为本局 `WorkerDiagnostics`。诊断先按工人及事件门禁，再在实际认领、释放、开始行程、抵达、播种转供水处记录，不把整秒前后比较代替中间转换。日志目标来自 `FarmWorkRequest.CellIndex` 的锚点，而公开快照 TargetCell 保持工作中心含义。quiet 行程只记录原累计区间的一次位置前后，关闭或故障不改变任务和移动；详见[生产与工人诊断](../../logging/implementation-production-diagnostics.md)。
+
 对应类型：`FarmExchange.Workers.WorkerScheduler`，代码位于 `scripts/workers/WorkerScheduler.cs`。它唯一维护经营工人的位置、当前任务、移动时间、田块认领关系与共用轮转游标；不拥有作物、水分或库存。当前 [#40/#43 已确认实施方案](implementation-movement-proposal.md)要求新游戏真实构造三名工人。
 
 | 成员 | 约定 |

@@ -2,6 +2,7 @@ using System;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
+using FarmExchange.Logging;
 using FarmExchange.Time;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
@@ -14,6 +15,8 @@ internal sealed class ProcessingSystem
     private readonly ProcessorState?[] _processors;
 
     internal ProcessingSystem(int cellCount) => _processors = new ProcessorState?[cellCount];
+
+    internal ProductionDiagnostics? Diagnostics { get; set; }
 
     internal bool HasProcessor(int index) => _processors[index] != null;
 
@@ -98,11 +101,16 @@ internal sealed class ProcessingSystem
     internal bool TryStart(int index, GoodsInventory inventory)
     {
         ProcessorState? processor = _processors[index];
-        if (processor == null || processor.RemainingTimeUnits != 0 ||
-            !inventory.TryTakeRawForProcessing(processor.CropKind))
+        if (processor == null || processor.RemainingTimeUnits != 0)
             return false;
+        ProcessorDiagnosticState? before = Diagnostics?.BeginProcessor(index, this, inventory);
+        if (!inventory.TryTakeRawForProcessing(processor.CropKind))
+            return false;
+        Diagnostics?.RawClaimed(index, before, this, inventory);
+        ProcessorDiagnosticState? beforeStart = Diagnostics?.BeginProcessor(index, this, inventory);
         processor.RemainingTimeUnits = CropCatalog.Get(processor.CropKind).ProcessingHalfDays *
             GameTimeUnits.PerHalfDay;
+        Diagnostics?.ProcessingStarted(index, beforeStart, this, inventory);
         return true;
     }
 

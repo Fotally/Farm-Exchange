@@ -9,6 +9,12 @@ public partial class TestSuite : Node
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         GD.Print("单元测试：农田、加工与交易");
         bool loggingPassed = TestLogging.RunChecks();
+        loggingPassed = TestDiagnosticCapture.RunChecks() && loggingPassed;
+        loggingPassed = TestPerformanceLogging.RunChecks() && loggingPassed;
+        loggingPassed = TestExceptionLogging.RunChecks() && loggingPassed;
+        loggingPassed = TestProductionDiagnostics.RunChecks() && loggingPassed;
+        loggingPassed = TestTradeDiagnostics.RunChecks() && loggingPassed;
+        loggingPassed = TestLoggingFaults.RunChecks() && loggingPassed;
         loggingPassed = TestLoggingFiles.RunChecks() && loggingPassed;
         loggingPassed = TestTradeLogging.RunChecks() && loggingPassed;
         loggingPassed = TestOrderLogging.RunChecks() && loggingPassed;

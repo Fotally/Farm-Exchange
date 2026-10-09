@@ -2,9 +2,9 @@
 
 关联 [#82](https://github.com/Fotally/Farm-Exchange/issues/82)；记录范围、框架及轮转方案见[日志设计](../research/runtime-logging.md)。2026-10-02 用户确认：两类业务日志均输出可读 `.log`，字段含义必须明确，供人和 AI 分析。本文件是字段与事件语义的唯一维护入口；事件登记包括分阶段接入的约定，只有实际覆盖表中的事件可作为当前程序已产生的证据。
 
-2026-10-09 修订：保留 #126 生命周期与单商品买入契约，#127 扩展主动交易、订单等待与行情，并登记跨商品编辑快照和集合截断计数；#128 接入建拆、原料底线与生产窗口。#129 接入年度表、两种手动接管、暂停/倍率与开发流程；专项诊断和性能仍由 #130 实现。格式与初始预算由实施选择并验证，具体实现范围以[日志接口](../architecture/logging/interface-logging.md)为准；登记不代替该阶段审查与运行验收。设计示意不作为实际验收样例。
+2026-10-09 修订：保留 #126 生命周期与单商品买入契约，#127 扩展主动交易、订单等待与行情，并登记跨商品编辑快照和集合截断计数；#128 接入建拆、原料底线与生产窗口。#129 接入年度表、两种手动接管、暂停/倍率与开发流程；#130 接入显式有界诊断与真实批次/进程帧性能；实际运行验收单独记录。格式与初始预算由实施选择并验证，具体实现范围以[日志接口](../architecture/logging/interface-logging.md)为准；登记不代替该阶段审查与运行验收。设计示意不作为实际验收样例。
 
-已确认的采集粒度：玩家命令、交易、订单变化与异常逐条记录；自动播种、浇水、收获、加工按时间窗口汇总，对象级详细记录按需、有界开启。该原则不保证普通日志可还原每座设施的每次动作；汇总字段和具体预算仍依照下文草案收敛。
+已确认的采集粒度：玩家命令、交易、订单变化与异常逐条记录；自动播种、浇水、收获、加工按时间窗口汇总，对象级详细记录按需、有界开启。该原则不保证普通日志可还原每座设施的每次动作；汇总字段与具体预算以下文实际登记为准。
 
 ## 版本、文件与分析入口
 
@@ -60,9 +60,13 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 | `GameDate` | `{ Year, Month, Day }` | 当前经营日期，三项均为整数：年从 1 起，月 1～12，日 1～28；不是现实年月日 |
 | `Season` | 季节字符串 | `Spring/Summer/Autumn/Winter`，分别为春/夏/秋/冬 |
 | `IsPaused` | 布尔 | 记录时经营暂停状态，不表示程序或日志线程暂停 |
-| `Phase` | 字符串枚举 | `Initialization/Command/Harvest/Processing/RawClaim/Workers/Calendar/Orders/Presentation/Shutdown`；说明记录所在阶段 |
+| `Phase` | 字符串枚举 | `Initialization/Command/Harvest/Processing/RawClaim/Workers/Calendar/Orders/Presentation/Shutdown`，以及推进异常的 `AdvanceValidation/EventSearch/QuietAdvance/TickPreparation/Checkpoint/DriverValidation/DriverBudget/DriverProgress`；说明记录所在实际阶段，新增值的条件见下文 |
 
 同一个 tick 内日历在换日阶段推进；早期阶段可能读到推进前的经营秒，订单阶段读到推进后的经营秒。以 `Sequence` 和 `Phase` 判断顺序，不把相同秒值的多个事件视为重复。日期换算入口为 [GameCalendar](../../scripts/time/GameCalendar.cs)，比例见[经营与生产时间](../architecture/time/game-time-units/interface-game-time-units.md)。
+
+推进异常的新增阶段不改变原有值含义：`AdvanceValidation` 是单 tick 或批次请求的原校验，`EventSearch` 是最近事件查询，`QuietAdvance` 是平静区间状态累计，`TickPreparation` 是事件秒结果清理及显式降雨，`Checkpoint` 是实际检查点回调；`DriverValidation` 是驱动输入/容量换算检查，`DriverBudget` 是宿主预算回调，`DriverProgress` 是真实返回后的驱动进度更新。生产、工人和日期等已有阶段在实际调用前设置；平静路径的日历与行情处理归 `Calendar`。异常记录不依赖详细诊断或阶段计时是否开启，也不从异常消息反推阶段。
+
+单 tick、批量与驱动异常输出 runtime/debug 共用的 `BusinessException`，携带原 `ExceptionType/Exception` 和当时真实局上下文。自动推进不构造 `CommandId/CommandName/CommandOrigin`；内部命令异常已经记录时，外层保留其原命令关联，不再生成另一条异常。去重限于本次活跃同步调用的传播关系，新独立操作及独立兄弟命令重用相同异常对象仍分别记录；相同消息的不同异常也不合并。`CommandFinished=Faulted`、失败批次和生产覆盖缺口各自保留。已观察只表示尝试记录，输出失败不触发外层改换上下文重试；健康和文件缺口仍按原规则解释。实现见[共用异常观察](../architecture/logging/implementation-exception-observation.md)。
 
 跨局关联使用 SessionId + GameInstanceId + 业务对象标识；同进程两个 OrderId=1 不属于同一单。主局 GamePurpose=Main，独立开发局为 ScenarioIndependent；原地流程仍使用主局身份。RunId 只关联一次开发流程和其 JSON 报告；在 CreateRunDirectory 后、Start/Prepare 发出首个业务命令前绑定实际目录名，不另造一套 ID。其他业务事件不隐式携带 RunId，通过同一 GameInstanceId、Sequence 与显式 Scenario 命令来源关联。流程开始/结束和局创建/释放是不同生命周期。进程序号表达接收顺序，不证明不同经营局的因果关系。
 
@@ -162,10 +166,11 @@ runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入
 | `CashBasisCents`、`ReserveCents` | 非负 int32，分 | 原建单现金基准、实际现金保留门槛；同 ID 编辑不重置原基准 |
 | `LockedQuantity` | 非负 int32，份 | 一次单建单时锁定的成交目标量；不是持续策略本次动态差额 |
 | `ConditionSatisfied` | 布尔 | 本次订单判断是否满足全部成交前提；为 false 时不代表程序错误 |
+| `ConditionGroupsSatisfied` | 布尔 | OrderEvaluated 中原配置条件组的实际 OR/AND 结果；它为true仍可被限价、目标量、预算或结算资源阻塞，不等于ConditionSatisfied |
 | `WaitingCategories`、`PreviousWaitingCategories` | 稳定字符串集合；前值可 null | 本次及上次实际观察的阻塞类别，首次前值为 null；从 Price/Stock/Season/LimitPrice/TargetReached/BudgetInsufficient 及非 None 的 TradeFailure 名称取值，不含实时数值；不声称穷尽未执行分支 |
 | `WaitingState` | `Waiting/Resolved` | 本次实际求值仍等待/已有证据结束此前等待；不同于订单生命周期状态 |
 | `PrimaryReason` | 上述稳定原因或 null | 本次实际观察的首要阻塞原因，Resolved 为 null；由业务判断提供，不从中文反向解析 |
-| `EvaluationCoverage` | `ActualShortCircuit/Complete` | 只记录原短路实际检查到的内容/本次业务本来就执行了完整检查；不得为了 Complete 重跑规则 |
+| `EvaluationCoverage` | `ActualShortCircuit/Complete` | 只记录原短路实际检查到的内容/本次业务本来就执行了完整检查；不是仅指条件组遍历完。即使所有OR组均已访问，提前阻塞而未进行后续成交前提/结算检查仍为ActualShortCircuit；不得为了Complete重跑规则 |
 | `Resolution` | `Filled/Eligible`，仅 Resolved | 已实际成交/实际求值不再被原原因阻塞但不证明成交；只在业务确有这种结果时使用 |
 
 `FailureCode` 使用完整枚举类型前缀和成员名，取值释义如下；`WaitingCategories` 引用交易拒绝原因时也使用 `TradeFailure.` 前缀且不包含 None：
@@ -255,7 +260,7 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 
 生产窗口仅在 `FarmGame` 构造时实际接入自动采集的局中启用。公开 `RuntimeLog.BindGame` 的手动领域观察用法不会把日志安装回已有经营局，也不输出生产汇总；不能把仅有生命周期或手动交易记录解释为自动生产已完整覆盖。缺少 ProductionSummary 表示没有该区间的完整生产证据，不据此推断零产出。
 
-批次耗时测量包围实际 AdvanceTicks，含该调用内日志采集及同步输出的成本；批次归入完成窗口，异常另计。旧稿 TickCount/TickAverageMs/TickMaxMs 删除，不能用批量总耗时除模拟秒数假装逐 tick 测量。ProcessFrames 不带某一局的设施数量或经营秒，两个局同帧运行也只统计一份帧间隔。普通运行不为日志保存无界帧数组。
+批次耗时测量包围实际 AdvanceTicks，含该调用内业务、生产日志和诊断预算轮询的采集及同步输出成本；性能汇总自身在停止计时后序列化，不将这部分自引用成本算回批次。批次归入完成窗口，异常另计。旧稿 TickCount/TickAverageMs/TickMaxMs 删除，不能用批量总耗时除模拟秒数假装逐 tick 测量。ProcessFrames 不带某一局的设施数量或经营秒，两个局同帧运行也只统计一份帧间隔。普通运行不为日志保存无界帧数组。
 
 ### 配置、手动接管与流程字段
 
@@ -285,9 +290,9 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 
 | 字段 | 类型/含义 |
 | --- | --- |
-| `CaptureId`、`CaptureScope` | 开发采集标识字符串；范围为 GameInstanceId、EventNames 字符串数组与 Anchors/OrderIds/WorkerNumbers 中适用数组 |
+| `CaptureId`、`CaptureScope` | 开发采集标识字符串；范围为 GameInstanceId、EventNames 字符串数组、Anchors/Cells/OrderIds/WorkerNumbers 中适用数组及 IncludeGameEvents 布尔值。Anchors 绑定开启时存在的设施实例；Cells 是显式基础格坐标筛选，可用于尚未建造位置的规则观察，两者合计最多32。IncludeGameEvents 默认false，显式true才允许无对象的局级事件；空对象范围且false拒绝，不隐式全图采集 |
 | `DurationLimitMs`、`EventLimit` | 正 int64，单调现实持续上限/明细条数上限 |
-| `ActualDurationMs`、`CapturedCount`、`SuppressedCount` | 非负 int64；实际持续毫秒/产生的明细数/可观察抑制数；不保证已写盘 |
+| `ActualDurationMs`、`CapturedCount`、`SuppressedCount` | 非负 int64；实际持续毫秒/明细提交尝试数/到达提交入口后因现实预算耗尽被阻止的实际候选数；预取快照的门禁、未选择对象及停止后的事件不推算为抑制数；不保证已写盘 |
 | `StopReason` | DurationLimit/EventLimit/UserStopped/GameEnded/Shutdown；发生对象失效时从范围移除，全部失效为 ObjectsEnded |
 | `LoggingHealth` | Healthy/Degraded/Unavailable，仅日志健康，不是游戏健康 |
 | `FirstFailureUptimeMs`、`FailureCount`、`KnownLostCount` | 非负 int64 或 null；故障首次时点/已观察故障数/可确定丢失数，不能确定则 null |
@@ -330,6 +335,8 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `TargetAnchorBefore`、`TargetAnchorAfter` | 锚点或 null | 认领的农田实例锚点，不是实际工作中心格；输入 WorkerSnapshot.TargetCell 须先按实际含义核对转换 |
 | `PositionBefore`、`PositionAfter` | `{ X, Y }` 小数对象，基础格单位 | 工人经营快照格位置，不是屏幕像素、地图本地像素或视觉插值位置 |
 | `Conditions` | 评估对象二维数组 | 对应原 ConditionGroups，每项 Factor/Comparison/Value 含义同配置，额外 `Actual` 是本次实际数值（同 Value 单位）、`Satisfied` 是布尔；按原组/项顺序对应 |
+| `ConfiguredConditionGroupCount` | 非负 int32 | 原订单配置的条件组总数，不把未访问组当成已执行 |
+| `EvaluatedConditionGroupCount`、`EvaluatedConditionCount` | 非负 int32、非负 int64 | 原短路路径实际访问的组数及实际求值条件总数；后续未访问 OR 组不属于日志截断 |
 | `ComputedQuantity` | 非负整数，份 | 本次评估得到的候选成交量，不代表已经成交 |
 | `ComputedBudgetCents` | 非负 int64，分 | 本次可用于买入并支付手续费的候选预算，不代表已扣费 |
 | `EventTickStartSimulationSeconds` | uint32，经营秒 | 专项诊断中实际执行的完整事件秒起点，不是平静秒或整批起点 |
@@ -377,11 +384,11 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `LoggingHealthChanged` | 两类/WRN 或 INF | 可输出的已观察故障/恢复；LoggingHealth、FirstFailureUptimeMs、FailureCount、KnownLostCount；不可用时由独立诊断渠道报告 |
 | `EventPayloadRejected` | 两类/WRN | 原事件核心内容无法完整输出时的有界说明；OriginalEventName、可取得的原关联键、RejectionReason；原事件不作为完整证据 |
 | `BusinessException`、`FatalException` | 两类/ERR 或 FTL | 真正异常的接收边界；ExceptionType、Exception，已有命令/订单/设施标识加相应字段；前者 ERR，确实不能初始化/继续的后者 FTL |
-| `RuleChecked` | debug/DBG | 实际规则检查完成；RuleKind、CheckResults、Outcome、相关 Cell/Anchor/Crop/Commodity；不等于该命令已提交成功 |
+| `RuleChecked` | debug/DBG | 实际建造/播种执行重验或交易检查完成；RuleKind、CheckResults、Outcome、相关 Cell/Anchor/Crop/Commodity；交易另带Side/RequestMode，全部加工品的聚合Capacity检查省略单一Commodity；不等于该命令已提交成功；UI预览、详情/提示查询及排程预检不触发该事件 |
 | `ProductionStateChanged` | debug/DBG | 指定对象的受控采集，实际状态转换后；ProductionKind、Anchor、Crop、Transition、StateBefore、StateAfter、RemainingSeconds；农田加供水前后，数量按 Transition 定义 |
 | `WorkerTaskChanged` | debug/DBG | 指定工人的受控采集，任务认领/释放或活动状态变化；WorkerNumber、ActivityBefore、ActivityAfter、TargetAnchorBefore、TargetAnchorAfter |
 | `WorkerMoved` | debug/VRB | 专项观察指定工人经营移动；WorkerNumber、PositionBefore、PositionAfter，不采集每帧插值 |
-| `OrderEvaluated` | debug/DBG 或 VRB | 真实求值后；OrderId、ConditionSatisfied、WaitingCategories、EvaluationCoverage；DBG 默认稳定变化且有界，选定订单 VRB 可逐次写并加本次实际得到的 Conditions、ComputedQuantity、ComputedBudgetCents；未执行项省略 |
+| `OrderEvaluated` | debug/VRB | 开启专项采集后，选定订单真实求值逐次记录；OrderId、ConditionSatisfied、ConditionGroupsSatisfied、WaitingCategories、EvaluationCoverage、ConfiguredConditionGroupCount、EvaluatedConditionGroupCount、EvaluatedConditionCount；Conditions为实际访问组中的有界样本，ComputedQuantity/ComputedBudgetCents仅在本次实际计算时提供；未执行项省略。稳定等待变化仍由runtime的OrderWaitChanged记录，不另有默认DBG流 |
 | `QuoteCalculated` | debug/DBG | 本轮行情计算完成；Commodity、QuoteDate、SupplyFactor、DemandFactor、CalculationInputs；QuoteDate 是这些计算面向的实际报价日，不必等于事件头当前 GameDate，最终以 QuoteUpdated 为正式提交证据 |
 | `EventTickTiming` | debug/VRB | 专项观察的完整事件秒完成；EventTickStartSimulationSeconds、StageDurationsMs，不为 QuietTicks 重新执行阶段；普通运行用批次汇总 |
 | `ViewChanged` | debug/DBG | 实际窗口/镜头/外观同步变化；按变化类型提供 WindowSize/ViewportSize/PlayerZoom/CameraCenter/RebuiltChunkCount，不为每帧刷新重复写 |
@@ -421,9 +428,9 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | 项目 | 初值及所属阶段 | 必须保持的语义 |
 | --- | --- | --- |
 | 生产窗口 | 60 个现实秒，#128 | 实际安全边界封窗，可超时，不拆批次 |
-| 性能窗口 | 候选 60 个现实秒，#130 | 实际安全边界封窗，可超时，不拆批次 |
+| 性能窗口 | 60 个现实秒，#130 | 实际安全边界封窗，可超时，不拆批次 |
 | 单订单中间等待变化 | 每现实 60 秒最多 8 条，#127 | 首次/终止不漏，超限有合并尾段，业务求值次数不变 |
-| 专项诊断 | 候选最多 32 个锚点、8 个订单或 3 个工人，120 秒或 5000 条，#130 | 对象、时间和总条数同时有限，到限自动结束 |
+| 专项诊断 | 最多 32 个锚点与坐标合计、8 个订单、3 个工人，120 秒及 5000 条上限，#130 | 对象、时间和总条数同时有限，到限自动结束 |
 | 自由文本/集合 | 摘要 256、自由字符串 512 个 Unicode 标量，#126；订单配置前 8 组且合计 32 条条件，#127；年度表条目/输入子格/解析目标各前 32 项，#129；诊断样本由 #130 限定 | 固定七/十四商品结构完整保留，大合法配置不能被日志限制拒绝 |
 | 异常/整事件 | 异常最多 64 行/16 KiB，整事件 32 KiB | 可见截断、结构完整；核心信息保不住则报告证据缺失 |
 

@@ -23,6 +23,9 @@ public partial class Main : Node2D
     private long _tickHarvested;
     private long _tickProduced;
 #if DEBUG
+    // 图形夹具必须在父节点 _EnterTree 中设置，在任何 Game/Driver 读取之前生效。
+    internal static System.Func<RuntimeLog>? LoggingFactory { get; set; }
+    internal static int? InitialSeed { get; set; }
     private DeveloperToolsWindow _developerWindow = null!;
 #endif
     private WorldMap _worldMap = null!;
@@ -82,6 +85,10 @@ public partial class Main : Node2D
 #else
         const bool development = false;
 #endif
+#if DEBUG
+        if (LoggingFactory != null) _logging = LoggingFactory();
+        else
+#endif
         if (OS.HasFeature("editor") || OS.HasFeature("windows"))
         {
             string directory = OS.HasFeature("editor")
@@ -99,7 +106,11 @@ public partial class Main : Node2D
         else _logging = RuntimeLog.Disabled();
         try
         {
+#if DEBUG
+            _currentGame = new FarmGame(InitialSeed, logging: _logging);
+#else
             _currentGame = new FarmGame(logging: _logging);
+#endif
             _driver = new SimulationDriver(_currentGame.Log?.Time);
         }
         catch (System.Exception error)
@@ -144,11 +155,14 @@ public partial class Main : Node2D
 
     public override void _Process(double delta)
     {
+        _logging?.ProcessFrame();
         AdvanceSimulation(delta);
 #if DEBUG
         _developerWindow.AdvanceIndependent(delta);
 #endif
         RefreshPlacementPreview();
+        _currentGame?.Log?.View.Observe(DisplayServer.WindowGetSize(), GetViewportRect().Size,
+            _camera.PlayerZoom, _worldMap.ToLocal(_camera.GlobalPosition), _worldMap.ChunkRedrawCount);
     }
 
     internal uint AdvanceSimulation(double delta)

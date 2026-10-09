@@ -30,3 +30,27 @@
 ```
 
 脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码。以 `scripts/` 的每个一级目录为模块，**每个模块及业务脚本总体的行覆盖率均不得低于 80%**；高覆盖率模块不能抵消未达标模块。`Run-Tests.ps1` 调用统一的 `Test-Coverage.ps1`，动态发现一级目录，按文件与行号去重、同一行任一记录命中即覆盖，自动输出并检查各模块与总体的有效行、已覆盖行及百分比；任一项低于 80% 或缺少有效数据即失败。本地与 CI 共用该门禁，不再要求人工另算模块结果。路径口径、缺失检查及独立夹具命令见[自动覆盖率门禁](../static-checks/coverage.md)。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
+
+## 日志专项验收（#130）
+
+先完成 Debug 编译和资源导入，再串行执行下列工具。工具不重编正式项目、不修改采集实现，每次指定不存在的输出目录以防混入旧证据；普通 `-Performance` 仍使用原 8 秒满图场景。详细用例、故障含义与 Release 门禁见[日志验收实现](../architecture/logging/implementation-validation.md)。
+
+```powershell
+./tools/Run-LoggingPerformance.ps1 -GodotConsole 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe'
+./tools/Test-LoggingLifecycle.ps1 -GodotConsole 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe'
+```
+
+图形矩阵每格独立进程、种子 130、1920×1080、预热 2 秒、采样 65 秒，覆盖满图 1×/16×下的关闭、runtime、development、持续 File 目标故障四档，以及连续交易和第二局组合负载、development 有界诊断。平均至少 60 FPS、P95 帧间隔不超过 16.67 ms；失败也保留已有报告。16×是本轮确认的最高压测倍率请求，报告同时给出实际推进量和吞吐，不能视作维持该倍率的承诺。首张截图完成后重新建立帧、托管分配及 GC 基线，末张截图在采样后保存。
+
+`matrix.json` 汇总所有格，`differences.json` 只比较存在关闭基线的同负载格；每格 `report.json`、`before.png`、`after.png`、实际日志和 `process.log` 独立保存。托管分配使用 `GC.GetTotalAllocatedBytes(true)`，三代 GC 次数分别记录，不包含 Godot/GPU 原生内存。日志事件按 SessionId/Sequence 去重；失败计数不代表精确丢失事件数。
+
+16×有界格的本次请求预算为 500 条，报告字段 `RequestedCaptureEventLimit` 明确记录该值；公共硬上限仍为 5000 条。该格必须在关局前真实按 `EventLimit` 停止且实际采集 500 条，未达到时报告无效；不声称本格实测了 5000 条。
+
+Release 编译与 Windows 正式导出后，分别对实际 DLL 执行探针，不以 Debug 下选择 runtime 档代替发布验证：
+
+```powershell
+./tools/Test-LoggingRelease.ps1 -AssemblyPath .godot/mono/temp/bin/Release/FarmExchange.dll -OutputDirectory build/issue130-validation/release-probe
+./tools/Test-LoggingRelease.ps1 -AssemblyPath build/windows/data_FarmExchange_windows_x86_64/FarmExchange.dll -OutputDirectory build/issue130-validation/export-release-probe
+```
+
+该工具只在 `build/` 生成独立控制台探针，引用指定发布程序集及随包依赖；报告保留实际载入 DLL 的 SHA-256，并核对与输入文件相同。正式 Windows 导出程序启动和同版本 schema 随包验收仍按[Windows 构建](windows-build.md)执行。本文描述可执行方法，不表示当前工作树已经通过上述门禁。

@@ -122,20 +122,34 @@ internal sealed class MarketQuotes
         for (int crop = 0; crop < CropCatalog.Crops.Count; crop++)
         {
             int rawIndex = crop * 2;
-            int percent = 100 + SupplyDemandPercent(rawIndex) + SeasonPercent(crop, season) + EventPercent(rawIndex);
+            int supplyDemandPercent = SupplyDemandPercent(rawIndex);
+            int seasonPercent = SeasonPercent(crop, season);
+            int eventPercent = EventPercent(rawIndex);
+            int percent = 100 + supplyDemandPercent + seasonPercent + eventPercent;
             long numerator = (long)_prices[rawIndex] * 100 + (long)_initialPrices[rawIndex] * percent;
-            _pendingPrices[rawIndex] = RoundAndClamp(rawIndex, numerator, 200);
+            _pendingPrices[rawIndex] = RoundAndClamp(rawIndex, numerator, 200, out int rounded, out int minimum, out int maximum);
+            if (log?.ShouldCaptureCalculation() == true)
+                log.QuoteCalculated(CommodityCatalog.All[rawIndex].Id, GameCalendar.GetDate(quoteDay),
+                    new(_supply[rawIndex], _demand[rawIndex], supplyDemandPercent, eventPercent, seasonPercent, null),
+                    new(_initialPrices[rawIndex], _prices[rawIndex], numerator, 200, rounded, minimum, maximum, _pendingPrices[rawIndex]));
         }
         for (int crop = 0; crop < CropCatalog.Crops.Count; crop++)
         {
             int rawIndex = crop * 2;
             int productIndex = rawIndex + 1;
             int rawInitial = _initialPrices[rawIndex];
-            int percent = 100 + SupplyDemandPercent(productIndex) + EventPercent(productIndex);
+            int supplyDemandPercent = SupplyDemandPercent(productIndex);
+            int eventPercent = EventPercent(productIndex);
+            int percent = 100 + supplyDemandPercent + eventPercent;
             long numerator = (long)_prices[productIndex] * 100 * rawInitial +
                 (long)_initialPrices[productIndex] * (percent * rawInitial +
                     25 * (_pendingPrices[rawIndex] - rawInitial));
-            _pendingPrices[productIndex] = RoundAndClamp(productIndex, numerator, 200L * rawInitial);
+            long denominator = 200L * rawInitial;
+            _pendingPrices[productIndex] = RoundAndClamp(productIndex, numerator, denominator, out int rounded, out int minimum, out int maximum);
+            if (log?.ShouldCaptureCalculation() == true)
+                log.QuoteCalculated(CommodityCatalog.All[productIndex].Id, GameCalendar.GetDate(quoteDay),
+                    new(_supply[productIndex], _demand[productIndex], supplyDemandPercent, eventPercent, null, _pendingPrices[rawIndex]),
+                    new(_initialPrices[productIndex], _prices[productIndex], numerator, denominator, rounded, minimum, maximum, _pendingPrices[productIndex], rawInitial));
         }
         _newsQuoteDay = quoteDay;
         _prepared = true;
@@ -143,11 +157,11 @@ internal sealed class MarketQuotes
             GameCalendar.GetDate(quoteDay), BuildNewsLines(quoteDay)));
     }
 
-    private int RoundAndClamp(int index, long numerator, long denominator)
+    private int RoundAndClamp(int index, long numerator, long denominator, out int rounded, out int minimum, out int maximum)
     {
-        int rounded = (int)((numerator + denominator / 2) / denominator);
-        int minimum = Math.Max((_initialPrices[index] * 20 + 99) / 100, (_prices[index] * 80 + 99) / 100);
-        int maximum = Math.Min(_initialPrices[index] * 4, _prices[index] * 120 / 100);
+        rounded = (int)((numerator + denominator / 2) / denominator);
+        minimum = Math.Max((_initialPrices[index] * 20 + 99) / 100, (_prices[index] * 80 + 99) / 100);
+        maximum = Math.Min(_initialPrices[index] * 4, _prices[index] * 120 / 100);
         return Math.Clamp(rounded, minimum, maximum);
     }
 

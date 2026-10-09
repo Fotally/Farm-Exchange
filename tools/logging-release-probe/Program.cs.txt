@@ -1,0 +1,129 @@
+using System.Collections;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text.Json;
+using FarmExchange.Gameplay;
+using FarmExchange.Inventory;
+using FarmExchange.Logging;
+using FarmExchange.Time;
+
+string output = Path.GetFullPath(args[0]);
+Directory.CreateDirectory(output);
+using var text = new StringWriter();
+using (var captured = RuntimeLog.Capture(text)) { VerifyGate(captured); VerifyExceptions(captured); }
+using (var file = RuntimeLog.OpenFile(Path.Combine(output, "logs"), true, new(BuildKind: "ReleaseProbe")))
+{ VerifyGate(file); VerifyExceptions(file); }
+File.WriteAllText(Path.Combine(output, "capture.log"), text.ToString());
+if (Directory.Exists(Path.Combine(output, "logs", "debug"))) throw new Exception("真实 Release 允许创建 debug 目标");
+string[] lines = Directory.GetFiles(Path.Combine(output, "logs"), "*.log", SearchOption.AllDirectories)
+    .SelectMany(File.ReadAllLines).Concat(text.ToString().Split('\n')).ToArray();
+if (!lines.Any(line => line.Contains("EventName=TradeFinished")) ||
+    lines.Any(line => line.Contains("EventName=DiagnosticCaptureStarted") || line.Contains("EventName=ProductionStateChanged") ||
+        line.Contains("EventName=EventTickTiming") || line.Contains("LoggingProfile: \"Development\"")))
+    throw new Exception("Release 运行结果或明细过滤错误");
+VerifyExceptionLines(lines);
+string assembly = typeof(RuntimeLog).Assembly.Location;
+File.WriteAllText(Path.Combine(output, "report.json"), JsonSerializer.Serialize(new
+{
+    Assembly = assembly,
+    Sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assembly))),
+    Mvid = typeof(RuntimeLog).Module.ModuleVersionId,
+    Passed = true,
+    Checks = new[] { "实际程序集 Capture 和 OpenFile(true) 强制 Runtime", "开始前不读取有毒范围集合", "生产/加工明细门禁先于状态读取", "真实交易及批量推进正常", "无 debug 文件",
+        "真实批量容量/检查点及驱动容量/预算异常保留类型消息堆栈和阶段", "命令传播只记录一次且后续独立操作重新记录", "异常对象原样传播及独立命令终结保留" }
+}, new JsonSerializerOptions { WriteIndented = true }));
+Console.WriteLine("实际 Release 日志门禁通过：" + assembly);
+
+static void VerifyGate(RuntimeLog logging)
+{
+    using var game = new FarmGame(130, logging);
+    if (game.Log!.Diagnostics.Start(new(new PoisonList(), IncludeGameEvents: true)))
+        throw new Exception("Release 允许开始专项诊断");
+    // 用真正 Release 类型调用快照入口，null 依赖只要被读取即失败；不是 Debug runtime 模式替身。
+    var property = typeof(GameLog).GetProperty("ProductionDiagnostics", BindingFlags.Instance | BindingFlags.NonPublic)!;
+    object diagnostic = property.GetValue(game.Log)!;
+    object? farm = diagnostic.GetType().GetMethod("BeginFarm", BindingFlags.Instance | BindingFlags.NonPublic)!
+        .Invoke(diagnostic, new object?[] { 0, null });
+    object? processor = diagnostic.GetType().GetMethod("BeginProcessor", BindingFlags.Instance | BindingFlags.NonPublic)!
+        .Invoke(diagnostic, new object?[] { 0, null, null });
+    if (farm != null || processor != null) throw new Exception("Release 构造了详细状态快照");
+    var result = game.Buy(new(CropKind.Wheat, CommodityKind.Raw), 1);
+    if (!result.Success || game.AdvanceTicks(120).AdvancedTicks != 120) throw new Exception("Release 经营执行失败");
+}
+
+static void VerifyExceptions(RuntimeLog logging)
+{
+    using var game = new FarmGame(130, logging);
+    var driver = new SimulationDriver(game.Log!.Time);
+    game.AdvanceTick();
+    Exception capacity = CaptureError(() => game.AdvanceTicks(uint.MaxValue));
+    if (capacity is not InvalidOperationException || !capacity.StackTrace!.Contains("AdvanceTicksCore"))
+        throw new Exception("Release 批量容量原异常丢失");
+    var checkpoint = new InvalidOperationException("RELEASE_CHECKPOINT_ORIGINAL");
+    if (!ReferenceEquals(CaptureError(() => game.AdvanceTicks(1, _ => ThrowCheckpoint(checkpoint))), checkpoint))
+        throw new Exception("Release 检查点异常被替换");
+    Exception driverCapacity = CaptureError(() => driver.Advance((double)uint.MaxValue + 1, game));
+    if (driverCapacity is not InvalidOperationException) throw new Exception("Release 驱动容量异常被替换");
+    var budget = new InvalidOperationException("RELEASE_BUDGET_ORIGINAL");
+    if (!ReferenceEquals(CaptureError(() => driver.Advance(1, game, maxTicks: () => ThrowBudget(budget))), budget))
+        throw new Exception("Release 预算异常被替换");
+    var commandError = new InvalidOperationException("RELEASE_COMMAND_ORIGINAL");
+    for (int attempt = 0; attempt < 2; attempt++)
+    {
+        // 公开观察接口验证传播关联，不宣称真实买入业务抛出此受控异常。
+        Exception received = CaptureError(() => driver.Advance(1, game, _ =>
+        {
+            var command = game.Log.Trading.BeginBuy(new(CropKind.Wheat, CommodityKind.Raw), 1)!;
+            try { return ThrowCheckpoint(commandError); }
+            catch (Exception error) { command.Faulted(error); throw; }
+        }));
+        if (!ReferenceEquals(received, commandError)) throw new Exception("Release 命令传播替换原异常");
+    }
+}
+
+static void VerifyExceptionLines(string[] lines)
+{
+    string[] failures = lines.Where(line => line.Contains("EventName=BusinessException ")).ToArray();
+    if (failures.Length != 12 || failures.Any(line => !line.Contains("ExceptionType: \"System.InvalidOperationException\"") ||
+        !line.Contains("Exception:") || !line.Contains("GameInstanceId:") || !line.Contains("GameDate:") || !line.Contains("SimulationSeconds:")))
+        throw new Exception("Release 异常数量或经营上下文字段不完整");
+    foreach (var expected in new[]
+    {
+        (Message: "模拟时间请求超出上限", Phase: "AdvanceValidation", Seconds: 1, Stack: "AdvanceTicksCore", Count: 2),
+        (Message: "RELEASE_CHECKPOINT_ORIGINAL", Phase: "Checkpoint", Seconds: 2, Stack: "ThrowCheckpoint", Count: 2),
+        (Message: "本帧请求的经营 tick 超出容量", Phase: "DriverValidation", Seconds: 2, Stack: "SimulationDriver.Advance", Count: 2),
+        (Message: "RELEASE_BUDGET_ORIGINAL", Phase: "DriverBudget", Seconds: 2, Stack: "ThrowBudget", Count: 2),
+        (Message: "RELEASE_COMMAND_ORIGINAL", Phase: "Command", Seconds: 0, Stack: "ThrowCheckpoint", Count: 4),
+    })
+    {
+        string[] matches = failures.Where(line => line.Contains(expected.Message)).ToArray();
+        if (matches.Length != expected.Count || matches.Any(line => !line.Contains("Phase: \"" + expected.Phase + "\"") ||
+            !line.Contains(expected.Stack) || (expected.Phase == "Command") != line.Contains("CommandId:") ||
+            expected.Seconds != 0 && !line.Contains("SimulationSeconds: " + expected.Seconds + ",")))
+            throw new Exception("Release 异常真实阶段、原堆栈或传播关联错误：" + expected.Message);
+    }
+    if (lines.Count(line => line.Contains("EventName=CommandFinished ") && line.Contains("CommandStatus: \"Faulted\"")) != 4)
+        throw new Exception("Release 异常传播去重丢失独立命令终结");
+}
+
+static Exception CaptureError(Action action)
+{
+    try { action(); }
+    catch (Exception error) { return error; }
+    throw new Exception("Release 应传播的原异常没有抛出");
+}
+
+[MethodImpl(MethodImplOptions.NoInlining)]
+static bool ThrowCheckpoint(Exception original) => throw original;
+
+[MethodImpl(MethodImplOptions.NoInlining)]
+static uint ThrowBudget(Exception original) => throw original;
+
+sealed class PoisonList : IReadOnlyList<string>
+{
+    public int Count => throw new Exception("Release 在门禁前读取了集合 Count");
+    public string this[int index] => throw new Exception("Release 在门禁前读取了范围");
+    public IEnumerator<string> GetEnumerator() => throw new Exception("Release 在门禁前枚举了范围");
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+}

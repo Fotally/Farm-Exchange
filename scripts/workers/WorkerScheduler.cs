@@ -4,6 +4,7 @@ using Godot;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
+using FarmExchange.Logging;
 using FarmExchange.Time;
 
 namespace FarmExchange.Workers;
@@ -24,17 +25,20 @@ internal sealed class WorkerScheduler
             _workers[i] = new WorkerState(startingCells[i]);
     }
 
+    internal WorkerDiagnostics? Diagnostics { get; set; }
+
     internal bool AdvanceOneSecond(FarmingSystem farming, CalendarSnapshot calendar,
         Action<int, FarmWorkRequest>? completed = null)
     {
         if (calendar.IsPaused)
             return false;
 
-        foreach (WorkerState worker in _workers)
+        for (int workerIndex = 0; workerIndex < _workers.Length; workerIndex++)
         {
+            WorkerState worker = _workers[workerIndex];
             if (worker.Work is FarmWorkRequest work &&
                 farming.GetWorkNeed(work.CellIndex, calendar) != work)
-                ReleaseWork(worker);
+                ReleaseWork(worker, workerIndex + 1);
         }
 
         bool acted = false;
@@ -46,28 +50,32 @@ internal sealed class WorkerScheduler
                 FarmWorkRequest? selected = SelectNextWork(farming, calendar);
                 if (selected == null)
                     continue;
-                BeginWork(worker, selected.Value);
+                BeginWork(worker, selected.Value, workerIndex + 1);
             }
 
             if (worker.RemainingTravelSeconds > 0)
             {
-                AdvanceTravel(worker);
+                AdvanceTravel(worker, workerIndex + 1);
                 continue;
             }
 
             FarmWorkRequest current = worker.Work!.Value;
             if (!farming.TryCompleteWork(current, calendar))
             {
-                ReleaseWork(worker);
+                ReleaseWork(worker, workerIndex + 1);
                 continue;
             }
             acted = true;
             completed?.Invoke(workerIndex + 1, current);
             FarmWorkRequest? next = farming.GetWorkNeed(current.CellIndex, calendar);
             if (current.Kind == FarmWorkKind.Sow && next is { Kind: FarmWorkKind.Water })
+            {
+                WorkerTaskDiagnosticState? before = TaskBefore(worker, workerIndex + 1);
                 worker.Work = next;
+                TaskAfter(worker, workerIndex + 1, before);
+            }
             else
-                ReleaseWork(worker);
+                ReleaseWork(worker, workerIndex + 1);
         }
         return acted;
     }
@@ -121,9 +129,12 @@ internal sealed class WorkerScheduler
      */
     internal void AdvanceQuietSeconds(uint seconds)
     {
-        foreach (WorkerState worker in _workers)
+        for (int workerIndex = 0; workerIndex < _workers.Length; workerIndex++)
+        {
+            WorkerState worker = _workers[workerIndex];
             if (worker.Work != null && worker.RemainingTravelSeconds > 0)
-                AdvanceTravel(worker, checked((int)seconds));
+                AdvanceTravel(worker, workerIndex + 1, checked((int)seconds));
+        }
     }
 
     private FarmWorkRequest? SelectNextWork(FarmingSystem farming, CalendarSnapshot calendar)
@@ -144,8 +155,9 @@ internal sealed class WorkerScheduler
         return null;
     }
 
-    private static void BeginWork(WorkerState worker, FarmWorkRequest work)
+    private void BeginWork(WorkerState worker, FarmWorkRequest work, int number)
     {
+        WorkerTaskDiagnosticState? before = TaskBefore(worker, number);
         worker.Work = work;
         Vector2 distance = (Vector2)CellOf(work.CellIndex) - worker.GridPosition;
         float gridDistance = Mathf.Max(Mathf.Abs(distance.X), Mathf.Abs(distance.Y));
@@ -153,24 +165,44 @@ internal sealed class WorkerScheduler
         worker.TravelStart = worker.GridPosition;
         worker.TravelTicks = 0;
         worker.TravelPerSecond = gridDistance == 0f ? Vector2.Zero : distance * (CellsPerSecond / gridDistance);
+        TaskAfter(worker, number, before);
     }
 
-    private static void AdvanceTravel(WorkerState worker, int seconds = 1)
+    private void AdvanceTravel(WorkerState worker, int number, int seconds = 1)
     {
+        WorkerTaskDiagnosticState? taskBefore = TaskBefore(worker, number);
+        Vector2? before = Diagnostics?.CanObserveMove(number) == true ? worker.GridPosition : null;
         worker.RemainingTravelSeconds -= seconds;
         worker.TravelTicks += seconds;
         worker.GridPosition = worker.TravelStart + worker.TravelPerSecond * worker.TravelTicks;
         if (worker.RemainingTravelSeconds == 0)
             worker.GridPosition = CellOf(worker.Work!.Value.CellIndex);
+        if (before.HasValue) Diagnostics?.Moved(number, before.Value, worker.GridPosition);
+        TaskAfter(worker, number, taskBefore);
     }
 
-    private void ReleaseWork(WorkerState worker)
+    private void ReleaseWork(WorkerState worker, int number)
     {
+        WorkerTaskDiagnosticState? before = TaskBefore(worker, number);
         _claimedCells.Remove(worker.Work!.Value.CellIndex);
         worker.Work = null;
         worker.RemainingTravelSeconds = 0;
         worker.TravelPerSecond = Vector2.Zero;
+        TaskAfter(worker, number, before);
     }
+
+    private WorkerTaskDiagnosticState? TaskBefore(WorkerState worker, int number) =>
+        Diagnostics?.CanObserveTask(number) == true ? new(ActivityOf(worker), worker.Work?.CellIndex) : null;
+
+    private void TaskAfter(WorkerState worker, int number, WorkerTaskDiagnosticState? before)
+    {
+        if (before.HasValue && Diagnostics?.CanObserveTask(number) == true)
+            Diagnostics?.TaskChanged(number, before.Value, new(ActivityOf(worker), worker.Work?.CellIndex));
+    }
+
+    private static WorkerActivity ActivityOf(WorkerState worker) => worker.Work == null ? WorkerActivity.Idle :
+        worker.RemainingTravelSeconds > 0 ? WorkerActivity.Moving :
+        worker.Work.Value.Kind == FarmWorkKind.Sow ? WorkerActivity.Sowing : WorkerActivity.Watering;
 
     private static Vector2I CellOf(int index) => BuildingFootprint.WorkCell(
         new Vector2I(index % FarmGame.MapSize, index / FarmGame.MapSize), BuildingKind.Farm);

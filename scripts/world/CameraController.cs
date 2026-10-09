@@ -17,6 +17,8 @@ public partial class CameraController : Camera2D
     private bool _leftDragging;
     private Vector2 _leftPressPosition;
 
+    internal float PlayerZoom => _viewZoom;
+
     /**
      * <summary>查询左键或中键是否正在平移镜头。</summary>
      */

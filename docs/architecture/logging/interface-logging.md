@@ -1,18 +1,49 @@
-# 运行时日志 Interface（#126～#129）
+# 运行时日志 Interface（#126～#130）
 
-代码位于 `scripts/logging/`；字段与单位只在 [schema v1](../../project/runtime-log-schema-v1.md) 维护。当前覆盖会话、经营局、完整主动交易、订单命令/等待/成交、实际公告及正式报价、建拆与底线命令、每局生产窗口、耕作表和手动接管、暂停与倍率选择及开发流程生命周期，并包含对应指令关联、初始化异常和日志健康。受控诊断与性能汇总按 #130 接入。
+代码位于 `scripts/logging/`；字段与单位只在 [schema v1](../../project/runtime-log-schema-v1.md) 维护。当前覆盖会话、经营局、完整主动交易、订单命令/等待/成交、实际公告及正式报价、建拆与底线命令、每局生产窗口、耕作表和手动接管、暂停与倍率选择及开发流程生命周期，并包含对应指令关联、初始化异常和日志健康。#130 接入受控诊断、批次/进程帧性能汇总及推进异常观察；验收结果单独记录。
+
+## 共用异常观察与真实推进（#130）
+
+`GameLog.Simulation.BeginTick()`、`BeginBatch()` 和 `GameLog.Time.BeginAdvance()` 返回可空的 `SimulationLogOperation`。采集关闭或局已结束时返回 null；正常推进不新增逐 tick、逐批或逐帧成功日志。调用方用 `using` 限定本次同步调用，在实际步骤前调用 `EnterPhase(SimulationLogPhase)`，捕获原异常后调用 `Faulted(error)`，随后保留 `throw;`。`Dispose` 仅清理传播凭据，不把未调用 Faulted 解释为成功，不执行、补做或重试业务。
+
+单 tick 与批量推进在校验前建立观察；`Phase` 跟随真实执行位置，覆盖容量校验、最近事件查询、平静累计、事件准备、六个经营阶段和检查点。收获与加工交织时逐分支更新，换季促熟仍属于 Harvest；平静累计之后的真实日历/行情更新属于 Calendar。阶段标记独立于可选诊断及性能计时。驱动在读取帧输入前建立观察，覆盖帧容量、宿主预算回调及进度累计；内部经营已记录的异常传播到驱动时不重复提交。
+
+`BusinessException` 保留原类型、原 `Exception.ToString()`（含消息与已有堆栈）、实际局/经营秒/日期和 Phase；自动推进没有虚构的 CommandId。`CommandObservation` 保持原来的 Complete/Faulted 一次终结约定，不要求调用方新增 using 或按栈顺序终结命令。每个命令只关联创建时的活跃推进观察；同一异常沿命令→推进→驱动传播时保留最内层事件，CommandFinished=Faulted、生产覆盖缺口和失败批次仍分别表达各自事实。后续独立调用、同一外层内的独立兄弟命令即使复用同一异常对象也分别记录。
+
+传播凭据只属于本局的活跃同步调用，没有全局、线程或永久异常表，不修改 Exception.Data。在原异常投影和输出之前登记“已观察”，所以投影或写盘失败由既有健康机制报告，外层不改换上下文重试；失败不替换原业务异常。异常投影失败也不阻止命令单独提交 Faulted 终结。初始化 FatalException 与 ScenarioReportSaveFailed 仅共用纯异常字段投影，保留各自真实事件和调用语义。设计与生命周期细节见[异常观察实现](implementation-exception-observation.md)。
+
+## 有界诊断与真实性能（#130）
+
+`GameLog.Diagnostics.Start(DiagnosticCaptureRequest)` 是显式采集入口。请求复制事件集合、实例锚点、订单编号、工人编号和坐标；最多 32 个锚点与坐标合计、8 张订单、3 名工人，最长 120000 毫秒、最多 5000 条。可请求更小预算；空事件、过大预算、非法工人、非现存实例锚点或无效订单拒绝。`IncludeGameEvents` 默认 false，只有显式 true 才接收不带对象的局级事件，例如行情计算、交易检查、事件秒计时与视图变化。没有对象且未启用局级事件的请求拒绝；不根据业务名称推断对象范围。已有采集、结束的局、关闭或非开发输出返回 false。
+
+`Anchors` 绑定开始时的 `BuildingSpaceSnapshot` 引用，拆除重建不继承。`Cells` 明确表示坐标，不声称永久实例；放置检查用它观察未建设位置。终结订单从范围移除，禁用的持续策略仍是有效对象。`Poll` 在 Main 唯一主帧、完整命令和推进边界执行，暂停也按现实时间结束。全部对象失效且未启用局级范围时以 ObjectsEnded 停止；主动停止、局结束与宿主关闭分别给出真实原因。开始、结束不占明细额度，关键 runtime 记录完全独立于采集预算。
+
+领域 Adapter 先 `ShouldCapture` 再取得明细快照、事实列表与字典；通用门禁只有事件集合和纯值对象筛选，没有业务名称分支。公开 `CheckPlacement`、`GetFarmDetails`、`GetPlantingCheck` 等纯查询不输出 RuleChecked；放置只观察实际 TryPlace 的同次执行重验，包括非法建筑的真实早拒，避免界面预览和刷新消耗执行诊断预算。该门禁不计抑制：预取可能没有实际状态变化，未入选对象也不等于丢失业务事件。`CapturedCount` 是实际提交尝试的明细数，不是写盘成功数；`SuppressedCount` 只计已来到提交入口、因现实预算耗尽而阻止的实际候选。停止后不推算未记录数量。结束清理范围，即使记录结束本身遇到输出/时钟故障也不持有旧对象。
+
+`LogOutput.DevelopmentEnabled` 在 Release 恒 false，Capture 与 OpenFile 一致，不能用内存输出绕过发布门禁。领域在任何诊断投影前读此资格；底座仍通过同一 `Submit` 接受领域维护的描述。控制器只拥有范围、计时和预算，生产、工人、订单、行情及放置事实由各自 Adapter 维护。
+
+`PerformanceLog` 只接入自动绑定局的真实 `AdvanceTicks`：高精度开始位于生产 BeginAdvance 之前，结束位于生产 EndAdvance 和诊断预算轮询之后。成功批次累计原 `SimulationAdvanceResult`；零请求和暂停仍是成功批次。异常仅增加 FailedBatchCount/FailedBatchTotalMs，保留原异常与已经发生的业务效果，不伪造返回的推进数。计时含此范围内日志采集和同步输出；性能汇总自身投影/序列化在停止计时后，不属于该批次。目标 60 秒，完整批次结束封窗，局结束补尾；公开手动 BindGame 不冒充自动推进覆盖。
+
+`EventTickTiming` 仅在入选后创建测量。Harvest 与 Processing 沿实际交织分支分别累计，促熟包含在 Harvest；RawClaim、Workers（含实际播种记录）、Calendar（含耕作同步）、Orders 对应实际相位。未发生的分支可省略，不以阶段和冒充完整 tick 耗时；不为 QuietTicks 重跑事件。
+
+`RuntimeLog.ProcessFrame` 只由 `Main._Process` 开头调用一次。独立局、驱动不重复采样。第一帧建立高精度基线，此后仅累计 count/sum/max；60 秒窗口和会话关闭尾段输出 ProcessFrames，未保存逐帧数组，也没有局身份或经营秒。关闭顺序为各局生产/性能/诊断尾段与 GameEnded、进程帧尾段、SessionEnded。
+
+`ViewDiagnostics` 对比实际窗口、视口、CameraController 玩家倍率与地图本地镜头中心；缓存增量来自 WorldMap 已执行 `_Draw` 的计数，QueueRedraw 不代表重建完成。每帧的值比较、基线更新和门禁，与含捕获 lambda 的私有记录方法分开；未开启、未选择该事件或 Release 门禁拒绝时，不进入会分配闭包和字段的慢路径。稳定帧只更新固定量的观察基线，不输出重复事件。`TestDiagnosticCapture` 对未开启、未选择事件的连续真实视图变化以及已选择事件的稳定帧，预热后检查严格零托管分配。Main 的 DEBUG 内部 `LoggingFactory` 与 `InitialSeed` 仅供图形验收夹具在父 `_EnterTree`、任何 Game/Driver 初始化之前设置，并于结束清空；发布编译不包含这些接缝。
+
+`TestDiagnosticCapture`、`TestPerformanceLogging` 以及生产/交易诊断测试经 TestSuite 注册。内部 `RuntimeLog.CaptureDiagnostics(writer, uptime, timestamp?)` 只控制诊断/性能的现实窗口和高精度时间，不改变公共日志头和生产资源窗口时钟；用于预算、故障传播、批次返回值、暂停和多局帧归属验证。真实运行及故障/图形证据以专项验收工件为准。
 
 ## 当前职责与通用提交
 
 [#127](https://github.com/Fotally/Farm-Exchange/issues/127) 先完成领域 Adapter 与通用输出的职责修正，再接入完整交易、订单与行情。本文说明当前接口，测试实际结果以统一验收记录为准。职责方向见[已确认安排](../../research/runtime-logging.md#已确认的后续修正方向)。
 
 - `RuntimeLog` 是公开组装 facade，负责进程生命周期、已绑定局的集合和关闭顺序；不维护交易字段或业务事件名称名单。
-- `GameLog` 拥有局身份、局内命令编号、日历上下文与局生命周期，公开 `Trading`、`Orders`、`Market`、`Gameplay`、`Cultivation`、`Time`、`Scenario`，内部组装 `Production`。初始化设施和库存基线属于其生命周期投影，关闭前封存订单等待和生产窗口尾段。
+- `GameLog` 拥有局身份、局内命令编号、日历上下文与局生命周期，公开 `Trading`、`Orders`、`Market`、`Gameplay`、`Cultivation`、`Time`、`Scenario`、`Simulation`，内部组装 `Production` 并维护本局活跃推进观察关联。初始化设施和库存基线属于其生命周期投影，关闭前封存订单等待和生产窗口尾段。
 - `TradingLog` 直接承担主动交易 Adapter，拥有请求、事件描述、前后资源快照及真实结果投影；`TradeLogOperation` 与 `ProductSaleLogOperation` 保存本次观察所需原输入与前快照。
 - `TradeOrderLog` 拥有订单配置投影、命令和成交资源观察及有界等待记录；`MarketLog` 投影实际公告、已提交报价和本轮真实因素，不重新求值或消费随机数。
 - `GameplayLog` 观察建拆与原料底线命令；[建拆实现](implementation-building-observation.md)说明真实子格、锚点和费用投影。`ProductionLog` 只拥有逐局生产累计、资源边界与封窗状态，业务继续拥有生产、库存和资金。
-- `CultivationLog` 观察年度表创建、更新、删除、批量应用和两种手动接管；`TimeLog` 观察暂停命令与实际接受的倍率选择；`ScenarioLog` 关联开发流程的启动、终结和报告保存结果。三个 Adapter 只维护日志投影与观察状态，不拥有耕作安排、倍率、流程执行或报告文件。
+- `CultivationLog` 观察年度表创建、更新、删除、批量应用和两种手动接管；`TimeLog` 观察暂停命令、实际接受的倍率选择及驱动推进异常；`ScenarioLog` 关联开发流程的启动、终结和报告保存结果。三个 Adapter 只维护日志投影与观察状态，不拥有耕作安排、倍率、流程执行或报告文件。
 - 内部 `CommandObservation` 拥有收到/结束配对、共同命令字段、异常关联和幂等终结。其完成回调只生成日志投影；从不接受、执行或重试业务命令。
+- `SimulationLog` 提供具名推进入口；`SimulationLogOperation` 保存实际阶段及同步调用生命周期。内部 `ExceptionObservation` 共用传播凭据，`ExceptionProjection` 共用原异常字段，输出仍交给既有通用底座。
 - 内部 `LogOutput` 提供统一 `Submit(description, message, fields)`，拥有会话标识、单调时间、序号、过滤、格式、输出和健康。`LogEventDescriptor` 由所属记录入口给出编号、稳定名称、来源、级别和 `RuntimeIncluded`，通用底座没有领域名称分支。新合法描述无需修改底座即可通过同一提交 Interface 输出。
 
 通用提交属于日志模块内部 seam，业务调用方仍只使用具名领域入口。字段使用已有标量、列表及具名嵌套字典；事件描述、字段名与含义须遵守 schema，不能借任意业务对象自动序列化增加字段。会话公共头由输出统一赋值，领域不能覆盖身份、序号、名称或来源。内部路由属性 `RuntimeIncluded` 和 MEL 的传输字段不进入文件文本。runtime 只接收有 runtime 资格且级别至少 INF 的事件；开发 debug 接收全部已提交事件；发布入口在分配序号前排除不具资格或低于 INF 的描述。

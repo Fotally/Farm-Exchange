@@ -17,15 +17,22 @@ public sealed class GameLog : IDisposable
     private readonly GamePurpose _purpose;
     private readonly string _gameId = Guid.NewGuid().ToString("N");
     private long _commandId;
+    private ExceptionObservation? _exceptionScope;
     private static readonly LogEventDescriptor InitializedEvent = new(3, "GameInitialized", Source);
     private static readonly LogEventDescriptor EndedEvent = new(4, "GameEnded", Source);
     private bool _ended;
 
-    internal GameLog(RuntimeLog owner, FarmGame game, bool collectProduction, GamePurpose purpose, Func<long>? productionUptime = null)
+    internal GameLog(RuntimeLog owner, FarmGame game, bool collectProduction, GamePurpose purpose, Func<long>? productionUptime = null, Func<long>? diagnosticUptime = null, Func<long>? timestamp = null)
     {
         _owner = owner;
         _game = game;
         _purpose = purpose;
+        Diagnostics = new DiagnosticCapture(this, game, diagnosticUptime);
+        Performance = collectProduction ? new PerformanceLog(this, game, diagnosticUptime, timestamp) : null;
+        ProductionDiagnostics = new ProductionDiagnostics(this);
+        WorkerDiagnostics = new WorkerDiagnostics(this);
+        View = new ViewDiagnostics(this);
+        Placement = new PlacementDiagnostics(this);
         Trading = new TradingLog(this, game);
         Orders = new TradeOrderLog(this, game);
         Market = new MarketLog(this);
@@ -33,6 +40,7 @@ public sealed class GameLog : IDisposable
         Gameplay = new GameplayLog(this, game);
         Cultivation = new CultivationLog(this, game);
         Time = new TimeLog(this, game);
+        Simulation = new SimulationLog(this);
         Scenario = new ScenarioLog(this);
     }
 
@@ -67,16 +75,40 @@ public sealed class GameLog : IDisposable
     public TimeLog Time { get; }
 
     /**
+     * <summary>本局单秒和批量推进异常的观察入口。</summary>
+     */
+    public SimulationLog Simulation { get; }
+
+    /**
      * <summary>关联本局的开发流程生命周期观察入口。</summary>
      */
     public ScenarioLog Scenario { get; }
 
+    /**
+     * <summary>本局显式限定事件、对象、时长和条数的开发诊断入口。</summary>
+     */
+    public DiagnosticCapture Diagnostics { get; }
+
+    internal ProductionDiagnostics ProductionDiagnostics { get; }
+    internal WorkerDiagnostics WorkerDiagnostics { get; }
+    internal ViewDiagnostics View { get; }
+    internal PlacementDiagnostics Placement { get; }
+    internal PerformanceLog? Performance { get; }
     internal ProductionLog? Production { get; }
 
     internal bool CanObserve => !_ended && _owner.Output.IsEnabled;
     internal LogOutput Output => _owner.Output;
     internal CommandObservation NewCommand(CommandDescription description, CommandOrigin origin) =>
         new(this, ++_commandId, description, origin);
+
+    internal ExceptionObservation NewExceptionObservation() => new(this, _exceptionScope);
+
+    internal ExceptionObservation BeginExceptionScope() => _exceptionScope = NewExceptionObservation();
+
+    internal void EndExceptionScope()
+    {
+        while (_exceptionScope?.IsClosed == true) _exceptionScope = _exceptionScope.Parent;
+    }
 
     internal void Initialized(int seed) => Observe(() =>
     {
@@ -112,6 +144,8 @@ public sealed class GameLog : IDisposable
         if (_ended) return;
         Orders.End();
         Production?.End();
+        Performance?.End();
+        Diagnostics.End(reason == "Shutdown" ? "Shutdown" : "GameEnded");
         _ended = true;
         _owner.Output.Observe(() =>
         {

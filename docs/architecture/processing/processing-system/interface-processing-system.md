@@ -2,6 +2,8 @@
 
 对应类型：`FarmExchange.Processing.ProcessingSystem`，代码位于 `scripts/processing/ProcessingSystem.cs`。它唯一维护每处加工场地匹配的作物和进行中批次的剩余精确时间单位。数组仅在锚点持有一份状态，九个子格不复制批次；子格解析与 footprint 由土地模块负责，经营入口只传锚点。
 
+内部可选 `Diagnostics` 由经营局组装为本局生产诊断入口。`TryStart` 只在真实扣除原料成功后记录 RawClaimed，再在批次建立后记录 ProcessingStarted；前者 Quantity=1，后者不产生第二笔消耗。门禁通过后才查询 `GetStatus(index, inventory)`，保留真实待料/底线/可领取状态。完工记录由 FarmGame 在实际加工品入库后提交，详细诊断不改变领取顺序、失败资源或批量推进。详见[生产与工人诊断](../../logging/implementation-production-diagnostics.md)。
+
 | 成员 | 约定 |
 | --- | --- |
 | `Place(index, crop)`、`Remove(index)` | 在 `FarmGame` 的建造、拆除协调中创建或清理该锚点加工状态；拆除仍丢弃已投入原料。 |

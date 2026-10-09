@@ -1,5 +1,9 @@
 # FarmingSystem 对外接口
 
+内部可选 `Diagnostics` 由经营局组装为本局 `ProductionDiagnostics`，不改变公开生产操作。选定实例在实际供水、播种、开始生长和越季清理处交出前后状态，湿田播种保留 Seeded 中间状态；重复已有水分不产生供水转换。前快照必须先经过采集门禁。正常及促熟收获的诊断由 FarmGame 在实际库存入库后提交，不能在仅返回待入库作物时提前宣布完成。详见[生产与工人诊断](../../logging/implementation-production-diagnostics.md)。
+
+`GetWorkNeed` 始终是无诊断输出的任务查询；`TryCompleteWork` 通过同一个私有判断过程执行原有一次重验，仅此时传入播种诊断。排程预检和下一事件探测不消耗采集预算；真实重验的失败保持原农田和任务结果，不为日志追加检查。
+
 `ClearDisallowedCrops(season)` 在原清理遍历中返回 `CropClearResult`，逐作物查询真实清理轮数；空田、仍适季作物和已通过促熟收获的轮次不计入。结果仅描述本次状态提交，不修改清理顺序、不读取库存、不持有日志计数。FarmGame 将结果交给[生产窗口](../../logging/interface-logging.md)，清理轮数不能解释成库存损失份数。
 
 对应类型：`FarmExchange.Farming.FarmingSystem`，代码位于 `scripts/farming/FarmingSystem.cs`。它唯一维护每块农田的所选作物、水分、播种或生长阶段、剩余精确时间单位和本实例工作凭据版本；状态数组只有锚点有值，九个子格不复制状态。空地与加工格不创建农田状态。

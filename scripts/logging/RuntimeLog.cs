@@ -22,6 +22,9 @@ public sealed class RuntimeLog : IDisposable
     private readonly object _sync = new();
     private bool _disposed;
     private Func<long>? _productionUptime;
+    private Func<long>? _diagnosticUptime;
+    private Func<long>? _timestamp;
+    private FramePerformanceLog? _frames;
 
     private RuntimeLog(LogOutput output) => _output = output;
 
@@ -62,7 +65,7 @@ public sealed class RuntimeLog : IDisposable
         Action<string>? diagnostic = null)
     {
         var log = new RuntimeLog(LogOutput.Capture(writer, diagnostic));
-        log.Start(environment ?? new LogEnvironment(), true);
+        log.Start(environment ?? new LogEnvironment(), log._output.DevelopmentEnabled);
         return log;
     }
 
@@ -80,6 +83,26 @@ public sealed class RuntimeLog : IDisposable
     public LoggingHealthSnapshot Health => _output.Health;
 
     internal LogOutput Output => _output;
+
+    // 控制诊断预算与高精度测量的测试 seam，不替换公共日志头或生产窗口时钟。
+    internal static RuntimeLog CaptureDiagnostics(TextWriter writer, Func<long> uptime, Func<long>? timestamp = null)
+    {
+        var log = Capture(writer);
+        log._diagnosticUptime = uptime;
+        log._timestamp = timestamp;
+        return log;
+    }
+
+    /**
+     * <summary>在 Main 的固定帧位置采样一次进程间隔，并轮询全部局的现实采集预算。</summary>
+     * <remarks>第一帧仅建立基线；驱动与独立局不得重复调用。</remarks>
+     */
+    public void ProcessFrame()
+    {
+        if (_disposed || !_output.IsEnabled) return;
+        (_frames ??= new FramePerformanceLog(_output, _diagnosticUptime, _timestamp)).Sample();
+        foreach (var game in _games) game.Diagnostics.Poll();
+    }
 
     private void Start(LogEnvironment environment, bool development) => _output.Submit(
         SessionStarted, "日志会话开始", new()
@@ -111,10 +134,11 @@ public sealed class RuntimeLog : IDisposable
         lock (_sync)
         {
             if (_disposed || !_output.IsEnabled) return null;
-            var context = new GameLog(this, game, collectProduction, purpose, _productionUptime);
+            var context = new GameLog(this, game, collectProduction, purpose, _productionUptime, _diagnosticUptime, _timestamp);
             _games.Add(context);
             context.Initialized(seed);
             context.Production?.Start();
+            context.Performance?.Start();
             return context;
         }
     }
@@ -128,13 +152,15 @@ public sealed class RuntimeLog : IDisposable
      * <summary>在真实初始化异常接收点记录不可继续的异常；不消费或重抛异常。</summary>
      * <param name="error">调用方正处理的原异常；调用方继续按原语义传播。</param>
      */
-    public void InitializationFailed(Exception error) => _output.Observe(() => _output.Submit(
-        FatalException, "经营初始化无法继续", new()
+    public void InitializationFailed(Exception error) => _output.Observe(() =>
+    {
+        var fields = new Dictionary<string, object?>
         {
             ["Phase"] = "Initialization",
-            ["ExceptionType"] = error.GetType().FullName,
-            ["Exception"] = error.ToString(),
-        }));
+        };
+        ExceptionProjection.Add(fields, error);
+        _output.Submit(FatalException, "经营初始化无法继续", fields);
+    });
 
     /**
      * <summary>先结束尚未释放的局，再记录进程结束并释放全部文件。</summary>
@@ -146,6 +172,7 @@ public sealed class RuntimeLog : IDisposable
         {
             if (_disposed) return;
             foreach (GameLog game in _games.ToArray()) game.End("Shutdown");
+            _frames?.End();
             _output.Submit(SessionEnded, "日志会话结束", new());
             _disposed = true;
             _output.Dispose();

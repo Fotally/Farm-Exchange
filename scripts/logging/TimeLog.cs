@@ -20,6 +20,13 @@ public sealed class TimeLog
     internal TimeLog(GameLog context, FarmGame game) { _context = context; _game = game; }
 
     /**
+     * <summary>建立一次现实帧推进的异常观察，包含进入经营模块前的校验与预算回调。</summary>
+     * <returns>须使用 using 释放的观察；采集关闭时为 null。</returns>
+     */
+    public SimulationLogOperation? BeginAdvance() => _context.CanObserve ?
+        new(_context, "FarmExchange.Time.SimulationDriver", "时间驱动推进抛出异常", SimulationLogPhase.DriverValidation) : null;
+
+    /**
      * <summary>保存暂停原请求与修改前实际状态。</summary>
      * <param name="requested">希望设置的暂停状态。</param>
      * <param name="origin">实际指令来源。</param>

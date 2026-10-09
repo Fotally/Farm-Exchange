@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using FarmExchange.Gameplay;
+using FarmExchange.Logging;
 using FarmExchange.Time;
 
 namespace FarmExchange.Farming;
@@ -25,6 +26,8 @@ internal sealed class FarmingSystem
         _farms = new FarmState?[cellCount];
         _farmRevisions = new int[cellCount];
     }
+
+    internal ProductionDiagnostics? Diagnostics { get; set; }
 
     internal int CellCount => _farms.Length;
     internal IReadOnlyList<int> Indices => _indicesSnapshot ??= Array.AsReadOnly(_indices.ToArray());
@@ -113,9 +116,11 @@ internal sealed class FarmingSystem
     internal void SupplyWater(int index)
     {
         FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
+        FarmSnapshot? before = !farm.HasWater ? Diagnostics?.BeginFarm(index, this) : null;
         farm.HasWater = true;
+        Diagnostics?.Watered(index, before, this);
         if (farm.Stage == CropStage.Seeded)
-            StartGrowth(farm);
+            StartGrowth(index, farm);
     }
 
     internal bool AdvanceGrowth(int index, out CropKind harvestedCrop)
@@ -213,14 +218,17 @@ internal sealed class FarmingSystem
         return farm.CropKind;
     }
 
-    internal FarmWorkRequest? GetWorkNeed(int index, CalendarSnapshot calendar)
+    internal FarmWorkRequest? GetWorkNeed(int index, CalendarSnapshot calendar) =>
+        GetWorkNeedCore(index, calendar, null);
+
+    private FarmWorkRequest? GetWorkNeedCore(int index, CalendarSnapshot calendar, ProductionDiagnostics? diagnostics)
     {
         FarmState? farm = _farms[index];
         if (farm == null || farm.Stage == CropStage.Growing)
             return null;
         if (farm.Stage == CropStage.None)
         {
-            if (!farm.SowingEnabled || !PlantingRules.CanSow(farm.CropKind, calendar, farm.HasWater))
+            if (!farm.SowingEnabled || !PlantingRules.CanSow(farm.CropKind, calendar, farm.HasWater, diagnostics, index))
                 return null;
             return new FarmWorkRequest(index, _farmRevisions[index], FarmWorkKind.Sow);
         }
@@ -229,14 +237,16 @@ internal sealed class FarmingSystem
 
     internal bool TryCompleteWork(FarmWorkRequest request, CalendarSnapshot calendar)
     {
-        if (GetWorkNeed(request.CellIndex, calendar) != request)
+        if (GetWorkNeedCore(request.CellIndex, calendar, Diagnostics) != request)
             return false;
         FarmState farm = _farms[request.CellIndex]!;
         if (request.Kind == FarmWorkKind.Sow)
         {
+            FarmSnapshot? before = Diagnostics?.BeginFarm(request.CellIndex, this);
             farm.Stage = CropStage.Seeded;
+            Diagnostics?.Sown(request.CellIndex, before, this);
             if (farm.HasWater)
-                StartGrowth(farm);
+                StartGrowth(request.CellIndex, farm);
         }
         else
             SupplyWater(request.CellIndex);
@@ -261,19 +271,23 @@ internal sealed class FarmingSystem
             if (farm == null || farm.Stage == CropStage.None ||
                 (CropCatalog.Get(farm.CropKind).GrowingSeasons & currentSeason) != 0)
                 continue;
+            FarmSnapshot? before = Diagnostics?.BeginFarm(index, this);
             farm.Stage = CropStage.None;
             farm.RemainingTimeUnits = 0;
             farm.HasWater = false;
             _farmRevisions[index]++;
             result.Record(farm.CropKind);
+            Diagnostics?.Cleared(index, before, this);
         }
         return result;
     }
 
-    private static void StartGrowth(FarmState farm)
+    private void StartGrowth(int index, FarmState farm)
     {
+        FarmSnapshot? before = Diagnostics?.BeginFarm(index, this);
         farm.Stage = CropStage.Growing;
         farm.RemainingTimeUnits = CropCatalog.Get(farm.CropKind).GrowthDays * GameTimeUnits.PerDay;
+        Diagnostics?.GrowthStarted(index, before, this);
     }
 
     internal void SetGrowingForBenchmark(int index, CropKind crop)

@@ -27,3 +27,13 @@
 上述经营入口增加可选 CommandOrigin，默认 Player；来源仅允许 Player/Scenario，非法值在任何指令记录与业务提交前抛参数异常。经营层的局部执行手续负责一次业务调用及原异常传播，领域日志观察请求和真实结果，不执行交易。全部加工品只记录一次 AllProductsSold 及七条明细，兼容入口不重复发出单商品交易事件。新增 `TestTradeLogging` 覆盖来源、冻结下全售、实际价、聚合明细和真实 File 日志；经营规则仍由原 `TestTradingService` 验证。
 
 库存接口见[统一公共库存](../../inventory/inventory/interface-inventory.md)，委托配置和相位见[委托模块](../trade-order-book/interface-trade-order-book.md)，经营顺序见[经营步进](../../game-state/farm-game/implementation-tick-order.md)。`tests/unit/TestTradingService.cs` 验证十四商品收支守恒、失败零修改、库存与钱包容量、全成品出售完整性、执行时价格、暂停交易与买入后的加工领取，以及费用取整、含费精确余额、现金保留、净收入容量和即时零费。
+
+## 有界规则诊断（#130）
+
+`SetLogging(TradingLog?)` 在局绑定后接入同一领域观察入口。只有显式选择 `RuleChecked` 且 `IncludeGameEvents=true` 的开发采集才创建 `TradeRuleObservation`；未选择、关闭或 runtime 采集不构造检查字典。公开采集范围与预算归 `DiagnosticCapture`，交易模块不持有第二份采集状态。
+
+`BuyCore` 沿原顺序只执行商品、数量、库存容量、资金、现金保留检查；`SellCore` 只执行商品、数量、可用库存、钱包容量检查。每个原分支把已得到的布尔事实连同 `TradeRuleCheck` 交给观察，首次拒绝立即输出已执行项，未走到的项不出现。全部通过时在实际资源提交前输出检查通过，因此 `RuleChecked.Outcome=Success` 不能证明已经成交，正式结果仍看 `TradeFinished/OrderFilled`。观察不返回判断、不捕获业务提交，也不继续短路或重读报价。
+
+诊断覆盖固定单商品交易、委托及两类全售。`RequestMode` 保留 `Fixed/AllCommodity/AllProducts` 范围：单商品全售非法输入只记录 `Commodity=false`，空库存成功只记录实际执行的 `Commodity=true`；非空复用卖出核心。全部加工品在原聚合容量检查处只记录 `Capacity`，没有单一商品，故省略 `Commodity`，不增加商品遍历或假数量检查。所有路径仍各有原 runtime 完成结果。
+
+`TestTradeDiagnostics` 验证首次拒绝的实际检查字典、成功路径、空/非法/聚合全售及容量拒绝的零资源修改、未选择与停止后的关闭，以及不同采集模式/坏输出下的结果、异常与平静推进等价；统一验收执行结果另行记录。

@@ -118,6 +118,10 @@ public sealed class FarmGame : IDisposable
         InitializeCenter(new Random(seed));
         _log = logging?.BindGame(this, seed, collectProduction: true, purpose);
         _tradeOrders.AttachLog(_log?.Orders);
+        _trading.SetLogging(_log?.Trading);
+        _farming.Diagnostics = _log?.ProductionDiagnostics;
+        _processing.Diagnostics = _log?.ProductionDiagnostics;
+        _workerScheduler.Diagnostics = _log?.WorkerDiagnostics;
     }
 
     private void InitializeCenter(Random random)
@@ -350,7 +354,10 @@ public sealed class FarmGame : IDisposable
         return occupiedCells == expectedOccupiedCells;
     }
 
-    public PlacementCheck CheckPlacement(Vector2I cell, BuildingKind building, CropKind crop)
+    public PlacementCheck CheckPlacement(Vector2I cell, BuildingKind building, CropKind crop) =>
+        CheckPlacementCore(cell, building, crop);
+
+    private PlacementCheck CheckPlacementCore(Vector2I cell, BuildingKind building, CropKind crop)
     {
         if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
             return new PlacementCheck(LandFailure.InvalidBuilding, 0);
@@ -375,7 +382,8 @@ public sealed class FarmGame : IDisposable
 
     private PlacementResult TryPlaceCore(Vector2I cell, BuildingKind building, CropKind crop)
     {
-        PlacementCheck check = CheckPlacement(cell, building, crop);
+        PlacementCheck check = CheckPlacementCore(cell, building, crop);
+        _log?.Placement.Completed(cell, building, crop, check);
         if (!check.Allowed)
             return new PlacementResult(check.Failure, 0);
 
@@ -667,24 +675,34 @@ public sealed class FarmGame : IDisposable
 
     public TickResult AdvanceTick(bool isRaining = false)
     {
+        using var observation = _log?.Simulation.BeginTick();
         _log?.Production?.BeginAdvance();
         bool completed = false;
         try
         {
-            TickResult result = AdvanceTickCore(isRaining);
+            TickResult result = AdvanceTickCore(isRaining, observation);
             completed = true;
             return result;
         }
-        finally { _log?.Production?.EndAdvance(completed); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        finally
+        {
+            _log?.Production?.EndAdvance(completed);
+            _log?.Diagnostics.Poll();
+        }
     }
 
-    private TickResult AdvanceTickCore(bool isRaining)
+    private TickResult AdvanceTickCore(bool isRaining, SimulationLogOperation? observation)
     {
         if (_calendar.IsPaused)
             return default;
         if (_calendar.Snapshot.ElapsedSeconds == uint.MaxValue)
             throw new InvalidOperationException("模拟时间已达到上限");
-        return AdvanceEventTick(isRaining);
+        return AdvanceEventTick(isRaining, observation);
     }
 
     /**
@@ -696,23 +714,38 @@ public sealed class FarmGame : IDisposable
      */
     public SimulationAdvanceResult AdvanceTicks(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint = null)
     {
+        using var observation = _log?.Simulation.BeginBatch();
+        long? started = _log?.Performance?.BeginBatch();
         _log?.Production?.BeginAdvance();
         bool completed = false;
+        SimulationAdvanceResult result = default;
         try
         {
-            SimulationAdvanceResult result = AdvanceTicksCore(maxTicks, checkpoint);
+            result = AdvanceTicksCore(maxTicks, checkpoint, observation);
             completed = true;
             return result;
         }
-        finally { _log?.Production?.EndAdvance(completed); }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        finally
+        {
+            _log?.Production?.EndAdvance(completed);
+            _log?.Diagnostics.Poll();
+            _log?.Performance?.EndBatch(started, completed, result);
+        }
     }
 
-    private SimulationAdvanceResult AdvanceTicksCore(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint)
+    private SimulationAdvanceResult AdvanceTicksCore(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint,
+        SimulationLogOperation? observation)
     {
         if (_calendar.IsPaused || maxTicks == 0)
             return default;
         if (maxTicks > uint.MaxValue - Calendar.ElapsedSeconds)
             throw new InvalidOperationException("模拟时间请求超出上限");
+        observation?.EnterPhase(SimulationLogPhase.Orders);
         _tradeOrders.BeginAdvanceRequest();
         uint advanced = 0, quiet = 0, events = 0, interval = 0;
         long harvested = 0, produced = 0;
@@ -720,12 +753,13 @@ public sealed class FarmGame : IDisposable
         while (advanced < maxTicks)
         {
             uint remaining = maxTicks - advanced;
+            observation?.EnterPhase(SimulationLogPhase.EventSearch);
             uint nextEvent = GetNextEventSeconds();
             uint quietSpan = Math.Min(remaining, nextEvent - 1);
             bool intervalDayAdvanced = false;
             if (quietSpan > 0)
             {
-                intervalDayAdvanced = AdvanceQuietSeconds(quietSpan);
+                intervalDayAdvanced = AdvanceQuietSeconds(quietSpan, observation);
                 advanced += quietSpan;
                 quiet += quietSpan;
                 interval += quietSpan;
@@ -735,7 +769,7 @@ public sealed class FarmGame : IDisposable
             bool isEvent = advanced < maxTicks;
             if (isEvent)
             {
-                result = AdvanceEventTick(false);
+                result = AdvanceEventTick(false, observation);
                 advanced++;
                 events++;
                 interval++;
@@ -745,9 +779,13 @@ public sealed class FarmGame : IDisposable
                 dayAdvanced |= result.DayAdvanced;
                 result = result with { DayAdvanced = result.DayAdvanced || intervalDayAdvanced };
             }
-            if (checkpoint != null && !checkpoint(new SimulationCheckpoint(
-                advanced, interval, Calendar.ElapsedSeconds, result, isEvent)))
-                return new(advanced, harvested, produced, workerActed, dayAdvanced, true, quiet, events);
+            if (checkpoint != null)
+            {
+                observation?.EnterPhase(SimulationLogPhase.Checkpoint);
+                if (!checkpoint(new SimulationCheckpoint(
+                    advanced, interval, Calendar.ElapsedSeconds, result, isEvent)))
+                    return new(advanced, harvested, produced, workerActed, dayAdvanced, true, quiet, events);
+            }
             interval = 0;
         }
         return new(advanced, harvested, produced, workerActed, dayAdvanced, false, quiet, events);
@@ -771,8 +809,9 @@ public sealed class FarmGame : IDisposable
         return next;
     }
 
-    private bool AdvanceQuietSeconds(uint seconds)
+    private bool AdvanceQuietSeconds(uint seconds, SimulationLogOperation? observation)
     {
+        observation?.EnterPhase(SimulationLogPhase.QuietAdvance);
         ClearPresentationResults();
         uint previousDay = Calendar.ElapsedDays;
         foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
@@ -783,6 +822,7 @@ public sealed class FarmGame : IDisposable
                 _processing.AdvanceQuietSeconds(space.AnchorIndex, seconds);
         }
         _workerScheduler.AdvanceQuietSeconds(seconds);
+        observation?.EnterPhase(SimulationLogPhase.Calendar);
         if (!_calendar.TryAdvanceSeconds(seconds))
             throw new InvalidOperationException("模拟时间已达到上限");
         if (Calendar.ElapsedDays == previousDay)
@@ -791,8 +831,10 @@ public sealed class FarmGame : IDisposable
         return true;
     }
 
-    private TickResult AdvanceEventTick(bool isRaining)
+    private TickResult AdvanceEventTick(bool isRaining, SimulationLogOperation? observation)
     {
+        observation?.EnterPhase(SimulationLogPhase.TickPreparation);
+        var timing = _log?.Performance?.BeginEventTick(Calendar.ElapsedSeconds);
         ClearPresentationResults();
         if (isRaining)
             ApplyRain();
@@ -803,24 +845,50 @@ public sealed class FarmGame : IDisposable
         {
             int i = space.AnchorIndex;
             BuildingKind building = space.Building;
-            if (building == BuildingKind.Farm && _farming.AdvanceGrowth(i, out CropKind harvestedCrop))
+            if (building == BuildingKind.Farm)
             {
-                harvested += CollectHarvest(i, harvestedCrop, nextTimeUnits);
+                observation?.EnterPhase(SimulationLogPhase.Harvest);
+                timing?.BeginStage();
+                var before = _log?.ProductionDiagnostics.BeginFarm(i, _farming);
+                if (_farming.AdvanceGrowth(i, out CropKind harvestedCrop))
+                    harvested += CollectHarvest(i, harvestedCrop, nextTimeUnits, before);
+                timing?.EndStage("Harvest");
             }
-            else if (building == BuildingKind.Processor && _processing.Advance(i, out CropKind productCrop))
+            else if (building == BuildingKind.Processor)
             {
-                _inventory.AddProduct(productCrop, 1);
-                _log?.Production?.Produced(productCrop);
-                RecordPresentationResult(i, productCrop, ProductionResultKind.Product, 1);
-                produced++;
+                observation?.EnterPhase(SimulationLogPhase.Processing);
+                timing?.BeginStage();
+                var before = _log?.ProductionDiagnostics.BeginProcessor(i, _processing, _inventory);
+                if (_processing.Advance(i, out CropKind productCrop))
+                {
+                    _inventory.AddProduct(productCrop, 1);
+                    _log?.Production?.Produced(productCrop);
+                    _log?.ProductionDiagnostics.Processed(i, before, _processing, _inventory, 1);
+                    RecordPresentationResult(i, productCrop, ProductionResultKind.Product, 1);
+                    produced++;
+                }
+                timing?.EndStage("Processing");
             }
         }
+        observation?.EnterPhase(SimulationLogPhase.Harvest);
         Season nextSeason = GameCalendar.GetDate((uint)(nextTimeUnits / GameTimeUnits.PerDay)).Season;
         if (nextSeason != _calendar.Snapshot.Season)
+        {
+            timing?.BeginStage();
             foreach (int index in _farming.Indices)
+            {
+                var before = _log?.ProductionDiagnostics.BeginFarm(index, _farming);
                 if (_farming.TryMatureBeforeDisallowedSeason(index, nextSeason, out CropKind rescuedCrop))
-                    harvested += CollectHarvest(index, rescuedCrop, nextTimeUnits);
+                    harvested += CollectHarvest(index, rescuedCrop, nextTimeUnits, before);
+            }
+            timing?.EndStage("Harvest");
+        }
+        observation?.EnterPhase(SimulationLogPhase.RawClaim);
+        timing?.BeginStage();
         StartIdleProcessors();
+        timing?.EndStage("RawClaim");
+        observation?.EnterPhase(SimulationLogPhase.Workers);
+        timing?.BeginStage();
         bool workerActed = _workerScheduler.AdvanceOneSecond(_farming, _calendar.Snapshot,
             (number, work) =>
             {
@@ -830,17 +898,26 @@ public sealed class FarmGame : IDisposable
                     0, number, work);
             });
         _cultivation.RecordSownCrops();
+        timing?.EndStage("Workers");
+        observation?.EnterPhase(SimulationLogPhase.Calendar);
+        timing?.BeginStage();
         bool dayAdvanced = AdvanceDay();
         _cultivation.Synchronize(nextTimeUnits);
+        timing?.EndStage("Calendar");
+        observation?.EnterPhase(SimulationLogPhase.Orders);
+        timing?.BeginStage();
         _tradeOrders.Execute(_calendar.Snapshot);
+        timing?.EndStage("Orders");
+        timing?.Complete();
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
     }
 
-    private int CollectHarvest(int index, CropKind crop, long nextTimeUnits)
+    private int CollectHarvest(int index, CropKind crop, long nextTimeUnits, FarmSnapshot? before)
     {
         int quantity = GetCrop(crop).HarvestQuantity;
         _inventory.AddRaw(crop, quantity);
         _log?.Production?.Harvested(crop, quantity);
+        _log?.ProductionDiagnostics.Harvested(index, before, _farming, quantity);
         RecordPresentationResult(index, crop, ProductionResultKind.Harvest, quantity);
         _cultivation.Harvested(index, nextTimeUnits);
         return quantity;
@@ -965,6 +1042,8 @@ public sealed class FarmGame : IDisposable
      * <returns>全部活动和已结束委托，查询不执行交易。</returns>
      */
     public IReadOnlyList<TradeOrderSnapshot> GetTradeOrders() => _tradeOrders.GetSnapshots();
+
+    internal bool IsDiagnosticOrderActive(int id) => _tradeOrders.IsDiagnosticOrderActive(id);
 
     /**
      * <summary>创建委托；一次单冻结资源，持续策略不冻结。</summary>

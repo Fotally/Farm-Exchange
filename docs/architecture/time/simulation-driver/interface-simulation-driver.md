@@ -18,4 +18,6 @@
 
 #129 在原合法性检查之后、真实赋值之前开始倍率观察，赋值后先完成 `SelectSimulationRate` / `SimulationRateSelected`，再按原顺序发出 `RateChanged`。同值选择也有完整记录，因此玩家主动选择导致流程中断时，可以先看到已接受选择，再看到流程结束。非法倍率保留原异常且不记接受事件；通知处理器的原异常继续传播，不回滚已接受倍率。旧入口对非法强转来源的原样通知行为保留，日志记录原十进制数字字符串而不解释为合法来源。时间观察不改变暂停和 tick 小数进度，细节见[时间与流程日志](../../logging/implementation-time-scenario-observation.md)。
 
+#130 在 Advance 的原输入检查前通过 `TimeLog.BeginAdvance()` 建立 using 观察；帧输入/容量、宿主 maxTicks 回调和返回后进度累计分别标记 DriverValidation、DriverBudget、DriverProgress。真实业务仍在驱动中执行，catch 记录后使用 `throw;`，不修改倍率、剩余现实时间、请求拆段或原失败效果。内部 FarmGame/命令已记录的同次异常向外传播不重复记录；正常帧不新增成功日志，释放仅清理关联。此观察使用构造时传入的同局 TimeLog，未注入或关闭采集保持原行为。Interface 与生命周期细节见[共用异常观察](../../logging/implementation-exception-observation.md)。
+
 `TestSimulationDriver.RunChecks()` 验证半 tick、暂停不累计、恢复改速、公共/开发允许规则、主动选择来源、途中换速、宿主终点及容量拒绝；`TestTimeLogging` 验证实际暂停变化、同值倍率及通知顺序、异常传播、来源和采集开关/输出故障等价。表现连接约定见[工人表现](../../world/worker-presentation/interface-worker-presentation.md)，批量结算约定见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。

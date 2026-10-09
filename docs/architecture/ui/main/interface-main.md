@@ -114,3 +114,7 @@
 共享表保存成功后同步地图，包括暂停时由表编辑改变空田当期作物的情况，不等待下一经营步。移除选中农田成功时先关闭依赖该田的作物选择窗口，再刷新详情和其他窗口；立即改种与预备下一轮都遵守此生命周期。
 
 农田两个手动按钮分别组装作物窗口模式。立即改种继续调用 `SetFarmCrop`，预备下一轮调用 `PrepareFarmCrop`；窗口选种前告知清空本田安排和立即改种损失。农田详情独立显示实际进度与计划引用。窗口与经营的约定见[耕作表窗口接口](../cultivation-window/interface-cultivation-window.md)。
+
+## 日志帧观察（#130）
+
+Main._Process 开头唯一调用 RuntimeLog.ProcessFrame，主局与独立局共用一次进程帧采样，暂停仍轮询诊断现实预算。帧末传实际窗口、视口、玩家倍率、地图本地镜头中心及已绘制缓存累计给日志模块，稳定帧不输出 ViewChanged。摆放预览、农田详情和选种预检均保持纯查询，不因每帧刷新输出 RuleChecked。DEBUG 内部 LoggingFactory/InitialSeed 供 1080P 专项验收父节点在 _EnterTree 设置；必须早于首次 Game/Driver 初始化，结束清空，不进入发布接口。

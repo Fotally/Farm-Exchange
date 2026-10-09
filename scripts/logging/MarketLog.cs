@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using FarmExchange.Market;
+using FarmExchange.Inventory;
+using Microsoft.Extensions.Logging;
 using FarmExchange.Time;
 
 namespace FarmExchange.Logging;
@@ -62,6 +64,54 @@ public sealed class MarketLog
         _context.Output.Submit(QuoteEvent, "商品正式报价已更新", fields);
     });
 
+    /**
+     * <summary>在构造行情明细前检查显式局级事件选择和采集预算。</summary>
+     * <returns>本次可以采集时为 true。</returns>
+     */
+    internal bool ShouldCaptureCalculation() => _context.Diagnostics.ShouldCapture("QuoteCalculated");
+
+    /**
+     * <summary>观察本次已经算出的待发布价、整数中间值与原因素。</summary>
+     * <param name="commodity">实际计算商品。</param>
+     * <param name="quoteDate">计算面向的实际报价日。</param>
+     * <param name="factors">原计算使用的真实因素。</param>
+     * <param name="calculation">原分子、分母及实际舍入和限幅结果。</param>
+     * <remarks>调用方先通过 ShouldCaptureCalculation，不在日志中重算。</remarks>
+     */
+    internal void QuoteCalculated(CommodityId commodity, GameDate quoteDate, MarketPriceFactors factors,
+        MarketCalculation calculation) => _context.Observe(() =>
+    {
+        var fields = _context.Context("Calendar");
+        fields["Commodity"] = commodity.Crop + "." + commodity.Kind;
+        fields["QuoteDate"] = Date(quoteDate);
+        fields["SupplyFactor"] = factors.SupplyFactor;
+        fields["DemandFactor"] = factors.DemandFactor;
+        var inputs = new Dictionary<string, object?>
+        {
+            ["InitialPriceCents"] = calculation.InitialPriceCents,
+            ["OldPriceCents"] = calculation.PreviousPriceCents,
+            ["Formula"] = commodity.Kind == CommodityKind.Raw ? "RawFormula" : "ProductFormula",
+            ["SupplyDemandPercent"] = factors.SupplyDemandPercent,
+            ["EventPercent"] = factors.EventPercent,
+            ["Numerator"] = calculation.Numerator,
+            ["Denominator"] = calculation.Denominator,
+            ["RoundedPriceCents"] = calculation.RoundedPriceCents,
+            ["MinimumPriceCents"] = calculation.MinimumPriceCents,
+            ["MaximumPriceCents"] = calculation.MaximumPriceCents,
+            ["FinalPriceCents"] = calculation.FinalPriceCents,
+        };
+        if (factors.SeasonPercent.HasValue) inputs["SeasonPercent"] = factors.SeasonPercent.Value;
+        if (factors.RawReferencePriceCents.HasValue)
+        {
+            inputs["RawInitialPriceCents"] = calculation.RawInitialPriceCents;
+            inputs["PendingRawPriceCents"] = factors.RawReferencePriceCents.Value;
+        }
+        fields["CalculationInputs"] = inputs;
+        _context.Diagnostics.Capture(CalculationEvent, "本轮商品待发布报价计算完成", fields);
+    });
+
+    private static readonly LogEventDescriptor CalculationEvent = new(105, "QuoteCalculated", Source, LogLevel.Debug, false);
+
     private static Dictionary<string, object?> Date(GameDate date) => new()
     {
         ["Year"] = date.Year,
@@ -72,3 +122,7 @@ public sealed class MarketLog
 
 internal readonly record struct MarketPriceFactors(int SupplyFactor, int DemandFactor,
     int SupplyDemandPercent, int EventPercent, int? SeasonPercent, int? RawReferencePriceCents);
+
+internal readonly record struct MarketCalculation(int InitialPriceCents, int PreviousPriceCents,
+    long Numerator, long Denominator, int RoundedPriceCents, int MinimumPriceCents,
+    int MaximumPriceCents, int FinalPriceCents, int? RawInitialPriceCents = null);

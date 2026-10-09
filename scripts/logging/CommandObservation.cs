@@ -15,6 +15,7 @@ internal sealed class CommandObservation
     private readonly long _id;
     private readonly CommandDescription _description;
     private readonly CommandOrigin _origin;
+    private readonly ExceptionObservation _exceptionObservation;
     private bool _finished;
 
     internal CommandObservation(GameLog context, long id, CommandDescription description, CommandOrigin origin)
@@ -23,6 +24,7 @@ internal sealed class CommandObservation
         _id = id;
         _description = description;
         _origin = origin;
+        _exceptionObservation = context.NewExceptionObservation();
     }
 
     internal void Received(Dictionary<string, object?> arguments, Dictionary<string, object?>? metadata = null)
@@ -38,6 +40,7 @@ internal sealed class CommandObservation
     {
         if (_finished) return;
         _finished = true;
+        _exceptionObservation.Close();
         _context.Observe(() =>
         {
             var fields = Fields();
@@ -50,24 +53,24 @@ internal sealed class CommandObservation
             _context.Output.Submit(new(6, "CommandFinished", _description.Source), _description.FinishedMessage, finished);
         });
         _context.Production?.CheckBoundary();
+        _context.Diagnostics.Poll();
     }
 
     internal void Faulted(Exception error)
     {
         if (_finished) return;
         _finished = true;
+        _exceptionObservation.Faulted(error,
+            new(8, "BusinessException", _description.Source, LogLevel.Error), _description.FaultMessage, Fields);
+        _exceptionObservation.Close();
         _context.Observe(() =>
         {
-            var fields = Fields();
-            fields["ExceptionType"] = error.GetType().FullName;
-            fields["Exception"] = error.ToString();
-            _context.Output.Submit(new(8, "BusinessException", _description.Source, LogLevel.Error),
-                _description.FaultMessage, fields);
             var finished = Fields();
             finished["CommandStatus"] = "Faulted";
             _context.Output.Submit(new(6, "CommandFinished", _description.Source), _description.FaultFinishedMessage, finished);
         });
         _context.Production?.CheckBoundary();
+        _context.Diagnostics.Poll();
     }
 
     private Dictionary<string, object?> Fields()

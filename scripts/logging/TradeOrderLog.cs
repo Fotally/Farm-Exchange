@@ -164,6 +164,16 @@ public sealed class TradeOrderLog
         _context.Output.Submit(Fill, "订单实际成交", fields);
     });
 
+    /**
+     * <summary>只为本次选中的真实订单建立有界条件采样。</summary>
+     * <param name="id">本局订单编号。</param>
+     * <param name="groupCount">原配置条件组数量。</param>
+     * <returns>通过采集资格与对象门禁时的观察；否则为 null。</returns>
+     */
+    internal OrderEvaluationObservation? BeginEvaluation(int id, int groupCount) =>
+        _context.Diagnostics.ShouldCapture("OrderEvaluated", orderId: id)
+            ? new OrderEvaluationObservation(_context, id, groupCount) : null;
+
     internal void Evaluated(int id, TradeOrderEvaluation evaluation, CalendarSnapshot calendar) => _context.Observe(() =>
     {
         string[] categories = Categories(evaluation);
@@ -257,7 +267,7 @@ public sealed class TradeOrderLog
         state.Counts.Clear();
     }
 
-    private static string[] Categories(TradeOrderEvaluation evaluation)
+    internal static string[] Categories(TradeOrderEvaluation evaluation)
     {
         if (evaluation.Failure != TradeFailure.None) return new[] { "TradeFailure." + evaluation.Failure };
         var categories = new List<string>(3);

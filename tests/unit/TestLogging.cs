@@ -54,13 +54,23 @@ public static class TestLogging
         log.Dispose();
         second.Dispose();
         string[] lines = Lines(output.ToString());
-        Require(lines.Length == 23, "生命周期或每笔买入的三条事件数量错误");
+        Require(lines.Length == 25, "生命周期或每笔买入的三条事件数量错误");
         Require(lines.Count(line => HasEvent(line, "SessionStarted")) == 1 &&
             lines.Count(line => HasEvent(line, "SessionEnded")) == 1 &&
             lines.Count(line => HasEvent(line, "GameInitialized")) == 2 &&
             lines.Count(line => HasEvent(line, "GameEnded")) == 2 &&
-            lines.Count(line => HasEvent(line, "ProductionSummary")) == 2, "关闭不是幂等或局未自动结束");
+            lines.Count(line => HasEvent(line, "ProductionSummary")) == 2 &&
+            lines.Count(line => HasEvent(line, "PerformanceSummary")) == 2, "关闭不是幂等或局未自动结束");
         string[] initializations = lines.Where(line => HasEvent(line, "GameInitialized")).ToArray();
+        foreach (string initialized in initializations)
+        {
+            string id = Field(initialized, "GameInstanceId");
+            string summary = lines.Single(line => HasEvent(line, "PerformanceSummary") && Field(line, "GameInstanceId") == id);
+            Require(summary.Contains("SummaryScope: \"GameAdvance\"") && summary.Contains("BatchCount: 0") &&
+                summary.Contains("IsPartialWindow: true") && summary.Contains("BatchMaxMs: null"), "未推进局的性能尾段不正确");
+            Require(Array.IndexOf(lines, summary) < Array.FindIndex(lines, line => HasEvent(line, "GameEnded") && Field(line, "GameInstanceId") == id), "性能尾段晚于局结束");
+        }
+
         Require(Field(initializations[0], "GameInstanceId") != Field(initializations[1], "GameInstanceId"), "两局身份重复");
         Require(initializations[0].Contains("Seed: 17") && initializations[0].Contains("MoneyCents: 5000") &&
             initializations[0].Contains("InitialFacilities: [") && initializations[0].Contains("Wheat.Raw:") &&
