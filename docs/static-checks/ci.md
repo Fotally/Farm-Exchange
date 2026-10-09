@@ -11,3 +11,7 @@
 dotnet format whitespace FarmExchange.sln --verify-no-changes 根据 .editorconfig 验证可格式化的 C# 空白风格；具体配置见[EditorConfig](editorconfig.md)。业务规则正确性由 Godot 场景测试负责，FPS、覆盖率、导出和启动要求仍以[构建与验收](../project/build-and-validation.md)为准。PR 模板中的变更类型与验收文字须对应真实改动，由提 PR skill 收集并供人工审查；CI 不假装理解其语义。
 
 多行字典初始化中的字段按格式器要求逐项换行。定位单文件格式错误时，运行 `dotnet format whitespace FarmExchange.sln --verify-no-changes --include scripts/logging/TradeOrderLog.cs`；修复可对同一文件去掉 `--verify-no-changes` 执行，再运行不带 `--include` 的完整检查。格式检查通过不替代编译和测试。若 CI 在静态检查阶段退出，随后报告覆盖率文件缺失，应先修复最早失败步骤，再完整重跑以生成报告。
+
+CI 在格式检查前输出 `dotnet --version`。项目目标框架 `net8.0` 与实际执行格式器的 SDK 版本不同；`actions/setup-dotnet` 安装 `8.0.x` 也不等于固定使用该版本，没有 `global.json` 时还需核对 runner 已安装的 SDK。定位本地通过而 CI 失败的问题时，先在仓库目录运行 `dotnet --version` 和 `dotnet --list-sdks`，再用 CI 实际版本对同一提交执行完整格式检查。
+
+#130 的 `Main.InitializeGame` 曾在 `#endif` 两侧连接 `else if`：SDK 8.0.425、9.0.304 检查通过，10.0.401 可复现 CI 的16条空白错误。修复使用显式语句块表达工厂与公共平台选择，保留原编译条件和分支语义；涉及条件编译的排版调整须同时检查本地与 CI 使用的 SDK，不通过放宽门禁解决差异。

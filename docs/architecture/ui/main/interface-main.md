@@ -118,3 +118,5 @@
 ## 日志帧观察（#130）
 
 Main._Process 开头唯一调用 RuntimeLog.ProcessFrame，主局与独立局共用一次进程帧采样，暂停仍轮询诊断现实预算。帧末传实际窗口、视口、玩家倍率、地图本地镜头中心及已绘制缓存累计给日志模块，稳定帧不输出 ViewChanged。摆放预览、农田详情和选种预检均保持纯查询，不因每帧刷新输出 RuleChecked。DEBUG 内部 LoggingFactory/InitialSeed 供 1080P 专项验收父节点在 _EnterTree 设置；必须早于首次 Game/Driver 初始化，结束清空，不进入发布接口。
+
+`InitializeGame` 在 DEBUG 下优先使用已设置的 `LoggingFactory`；未设置时进入公共平台选择块，编辑器与 Windows 使用文件日志，其他平台关闭输出。Release 直接执行同一平台选择块。工厂分支与公共块使用显式花括号，避免条件编译分隔 `else if` 时不同 SDK 格式器产生不同缩进；工厂异常仍原样传播，后续经营初始化失败的记录与释放顺序保持不变。

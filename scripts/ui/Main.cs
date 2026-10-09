@@ -86,24 +86,29 @@ public partial class Main : Node2D
         const bool development = false;
 #endif
 #if DEBUG
-        if (LoggingFactory != null) _logging = LoggingFactory();
+        if (LoggingFactory != null)
+        {
+            _logging = LoggingFactory();
+        }
         else
 #endif
-        if (OS.HasFeature("editor") || OS.HasFeature("windows"))
         {
-            string directory = OS.HasFeature("editor")
-                ? ProjectSettings.GlobalizePath("res://build/logs")
-                : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(OS.GetExecutablePath())!, "logs");
-            var size = DisplayServer.WindowGetSize();
-            _logging = RuntimeLog.OpenFile(directory, development, new LogEnvironment(
-                GameVersion: ProjectSettings.HasSetting("application/config/version")
-                    ? ProjectSettings.GetSetting("application/config/version").AsString() : null,
-                EngineVersion: Engine.GetVersionInfo()["string"].AsString(),
-                Renderer: RenderingServer.GetCurrentRenderingMethod(), WindowWidth: size.X, WindowHeight: size.Y,
-                BuildKind: OS.HasFeature("editor") ? "Debug" : OS.HasFeature("debug") ? "ExportDebug" : "Release"),
-                diagnostic: message => GD.PushWarning(message));
+            if (OS.HasFeature("editor") || OS.HasFeature("windows"))
+            {
+                string directory = OS.HasFeature("editor")
+                    ? ProjectSettings.GlobalizePath("res://build/logs")
+                    : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(OS.GetExecutablePath())!, "logs");
+                var size = DisplayServer.WindowGetSize();
+                _logging = RuntimeLog.OpenFile(directory, development, new LogEnvironment(
+                    GameVersion: ProjectSettings.HasSetting("application/config/version")
+                        ? ProjectSettings.GetSetting("application/config/version").AsString() : null,
+                    EngineVersion: Engine.GetVersionInfo()["string"].AsString(),
+                    Renderer: RenderingServer.GetCurrentRenderingMethod(), WindowWidth: size.X, WindowHeight: size.Y,
+                    BuildKind: OS.HasFeature("editor") ? "Debug" : OS.HasFeature("debug") ? "ExportDebug" : "Release"),
+                    diagnostic: message => GD.PushWarning(message));
+            }
+            else _logging = RuntimeLog.Disabled();
         }
-        else _logging = RuntimeLog.Disabled();
         try
         {
 #if DEBUG

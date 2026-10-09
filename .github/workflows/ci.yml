@@ -70,6 +70,7 @@ jobs:
         run: |
           ./tools/Repair-RuleLinks.ps1
           ./tools/Test-StaticChecks.ps1
+          dotnet --version
           dotnet format whitespace FarmExchange.sln --verify-no-changes
 
       - name: 运行场景测试并检查行覆盖率
