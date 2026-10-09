@@ -2,6 +2,7 @@
 
 ## 构建来源
 
+- 开发 SDK：安装 .NET SDK 10.0.401；仓库根目录的 [global.json](../../global.json) 是本地与 CI 的唯一 SDK 选择约束，禁用版本前滚与预览版。另安装 .NET 8 SDK 提供 `net8.0` 测试与 Godot 引擎所需的兼容运行时；项目目标框架保持 `net8.0`。
 - 引擎：`E:\Godot\Godot_v4.7.2-stable_mono_win64` 中的 Godot 4.7.2 Mono。
 - 官方 .NET 导出模板：同一目录中的 `Godot_v4.7.2-stable_mono_export_templates.tpz`；Windows x86_64 模板与中文所需 ICU 数据解压在 `export_templates/4.7.2.stable.mono/`，可供后续项目复用。
 - `project.godot` 启用中文断行所需的文本服务数据；导出包应包含该数据。
@@ -10,6 +11,8 @@
 - 所有构建配置统一排除 `build/**/*.cs`：该目录保留导出产物、验收副本和历史源码备份，不是编译输入。原有备份保持原位，实际脚本及测试源码仍遵循上述配置范围。
 
 ## 生成可运行版本
+
+安装完成后，在项目根目录执行 `dotnet --version`，结果必须与 `global.json` 的版本一致；`dotnet --list-sdks` 列出已安装 SDK，`dotnet --list-runtimes` 应包含 `Microsoft.NETCore.App 8.0.x`。缺少确切 SDK 时安装该版本，不修改版本前滚策略。
 
 在项目根目录执行：
 

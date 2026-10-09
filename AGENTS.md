@@ -50,6 +50,7 @@
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、导入 Godot 图片资源、运行必需的 headless 测试套件、生成 Cobertura 报告，由 `tools/Test-Coverage.ps1` 按文件与行号去重，动态检查业务脚本总体及每个一级模块行覆盖率不低于 80%；`tools/Test-CoverageGate.ps1` 验证门禁夹具；`-Performance` 追加图形性能测试和 JSON 报告。
 - `tools/Run-LoggingPerformance.ps1`、`Test-LoggingLifecycle.ps1` 与 `Test-LoggingRelease.ps1`：日志专项1080P、1×/16×矩阵，独立进程退出及实际Release程序集前置门禁；测试场景与探针只生成本地证据，不更改正式采集策略。执行及故障边界见 `docs/architecture/logging/implementation-validation.md`。
 - `tools/Repair-RuleLinks.ps1` 与 `tools/Test-StaticChecks.ps1`：按 `.codex/rule-links.json` 修复及检查目录指令符号链接，并检查文档路径、内部链接和脚本命名空间。
+- `global.json`：开发与双平台 CI 的 SDK 精确版本唯一来源，禁止前滚和预览版；工作流按该文件安装，版本维护与本地检查见 `docs/project/continuous-integration.md`。
 - `.github/workflows/ci.yml`：静态检查阶段输出实际 SDK 版本并执行完整 C# 空白格式验证，定位和复验见 `docs/static-checks/ci.md`；`dev` 推送时自动运行 headless 测试；手动触发可选图形 FPS 性能测试；`main` 推送时在测试通过后额外完成 Windows Release 导出，通过进程退出码验收导出程序启动并上传构建产物。
 - `.github/workflows/macos.yml`：在 macOS runner 上编译、导出 Universal 2 ZIP、检查双架构程序集并启动应用，上传提交级构建产物。
 - `.github/workflows/release.yml`：独立手动发布游戏版本；操作者输入版本号，复用触发时 main 同提交成功的 Windows 与 macOS CI 产物。Windows 下载后验收启动并打包，macOS 检查 Universal 2 ZIP 后保持原包字节；两平台准备成功后创建标签与单个 GitHub Release，上传两份版本 ZIP。操作与失败处理见 `docs/project/release.md`。

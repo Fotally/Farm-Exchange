@@ -4,9 +4,9 @@
 
 ## CI 流程
 
-`.github/workflows/macos.yml` 在推送 `dev`、`main` 或手动触发时使用 `macos-15`：下载官方 Mono 编辑器与同版本导出模板，安装 .NET 8，编译 C#，导入项目资源，导出 ZIP，再解压检查应用包、两个架构的程序集和 Universal 2 可执行文件，最后无窗口启动并检查退出状态。通过后上传 `FarmExchange-macos-universal-提交SHA`，保留 14 天。该工作流与 [Windows 主 CI](continuous-integration.md)分别运行。
+`.github/workflows/macos.yml` 在推送 `dev`、`main` 或手动触发时使用 `macos-15`：从根目录 [global.json](../../global.json) 安装固定的 .NET SDK 10.0.401，并输出实际选择版本；额外安装 .NET 8 SDK 只为提供 `net8.0` 兼容运行时。随后下载官方 Mono 编辑器与同版本导出模板，编译 C#，导入项目资源，导出 ZIP，再解压检查应用包、两个架构的程序集和 Universal 2 可执行文件，最后无窗口启动并检查退出状态。通过后上传 `FarmExchange-macos-universal-提交SHA`，保留 14 天。该工作流与 [Windows 主 CI](continuous-integration.md)分别运行，使用同一 SDK 约束。
 
-在 macOS 本机安装相同版本的 Godot Mono 编辑器、.NET 8 和 macOS 导出模板后，先把 `NuGet.Config` 中的本地包源指向该编辑器随附的 `Godot.NET.Sdk` 包目录，再在仓库根目录执行：
+在 macOS 本机安装相同版本的 Godot Mono 编辑器、.NET SDK 10.0.401 和 macOS 导出模板，另安装 .NET 8 SDK 提供测试与引擎所需的兼容运行时；项目目标框架保持 `net8.0`。在仓库根目录运行 `dotnet --version`，结果必须与 `global.json` 一致；运行 `dotnet --list-runtimes` 确认包含 `Microsoft.NETCore.App 8.0.x`。SDK 选择禁用版本前滚与预览版，缺少确切版本时明确失败。然后把 `NuGet.Config` 中的本地包源指向该编辑器随附的 `Godot.NET.Sdk` 包目录，再在仓库根目录执行：
 
 ```sh
 dotnet nuget update source 'Godot 本地包' --source '/实际路径/GodotSharp/Tools/nupkgs' --configfile NuGet.Config
