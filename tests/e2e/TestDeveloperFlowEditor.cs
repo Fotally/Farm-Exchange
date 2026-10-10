@@ -470,7 +470,7 @@ public partial class TestDeveloperFlowEditor : Node
         }
         foreach (string name in new[] { "ScenarioStartButton", "ScenarioAbortButton", "ScenarioResultBackButton" })
             if (!Inside(window, Find<Button>(window, name))) return Fail("结果页固定操作区被正文挤出：" + name);
-        if (!Find<Button>(window, "DevelopmentRate20Button").IsVisibleInTree()) return Fail("结果页丢失已确认开发倍率入口");
+        if (!Find<Button>(window, "DevelopmentRate16Button").IsVisibleInTree()) return Fail("结果页丢失已确认开发倍率入口");
         if (!CheckStepFooter(window, "ScenarioResultFooterSeparator", "ScenarioStartButton")) return false;
         return true;
     }

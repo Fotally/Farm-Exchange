@@ -1,6 +1,6 @@
 # 配置库的严格输入、持久修订与删除
 
-履行[流程配置编辑接口](interface-scenario-configuration-editor.md)，计划来源为[C分步设计](../ui/developer-tools-window/implementation-step-flow-editor.md)与[#104](https://github.com/Fotally/Farm-Exchange/issues/104)。
+履行[流程配置编辑接口](interface-scenario-configuration-editor.md)；窗口操作见[分步设计与实现](../ui/developer-tools-window/implementation-step-flow-editor.md)。
 
 ## 单一字段来源
 
@@ -30,7 +30,7 @@
 
 ## 外部修改后的显式重选
 
-[#118](https://github.com/Fotally/Farm-Exchange/issues/118)将重新发现、按稳定文件身份定位和重验打开集中到 `ReloadSelection(entry)`。库不按可编辑的名称或列表下标恢复；合法外部修改即使未递增修订也会生成新摘要与独立草稿。正常 `Open`、覆盖、删除及启动仍重验旧摘要，旧脏草稿不会得到新凭据，也不会自动覆盖外部文件。
+重新发现、按稳定文件身份定位和重验打开集中到 `ReloadSelection(entry)`。库不按可编辑的名称或列表下标恢复；合法外部修改即使未递增修订也会生成新摘要与独立草稿。正常 `Open`、覆盖、删除及启动仍重验旧摘要，旧脏草稿不会得到新凭据，也不会自动覆盖外部文件。
 
 恢复结果同时携带本次合法目录、打开成功的新草稿或明确错误。文件已删除、改为非法JSON或在扫描后再次改变时，不返回可运行的旧草稿；对应失效条目从本轮列表移除。UI只呈现结果，不自行计算摘要或拼接扫描顺序。未保存输入在UI确认放弃后才重载，取消保持草稿；不引入监控、热加载或自动合并。
 
@@ -48,4 +48,4 @@
 
 `TestScenarioConfigurationLibrary`在唯一临时目录验证三份旧JSON、只读保护、另存为/覆盖修订、重启发现及持久隐藏、原字节SHA-256与加载隔离、同名/外部修改/非法文件/外部路径拒绝、写入失败、修订上限、真实文件删除与历史报告保留。Windows另外用允许读取但禁止删除的文件句柄验证部分删除失败和覆盖失败后实际文件、修订及列表；POSIX允许删除已打开文件，因此不以该Windows句柄方式验收POSIX失败。
 
-上述测试场景及完整编译、覆盖率、图形和导出验收由本issue整体验证统一运行，本实现说明不把尚未运行的检查记为已通过。
+上述测试场景的运行结果见项目验收记录。

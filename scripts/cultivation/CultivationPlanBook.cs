@@ -116,9 +116,19 @@ internal sealed class CultivationPlanBook
     internal bool Contains(int id) => _plans.ContainsKey(id);
 
     internal IReadOnlyList<CultivationPlanSnapshot> GetSnapshots() => Array.AsReadOnly(
-        _plans.Values.Select(plan => new CultivationPlanSnapshot(plan.Id, plan.Name, plan.Mode,
-            Array.AsReadOnly((CultivationEntry[])plan.Entries.Clone()),
-            _bindings.Values.Count(binding => binding.PlanId == plan.Id), plan.NextEntryId)).ToArray());
+        _plans.Values.Select(Snapshot).ToArray());
+
+    /**
+     * <summary>按编号取得一张年度表的独立快照及真实引用数。</summary>
+     * <param name="id">年度表编号。</param>
+     * <returns>现存表快照；不存在时为 null。</returns>
+     */
+    internal CultivationPlanSnapshot? GetSnapshot(int id) =>
+        _plans.TryGetValue(id, out Plan? plan) ? Snapshot(plan) : null;
+
+    private CultivationPlanSnapshot Snapshot(Plan plan) => new(plan.Id, plan.Name, plan.Mode,
+        Array.AsReadOnly((CultivationEntry[])plan.Entries.Clone()),
+        _bindings.Values.Count(binding => binding.PlanId == plan.Id), plan.NextEntryId);
 
     internal FarmCultivationSnapshot GetFarm(int index)
     {

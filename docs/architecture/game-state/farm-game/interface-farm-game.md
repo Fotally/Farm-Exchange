@@ -4,7 +4,9 @@
 
 对应类型：FarmExchange.Gameplay.FarmGame，代码位于 scripts/gameplay/FarmGame.cs。调用方为主场景和地图；测试也通过该公开接口验证行为。当前只有一个实现，未声明 C# interface 类型。
 
-`FarmGame(seed?, logging?)` 默认不采集日志；显式传入 `RuntimeLog` 时通过公开 BindGame 在真实开局完成后绑定局身份与初始化基线。当前只对 `Buy(commodity, quantity, origin=Player)` 关联原指令、真实结算和结束结果；经营语义来源 `FarmExchange.Gameplay.CommandOrigin` 只有 Player/Scenario，其他值在记录与业务提交前抛出 `ArgumentOutOfRangeException(nameof(origin))`，资源零修改且不依赖采集开关。开发流程显式 Scenario，其他经营命令仍由后续议题接入。业务只开始公开观察、执行交易一次并完成/异常终结，不持有日志内部快照或指令凭据。输出失败不改业务结果、不重试命令，业务异常原样传播。`Dispose()` 幂等结束本局日志关联且不改变资源；宿主持有并在局之后关闭会话，具体约定见[日志 Interface](../../logging/interface-logging.md)。
+`FarmGame(seed?, logging?, purpose?)` 默认不采集日志；显式传入 `RuntimeLog` 时通过内部自动绑定在真实开局完成后建立局身份、初始化基线与生产观察。`purpose` 默认为 `GamePurpose.Main`，独立开发流程指定 `ScenarioIndependent`；非法用途在初始化前抛参数异常。只读 `Log` 返回已绑定上下文或 null，不允许重新安装。公开 `RuntimeLog.BindGame` 仍只用于手动领域观察，不自动采集已有局的生产。
+
+主动交易、订单、建拆、原料底线、六个耕作命令和暂停设置关联原指令、真实结果和一次结束，相关命令均接受可选 `origin=Player`。经营语义来源 `FarmExchange.Gameplay.CommandOrigin` 只有 Player/Scenario，其他值在记录与业务提交前抛出 `ArgumentOutOfRangeException(nameof(origin))`，资源零修改且不依赖采集开关。开发流程真实命令显式传 Scenario；自动订单成交、实际等待、行情与生产由所属领域观察，不伪造玩家命令。经营层保留原业务执行权和检查顺序，不持有日志字段或前后投影，日志不执行业务回调。输出失败不改业务结果、不重试命令，业务异常原样传播。`Dispose()` 幂等结束本局关联，先封存订单等待与生产尾段且不改变资源；开发宿主先终结流程和报告，再释放独立局，最后由 Main 关闭主局和会话，具体约定见[日志 Interface](../../logging/interface-logging.md)。
 
 | 用途 | 公开成员 | 调用方需要知道的约定 |
 | --- | --- | --- |
@@ -28,6 +30,8 @@
 地图为 384×384 基础格。农田与加工场地各占 3×3，每座一份生产状态；道路为 1×1。`GetPlot` 从 `LandOccupancy`、`FarmingSystem`、`ProcessingSystem` 聚合 `PlotSnapshot`，不泄露可变内部状态；空地与道路快照的作物字段没有经营含义；道路显式返回 `BuildingKind.Road`、零剩余秒与无水，不查询农田或加工状态。`TryGetPlot` 返回 `None` 或 `OutOfBounds`，无效时输出默认快照；既有 `GetPlot` 保留“调用方已确认有效格”的便利形式，越界抛 `ArgumentOutOfRangeException`。WorldMap 按 `GetBuildingSpaces` 遍历空间，在锚点调用 `GetPlot` 获取一次外观并覆盖整个 footprint；它不能驱动 AdvanceTick，也不修改库存。Main 接收玩家操作、调用经营命令并在状态变化后通知地图同步。
 
 `FarmDetailsSnapshot` 与 `ProcessorDetailsSnapshot` 是只读值，包含作物定义、稳定状态原因、对应当日售价和库存。`Main` 先用 `GetPlot` 分派详情面板，再向对应查询索取语义快照；UI 只负责中文文案和控件更新。雨后空田由 `WaitingForWorkerWithWater` 表示；计划空白或本条已执行的空田显示 `Resting`；空田的 `WrongSeason` 与可播风险 `InsufficientTime` 直接复用[PlantingRules](../../farming/planting-rules/interface-planting-rules.md)的判断。越季失败清理后立即查询当前空田原因，不增加历史失败状态或工人清理动作；清理不操作库存和钱包。内部测试构造器可指定初始累计秒，公开游戏构造器从零时刻开始。
+
+`GetCultivationPlan(id)` 返回指定表的独立只读快照，不存在时为 null；它与 `GetCultivationPlans()` 共用计划模块的正式数据。`CreateCultivationPlan/UpdateCultivationPlan/DeleteCultivationPlan/ApplyCultivationPlan/SetFarmCrop/PrepareFarmCrop` 在真实执行前后交由 CultivationLog 观察。批量应用保留原先的表存在、空列表、逐子格有效性和整批提交顺序；只有完整解析完成才提供实际去重目标，提前拒绝不为日志补跑后续校验，实际已检查空列表时提供已知零目标。日志采样不限制合法业务集合。`SetPaused(paused, origin)` 重复设置也形成一对命令记录，但仅实际改变暂停状态时产生 PauseChanged，未完成经营秒仍由驱动保留。
 
 加工详情复用 `ProcessingSystem.GetStatus` 的只读状态：进行中优先；空闲时由库存模块给出没有原料、受底线限制或可领取的原因。设置降低底线后，下一领取阶段之前可返回 `ReadyToProcess`，查询不会开始加工或扣库存。
 
@@ -53,7 +57,7 @@
 
 满地图夹具以三格间距铺设锚点 `(0,0)` 到 `(381,381)`，按标准列奇偶交替农田/加工，保留 8,192+8,192 个生产实例与 147,456 个占用子格。生产、雨水与领取均按空间实例各处理一次。专用人物表现夹具将三座中心右上方农田改为空田并真实推进一秒，以采样移动；普通负载夹具不受影响。
 
-## 逐实例成功结果与精确生长比例（#105）
+## 逐实例成功结果与精确生长比例
 
 `PlotSnapshot.GrowthProgress` 是农田实际生长精确单位除以本轮总单位所得的 0～1 比例；非生长状态为零。它与 RemainingSeconds 的向上取整剩余秒分别供表现选档和玩家时间展示，不从取整秒反推生长档。
 
@@ -62,3 +66,6 @@
 `IsPresentationResultCurrent(result)` 是开始播放的完整校验：结果须属于本局当前秒及当前保留集合，工人动作还须通过农田原工作凭据版本检查。`IsPresentationTargetCurrent(result)` 单独验证已经开始的片段：内部保存 LandOccupancy 已有的不可变 BuildingSpaceSnapshot 引用，以引用一致性确认原设施仍在，并校验农田原工作凭据；它不限制秒数，让公共倍率的片段自然完成。拆除同格重建产生新引用，不使旧结果复活；改种/重启/换季等通过 FarmingSystem 失效原动作，不清空其他实例结果。没有新增永久 ID、事件历史或第二份土地状态，调用方不能修改集合或内部凭据。
 
 每个新事件秒先覆盖结果，平静秒也清空；批量请求结束仅留下最后经营秒，不是整个请求的历史。初次表现挂接记录当前秒并跳过已有结果，之后按经营秒去重；开发高倍率跳过过期动作不排队。暂停不推进经营或产生结果，表现冻结并在恢复时继续有效当前片段。此 Seam 只供人物和设施表现读取，不承担存档、审计或全局事件总线。测试为 TestProductionResults 与 TestWorkerPresentation。
+
+
+建拆及底线入口 `TryPlace/BuildFarm/BuildProcessor/RemoveBuilding/SetRawReserve` 接受默认 Player 的 `CommandOrigin`，开发流程显式传 Scenario；非法来源在修改前抛参数异常。已启用日志时，预检无命令记录，实际提交记录原输入和真实结果。`AdvanceTick/AdvanceTicks` 请求结束及完整命令结束作为生产汇总安全边界，生命周期尾段先于 GameEnded；详见[日志 Interface](../../logging/interface-logging.md)。这些观察不修改生产推进、领取时点或资源结算。

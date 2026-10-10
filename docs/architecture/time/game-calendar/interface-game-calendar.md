@@ -1,6 +1,6 @@
 # GameCalendar 对外接口
 
-对应 `FarmExchange.Time.GameCalendar`，代码位于 `scripts/time/GameCalendar.cs`，来源为 [T05A issue #55](https://github.com/Fotally/Farm-Exchange/issues/55)。T05B 后由 `FarmGame` 唯一持有，主场景读取其不可变快照显示日期。
+对应 `FarmExchange.Time.GameCalendar`，代码位于 `scripts/time/GameCalendar.cs`。`FarmGame` 唯一持有日历，主场景读取其不可变快照显示日期。
 
 | 成员 | 调用约定 |
 | --- | --- |

@@ -182,7 +182,7 @@ public partial class TestWorkerPresentation : Node
 
     private static bool CheckRates(Node parent)
     {
-        foreach (double rate in new[] { 0.5, 1, 2, 20 })
+        foreach (double rate in new[] { 0.5, 1, 2, 16 })
         {
             FarmGame game = CreateGame();
             var driver = new SimulationDriver();
@@ -312,7 +312,7 @@ public partial class TestWorkerPresentation : Node
                 // 同一过期记录不能被开发高倍率补播或保留。
                 game.SetFarmCrop(farm, CropKind.Radish);
                 game.AdvanceTick(isRaining: true);
-                driver.SetDevelopmentRate(20);
+                driver.SetDevelopmentRate(16);
                 presentation._Process(0);
                 if (sprite.Animation != "sow_down") return Fail("高倍率未呈现最新有效成功结果");
                 game.AdvanceTick();

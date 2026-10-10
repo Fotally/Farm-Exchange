@@ -7,6 +7,9 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Godot;
 using FarmExchange.Development;
+using FarmExchange.Gameplay;
+using FarmExchange.Logging;
+using FarmExchange.Time;
 using FarmExchange.UI;
 
 public partial class TestDeveloperToolsWindow : Node
@@ -44,7 +47,7 @@ public partial class TestDeveloperToolsWindow : Node
             string independentJson = """
                 {"schemaVersion":1,"caseId":"window-independent","revision":1,"flow":"buy-process-sell",
                  "run":{"target":"independent","seed":12345},
-                 "execution":{"timePlan":[{"endDate":"01-04-01","rate":20}]},
+                 "execution":{"timePlan":[{"endDate":"01-04-01","rate":16}]},
                  "parameters":{"rawCommodity":"Radish.Raw","quantity":1,"processorAnchor":{"x":0,"y":0},
                  "processingWaitLimitTicks":1000,"orderWaitLimitTicks":10}}
                 """;
@@ -171,13 +174,64 @@ public partial class TestDeveloperToolsWindow : Node
             SelectProfile(window, "window-current");
             if (!CheckInvalidSelection(window, 0)) return Fail("外部删除仍保留可运行的过期引用");
             GD.Print("#118 脏草稿冲突保护、确认取消与重载、非法及删除目录同步检查通过");
-            return true;
+            return await CheckShutdownAsync(parent, directory);
         }
         finally
         {
             main.QueueFree();
             await parent.ToSignal(parent.GetTree(), SceneTree.SignalName.ProcessFrame);
         }
+    }
+
+    private static async Task<bool> CheckShutdownAsync(Node parent, string directory)
+    {
+        foreach (bool independent in new[] { true, false })
+        {
+            using var text = new StringWriter();
+            using var log = RuntimeLog.Capture(text);
+            using var game = new FarmGame(12345, log);
+            foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
+            if (game.BuildProcessor(Vector2I.Zero, CropKind.Radish) != null) return Fail("退出夹具建造失败");
+            game.SetPaused(true);
+            var driver = new SimulationDriver(game.Log!.Time);
+            string configDirectory = Path.Combine(directory, independent ? "shutdown-independent" : "shutdown-current");
+            Directory.CreateDirectory(configDirectory);
+            File.WriteAllText(Path.Combine(configDirectory, "case.json"),
+                "{\"schemaVersion\":1,\"caseId\":\"shutdown\",\"revision\":1,\"flow\":\"buy-process-sell\"," +
+                "\"run\":{\"target\":\"" + (independent ? "independent\",\"seed\":12345" : "current\"") + "}," +
+                "\"execution\":{\"timePlan\":[{\"endDate\":\"01-04-01\",\"rate\":1}]}," +
+                "\"parameters\":{\"rawCommodity\":\"Radish.Raw\",\"quantity\":1,\"processorAnchor\":{\"x\":0,\"y\":0}," +
+                "\"processingWaitLimitTicks\":1000,\"orderWaitLimitTicks\":10}}");
+            var library = new ScenarioConfigurationLibrary(new Dictionary<string, byte[]>(), configDirectory);
+            var window = new DeveloperToolsWindow(game, driver, () => { }, library, log);
+            parent.AddChild(window);
+            Find<Button>(window, "ScenarioSelectFlow_buy-process-sell").EmitSignal(Button.SignalName.Pressed);
+            Find<Button>(window, "ScenarioCatalogContinueButton").EmitSignal(Button.SignalName.Pressed);
+            SelectProfile(window, "shutdown");
+            Find<Button>(window, "ScenarioEditorContinueButton").EmitSignal(Button.SignalName.Pressed);
+            Find<Button>(window, "ScenarioStartButton").EmitSignal(Button.SignalName.Pressed);
+            string output = Find<Label>(window, "ScenarioReportPathLabel").Text[7..];
+            if (!independent)
+            {
+                // 与Main退出时主动通知的同一入口；随后真实ExitTree再调用也不重复。
+                window.ShutdownScenario();
+                window.ShutdownScenario();
+            }
+            window.QueueFree();
+            await Frames(parent);
+            string[] records = text.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            string[] finished = records.Where(line => line.Contains("EventName=ScenarioFinished ")).ToArray();
+            string[] saved = records.Where(line => line.Contains("EventName=ScenarioReportSaved ")).ToArray();
+            string[] ended = records.Where(line => line.Contains("EventName=GameEnded ")).ToArray();
+            if (!File.Exists(Path.Combine(output, "report.json")) || finished.Length != 1 || saved.Length != 1 ||
+                !finished[0].Contains("ScenarioOutcome: \"Aborted\"") || ended.Length != (independent ? 1 : 0) ||
+                independent && Array.IndexOf(records, saved[0]) >= Array.IndexOf(records, ended[0]))
+                return Fail("宿主退出未先终结/保存再释放独立局，或原地主局被错误释放");
+            game.SetPaused(false);
+            game.AdvanceTick();
+            if (game.Calendar.ElapsedSeconds != 1) return Fail("退出开发窗口影响主局继续推进");
+        }
+        return true;
     }
 
     private static bool CheckInvalidSelection(Node window, int count) =>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using FarmExchange.Logging;
 using FarmExchange.Economy;
 using FarmExchange.Inventory;
 using FarmExchange.Market;
@@ -30,6 +31,16 @@ internal sealed class TradeOrderBook
     private readonly MarketQuotes _market;
     private readonly TradingService _trading;
     private bool _nextCheckRequired = true;
+    private TradeOrderLog? _log;
+
+    internal void AttachLog(TradeOrderLog? log) => _log = log;
+
+    /**
+     * <summary>只查询现有订单是否仍可执行或重新启用，不创建快照或求值。</summary>
+     * <param name="id">本局订单编号。</param>
+     * <returns>等待或停用的订单为 true，不存在及终态为 false。</returns>
+     */
+    internal bool IsDiagnosticOrderActive(int id) => Find(id)?.Status is TradeOrderStatus.Waiting or TradeOrderStatus.Disabled;
 
     /**
      * <summary>新批量请求重新检查等待订单，纳入请求之间的正式经营命令。</summary>
@@ -181,27 +192,44 @@ internal sealed class TradeOrderBook
                 continue;
             TradeOrderRequest request = order.Request;
             int price = _market.GetQuote(request.Commodity).PriceCents;
-            string? reason = UnmetConditions(request, price, calendar.Season);
+            OrderEvaluationObservation? detail = _log?.BeginEvaluation(order.Id, request.ConditionGroups.Count);
+            string? reason = UnmetConditions(request, price, calendar.Season, detail,
+                out TradeOrderBlocker blockers, out TradeOrderBlocker primary, out bool allGroupsChecked);
+            bool conditionGroupsSatisfied = reason == null;
             if (reason == null && request.BudgetMode == TradeOrderBudgetMode.LimitPrice && price > request.LimitPriceCents)
+            {
                 reason = "当前报价高于最高买入限价";
+                blockers = primary = TradeOrderBlocker.LimitPrice;
+            }
             int quantity = request.Frequency == TradeOrderFrequency.Once ? order.LockedQuantity :
                 QuantityFor(request);
             if (request.BudgetMode == TradeOrderBudgetMode.FixedBudget)
                 quantity = BudgetQuantity(request.BudgetCents, price);
             if (reason == null && quantity <= 0)
+            {
                 reason = request.BudgetMode == TradeOrderBudgetMode.FixedBudget
                     ? "预算不足以完整买入一份商品及手续费" : "当前库存已达到数量目标";
+                blockers = primary = request.BudgetMode == TradeOrderBudgetMode.FixedBudget
+                    ? TradeOrderBlocker.BudgetInsufficient : TradeOrderBlocker.TargetReached;
+            }
             if (reason != null)
             {
                 order.WaitingReason = reason;
+                detail?.Complete(new(blockers, primary, TradeFailure.None, false), conditionGroupsSatisfied, quantity,
+                    request.BudgetMode == TradeOrderBudgetMode.FixedBudget ? request.BudgetCents : null);
+                _log?.Evaluated(order.Id, new(blockers, primary, TradeFailure.None, false), calendar);
                 continue;
             }
+            OrderFillObservation? observation = _log?.BeforeFill(Snapshot(order));
             TradeResult result = request.Side == TradeOrderSide.Buy
                 ? _trading.BuyOrder(request.Commodity, quantity, order.ReserveCents, order.FrozenCents)
                 : _trading.SellOrder(request.Commodity, quantity, order.FrozenQuantity);
             if (!result.Success)
             {
                 order.WaitingReason = result.ErrorMessage;
+                detail?.Complete(new(TradeOrderBlocker.None, TradeOrderBlocker.None, result.Failure, false), conditionGroupsSatisfied, quantity,
+                    request.BudgetMode == TradeOrderBudgetMode.FixedBudget ? request.BudgetCents : null);
+                _log?.Evaluated(order.Id, new(TradeOrderBlocker.None, TradeOrderBlocker.None, result.Failure, false), calendar);
                 continue;
             }
             order.LastFill = new TradeOrderFillSnapshot(request.Commodity, request.Side, result, _wallet.BalanceCents);
@@ -212,6 +240,10 @@ internal sealed class TradeOrderBook
                 order.FrozenCents = order.FrozenQuantity = 0;
                 order.Status = TradeOrderStatus.Completed;
             }
+            _log?.Filled(observation, Snapshot(order), result);
+            detail?.Complete(new(TradeOrderBlocker.None, TradeOrderBlocker.None, TradeFailure.None, allGroupsChecked), conditionGroupsSatisfied, quantity,
+                request.BudgetMode == TradeOrderBudgetMode.FixedBudget ? request.BudgetCents : null);
+            _log?.Evaluated(order.Id, new(TradeOrderBlocker.None, TradeOrderBlocker.None, TradeFailure.None, allGroupsChecked), calendar);
         }
     }
 
@@ -326,11 +358,17 @@ internal sealed class TradeOrderBook
         return low;
     }
 
-    private string? UnmetConditions(TradeOrderRequest request, int price, Season season)
+    private string? UnmetConditions(TradeOrderRequest request, int price, Season season, OrderEvaluationObservation? detail,
+        out TradeOrderBlocker blockers, out TradeOrderBlocker primary, out bool allGroupsChecked)
     {
+        blockers = primary = TradeOrderBlocker.None;
+        allGroupsChecked = false;
+        int visitedGroups = 0;
         var groups = new List<string>();
         foreach (IReadOnlyList<TradeOrderCondition> group in request.ConditionGroups)
         {
+            visitedGroups++;
+            detail?.BeginGroup(group.Count);
             var reasons = new List<string>();
             foreach (TradeOrderCondition condition in group)
             {
@@ -350,15 +388,35 @@ internal sealed class TradeOrderBook
                     TradeConditionComparison.Greater => actual > condition.Value,
                     _ => throw new ArgumentOutOfRangeException(nameof(request)),
                 };
+                detail?.Condition(condition, actual, satisfied);
                 if (!satisfied)
+                {
                     reasons.Add($"{FactorName(condition.Factor)}条件未满足（当前 {actual}）");
+                    TradeOrderBlocker blocker = condition.Factor switch
+                    {
+                        TradeConditionFactor.Price => TradeOrderBlocker.Price,
+                        TradeConditionFactor.Stock => TradeOrderBlocker.Stock,
+                        TradeConditionFactor.Season => TradeOrderBlocker.Season,
+                        _ => throw new ArgumentOutOfRangeException(nameof(request)),
+                    };
+                    blockers |= blocker;
+                    if (primary == TradeOrderBlocker.None) primary = blocker;
+                }
             }
             if (reasons.Count == 0)
+            {
+                blockers = primary = TradeOrderBlocker.None;
+                allGroupsChecked = visitedGroups == request.ConditionGroups.Count;
                 return null;
+            }
             groups.Add(string.Join("，", reasons));
         }
         return string.Join("；或：", groups);
     }
+
+    private static TradeOrderSnapshot Snapshot(Order order) => new(order.Id, order.Request, order.Status,
+        order.CashBasisCents, order.ReserveCents, order.LockedQuantity, order.FrozenCents,
+        order.FrozenQuantity, order.WaitingReason, order.LastFill);
 
     private static string FactorName(TradeConditionFactor factor) => factor switch
     {

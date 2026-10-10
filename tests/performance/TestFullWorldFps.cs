@@ -85,8 +85,8 @@ public partial class TestFullWorldFps : Node
         {
             string screenshotPath = ProjectSettings.GlobalizePath($"res://coverage/{ReportName}.png");
             GetViewport().GetTexture().GetImage().SavePng(screenshotPath);
-            _sampleStartUsec = now;
-            _previousFrameUsec = now;
+            _sampleStartUsec = Time.GetTicksUsec();
+            _previousFrameUsec = _sampleStartUsec;
             _startFrames = Engine.GetFramesDrawn();
             _startChunkRedraws = _map.ChunkRedrawCount;
             _movingWorkersAtStart = CountMovingWorkers();

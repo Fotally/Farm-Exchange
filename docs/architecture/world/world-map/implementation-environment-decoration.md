@@ -1,6 +1,6 @@
 # 清亮 v2 环境装饰实现与验收约定
 
-履行 [WorldMap Interface](interface-world-map.md)，关联 [#109](https://github.com/Fotally/Farm-Exchange/issues/109)。**状态：2026-10-07 已完成WorldMap整合、独立审查、完整测试与覆盖率、真实图形/性能及Windows导出启动验收。** 以下参数为当前实现值，证据见[验收记录](../../../archive/project/testing.md#2026-10-07-105-清亮-v2-首批素材动作动效与环境验收)。
+履行 [WorldMap Interface](interface-world-map.md)。以下参数为当前实现值；历史交付证据见[归档验收记录](../../../archive/project/testing.md#2026-10-07-105-清亮-v2-首批素材动作动效与环境验收)。
 
 ## 已确认规则和状态归属
 

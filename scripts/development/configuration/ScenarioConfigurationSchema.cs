@@ -267,7 +267,7 @@ public sealed class ScenarioConfigurationSchema
             throw Error(path, "整数超出允许范围");
         if (value is double number && !double.IsFinite(number)) throw Error(path, "须为有限数值");
         if (field.Kind == ConfigFieldKind.Rate && !SimulationDriver.IsDevelopmentRateAllowed((double)value))
-            throw Error(path, "须为0.5、1、2或有限正整数倍率");
+            throw Error(path, "须为0.5、1、2或1～16的整数倍率");
         if (field.Options.Count > 0 && !field.Options.Any(option => option.Value == value.ToString())) throw Error(path, "不是合法选项");
         if (field.Kind == ConfigFieldKind.GameDate)
             try { ParseGameDate((string)value); }

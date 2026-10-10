@@ -16,7 +16,6 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.7.2-stable
-  DOTNET_VERSION: 8.0.x
 
 jobs:
   build-macos:
@@ -28,10 +27,15 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v7
 
-      - name: 安装 .NET
+      - name: 安装固定 .NET SDK 与兼容运行时
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          global-json-file: global.json
+          # 按已确认范围暂保留额外 8.0.x 安装；构建与导出使用固定 SDK 10。
+          dotnet-version: '8.0.x'
+
+      - name: 核对实际 .NET SDK
+        run: dotnet --version
 
       - name: 安装 Godot Mono 与导出模板
         run: |

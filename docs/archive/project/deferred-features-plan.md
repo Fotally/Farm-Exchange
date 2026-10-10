@@ -13,13 +13,13 @@
 ### 2026-10-03 — 季节耕作表（#42）
 
 - 成果：开局可用的共享年度表、原生整条拖放与跨季折行、多田应用、两种表级模式、完成时间缓存和年度执行凭据；两种手动接管独立，适季时间不足仅提示风险，禁生边界成熟沿用原收获入库流程。代码、中文玩法、接口、实现、导航和根系统结构一致。
-- 审查与验收：基准 `1baa79b991818a2e025dd2986b53099c9e973786`；完整 issue 及验收修改分别经新建独立审查员复查，无待修。指定 Godot 4.7.2 Mono Debug/Release 编译零警告零错误，完整 headless 套件、真实窗口原生拖放、Windows Release 导出和实际 EXE 启动退出码 0。总体行覆盖率 4207/4320（97.38%），14 个模块均超过 80%；满地图 50 tick 89.64 ms，平均 1.793 ms/tick，图形平均 667.6 FPS、P95 1.848 ms。分表及日志路径见[测试记录](testing.md#2026-10-03-42-年度耕作表验收)，[直条预览](../../architecture/ui/cultivation-window/cultivation-drag-preview.png)与[落位分段截图](../../architecture/ui/cultivation-window/cultivation-window.png)均已查看。静态、格式与差异空白检查通过；临时报告位于本地 `build/issue42-validation/`，不入 Git。
+- 审查与验收：基准 `1baa79b991818a2e025dd2986b53099c9e973786`；完整 issue 及验收修改分别经新建独立审查员复查，无待修。指定 Godot 4.7.2 Mono Debug/Release 编译零警告零错误，完整 headless 套件、真实窗口原生拖放、Windows Release 导出和实际 EXE 启动退出码 0。总体行覆盖率 4207/4320（97.38%），14 个模块均超过 80%；满地图 50 tick 89.64 ms，平均 1.793 ms/tick，图形平均 667.6 FPS、P95 1.848 ms。分表及日志路径见[测试记录](testing.md#2026-10-03-42-年度耕作表验收)，[直条预览](../architecture/ui/cultivation-window/cultivation-drag-preview.png)与[落位分段截图](../architecture/ui/cultivation-window/cultivation-window.png)均已查看。静态、格式与差异空白检查通过；临时报告位于本地 `build/issue42-validation/`，不入 Git。
 - 交付状态：已验收、待人工合并；[PR #84](https://github.com/Fotally/Farm-Exchange/pull/84)，`dev → main`，功能提交 `12c78cc`。#43、#44 继续暂缓。
 
 ### 2026-10-02 — 委托挂单、自动买卖与手续费（#36）
 
 - 成果：两种一次买单、一次卖单与持续策略，多组价格/库存/季节条件，原设单现金保留、资源冻结和 1% 成交费用；完成市场入口、订单管理、草稿保持及对应中文玩法与接口文档。
-- 审查与验收：基准 `fae7f1e66175cb1aebd779187636d6b2da36482b`；第五轮独立代码与提交范围复审无待修。指定 Godot 4.7.2 Mono Debug/Release 编译零警告零错误，完整 headless 套件、真实窗口场景、Windows Release 导出及实际 EXE 启动退出码 0。总体行覆盖率 3381/3488（96.93%），13 个模块均超过 80%，分表见[测试记录](testing.md#2026-10-02-36-委托与自动交易验收)。满地图 50 tick 92.83 ms，平均 1.857 ms/tick；[窗口原始截图](../../architecture/ui/trade-orders-window/orders-window.png)已查看。静态、全仓格式和差异空白检查通过。日志与逐模块 JSON 位于本地 `build/issue36-validation/`，原始覆盖报告为 `coverage/coverage.cobertura.xml`，这些临时产物不入 Git。
+- 审查与验收：基准 `fae7f1e66175cb1aebd779187636d6b2da36482b`；第五轮独立代码与提交范围复审无待修。指定 Godot 4.7.2 Mono Debug/Release 编译零警告零错误，完整 headless 套件、真实窗口场景、Windows Release 导出及实际 EXE 启动退出码 0。总体行覆盖率 3381/3488（96.93%），13 个模块均超过 80%，分表见[测试记录](testing.md#2026-10-02-36-委托与自动交易验收)。满地图 50 tick 92.83 ms，平均 1.857 ms/tick；[窗口原始截图](../architecture/ui/trade-orders-window/orders-window.png)已查看。静态、全仓格式和差异空白检查通过。日志与逐模块 JSON 位于本地 `build/issue36-validation/`，原始覆盖报告为 `coverage/coverage.cobertura.xml`，这些临时产物不入 Git。
 - 交付状态：已合并；[PR #81](https://github.com/Fotally/Farm-Exchange/pull/81) 于北京时间 2026-10-02 19:12 人工合并，合并提交 `71429fdb9ece70158d355ada784f0a5334ba3b15`，功能提交 `22fd19d`。
 
 # 后续功能计划

@@ -3,29 +3,117 @@ using System.Collections.Generic;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
 using FarmExchange.Market;
-using FarmExchange.Trading;
-using Microsoft.Extensions.Logging;
 
 namespace FarmExchange.Logging;
 
 /**
- * <summary>绑定一局真实经营的领域观察上下文，封装局身份、指令关联及业务投影。</summary>
+ * <summary>绑定一局真实经营的领域观察上下文，封装局身份、共同上下文及领域记录入口。</summary>
  */
 public sealed class GameLog : IDisposable
 {
     private const string Source = "FarmExchange.Gameplay.FarmGame";
     private readonly RuntimeLog _owner;
     private readonly FarmGame _game;
+    private readonly GamePurpose _purpose;
     private readonly string _gameId = Guid.NewGuid().ToString("N");
     private long _commandId;
+    private ExceptionObservation? _exceptionScope;
+    private static readonly LogEventDescriptor InitializedEvent = new(3, "GameInitialized", Source);
+    private static readonly LogEventDescriptor EndedEvent = new(4, "GameEnded", Source);
     private bool _ended;
 
-    internal GameLog(RuntimeLog owner, FarmGame game) { _owner = owner; _game = game; }
+    internal GameLog(RuntimeLog owner, FarmGame game, bool collectProduction, GamePurpose purpose, Func<long>? productionUptime = null, Func<long>? diagnosticUptime = null, Func<long>? timestamp = null)
+    {
+        _owner = owner;
+        _game = game;
+        _purpose = purpose;
+        Diagnostics = new DiagnosticCapture(this, game, diagnosticUptime);
+        Performance = collectProduction ? new PerformanceLog(this, game, diagnosticUptime, timestamp) : null;
+        ProductionDiagnostics = new ProductionDiagnostics(this);
+        WorkerDiagnostics = new WorkerDiagnostics(this);
+        View = new ViewDiagnostics(this);
+        Placement = new PlacementDiagnostics(this);
+        Trading = new TradingLog(this, game);
+        Orders = new TradeOrderLog(this, game);
+        Market = new MarketLog(this);
+        Production = collectProduction ? new ProductionLog(this, game, productionUptime) : null;
+        Gameplay = new GameplayLog(this, game);
+        Cultivation = new CultivationLog(this, game);
+        Time = new TimeLog(this, game);
+        Simulation = new SimulationLog(this);
+        Scenario = new ScenarioLog(this);
+    }
+
+    /**
+     * <summary>本局主动交易的领域观察入口，不执行交易。</summary>
+     */
+    public TradingLog Trading { get; }
+
+    /**
+     * <summary>本局订单配置、真实成交与等待观察入口。</summary>
+     */
+    public TradeOrderLog Orders { get; }
+
+    /**
+     * <summary>本局实际公告与正式报价观察入口。</summary>
+     */
+    public MarketLog Market { get; }
+
+    /**
+     * <summary>本局建拆及库存底线命令观察入口。</summary>
+     */
+    public GameplayLog Gameplay { get; }
+
+    /**
+     * <summary>本局共享年度表与手动接管命令观察入口。</summary>
+     */
+    public CultivationLog Cultivation { get; }
+
+    /**
+     * <summary>本局暂停和已接受倍率选择的观察入口。</summary>
+     */
+    public TimeLog Time { get; }
+
+    /**
+     * <summary>本局单秒和批量推进异常的观察入口。</summary>
+     */
+    public SimulationLog Simulation { get; }
+
+    /**
+     * <summary>关联本局的开发流程生命周期观察入口。</summary>
+     */
+    public ScenarioLog Scenario { get; }
+
+    /**
+     * <summary>本局显式限定事件、对象、时长和条数的开发诊断入口。</summary>
+     */
+    public DiagnosticCapture Diagnostics { get; }
+
+    internal ProductionDiagnostics ProductionDiagnostics { get; }
+    internal WorkerDiagnostics WorkerDiagnostics { get; }
+    internal ViewDiagnostics View { get; }
+    internal PlacementDiagnostics Placement { get; }
+    internal PerformanceLog? Performance { get; }
+    internal ProductionLog? Production { get; }
+
+    internal bool CanObserve => !_ended && _owner.Output.IsEnabled;
+    internal LogOutput Output => _owner.Output;
+    internal CommandObservation NewCommand(CommandDescription description, CommandOrigin origin) =>
+        new(this, ++_commandId, description, origin);
+
+    internal ExceptionObservation NewExceptionObservation() => new(this, _exceptionScope);
+
+    internal ExceptionObservation BeginExceptionScope() => _exceptionScope = NewExceptionObservation();
+
+    internal void EndExceptionScope()
+    {
+        while (_exceptionScope?.IsClosed == true) _exceptionScope = _exceptionScope.Parent;
+    }
 
     internal void Initialized(int seed) => Observe(() =>
     {
         var fields = Context("Initialization");
-        fields["GamePurpose"] = "Main";
+        fields["GamePurpose"] = _purpose.ToString();
         fields["Seed"] = seed;
         var facilities = new List<Dictionary<string, object?>>();
         foreach (var space in _game.GetBuildingSpaces())
@@ -48,97 +136,22 @@ public sealed class GameLog : IDisposable
         fields["MoneyCents"] = _game.MoneyCents;
         fields["AvailableMoneyCents"] = _game.AvailableMoneyCents;
         fields["FrozenMoneyCents"] = _game.FrozenMoneyCents;
-        _owner.Emit("GameInitialized", "经营局初始化完成", Source, fields);
-    });
-
-    /**
-     * <summary>观察原买入请求并取得本笔提交前的真实资源。</summary>
-     * <param name="commodity">原请求商品，非法商品保持原值并交给业务判断。</param>
-     * <param name="quantity">原请求份数，不用实际成交数量覆盖。</param>
-     * <param name="origin">真实 Player 或 Scenario 来源；其他值在记录前抛出 ArgumentOutOfRangeException。</param>
-     * <returns>在业务完成后终结的观察对象；已释放或关闭采集时为 null。</returns>
-     * <remarks>调用方随后只执行一次原业务命令，再 Complete 或 Faulted；本入口不执行业务。</remarks>
-     */
-    public BuyLogOperation? BeginBuy(CommodityId commodity, int quantity, CommandOrigin origin = CommandOrigin.Player)
-    {
-        if (origin is not CommandOrigin.Player and not CommandOrigin.Scenario)
-            throw new ArgumentOutOfRangeException(nameof(origin));
-        if (_ended || !_owner.IsEnabled) return null;
-        var command = new BuyCommand(++_commandId, origin);
-        TradeObservation? before = null;
-        Observe(() =>
-        {
-            var fields = Command(command);
-            fields["CommandArguments"] = new Dictionary<string, object?>
-            {
-                ["Commodity"] = CommodityName(commodity),
-                ["RequestMode"] = "Fixed",
-                ["RequestedQuantity"] = quantity,
-            };
-            _owner.Emit("CommandReceived", "收到商品买入指令", Source, fields);
-            before = Snapshot(commodity);
-        });
-        return new BuyLogOperation(this, command, commodity, quantity, before);
-    }
-
-    internal void BuyFinished(BuyCommand command, CommodityId commodity, int requestedQuantity, TradeResult result, TradeObservation? before)
-        => Observe(() =>
-        {
-            if (before.HasValue)
-            {
-                TradeObservation after = Snapshot(commodity);
-                var fields = Command(command);
-                fields["Outcome"] = result.Success ? "Success" : "Rejected";
-                fields["FailureCode"] = "TradeFailure." + result.Failure;
-                fields["RejectionReason"] = result.ErrorMessage;
-                fields["Commodity"] = CommodityName(commodity);
-                fields["Side"] = "Buy";
-                fields["RequestMode"] = "Fixed";
-                fields["RequestedQuantity"] = requestedQuantity;
-                fields["Quantity"] = result.Quantity;
-                fields["ValueCents"] = result.TotalCents;
-                fields["FeeCents"] = result.FeeCents;
-                if (result.UnitPriceCents.HasValue) fields["UnitPriceCents"] = result.UnitPriceCents.Value;
-                fields["MoneyBeforeCents"] = before.Value.Money;
-                fields["MoneyAfterCents"] = after.Money;
-                fields["AvailableMoneyBeforeCents"] = before.Value.AvailableMoney;
-                fields["AvailableMoneyAfterCents"] = after.AvailableMoney;
-                fields["FrozenMoneyBeforeCents"] = before.Value.FrozenMoney;
-                fields["FrozenMoneyAfterCents"] = after.FrozenMoney;
-                fields["StockBefore"] = before.Value.Stock;
-                fields["StockAfter"] = after.Stock;
-                fields["AvailableStockBefore"] = before.Value.AvailableStock;
-                fields["AvailableStockAfter"] = after.AvailableStock;
-                fields["FrozenStockBefore"] = before.Value.FrozenStock;
-                fields["FrozenStockAfter"] = after.FrozenStock;
-                _owner.Emit("TradeFinished", result.Success ? "买入商品成功" : "买入商品被拒绝", Source, fields);
-            }
-            var finished = Command(command);
-            finished["CommandStatus"] = result.Success ? "Succeeded" : "Rejected";
-            finished["RejectionReason"] = result.ErrorMessage;
-            _owner.Emit("CommandFinished", "商品买入指令结束", Source, finished);
-        });
-
-    internal void BuyFaulted(BuyCommand command, Exception error) => Observe(() =>
-    {
-        var fields = Command(command);
-        fields["ExceptionType"] = error.GetType().FullName;
-        fields["Exception"] = error.ToString();
-        _owner.Emit("BusinessException", "商品买入抛出异常", Source, fields, LogLevel.Error);
-        var finished = Command(command);
-        finished["CommandStatus"] = "Faulted";
-        _owner.Emit("CommandFinished", "商品买入指令异常结束", Source, finished);
+        _owner.Output.Submit(InitializedEvent, "经营局初始化完成", fields);
     });
 
     internal void End(string reason)
     {
         if (_ended) return;
+        Orders.End();
+        Production?.End();
+        Performance?.End();
+        Diagnostics.End(reason == "Shutdown" ? "Shutdown" : "GameEnded");
         _ended = true;
-        _owner.Observe(() =>
+        _owner.Output.Observe(() =>
         {
             var fields = Context("Shutdown");
             fields["EndReason"] = reason;
-            _owner.Emit("GameEnded", "经营局结束", Source, fields);
+            _owner.Output.Submit(EndedEvent, "经营局结束", fields);
         });
         _owner.Release(this);
     }
@@ -148,21 +161,12 @@ public sealed class GameLog : IDisposable
      */
     public void Dispose() => End("Released");
 
-    private Dictionary<string, object?> Command(BuyCommand command)
+    internal void Observe(Action observation)
     {
-        var fields = Context("Command");
-        fields["CommandId"] = command.Id;
-        fields["CommandName"] = "BuyCommodity";
-        fields["CommandOrigin"] = command.Origin.ToString();
-        return fields;
+        if (!_ended) _owner.Output.Observe(observation);
     }
 
-    private void Observe(Action observation)
-    {
-        if (!_ended) _owner.Observe(observation);
-    }
-
-    private Dictionary<string, object?> Context(string phase)
+    internal Dictionary<string, object?> Context(string phase)
     {
         var calendar = _game.Calendar;
         return new()
@@ -176,16 +180,5 @@ public sealed class GameLog : IDisposable
         };
     }
 
-    private TradeObservation Snapshot(CommodityId commodity) => new(
-        _game.MoneyCents, _game.AvailableMoneyCents, _game.FrozenMoneyCents,
-        commodity.IsDefined ? _game.GetStock(commodity) : null,
-        commodity.IsDefined ? _game.GetAvailableStock(commodity) : null,
-        commodity.IsDefined ? _game.GetFrozenStock(commodity) : null);
-
     private static string CommodityName(CommodityId commodity) => commodity.Crop + "." + commodity.Kind;
 }
-
-internal readonly record struct TradeObservation(
-    int Money, int AvailableMoney, int FrozenMoney, int? Stock, int? AvailableStock, int? FrozenStock);
-
-internal readonly record struct BuyCommand(long Id, CommandOrigin Origin);

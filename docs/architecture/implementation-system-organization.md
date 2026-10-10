@@ -1,6 +1,6 @@
 # 当前系统组织与状态归属
 
-本文记录已落地的模块关系，随实施任务更新；后续功能的范围与验收状态见[后续功能计划](../project/deferred-features-plan.md)；已完成的设计与执行历史见[系统设计计划归档](../archive/project/farm-exchange-system-design-and-execution-plan.md)。
+本文记录当前模块关系；后续功能的范围见[后续功能计划](../project/deferred-features-plan.md)，设计与交付历史见[系统设计计划归档](../archive/project/farm-exchange-system-design-and-execution-plan.md)。
 
 ```mermaid
 flowchart LR
@@ -112,20 +112,8 @@ flowchart LR
 | 工人画面、朝向或插值 | `WorkerPresentation`、`NpcCharacter`、`MapCoordinates` | 主场景组装、地图变换、暂停与镜头外生产；动画回调不写经营状态。 |
 | 行情、公告或即时交易 | `MarketQuotes`、`CommodityCatalog`、`TradingService`、`FarmGame` | 实际报价排期、消息真实因素、执行时价格、容量失败零修改与公共库存守恒。 |
 | 原料保留底线与加工竞争 | `Inventory`、`ProcessingSystem`、`FarmGame` | 下次经营领取、新建全场即时领取、稳定格序、手动出售与库存输入刷新。 |
-| 道路收费、占用、铺设或外观 | `FarmGame.GetBuildingCostCents`、`LandOccupancy`、`PlacementRules`、`BuildCatalogWindow`、`Main`、`WorldMap` | 道路仅占格、不触发加工领取；UI 显式分派道路详情，未来移动属性只接内部计时。 |
+| 道路收费、占用、铺设或外观 | `FarmGame.GetBuildingCostCents`、`LandOccupancy`、`PlacementRules`、`BuildCatalogWindow`、`Main`、`WorldMap` | 道路仅占格、不触发加工领取；UI 显式分派道路详情，移动耗时由 `WorkerScheduler` 维护。 |
 | 日期边界与生产时间 | `GameCalendar`、`GameTimeUnits` | 同步核对 `FarmGame` 相位、生产模块和日历测试。 |
 | 共享耕作表、预备安排或手动接管 | `CultivationPlanBook`、`FarmGame`、`FarmingSystem` | 年度环绕、日期事件与精确完成时间、每条一轮、过期跳过、应用编辑保留当前轮；UI 草稿不能推进经营。 |
 | 窗口交互 | `Main`、`DraggableWindow`、对应具体窗口 | 玩家操作、固定控件刷新、场景节点名和端到端测试。 |
 | NPC 动画、角色图集或预览输入 | `NpcCharacter`、`NpcPreview` | 角色场景、20人五动作资源和预览集成测试；动画结束仅结束视觉，不推进经营。 |
-
-T01/T02 已将窗口容器、目录、选种、库存、市场和详情从 `Main` 的构造与重建逻辑中抽出；经营刷新保留控件实例。T03 已统一坐标入口，T04A～T04C 已统一状态归属和放置规则。T05A 完成独立历法，T05B 已接管经营时间并切换七作物参数；T06A 的田块水分由 `FarmingSystem` 唯一持有，T06B 的播种判断由 `PlantingRules` 统一提供。T06C 的 `ClearDisallowedCrops(Season)` 把阶段筛选、适宜季节判断与本轮清理收在农田模块内；经营入口只在成熟结算后的换季相位调用。
-
-T08 的底线与领取判定收在 `Inventory` 中，`ProcessingSystem.TryStart` 完成领取及启动批次，状态查询实时复用同一判定；`FarmGame.SetRawReserve` 仅设置，不泄露内部容器或让 UI 协调加工步骤。默认 0、非法值、稳定竞争、设置时点、完工/出售/拆除守恒与库存编辑刷新由现有资源、生产、经营和端到端测试覆盖。
-
-T07 将真实工人状态收在 `WorkerScheduler`，农田 Interface 负责与策略无关的需求和执行凭据重验，表现只读取快照。当前稳定轮转可在内部任务选择方法替换，经营入口与表现的 Interface 保持稳定；后续扩员方式仍待 #43 的后续范围确认。
-
-T10 将道路接入既有占用和放置命令，费用查询由 `FarmGame` 统一提供。道路不创建生产状态；目录和场景协调连续铺设，独立道路详情只发出移除意图，地图复用现有块网格绘制灰色路面。未来确认移动属性后，从只读土地查询接入工人内部计时，不修改当前 UI 和经营推进 Interface。
-
-T09 把正式行情放入 `MarketQuotes`，日历的纯日期查询统一未来报价日换算，公告携带实际参与下期价格的因素。商品标识贯穿目录、报价、唯一公共库存及交易；`TradingService` 在一次命令中预检全部资源与整数容量，再同步提交。`Main` 只转发市场窗口意图，窗口固定十四行和一个数量输入，刷新不重建控件、不覆盖编辑草稿。旧出售查询委托相同报价和结算路径，旧面粉曲线仅保留为历史独立模块。
-
-#42 将共享年度配置与逐田执行安排收在 `CultivationPlanBook`。农田继续拥有当前作物和精确进度，计划仅缓存完成时间对应的后续目标及下一日期事件。手动立即改种、预备下一轮均解除本田引用；播种启停阻止休耕或已执行时间条再次播种，已播种供水不受影响。禁生边界处理和正常成熟共用农田收获终结，经营入口沿原路径入库，不由计划发放库存。四季拖动图与批量选择通过经营 Interface 管理真实表，动效和草稿不修改模拟日期。

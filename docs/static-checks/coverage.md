@@ -1,6 +1,6 @@
 # 自动行覆盖率门禁
 
-对应 [#119](https://github.com/Fotally/Farm-Exchange/issues/119)。[统一测试入口](../../tools/Run-Tests.ps1)在收集 Cobertura 后调用 [Test-Coverage.ps1](../../tools/Test-Coverage.ps1)，本地与现有 Windows CI 使用同一判定。总体和每个 `scripts/` 一级目录模块均必须达到 80%，恰好 80% 通过；判定采用整数行数，不使用四舍五入后的显示百分比。
+[统一测试入口](../../tools/Run-Tests.ps1)在收集 Cobertura 后调用 [Test-Coverage.ps1](../../tools/Test-Coverage.ps1)，本地与现有 Windows CI 使用同一判定。总体和每个 `scripts/` 一级目录模块均必须达到 80%，恰好 80% 通过；判定采用整数行数，不使用四舍五入后的显示百分比。
 
 模块列表来自仓库实际 `scripts/` 一级目录，不维护硬编码名单。读取报告 class 下的文件行记录，以规范化文件路径和行号去重，同一行任一类型命中即计覆盖。绝对文件路径直接定位；相对路径按 Cobertura `sources/source` 解析，没有 source 时相对仓库根目录；兼容正反斜线。同一文件的 method 重复记录不另外累加。仅统计当前仓库 `scripts/` 内真实文件，总体由各模块的去重计数汇总，不采信根节点 `line-rate`，也不平均文件或类型百分比。
 

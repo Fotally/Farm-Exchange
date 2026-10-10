@@ -1,16 +1,16 @@
 # 运行时日志 schema v1
 
-关联 [#82](https://github.com/Fotally/Farm-Exchange/issues/82)；记录范围、框架及轮转方案见[日志设计](../research/runtime-logging.md)。2026-10-02 用户确认：两类业务日志均输出可读 `.log`，字段含义必须明确，供人和 AI 分析。本文件是字段与事件语义的唯一维护入口；事件登记包括分阶段接入的约定，只有实际覆盖表中的事件可作为当前程序已产生的证据。
+记录范围、框架及轮转方案见[日志设计](../research/runtime-logging.md)。两类业务日志均输出可读 `.log`，字段含义须明确，供人和 AI 分析。本文件是字段与事件语义的唯一维护入口；只有实际覆盖表中的事件可作为当前程序已产生的证据。
 
-2026-10-07 修订：初版设计已确认，先以 #126 接入生命周期与单商品买入；后续等待、生产、年度表、倍率和流程仍由 #127～#130 分阶段实现。格式与初始预算由实施选择并验证，具体实现范围以[日志接口](../architecture/logging/interface-logging.md)为准。设计示意不作为实际验收样例。
+当前登记涵盖生命周期、交易、订单等待、行情、建拆、原料底线、生产窗口、耕作、暂停与倍率、开发流程、有界诊断及真实批次和进程帧性能。具体实现范围以[日志接口](../architecture/logging/interface-logging.md)为准；设计示意不作为实际验收样例。
 
-已确认的采集粒度：玩家命令、交易、订单变化与异常逐条记录；自动播种、浇水、收获、加工按时间窗口汇总，对象级详细记录按需、有界开启。该原则不保证普通日志可还原每座设施的每次动作；汇总字段和具体预算仍依照下文草案收敛。
+已确认的采集粒度：玩家命令、交易、订单变化与异常逐条记录；自动播种、浇水、收获、加工按时间窗口汇总，对象级详细记录按需、有界开启。该原则不保证普通日志可还原每座设施的每次动作；汇总字段与具体预算以下文实际登记为准。
 
 ## 版本、文件与分析入口
 
 - 业务日志每个事件携带 `SchemaVersion=1`。runtime 与 debug 使用同一 schema；详细程度不同，不改变同名字段的含义。
 - Windows 发布包位置为 exe 同级 `logs/runtime/*.log`；开发构建另写 `logs/debug/*.log`。后续发布时附带本文件的同版本副本 `logs/schema-v1.md`，让 AI 不依赖仓库也能读懂字段。
-- 本版是 #126 初次交付契约；后续事件仅按实际覆盖声明分阶段接入。交付后修改既有字段含义、单位或事件记录时点要升版本，并保留旧版说明，不能用新含义解释旧文件；新增字段和事件也要先登记对应版本文档。
+- 修改既有字段含义、单位或事件记录时点须升版本，并保留旧版说明，不能用新含义解释旧文件；新增字段和事件也须先登记对应版本文档。
 - Godot 原生 `godot.log` 不属于这套业务 schema；其阅读说明见文末，不往原生日志虚构 `SchemaVersion` 或业务字段。
 
 AI 分析时先读本文件，再确认日志版本、会话和事件名。`Message` 是中文摘要；数值、判断和关联关系以具名字段为准。字段顺序不表达业务先后。
@@ -29,9 +29,11 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 
 普通事件与异常事件均占一条物理行。所有自由字符串中的反斜杠、引号、CR/LF/TAB 与其他控制字符使用可见转义，不能注入新的事件头。异常类型与原异常文本放入 `ExceptionType` / `Exception` 属性，换行转义后仍属于原事件，不另加没有身份的堆栈续行。保留金额/数量等核心结构，不用任意业务对象 ToString()；真实 provider 的样例验证中文、转义、异常边界、跨文件一致性和无效枚举。
 
-自由文本和对象样本超限须标明截断字段及原数量，不能截断 UTF-8 字符或结构。当前文本预算与有界拒绝已由 #126 落实；后续对象采集预算见文末。若核心字段也无法保留，用有界拒绝事件报告原事件无法完整输出，不生成貌似完整的成功结算。日志尺寸限制不能反向拒绝原本合法的业务命令；订单验证器没有条件组/条件项数量硬上限，#127 接入时必须验证大合法配置。
+自由文本和对象样本超限须标明截断字段及原数量，不能截断 UTF-8 字符或结构；对象采集预算见文末。若核心字段也无法保留，用有界拒绝事件报告原事件无法完整输出，不生成貌似完整的成功结算。日志尺寸限制不能反向拒绝原本合法的业务命令；订单验证器没有条件组/条件项数量硬上限，须验证大合法配置。
 
 实际截断的事件输出 `Truncated: true`、`TruncatedFields` 字段路径数组及 `TruncatedOriginalCounts` 路径到原计数对象的字典。普通字符串和摘要对象含 `ScalarCount`（原 Unicode 标量总数，非负 int64）；`Exception` 另含 `Utf8Bytes`（原 UTF-8 字节总数，非负 int64）与 `LineCount`（原文本 LF 数量加一，正 int64，CRLF 计一次换行）。计数针对截断前文本，不能用转义后长度或物理日志行数代替。未截断的字段不输出计数；整事件超过预算改写为 `EventPayloadRejected` 时不保留貌似完整的原事件。
+
+集合采样计数：被截断数组的计数对象含 `ItemCount`（原数组元素数量，非负 int64），不是输出样本长度或递归叶子总数。领域投影提供集合采样路径和原数量，formatter 将其与文本截断合并为一份 `TruncatedFields/TruncatedOriginalCounts`；同一事件不出现重复元数据键。字符串计数含义保持不变。
 
 ## 通用字段
 
@@ -58,13 +60,17 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 | `GameDate` | `{ Year, Month, Day }` | 当前经营日期，三项均为整数：年从 1 起，月 1～12，日 1～28；不是现实年月日 |
 | `Season` | 季节字符串 | `Spring/Summer/Autumn/Winter`，分别为春/夏/秋/冬 |
 | `IsPaused` | 布尔 | 记录时经营暂停状态，不表示程序或日志线程暂停 |
-| `Phase` | 字符串枚举 | `Initialization/Command/Harvest/Processing/RawClaim/Workers/Calendar/Orders/Presentation/Shutdown`；说明记录所在阶段 |
+| `Phase` | 字符串枚举 | `Initialization/Command/Harvest/Processing/RawClaim/Workers/Calendar/Orders/Presentation/Shutdown`，以及推进异常的 `AdvanceValidation/EventSearch/QuietAdvance/TickPreparation/Checkpoint/DriverValidation/DriverBudget/DriverProgress`；说明记录所在实际阶段，新增值的条件见下文 |
 
 同一个 tick 内日历在换日阶段推进；早期阶段可能读到推进前的经营秒，订单阶段读到推进后的经营秒。以 `Sequence` 和 `Phase` 判断顺序，不把相同秒值的多个事件视为重复。日期换算入口为 [GameCalendar](../../scripts/time/GameCalendar.cs)，比例见[经营与生产时间](../architecture/time/game-time-units/interface-game-time-units.md)。
 
-跨局关联使用 SessionId + GameInstanceId + 业务对象标识；同进程两个 OrderId=1 不属于同一单。主局 GamePurpose=Main，独立开发局为 ScenarioIndependent；原地流程仍使用主局身份。RunId 只关联一次开发流程和其 JSON 报告；当前报告到保存时才赋值，后续须在 CreateRunDirectory 后、Start/Prepare 发出命令前绑定同一目录标识，不另造一套 ID。流程开始/结束和局创建/释放是不同生命周期。进程序号表达接收顺序，不证明不同经营局的因果关系。
+推进异常的新增阶段不改变原有值含义：`AdvanceValidation` 是单 tick 或批次请求的原校验，`EventSearch` 是最近事件查询，`QuietAdvance` 是平静区间状态累计，`TickPreparation` 是事件秒结果清理及显式降雨，`Checkpoint` 是实际检查点回调；`DriverValidation` 是驱动输入/容量换算检查，`DriverBudget` 是宿主预算回调，`DriverProgress` 是真实返回后的驱动进度更新。生产、工人和日期等已有阶段在实际调用前设置；平静路径的日历与行情处理归 `Calendar`。异常记录不依赖详细诊断或阶段计时是否开启，也不从异常消息反推阶段。
 
-统一日志直接接收各模块事件，不先分模块写文件再合并；建议首版把 Sequence 分配与两个文件目标的提交串行化，验证单会话成功输出的物理记录顺序。现实时钟回退不改变序号顺序；多个线程同毫秒到达时，序号仅表示日志接收先后。周期 Summary 的序号表示封窗记录的提交位置，内部累计量属于它注明的整个窗口，不能把所有产出都当作封窗瞬间发生。实施分阶段及顺序验收见[日志设计](../research/runtime-logging.md#后续实施顺序与待讨论决策)。
+单 tick、批量与驱动异常输出 runtime/debug 共用的 `BusinessException`，携带原 `ExceptionType/Exception` 和当时真实局上下文。自动推进不构造 `CommandId/CommandName/CommandOrigin`；内部命令异常已经记录时，外层保留其原命令关联，不再生成另一条异常。去重限于本次活跃同步调用的传播关系，新独立操作及独立兄弟命令重用相同异常对象仍分别记录；相同消息的不同异常也不合并。`CommandFinished=Faulted`、失败批次和生产覆盖缺口各自保留。已观察只表示尝试记录，输出失败不触发外层改换上下文重试；健康和文件缺口仍按原规则解释。实现见[共用异常观察](../architecture/logging/implementation-exception-observation.md)。
+
+跨局关联使用 SessionId + GameInstanceId + 业务对象标识；同进程两个 OrderId=1 不属于同一单。主局 GamePurpose=Main，独立开发局为 ScenarioIndependent；原地流程仍使用主局身份。RunId 只关联一次开发流程和其 JSON 报告；在 CreateRunDirectory 后、Start/Prepare 发出首个业务命令前绑定实际目录名，不另造一套 ID。其他业务事件不隐式携带 RunId，通过同一 GameInstanceId、Sequence 与显式 Scenario 命令来源关联。流程开始/结束和局创建/释放是不同生命周期。进程序号表达接收顺序，不证明不同经营局的因果关系。
+
+统一日志直接接收各模块事件，不先分模块写文件再合并；Sequence 分配与两个文件目标的提交串行化，保持单会话成功输出的物理记录顺序。现实时钟回退不改变序号顺序；多个线程同毫秒到达时，序号仅表示日志接收先后。周期 Summary 的序号表示封窗记录的提交位置，内部累计量属于它注明的整个窗口，不能把所有产出都当作封窗瞬间发生。
 
 本 schema 的日期对象是日志专用投影：记录前只取 `Year/Month/Day` 三个成员。源码 `GameDate` 还含 `ElapsedDays/Season`，不得直接结构化输出完整源码对象并带出未登记成员；`GameDate`、`QuoteDate`、`NextQuoteDate`、`PublishedDate` 均采用同一三字段投影。保留结构指保留这里定义的日志结构，不表示直接序列化业务对象的全部成员。
 
@@ -79,17 +85,41 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 
 ## 玩家指令契约
 
-记录玩家语义指令并便于未来复用。初版采用 `CommandReceived` / `CommandFinished` 配对，与中间的实际领域结果关联。#126 首先实现 `BuyCommodity`，其原参数为 `Commodity`、`RequestMode="Fixed"`、`RequestedQuantity`；`CommandOrigin` 为 `Player/Scenario`。无效商品仍按 `<Crop>.<Kind>` 保留位置，其中未定义枚举用原十进制整数，例如 `"123.456"`；负数量原样记录。领域结果另说明拒绝，不能用执行后的合法值覆盖请求。其他命令随所属子议题登记参数并接入，不表示已经覆盖。
+记录玩家语义指令并便于未来复用。采用 `CommandReceived` / `CommandFinished` 配对，与中间的实际领域结果关联；`CommandOrigin` 为 `Player/Scenario`。交易、订单、建拆、原料底线、耕作、暂停和已接受倍率命令的参数统一见下表。无效商品仍按 `<Crop>.<Kind>` 保留位置，其中未定义枚举用原十进制整数，例如 `"123.456"`；负数量原样记录。领域结果另说明拒绝，不能用执行后的合法值覆盖请求。开发流程的开始/终结/报告是独立生命周期事件。
 
 | 字段 | 含义 |
 | --- | --- |
 | `CommandId` | 每局内递增的正 int64 指令编号，与 SessionId/GameInstanceId 共同解释；不使用玩法随机源，不替代日志事件 Sequence |
-| `CommandName` | 稳定语义命令名；#126 为 `BuyCommodity`，其余随逐项参数登记，不使用 UI 控件名 |
+| `CommandName` | 稳定语义命令名，交易、订单、建拆和底线取下表登记值；其余随逐项参数登记，不使用 UI 控件名 |
 | `CommandOrigin` | `Player/Scenario`，区分玩家与开发流程的实际调用来源；自动成交/生产不伪装为玩家再次下令 |
 | `CommandArguments` | 按命令分别定义的原始请求结构，不是任意属性字典或完整对象序列化；复用已定义的商品、请求模式、格坐标、订单/计划配置等字段语义 |
 | `CommandStatus` | `Succeeded/Rejected/Faulted`；真实完成/业务拒绝/抛出异常，独立于领域事件的 Outcome，不把收到输入当成功 |
 
+| CommandName | CommandArguments 原始参数 |
+| --- | --- |
+| `BuyCommodity`、`SellCommodity` | Commodity、RequestMode=Fixed、RequestedQuantity |
+| `SellCommodityAll` | Commodity、RequestMode=AllCommodity；不伪造 RequestedQuantity |
+| `SellAllProducts` | RequestMode=AllProducts；不附单一 Commodity 或 RequestedQuantity |
+| `CreateTradeOrder` | RequestedOrderRequest；创建前没有已分配 OrderId |
+| `UpdateTradeOrder` | OrderId、RequestedOrderRequest |
+| `CancelTradeOrder` | OrderId |
+| `SetTradeOrderEnabled` | OrderId、Enabled（布尔原输入） |
+| `PlaceBuilding` | Cell、BuildingKind、Crop；道路的原 Crop 输入也保留在参数域，不解释为道路种植 |
+| `RemoveBuilding` | Cell；保留输入子格，实际整座锚点由领域结果说明 |
+| `SetRawReserve` | Crop、RequestedQuantity（原请求原料保留份数，负数仍原样记录） |
+| `CreateCultivationPlan` | RequestedPlan；创建前无有效 PlanId |
+| `UpdateCultivationPlan` | PlanId、RequestedPlan |
+| `DeleteCultivationPlan` | PlanId |
+| `ApplyCultivationPlan` | PlanId、Cells（原输入子格数组，不先去重） |
+| `SetFarmCrop`、`PrepareFarmCrop` | Cell、Crop；分别立即重启与保留当前轮接管 |
+| `SetPaused` | IsPaused（原请求布尔值，通用上下文仍说明记录时实际暂停状态） |
+| `SelectSimulationRate` | RequestedRate、Source；仅已通过原倍率检查的选择 |
+
+`CommandArguments.OrderId` 与 `CommandArguments.PlanId` 属于原输入域，允许记录请求中的 0 或负数；领域事件的 `OrderId`、`PlanId` 仍只表示已经存在或成功分配的正整数身份。订单原配置按下文投影和有界截断约定记录，不将拒绝输入解释为生效配置。
+
 runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入口取得实际输入后、业务验证/修改前提交，带命令身份、来源、原参数及通用头/经营上下文。Finished 在真实完成、拒绝或异常边界提交，带同一 CommandId 与状态，正常拒绝复用实际原因，异常保持原传播。中间的 TradeFinished、BuildingPlaced 等领域事件携带 CommandId 关联且各自记录一次资源结果；通用 Finished 不复制资金库存收支。高频内部调用不作为新玩家命令记录，不为日志建立新的命令执行总线。
+
+倍率原入口只校验倍率值，未校验强转的非法来源枚举。该调用仍按原行为接受时，`SelectSimulationRate` 的 CommandOrigin 和 Source 都保留原十进制字符串（如 "99"），不虚构 Player/Scenario，也不因日志新增业务异常；其他正式命令的来源验证保持。`RunMode` 同样出现在报告成功/失败事件中，用于说明所属流程方式。
 
 同一经营秒可以有多条指令，使用 Received 的 Sequence 区分接收顺序，Finished 的 Sequence 表示结束记录位置。收到但未见结束只说明结尾证据缺失，不能推断成功或失败。同值暂停/倍率选择等无状态变化请求仍可有成功结束记录，不强制捏造 PauseChanged 等状态变化事件。
 
@@ -114,7 +144,7 @@ runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入
 | `PreviousReserveQuantity`、`ReserveQuantity` | 非负 int32，份 | 修改前/后的原料加工保留底线，不是冻结库存或订单目标 |
 | `Side` | `Buy/Sell` | 买入/卖出；不是金币变化的正负号 |
 | `RequestMode` | `Fixed/AllCommodity/AllProducts` | 请求固定份数/某商品可用量全部/全部加工品；不是订单的 QuantityMode |
-| `RequestedQuantity` | 可选 int32，份 | Fixed 请求的原输入，非法负数原样保留；全部出售请求省略，不用 -1 表示全部 |
+| `RequestedQuantity` | 可选 int32，份 | Fixed 交易或 SetRawReserve 的原输入，非法负数原样保留；全部出售请求省略，不用 -1 表示全部；底线生效值另见 ReserveQuantity |
 | `Quantity` | 非负 int64，份 | 本次实际成交量；失败为 0；不等于请求量、目标量或冻结量 |
 | `UnitPriceCents` | 非负 int32，分/份 | 实际结算使用的报价；未取得有效报价的拒绝事件省略；不是显示时缓存报价或订单限价 |
 | `ValueCents` | 非负 int64，分 | 商品货值，不含手续费；单商品成功时＝Quantity × UnitPriceCents |
@@ -130,15 +160,17 @@ runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入
 | `OrderStatusBefore`、`OrderStatusAfter` | 订单状态字符串 | `Waiting/Disabled/Completed/Cancelled`＝等待/停用/完成/撤销；创建前状态为 null |
 | `OrderFrozenCentsBefore`、`OrderFrozenCentsAfter` | 非负 int32，分 | 本单拥有的资金冻结，不是所有订单冻结总额 |
 | `OrderFrozenQuantityBefore`、`OrderFrozenQuantityAfter` | 非负 int32，份 | 本单拥有的库存冻结，不是全部商品的冻结量 |
+| `OrderCommodityStocks` | 最多两项商品库存对象数组 | 创建/编辑观察涉及的商品，每项含 Commodity 与 Stock/AvailableStock/FrozenStock 的 Before/After 六字段；同商品仅一项，跨商品先原订单商品、后请求商品。非法商品的六个库存值为 null，不查询库存；不与顶层快照重复计量 |
 | `RequestedOrderRequest` | 订单配置对象 | 创建/编辑命令收到的完整原始配置，可能非法或被拒绝，不能当作已经生效；形状见下一表 |
 | `OrderRequestBefore`、`OrderRequestAfter` | 订单配置对象或 null | 真正提交前/后的有效单据配置；创建的 Before 为 null；成功才必填，拒绝时若记录合法已有订单则前后相同，不用拒绝的输入冒充 After |
 | `CashBasisCents`、`ReserveCents` | 非负 int32，分 | 原建单现金基准、实际现金保留门槛；同 ID 编辑不重置原基准 |
 | `LockedQuantity` | 非负 int32，份 | 一次单建单时锁定的成交目标量；不是持续策略本次动态差额 |
 | `ConditionSatisfied` | 布尔 | 本次订单判断是否满足全部成交前提；为 false 时不代表程序错误 |
+| `ConditionGroupsSatisfied` | 布尔 | OrderEvaluated 中原配置条件组的实际 OR/AND 结果；它为true仍可被限价、目标量、预算或结算资源阻塞，不等于ConditionSatisfied |
 | `WaitingCategories`、`PreviousWaitingCategories` | 稳定字符串集合；前值可 null | 本次及上次实际观察的阻塞类别，首次前值为 null；从 Price/Stock/Season/LimitPrice/TargetReached/BudgetInsufficient 及非 None 的 TradeFailure 名称取值，不含实时数值；不声称穷尽未执行分支 |
 | `WaitingState` | `Waiting/Resolved` | 本次实际求值仍等待/已有证据结束此前等待；不同于订单生命周期状态 |
 | `PrimaryReason` | 上述稳定原因或 null | 本次实际观察的首要阻塞原因，Resolved 为 null；由业务判断提供，不从中文反向解析 |
-| `EvaluationCoverage` | `ActualShortCircuit/Complete` | 只记录原短路实际检查到的内容/本次业务本来就执行了完整检查；不得为了 Complete 重跑规则 |
+| `EvaluationCoverage` | `ActualShortCircuit/Complete` | 只记录原短路实际检查到的内容/本次业务本来就执行了完整检查；不是仅指条件组遍历完。即使所有OR组均已访问，提前阻塞而未进行后续成交前提/结算检查仍为ActualShortCircuit；不得为了Complete重跑规则 |
 | `Resolution` | `Filled/Eligible`，仅 Resolved | 已实际成交/实际求值不再被原原因阻塞但不证明成交；只在业务确有这种结果时使用 |
 
 `FailureCode` 使用完整枚举类型前缀和成员名，取值释义如下；`WaitingCategories` 引用交易拒绝原因时也使用 `TradeFailure.` 前缀且不包含 None：
@@ -167,6 +199,10 @@ runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入
 
 模式不适用的配置字段仍原样记录完整配置，但 AI 不应把其值当作生效限制。拒绝的配置允许带不合法输入；其合法性由真实结果说明。
 
+创建命令的顶层 `Commodity` 与库存前后观察请求商品；已有订单的编辑命令观察原订单商品。跨商品编辑用 `OrderCommodityStocks` 同时解释旧商品冻结释放与新商品冻结建立。拒绝编辑的 `OrderRequestBefore/After` 均为原生效配置，所有已取得资源的前后值保持；不存在订单时不伪造有效配置、原冻结或已有对象身份。输入非法商品仍保留原标识，未知库存为 null。
+
+每份配置最多记录前 8 个条件组及合计前 32 条条件，保持原顺序；预算不参与业务验证或求值。外层组被截断时记录 `*.ConditionGroups` 的原组数，某个保留组被截断时记录 `*.ConditionGroups[i]` 的原条件数，均使用 `ItemCount`。条件预算耗尽而省略后续组时也标记外层截断，不用未标记空组冒充原输入。路径前缀分别为 `CommandArguments.RequestedOrderRequest`、`RequestedOrderRequest`、`OrderRequestBefore`、`OrderRequestAfter`；只标记实际截断路径。原 null 请求、组或条件保留 null，非法枚举保留其原数值表示，不由日志修复输入。
+
 ### 等待观察的记录时点
 
 OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际求值或成交结束此前等待时记录。订单刚创建的“等待下一经营秒检查”不等于已经判定阻塞；暂停和平静批量秒不能补造检查。AND/OR 保持原语义，某个 OR 分支失败不能独自证明整单阻塞，日志只记录真实业务判断的依据。
@@ -175,12 +211,14 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 
 首次等待、成交恢复、取消和停用不受中间变化预算影响；终止或封窗前先输出尚未输出的合并尾段。取消/停用只通过对应生命周期事件结束观察，不伪造 Resolved。重新启用后首次实际求值重新建立基线。去重状态按局/订单隔离，订单终结和局释放后删除。
 
+成功编辑订单时，在 `OrderEdited` 前封存旧配置尚未输出的等待尾段并清理原观察，下一次实际求值为新配置建立基线；编辑本身不代表等待已恢复，不伪造 `Resolved`。拒绝编辑保留原配置的观察与合并计数。
+
 ## 汇总、行情与诊断字段
 
 | 字段 | 类型/单位 | 含义 |
 | --- | --- | --- |
 | `WindowId` | 正 int64 | 同一局同一汇总种类内递增；进程帧汇总在进程范围内递增，不跨局混用 |
-| `IntervalStartUptimeMs`、`IntervalEndUptimeMs` | 非负 int64，毫秒 | 实际封窗单调时间；归属以业务线程在安全边界切换计数器为准，同毫秒两次封窗仍按窗口 ID/提交顺序区分，不按时间戳重分配增量 |
+| `IntervalStartUptimeMs`、`IntervalEndUptimeMs` | 非负 int64，毫秒；生产窗口未知起点可 null | 实际封窗单调时间；仅首次接入的 ProductionSummary 在起点时钟采集失败时允许 Start 为 null，并降低覆盖、标记 CollectorFailure/BoundaryMissing；End 为本次实际取得值。既有 OrderWaitSummary 的两端仍为非负整数。归属以安全边界切换计数器为准，同毫秒两次封窗仍按窗口 ID/提交顺序区分，不按时间戳重分配增量 |
 | `SimulationSecondsStart`、`SimulationSecondsEnd` | uint32，经营秒 | 窗口起止日历值，暂停窗口可能相同，不是所有事件记录时间之和 |
 | `IsPartialWindow` | 布尔 | 因局结束/关闭而提前封窗；窗口短不代表采集不完整 |
 | `CoverageStatus`、`CoverageReasons` | `Complete/Partial/Unknown` 及字符串数组 | 仅描述进程内增量采集与边界快照是否完整；原因暂登记 CollectorFailure/BoundaryMissing/UnregisteredMutation，未知用 Unknown；Complete 不保证拿到的文件没有缺失 |
@@ -216,7 +254,13 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 
 生产累计覆盖所有真实提交路径，包括暂停主动命令、新建场地触发全场闲置加工领取、普通事件秒和批量推进。初始化完成才建立第一期初；期间发生的初始资源变化已在初始快照中，不再次算入后续流量。窗口到期在下一安全边界整体封窗，不拆分一个长批次，也不补造逐秒生产事件。
 
-批次耗时测量包围实际 AdvanceTicks，含该调用内日志采集及同步输出的成本；批次归入完成窗口，异常另计。旧稿 TickCount/TickAverageMs/TickMaxMs 删除，不能用批量总耗时除模拟秒数假装逐 tick 测量。ProcessFrames 不带某一局的设施数量或经营秒，两个局同帧运行也只统计一份帧间隔。普通运行不为日志保存无界帧数组。
+生产窗口目标为 60 个单调现实秒。`AdvanceTicks` 检查点内允许的正式命令不单独切开尚未结束的外层推进；独立完整命令、单秒推进或完整批次返回后才检查封窗。暂停无经营变化可延长窗口，正常局结束补一次尾段。夹具直接重置生产状态等未登记修改使受影响窗口降低覆盖；后续取得真实新边界后的 Complete 只描述该窗口内采集，不补齐过去未知投入或缺失日志。输出失败与进程内增量采集失败分别解释，不能用恢复写盘证明已补齐缺口。
+
+初始窗口先取得真实经营秒和资源，再观察现实时间；若首次计时失败，保留已取得事实、将现实起点保持为 null，在下一次成功安全边界输出 Partial 并建立新起点。真实读到的 0 毫秒仍保留为 0，不与未知混同。换季边界同一秒可先促熟收获、再由工人播种新轮、最后清理新轮；收获份数与清理轮数各按实际提交记录，不能仅因二者同时非零认定重复记账。
+
+生产窗口仅在 `FarmGame` 构造时实际接入自动采集的局中启用。公开 `RuntimeLog.BindGame` 的手动领域观察用法不会把日志安装回已有经营局，也不输出生产汇总；不能把仅有生命周期或手动交易记录解释为自动生产已完整覆盖。缺少 ProductionSummary 表示没有该区间的完整生产证据，不据此推断零产出。
+
+批次耗时测量包围实际 AdvanceTicks，含该调用内业务、生产日志和诊断预算轮询的采集及同步输出成本；性能汇总自身在停止计时后序列化，不将这部分自引用成本算回批次。批次归入完成窗口，异常另计。旧稿 TickCount/TickAverageMs/TickMaxMs 删除，不能用批量总耗时除模拟秒数假装逐 tick 测量。ProcessFrames 不带某一局的设施数量或经营秒，两个局同帧运行也只统计一份帧间隔。普通运行不为日志保存无界帧数组。
 
 ### 配置、手动接管与流程字段
 
@@ -226,13 +270,13 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 | `EndReason` | `Shutdown/Replaced/Released` | GameEnded 的真实释放原因；流程结束用独立事件 |
 | `PlanId` | 正 int32 | 共享年度表 ID，创建拒绝未分配时省略 |
 | `RequestedPlan`、`PlanBefore`、`PlanAfter` | 计划配置或 null | 原始请求与实际前后；配置仅含 Name（字符串）、Mode（Immediate/PrepareNext）、Entries 数组（Id 正整数、Crop、StartDay 年内 0～335）；非法请求原值保留，删除后为 null；不新造 Revision |
-| `InputCellCount`、`ResolvedUniqueTargetCount`、`AppliedTargetCount` | 非负整数；解析数可 null | 原输入数、完整解析去重数、实际应用数；中途拒绝未解析完时去重数未知，整批拒绝应用数为 0 |
+| `InputCellCount`、`ResolvedUniqueTargetCount`、`AppliedTargetCount` | 非负整数；输入数和解析数可 null | 原输入数、完整解析去重数、实际应用数；原集合为 null 时输入数未知，中途拒绝未解析完时去重数未知；实际检查到空集合为0，整批拒绝应用数为0 |
 | `TargetAnchors`、`TargetsTruncated` | 锚点数组及布尔 | 应用的已解析目标样本；截断时明确只是一部分，不能据此恢复所有农田引用 |
 | `DetachedFarmCount` | 非负整数 | 删除年度表时真实解除引用的农田数量；拒绝为 0 |
 | `TakeoverMode` | `Immediate/PrepareNext` | 立即重启选种/保留当前轮后安排下一轮，按真实命令区分 |
 | `PreviousPlanId`、`PlanDetached`、`CurrentCyclePreserved` | 正整数或 null、布尔、布尔 | 接管前引用、是否实际解除、本轮是否实际保留；拒绝/无有效农田时未能确认的结果为 null |
 | `PreviousSelectedCrop`、`EffectiveSelectedCrop`、`NextCycleCrop` | 作物或 null | 前选种、命令后选种、预备下一轮；没有预备安排为 null，不用下一轮覆盖本轮 |
-| `Source` | `Player/Scenario` | 倍率意图来源，复用 SimulationRateSource；不是文件来源 |
+| `Source` | `Player/Scenario` 或原十进制枚举字符串 | 倍率意图来源，复用 SimulationRateSource；不是文件来源。原驱动不验证强转的非法来源值，日志保留如 "99"，不能将其解释为已知来源 |
 | `RequestedRate`、`PreviousRate`、`EffectiveRate`、`ValueChanged` | 正有限小数及布尔 | 已接受选择的请求/前值/生效值及数值是否变化；同值玩家选择也记录，可能实际中断开发流程 |
 | `RunId`、`RunMode` | 字符串、`Current/Independent` | 已创建报告目录的同一运行标识及原地/独立方式，不包含用户绝对路径 |
 | `ConfigurationRevision`、`ConfigurationHash` | 整数、SHA-256 字符串 | 实际加载配置的修订及哈希，不记录整份配置或未保存草稿 |
@@ -240,20 +284,20 @@ OrderWaitChanged 在首次真实求值进入等待、稳定原因改变、实际
 | `FinishReason` | 字符串或 null | 原流程实际结束说明；不能据中文文本推断新的稳定原因码 |
 | `ReportFile` | 相对路径字符串 | 保存成功的实际报告；保存失败用 ExceptionType/Exception 表达，不改流程结果 |
 
-耕作表应用沿用全部验证后原子提交；日志不得为凑完整目标数继续执行已短路的检查。立即接管同种作物仍可能重启本轮，不能按选种值相同过滤。开发事件仅在相应功能存在的开发构建产生，若发生则属于关键记录；日志公共模块不依赖发布构建排除的开发类型，由开发侧投影纯值。
+年度表原请求/前后配置的 Entries、命令原 Cells、解析 TargetAnchors 各最多32项，超限使用统一 ItemCount 元数据说明完整原数量；采样不限制业务合法配置。名称修剪、条目排序只体现在生效配置中，拒绝不把请求当作 After。`PlanId` 只在实际表存在或成功删除的前态存在时给出；未知原请求编号仅留命令参数。耕作表应用沿用全部验证后原子提交；日志不得为凑完整目标数继续执行已短路的检查。立即接管同种作物仍可能重启本轮，不能按选种值相同过滤。开发事件仅在相应功能存在的开发构建产生，若发生则属于关键记录；日志公共模块不依赖发布构建排除的开发类型，由开发侧投影纯值。
 
 ### 采集与输出健康字段
 
 | 字段 | 类型/含义 |
 | --- | --- |
-| `CaptureId`、`CaptureScope` | 开发采集标识字符串；范围为 GameInstanceId、EventNames 字符串数组与 Anchors/OrderIds/WorkerNumbers 中适用数组 |
+| `CaptureId`、`CaptureScope` | 开发采集标识字符串；范围为 GameInstanceId、EventNames 字符串数组、Anchors/Cells/OrderIds/WorkerNumbers 中适用数组及 IncludeGameEvents 布尔值。Anchors 绑定开启时存在的设施实例；Cells 是显式基础格坐标筛选，可用于尚未建造位置的规则观察，两者合计最多32。IncludeGameEvents 默认false，显式true才允许无对象的局级事件；空对象范围且false拒绝，不隐式全图采集 |
 | `DurationLimitMs`、`EventLimit` | 正 int64，单调现实持续上限/明细条数上限 |
-| `ActualDurationMs`、`CapturedCount`、`SuppressedCount` | 非负 int64；实际持续毫秒/产生的明细数/可观察抑制数；不保证已写盘 |
+| `ActualDurationMs`、`CapturedCount`、`SuppressedCount` | 非负 int64；实际持续毫秒/明细提交尝试数/到达提交入口后因现实预算耗尽被阻止的实际候选数；预取快照的门禁、未选择对象及停止后的事件不推算为抑制数；不保证已写盘 |
 | `StopReason` | DurationLimit/EventLimit/UserStopped/GameEnded/Shutdown；发生对象失效时从范围移除，全部失效为 ObjectsEnded |
 | `LoggingHealth` | Healthy/Degraded/Unavailable，仅日志健康，不是游戏健康 |
 | `FirstFailureUptimeMs`、`FailureCount`、`KnownLostCount` | 非负 int64 或 null；故障首次时点/已观察故障数/可确定丢失数，不能确定则 null |
 | `Truncated`、`TruncatedFields` | 布尔、字段路径数组；只承认明确截断的内容，不缩减金额等核心字段后冒充完整 |
-| `TruncatedOriginalCounts` | 字段路径到原文本计数对象的字典；ScalarCount/Utf8Bytes/LineCount 的单位及出现条件见文本布局，#126 已接入 |
+| `TruncatedOriginalCounts` | 字段路径到原数量对象的字典；ScalarCount/Utf8Bytes/LineCount 记录文本计数，数组记录 ItemCount；单位及出现条件见文本布局 |
 | `OriginalItemCount` | 字段路径到原集合数量的字典；后续集合样本截断时使用，当前未接入 |
 | `OriginalEventName` | 无法完整输出时原事件名，关联身份沿用原事件；不代表原事件已写盘 |
 
@@ -291,6 +335,8 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `TargetAnchorBefore`、`TargetAnchorAfter` | 锚点或 null | 认领的农田实例锚点，不是实际工作中心格；输入 WorkerSnapshot.TargetCell 须先按实际含义核对转换 |
 | `PositionBefore`、`PositionAfter` | `{ X, Y }` 小数对象，基础格单位 | 工人经营快照格位置，不是屏幕像素、地图本地像素或视觉插值位置 |
 | `Conditions` | 评估对象二维数组 | 对应原 ConditionGroups，每项 Factor/Comparison/Value 含义同配置，额外 `Actual` 是本次实际数值（同 Value 单位）、`Satisfied` 是布尔；按原组/项顺序对应 |
+| `ConfiguredConditionGroupCount` | 非负 int32 | 原订单配置的条件组总数，不把未访问组当成已执行 |
+| `EvaluatedConditionGroupCount`、`EvaluatedConditionCount` | 非负 int32、非负 int64 | 原短路路径实际访问的组数及实际求值条件总数；后续未访问 OR 组不属于日志截断 |
 | `ComputedQuantity` | 非负整数，份 | 本次评估得到的候选成交量，不代表已经成交 |
 | `ComputedBudgetCents` | 非负 int64，分 | 本次可用于买入并支付手续费的候选预算，不代表已扣费 |
 | `EventTickStartSimulationSeconds` | uint32，经营秒 | 专项诊断中实际执行的完整事件秒起点，不是平静秒或整批起点 |
@@ -310,13 +356,13 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `SessionEnded` | 两类/INF | 各局结束和尾段输出后、关闭文件前的进程事件；时长由 UptimeMs 表达，不代表字节已耐断电持久化 |
 | `GameInitialized` | 两类/INF | 真实初始化完成；GamePurpose、Seed、InitialFacilities、Inventory、MoneyCents、AvailableMoneyCents、FrozenMoneyCents |
 | `GameEnded` | 两类/INF | 本局尾段和捕获结束后；EndReason、IsPaused；不因原地流程结束而发出 |
-| `CommandReceived` | 两类/INF | 语义请求收到后、业务验证和修改前；CommandId、CommandName、CommandOrigin、CommandArguments；#126 仅 BuyCommodity，其参数含原 Commodity 与 RequestedQuantity |
+| `CommandReceived` | 两类/INF | 语义请求收到后、业务验证和修改前；CommandId、CommandName、CommandOrigin、CommandArguments；原参数形状见玩家指令契约 |
 | `CommandFinished` | 两类/INF | 真实完成、拒绝或异常后；同一 CommandId、CommandName、CommandOrigin、CommandStatus；拒绝加 RejectionReason，异常另关联 BusinessException 并保持传播；不重复输出资金库存收支 |
 | `BuildingPlaced`、`BuildingRemoved` | 两类/INF | 实际命令完成；Outcome、RejectionReason、Cell、Anchor、BuildingKind、ChargedCents、资金前后；生产建筑加 Crop，失败无法解析的建筑信息可 null；有枚举时加 FailureCode |
 | `FarmManualControlChanged` | 两类/INF | 两种接管命令完成；Outcome、RejectionReason、Cell、Anchor、Crop（请求）、TakeoverMode、PreviousPlanId、PlanDetached、CurrentCyclePreserved、PreviousSelectedCrop、EffectiveSelectedCrop、NextCycleCrop；无法取得的状态为 null；替代旧 CropChanged，不重复发出 |
 | `CultivationPlanCreated`、`CultivationPlanUpdated` | 两类/INF | 正式保存完成；Outcome、RejectionReason、RequestedPlan、PlanBefore、PlanAfter；已有 ID 时加 PlanId，拒绝不把请求当 After |
-| `CultivationPlanDeleted` | 两类/INF | 删除及解除全部引用后；Outcome、RejectionReason、PlanId、PlanBefore、PlanAfter、DetachedFarmCount；保留当前轮的规则由真实结果解释 |
-| `CultivationPlanApplied` | 两类/INF | 批量命令完成；Outcome、RejectionReason、PlanId、InputCellCount、ResolvedUniqueTargetCount、AppliedTargetCount、TargetAnchors、TargetsTruncated；输入提前拒绝未完整解析时去重数 null |
+| `CultivationPlanDeleted` | 两类/INF | 删除及解除全部引用后；Outcome、RejectionReason、已有时的 PlanId、PlanBefore、PlanAfter、DetachedFarmCount；保留当前轮的规则由真实结果解释 |
+| `CultivationPlanApplied` | 两类/INF | 批量命令完成；Outcome、RejectionReason、已有时的 PlanId、InputCellCount、ResolvedUniqueTargetCount、AppliedTargetCount、TargetAnchors、TargetsTruncated；输入提前拒绝未完整解析时去重数 null |
 | `RawReserveChanged` | 两类/INF | 底线命令完成；Outcome、FailureCode、RejectionReason、Crop、PreviousReserveQuantity、ReserveQuantity；成功 FailureCode=RawReserveFailure.None，拒绝使用该枚举实际原因；无效输入须另记录 RequestedQuantity，未取得合法品种时前后值 null |
 | `PauseChanged` | 两类/INF | 暂停状态真正变化后；IsPaused 为新值，不为 UI 刷新重复写 |
 | `SimulationRateSelected` | 两类/INF | 每次已接受倍率选择，包括同值选择；Source、RequestedRate、PreviousRate、EffectiveRate、ValueChanged，不声称一定改变数值或解除暂停 |
@@ -326,7 +372,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `TradeFinished` | 两类/INF | 单商品主动交易完成；Outcome、FailureCode、RejectionReason、Commodity、Side、RequestMode、Quantity、ValueCents、FeeCents、资金前后及库存前后；Fixed 加 RequestedQuantity；合法报价已取得时加 UnitPriceCents；非法商品时库存前后为 null |
 | `AllProductsSold` | 两类/INF | 一次全部加工品出售完成；Outcome、FailureCode、RejectionReason、RequestMode=AllProducts、Quantity、ValueCents、FeeCents=0、资金前后、TradeLines；Quantity/ValueCents 为各行实际成交的合计，拒绝时各行实际量/货值为 0，不把合计货值除以合计数量假装单价 |
 | `OrderCreated`、`OrderEdited` | 两类/INF | 命令完成；Outcome、RejectionReason、RequestedOrderRequest（请求原值）；成功加 OrderId、OrderRequestBefore、OrderRequestAfter、订单前后、资金/商品库存前后、CashBasisCents、ReserveCents、LockedQuantity；创建拒绝没有已分配 ID 时省略，不把失败的编辑输入当作生效配置 |
-| `OrderCancelled`、`OrderEnabledChanged` | 两类/INF | 命令完成；Outcome、RejectionReason、OrderId；有合法订单时加订单前后、资金与库存前后 |
+| `OrderCancelled`、`OrderEnabledChanged` | 两类/INF | 命令完成；Outcome、RejectionReason；有合法订单时加 OrderId、订单前后、资金与库存前后；不存在订单的原输入编号由关联 CommandArguments.OrderId 保留 |
 | `OrderFilled` | 两类/INF | 完成结算、冻结差额释放、订单状态更新后；OrderId、Commodity、Side、Quantity、UnitPriceCents、ValueCents、FeeCents、资金/库存前后、订单前后；仅实际成交，不能用本事件表达等待 |
 | `OrderWaitChanged` | 两类/INF | 本节定义的真实等待观察变化；OrderId、WaitingState、PrimaryReason、WaitingCategories、PreviousWaitingCategories、EvaluationCoverage；Resolved 加 Resolution，季节原因加 Season；不附第二笔资金变动 |
 | `OrderWaitSummary` | 两类/INF | 等待观察封窗/终止前的已合并尾段；OrderId、IntervalStartUptimeMs/IntervalEndUptimeMs、Coalesced、SuppressedTransitionCount、ReasonObservationCounts、FirstObservedSimulationSeconds/LastObservedSimulationSeconds、LastWaitingState/LastWaitingCategories |
@@ -338,11 +384,11 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `LoggingHealthChanged` | 两类/WRN 或 INF | 可输出的已观察故障/恢复；LoggingHealth、FirstFailureUptimeMs、FailureCount、KnownLostCount；不可用时由独立诊断渠道报告 |
 | `EventPayloadRejected` | 两类/WRN | 原事件核心内容无法完整输出时的有界说明；OriginalEventName、可取得的原关联键、RejectionReason；原事件不作为完整证据 |
 | `BusinessException`、`FatalException` | 两类/ERR 或 FTL | 真正异常的接收边界；ExceptionType、Exception，已有命令/订单/设施标识加相应字段；前者 ERR，确实不能初始化/继续的后者 FTL |
-| `RuleChecked` | debug/DBG | 实际规则检查完成；RuleKind、CheckResults、Outcome、相关 Cell/Anchor/Crop/Commodity；不等于该命令已提交成功 |
+| `RuleChecked` | debug/DBG | 实际建造/播种执行重验或交易检查完成；RuleKind、CheckResults、Outcome、相关 Cell/Anchor/Crop/Commodity；交易另带Side/RequestMode，全部加工品的聚合Capacity检查省略单一Commodity；不等于该命令已提交成功；UI预览、详情/提示查询及排程预检不触发该事件 |
 | `ProductionStateChanged` | debug/DBG | 指定对象的受控采集，实际状态转换后；ProductionKind、Anchor、Crop、Transition、StateBefore、StateAfter、RemainingSeconds；农田加供水前后，数量按 Transition 定义 |
 | `WorkerTaskChanged` | debug/DBG | 指定工人的受控采集，任务认领/释放或活动状态变化；WorkerNumber、ActivityBefore、ActivityAfter、TargetAnchorBefore、TargetAnchorAfter |
 | `WorkerMoved` | debug/VRB | 专项观察指定工人经营移动；WorkerNumber、PositionBefore、PositionAfter，不采集每帧插值 |
-| `OrderEvaluated` | debug/DBG 或 VRB | 真实求值后；OrderId、ConditionSatisfied、WaitingCategories、EvaluationCoverage；DBG 默认稳定变化且有界，选定订单 VRB 可逐次写并加本次实际得到的 Conditions、ComputedQuantity、ComputedBudgetCents；未执行项省略 |
+| `OrderEvaluated` | debug/VRB | 开启专项采集后，选定订单真实求值逐次记录；OrderId、ConditionSatisfied、ConditionGroupsSatisfied、WaitingCategories、EvaluationCoverage、ConfiguredConditionGroupCount、EvaluatedConditionGroupCount、EvaluatedConditionCount；Conditions为实际访问组中的有界样本，ComputedQuantity/ComputedBudgetCents仅在本次实际计算时提供；未执行项省略。稳定等待变化仍由runtime的OrderWaitChanged记录，不另有默认DBG流 |
 | `QuoteCalculated` | debug/DBG | 本轮行情计算完成；Commodity、QuoteDate、SupplyFactor、DemandFactor、CalculationInputs；QuoteDate 是这些计算面向的实际报价日，不必等于事件头当前 GameDate，最终以 QuoteUpdated 为正式提交证据 |
 | `EventTickTiming` | debug/VRB | 专项观察的完整事件秒完成；EventTickStartSimulationSeconds、StageDurationsMs，不为 QuietTicks 重新执行阶段；普通运行用批次汇总 |
 | `ViewChanged` | debug/DBG | 实际窗口/镜头/外观同步变化；按变化类型提供 WindowSize/ViewportSize/PlayerZoom/CameraCenter/RebuiltChunkCount，不为每帧刷新重复写 |
@@ -375,16 +421,17 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 
 加工：窗口 A 期初原料 10 份，收获 4、买入 3、卖出 2、实际开工领取 6，尚未完工，则期末原料 9，RawConsumedByCrop=6、ProducedByCrop=0。窗口 B 这 6 个批次完成入库、卖出加工品 1，且没有新开工，则该窗口消耗 0、产出 6、加工品净增 5。这是当前每次领取 1 份的多批次合计示意，不改变配方；两窗口之间不允许从产量倒推消耗。若 A 尾段缺失，则不能仅凭 B 恢复 A 的完整原料流向。
 
-### 初始采集与格式预算
+### 采集与格式预算
 
-初版允许工程实施选择并验证限额，不将它们用作业务限制。#126 采用摘要 256、自由字符串 512 个 Unicode 标量、异常 64 行/16 KiB、整事件 32 KiB；其余汇总窗口、等待合并、对象范围和集合样本预算随所属阶段实际接入，不能将下表视为这些能力已经存在。满图、高倍率、连续交易和大合法配置下的预算调整遵守已确认的采集语义。
+下表是当前采集限额，不用作业务限制。摘要 256、自由字符串 512 个 Unicode 标量、异常 64 行/16 KiB、整事件 32 KiB；每订单每现实 60 秒最多 8 条中间等待变化，每配置取前 8 组且共 32 条条件。首次等待、真实成交恢复、取消与停用不被预算抑制。满图、高倍率、连续交易和大合法配置下的预算调整须保持采集语义。
 
-| 项目 | 候选初值 | 必须保持的语义 |
+| 项目 | 当前限额 | 必须保持的语义 |
 | --- | --- | --- |
-| 生产/性能窗口 | 60 个现实秒 | 实际安全边界封窗，可超时，不拆批次 |
+| 生产窗口 | 60 个现实秒 | 实际安全边界封窗，可超时，不拆批次 |
+| 性能窗口 | 60 个现实秒 | 实际安全边界封窗，可超时，不拆批次 |
 | 单订单中间等待变化 | 每现实 60 秒最多 8 条 | 首次/终止不漏，超限有合并尾段，业务求值次数不变 |
-| 专项诊断 | 最多 32 个锚点、8 个订单或 3 个工人，120 秒或 5000 条 | 对象、时间和总条数同时有限，到限自动结束 |
-| 自由文本/集合 | 摘要 256、自由字符串 512 个 Unicode 标量；样本集合 32 项 | 固定七/十四商品结构完整保留，大合法配置不能被日志限制拒绝 |
+| 专项诊断 | 最多 32 个锚点与坐标合计、8 个订单、3 个工人，120 秒及 5000 条上限 | 对象、时间和总条数同时有限，到限自动结束 |
+| 自由文本/集合 | 摘要 256、自由字符串 512 个 Unicode 标量；订单配置前 8 组且合计 32 条条件；年度表条目/输入子格/解析目标各前 32 项；诊断样本另有限额 | 固定七/十四商品结构完整保留，大合法配置不能被日志限制拒绝 |
 | 异常/整事件 | 异常最多 64 行/16 KiB，整事件 32 KiB | 可见截断、结构完整；核心信息保不住则报告证据缺失 |
 
 附件的 SlowBatch 告警、全场停工原因统计、计划修订号暂不登记为首版必需事件或字段；若后续确认实际诊断需求，再补独立契约。性能验收仍按项目已有标准，不把建议慢批次阈值解释成玩法实时保证。

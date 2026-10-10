@@ -2,6 +2,7 @@ using System;
 using FarmExchange.Economy;
 using FarmExchange.Farming;
 using FarmExchange.Inventory;
+using FarmExchange.Logging;
 using FarmExchange.Market;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
@@ -12,6 +13,14 @@ internal sealed class TradingService
     private readonly GoodsInventory _inventory;
     private readonly Wallet _wallet;
     private readonly MarketQuotes _market;
+
+    private TradingLog? _log;
+
+    /**
+     * <summary>接入本局交易观察，不改变结算依赖或规则。</summary>
+     * <param name="log">本局领域入口；null 关闭观察。</param>
+     */
+    internal void SetLogging(TradingLog? log) => _log = log;
 
     internal TradingService(GoodsInventory inventory, Wallet wallet, MarketQuotes market)
     {
@@ -40,21 +49,33 @@ internal sealed class TradingService
 
     private TradeResult BuyCore(CommodityId commodity, int quantity, int reserveCents, bool chargeFee, int frozenCents)
     {
-        if (!commodity.IsDefined)
+        TradeRuleObservation? checks = _log?.BeginRuleCheck(commodity, true, chargeFee);
+        bool commodityRejected = !commodity.IsDefined;
+        checks?.Checked(TradeRuleCheck.Commodity, !commodityRejected);
+        if (commodityRejected)
             return Failed(TradeFailure.InvalidCommodity);
-        if (quantity <= 0)
+        bool quantityRejected = quantity <= 0;
+        checks?.Checked(TradeRuleCheck.Quantity, !quantityRejected);
+        if (quantityRejected)
             return Failed(TradeFailure.InvalidQuantity);
-        if (quantity > int.MaxValue - _inventory.Get(commodity))
+        bool capacityRejected = quantity > int.MaxValue - _inventory.Get(commodity);
+        checks?.Checked(TradeRuleCheck.Capacity, !capacityRejected);
+        if (capacityRejected)
             return Failed(TradeFailure.InventoryCapacityExceeded);
         int unitPriceCents = _market.GetQuote(commodity).PriceCents;
         long totalCents = (long)quantity * unitPriceCents;
         long feeCents = chargeFee ? (totalCents + 99) / 100 : 0;
         long expenseCents = totalCents + feeCents;
         long availableCents = (long)_wallet.AvailableCents + frozenCents;
-        if (expenseCents > availableCents)
+        bool fundsRejected = expenseCents > availableCents;
+        checks?.Checked(TradeRuleCheck.Funds, !fundsRejected);
+        if (fundsRejected)
             return Failed(TradeFailure.InsufficientFunds, unitPriceCents);
-        if (availableCents - expenseCents < reserveCents)
+        bool reserveRejected = availableCents - expenseCents < reserveCents;
+        checks?.Checked(TradeRuleCheck.Reserve, !reserveRejected);
+        if (reserveRejected)
             return Failed(TradeFailure.CashReserveNotMet, unitPriceCents);
+        checks?.Accepted();
         _wallet.SpendForOrder((int)expenseCents, frozenCents);
         _inventory.Add(commodity, quantity);
         return new TradeResult(TradeFailure.None, quantity, totalCents)
@@ -77,35 +98,64 @@ internal sealed class TradingService
     internal TradeResult SellOrder(CommodityId commodity, int quantity, int frozenQuantity = 0) =>
         SellCore(commodity, quantity, true, frozenQuantity);
 
-    private TradeResult SellCore(CommodityId commodity, int quantity, bool chargeFee, int frozenQuantity)
+    private TradeResult SellCore(CommodityId commodity, int quantity, bool chargeFee, int frozenQuantity,
+        TradeRuleScope scope = TradeRuleScope.Fixed)
     {
-        if (!commodity.IsDefined)
+        TradeRuleObservation? checks = _log?.BeginRuleCheck(commodity, false, chargeFee, scope);
+        bool commodityRejected = !commodity.IsDefined;
+        checks?.Checked(TradeRuleCheck.Commodity, !commodityRejected);
+        if (commodityRejected)
             return Failed(TradeFailure.InvalidCommodity);
-        if (quantity <= 0)
+        bool quantityRejected = quantity <= 0;
+        checks?.Checked(TradeRuleCheck.Quantity, !quantityRejected);
+        if (quantityRejected)
             return Failed(TradeFailure.InvalidQuantity);
-        if (quantity > (long)_inventory.GetAvailable(commodity) + frozenQuantity)
+        bool stockRejected = quantity > (long)_inventory.GetAvailable(commodity) + frozenQuantity;
+        checks?.Checked(TradeRuleCheck.Stock, !stockRejected);
+        if (stockRejected)
             return Failed(TradeFailure.InsufficientStock);
-        long totalCents = (long)quantity * _market.GetQuote(commodity).PriceCents;
+        int unitPriceCents = _market.GetQuote(commodity).PriceCents;
+        long totalCents = (long)quantity * unitPriceCents;
         long feeCents = chargeFee ? (totalCents + 99) / 100 : 0;
         long incomeCents = totalCents - feeCents;
-        if (incomeCents > int.MaxValue - _wallet.BalanceCents)
-            return Failed(TradeFailure.WalletCapacityExceeded);
+        bool capacityRejected = incomeCents > int.MaxValue - _wallet.BalanceCents;
+        checks?.Checked(TradeRuleCheck.Capacity, !capacityRejected);
+        if (capacityRejected)
+            return Failed(TradeFailure.WalletCapacityExceeded, unitPriceCents);
+        checks?.Accepted();
         _inventory.RemoveForOrder(commodity, quantity, frozenQuantity);
         _wallet.Credit((int)incomeCents);
-        return new TradeResult(TradeFailure.None, quantity, totalCents) { FeeCents = feeCents };
+        return new TradeResult(TradeFailure.None, quantity, totalCents) { FeeCents = feeCents, UnitPriceCents = unitPriceCents };
     }
 
     internal TradeResult SellAll(CommodityId commodity)
     {
         if (!commodity.IsDefined)
+        {
+            _log?.BeginRuleCheck(commodity, false, false, TradeRuleScope.AllCommodity)?.Checked(TradeRuleCheck.Commodity, false);
             return Failed(TradeFailure.InvalidCommodity);
+        }
         int quantity = _inventory.GetAvailable(commodity);
-        return quantity == 0 ? new TradeResult(TradeFailure.None, 0, 0) : Sell(commodity, quantity);
+        if (quantity == 0)
+        {
+            TradeRuleObservation? checks = _log?.BeginRuleCheck(commodity, false, false, TradeRuleScope.AllCommodity);
+            checks?.Checked(TradeRuleCheck.Commodity, true);
+            checks?.Accepted();
+            return new TradeResult(TradeFailure.None, 0, 0);
+        }
+        return SellCore(commodity, quantity, false, 0, TradeRuleScope.AllCommodity);
     }
 
-    internal TradeResult SellAllProducts()
+    internal TradeResult SellAllProducts() => SellAllProductsDetailed().Trade;
+
+    /**
+     * <summary>完整结算全部加工品并返回原汇总过程取得的七商品实际明细。</summary>
+     * <returns>真实合计和只读明细；容量拒绝保持资源不变、逐行实际数量与货值为零。</returns>
+     */
+    internal ProductSaleResult SellAllProductsDetailed()
     {
         var quantities = new int[CropCatalog.Crops.Count];
+        var prices = new int[CropCatalog.Crops.Count];
         long sold = 0;
         long totalCents = 0;
         foreach (var crop in CropCatalog.Crops)
@@ -114,14 +164,27 @@ internal sealed class TradingService
             int quantity = _inventory.GetAvailable(commodity);
             quantities[(int)crop.Kind] = quantity;
             sold += quantity;
-            totalCents += (long)quantity * _market.GetQuote(commodity).PriceCents;
+            int unitPriceCents = _market.GetQuote(commodity).PriceCents;
+            prices[(int)crop.Kind] = unitPriceCents;
+            totalCents += (long)quantity * unitPriceCents;
         }
-        if (totalCents > int.MaxValue - _wallet.BalanceCents)
-            return Failed(TradeFailure.WalletCapacityExceeded);
+        var lines = new TradeLineResult[CropCatalog.Crops.Count];
+        bool rejected = totalCents > int.MaxValue - _wallet.BalanceCents;
+        TradeRuleObservation? checks = _log?.BeginRuleCheck(null, false, false, TradeRuleScope.AllProducts);
+        checks?.Checked(TradeRuleCheck.Capacity, !rejected);
+        if (!rejected) checks?.Accepted();
+        foreach (var crop in CropCatalog.Crops)
+        {
+            int index = (int)crop.Kind;
+            int quantity = rejected ? 0 : quantities[index];
+            lines[index] = new(new(crop.Kind, CommodityKind.Product), quantity, prices[index], (long)quantity * prices[index]);
+        }
+        if (rejected)
+            return new(Failed(TradeFailure.WalletCapacityExceeded), Array.AsReadOnly(lines));
         foreach (var crop in CropCatalog.Crops)
             _inventory.Remove(new CommodityId(crop.Kind, CommodityKind.Product), quantities[(int)crop.Kind]);
         _wallet.Credit((int)totalCents);
-        return new TradeResult(TradeFailure.None, sold, totalCents);
+        return new(new TradeResult(TradeFailure.None, sold, totalCents), Array.AsReadOnly(lines));
     }
 
     private static TradeResult Failed(TradeFailure failure, int? unitPriceCents = null) =>

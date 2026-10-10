@@ -5,6 +5,7 @@ using System.Linq;
 using Godot;
 using FarmExchange.Development;
 using FarmExchange.Gameplay;
+using FarmExchange.Logging;
 using FarmExchange.Time;
 using static FarmExchange.UI.UiElements;
 
@@ -18,6 +19,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
 {
     private readonly FarmGame _currentGame;
     private readonly SimulationDriver _currentDriver;
+    private readonly RuntimeLog? _logging;
     private readonly Action _refreshCurrent;
     private readonly ScenarioCatalogStep _catalog;
     private readonly ScenarioEditorStep _editor;
@@ -44,13 +46,15 @@ public partial class DeveloperToolsWindow : DraggableWindow
      * <param name="currentDriver">当前局唯一时间驱动。</param>
      * <param name="refreshCurrent">经营变化后的统一刷新。</param>
      * <param name="library">已明确目录的配置库；省略时使用仓库或开发包配置目录。</param>
+     * <param name="logging">与主局共享的日志会话，用于独立流程局。</param>
      */
     public DeveloperToolsWindow(FarmGame currentGame, SimulationDriver currentDriver, Action refreshCurrent,
-        ScenarioConfigurationLibrary? library = null)
+        ScenarioConfigurationLibrary? library = null, RuntimeLog? logging = null)
         : base("DeveloperToolsWindow", "开发测试 · 流程与配置", new Vector2(280, 155), new Vector2(1360, 740))
     {
         _currentGame = currentGame;
         _currentDriver = currentDriver;
+        _logging = logging;
         _refreshCurrent = refreshCurrent;
         SetInitialPlacement(false);
         ConfigureFrame();
@@ -210,8 +214,14 @@ public partial class DeveloperToolsWindow : DraggableWindow
     public override void _ExitTree()
     {
         _currentDriver.RateChanged -= OnCurrentRateChanged;
-        if (_scenario?.IsRunning == true) Abort("开发窗口宿主退出");
+        ShutdownScenario();
         base._ExitTree();
+    }
+
+    internal void ShutdownScenario()
+    {
+        _scenario?.Abort("开发窗口宿主退出");
+        SaveFinishedReport();
     }
 
     private bool IsRunning => _scenario?.IsRunning == true;
@@ -436,8 +446,8 @@ public partial class DeveloperToolsWindow : DraggableWindow
             _runDirectory = ScenarioReport.CreateRunDirectory(root);
             _reportAttempted = false;
             _isCurrent = configuration.Target == "current";
-            _scenario = BuyProcessSellScenario.Start(configuration, _isCurrent ? _currentGame : null);
-            _independentDriver = _isCurrent ? null : new SimulationDriver();
+            _scenario = BuyProcessSellScenario.Start(configuration, _runDirectory, _isCurrent ? _currentGame : null, logging: _logging);
+            _independentDriver = _isCurrent ? null : new SimulationDriver(_scenario.Game.Log?.Time);
             _observedPaused = _scenario.Game.IsPaused;
             if (_scenario.IsRunning) ApplyScenarioRate();
             if (_isCurrent) _refreshCurrent();
@@ -520,17 +530,25 @@ public partial class DeveloperToolsWindow : DraggableWindow
         _result.Progress.Text = $"{(_isCurrent ? "当前局" : "独立局")} · {_scenario.Progress}\n" +
             $"实际倍率 {(_isCurrent ? _currentDriver : _independentDriver!)?.Rate}× · " +
             (_scenario.Game.IsPaused && IsRunning ? "暂停，等待继续" : OutcomeText(_scenario.Outcome));
-        if (IsRunning || _reportAttempted) return;
+        var saved = SaveFinishedReport();
+        if (saved == null) return;
+        if (saved.Value.File != null) _result.ReportPath.Text = "报告：" + saved.Value.File;
+        SetFeedback(saved.Value.Feedback);
+    }
+
+    private (string? File, string Feedback)? SaveFinishedReport()
+    {
+        if (_scenario == null || IsRunning || _reportAttempted) return null;
         _reportAttempted = true;
         try
         {
-            _result.ReportPath.Text = "报告：" + _scenario.WriteReport(_runDirectory!);
-            SetFeedback(_scenario.Report.Reason ?? "流程结束，检查结果见JSON报告。");
+            return (_scenario.WriteReport(), _scenario.Report.Reason ?? "流程结束，检查结果见JSON报告。");
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            SetFeedback("输出错误（报告尚未保存）：" + error.Message + "；执行结果保留，未切换输出位置。");
+            return (null, "输出错误（报告尚未保存）：" + error.Message + "；执行结果保留，未切换输出位置。");
         }
+        finally { if (!_isCurrent) _scenario.Game.Dispose(); }
     }
 
     private static string OutcomeText(ScenarioOutcome outcome) => outcome switch

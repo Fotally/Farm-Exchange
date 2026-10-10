@@ -1,6 +1,6 @@
 # 本地开发构建与工具排除
 
-关联 [#100](https://github.com/Fotally/Farm-Exchange/issues/100)、[#101](https://github.com/Fotally/Farm-Exchange/issues/101) 与 [#104](https://github.com/Fotally/Farm-Exchange/issues/104)。项目只维护一套公共经营代码与一个 `FarmExchange.csproj`，不创建第二个工具程序集，不把 dev 包加入 CI。
+项目只维护一套公共经营代码与一个 `FarmExchange.csproj`，不创建第二个工具程序集，不把 dev 包加入 CI。
 
 | 构建配置 | 编译内容 |
 | --- | --- |

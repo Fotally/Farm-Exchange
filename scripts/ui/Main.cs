@@ -17,12 +17,15 @@ public partial class Main : Node2D
     private FarmGame? _currentGame;
     private RuntimeLog? _logging;
     private FarmGame GameState => InitializeGame();
-    private readonly SimulationDriver _driver = new();
+    private SimulationDriver _driver = null!;
     private WorkerPresentation _workerPresentation = null!;
     private Button _rateButton = null!;
     private long _tickHarvested;
     private long _tickProduced;
 #if DEBUG
+    // 图形夹具必须在父节点 _EnterTree 中设置，在任何 Game/Driver 读取之前生效。
+    internal static System.Func<RuntimeLog>? LoggingFactory { get; set; }
+    internal static int? InitialSeed { get; set; }
     private DeveloperToolsWindow _developerWindow = null!;
 #endif
     private WorldMap _worldMap = null!;
@@ -65,7 +68,14 @@ public partial class Main : Node2D
     }
 
     internal FarmGame Game => GameState;
-    internal SimulationDriver Driver => _driver;
+    internal SimulationDriver Driver
+    {
+        get
+        {
+            InitializeGame();
+            return _driver;
+        }
+    }
 
     private FarmGame InitializeGame()
     {
@@ -75,22 +85,39 @@ public partial class Main : Node2D
 #else
         const bool development = false;
 #endif
-        if (OS.HasFeature("editor") || OS.HasFeature("windows"))
+#if DEBUG
+        if (LoggingFactory != null)
         {
-            string directory = OS.HasFeature("editor")
-                ? ProjectSettings.GlobalizePath("res://build/logs")
-                : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(OS.GetExecutablePath())!, "logs");
-            var size = DisplayServer.WindowGetSize();
-            _logging = RuntimeLog.OpenFile(directory, development, new LogEnvironment(
-                GameVersion: ProjectSettings.HasSetting("application/config/version")
-                    ? ProjectSettings.GetSetting("application/config/version").AsString() : null,
-                EngineVersion: Engine.GetVersionInfo()["string"].AsString(),
-                Renderer: RenderingServer.GetCurrentRenderingMethod(), WindowWidth: size.X, WindowHeight: size.Y,
-                BuildKind: OS.HasFeature("editor") ? "Debug" : OS.HasFeature("debug") ? "ExportDebug" : "Release"),
-                diagnostic: message => GD.PushWarning(message));
+            _logging = LoggingFactory();
         }
-        else _logging = RuntimeLog.Disabled();
-        try { _currentGame = new FarmGame(logging: _logging); }
+        else
+#endif
+        {
+            if (OS.HasFeature("editor") || OS.HasFeature("windows"))
+            {
+                string directory = OS.HasFeature("editor")
+                    ? ProjectSettings.GlobalizePath("res://build/logs")
+                    : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(OS.GetExecutablePath())!, "logs");
+                var size = DisplayServer.WindowGetSize();
+                _logging = RuntimeLog.OpenFile(directory, development, new LogEnvironment(
+                    GameVersion: ProjectSettings.HasSetting("application/config/version")
+                        ? ProjectSettings.GetSetting("application/config/version").AsString() : null,
+                    EngineVersion: Engine.GetVersionInfo()["string"].AsString(),
+                    Renderer: RenderingServer.GetCurrentRenderingMethod(), WindowWidth: size.X, WindowHeight: size.Y,
+                    BuildKind: OS.HasFeature("editor") ? "Debug" : OS.HasFeature("debug") ? "ExportDebug" : "Release"),
+                    diagnostic: message => GD.PushWarning(message));
+            }
+            else _logging = RuntimeLog.Disabled();
+        }
+        try
+        {
+#if DEBUG
+            _currentGame = new FarmGame(InitialSeed, logging: _logging);
+#else
+            _currentGame = new FarmGame(logging: _logging);
+#endif
+            _driver = new SimulationDriver(_currentGame.Log?.Time);
+        }
         catch (System.Exception error)
         {
             _logging.InitializationFailed(error);
@@ -123,18 +150,24 @@ public partial class Main : Node2D
 
     public override void _ExitTree()
     {
-        _driver.RateChanged -= RefreshSimulationRate;
+        if (_driver != null) _driver.RateChanged -= RefreshSimulationRate;
+#if DEBUG
+        if (GodotObject.IsInstanceValid(_developerWindow)) _developerWindow.ShutdownScenario();
+#endif
         _currentGame?.Dispose();
         _logging?.Dispose();
     }
 
     public override void _Process(double delta)
     {
+        _logging?.ProcessFrame();
         AdvanceSimulation(delta);
 #if DEBUG
         _developerWindow.AdvanceIndependent(delta);
 #endif
         RefreshPlacementPreview();
+        _currentGame?.Log?.View.Observe(DisplayServer.WindowGetSize(), GetViewportRect().Size,
+            _camera.PlayerZoom, _worldMap.ToLocal(_camera.GlobalPosition), _worldMap.ChunkRedrawCount);
     }
 
     internal uint AdvanceSimulation(double delta)
@@ -340,7 +373,7 @@ public partial class Main : Node2D
         AddWindow(_cultivationWindow);
 #if DEBUG
         _developerWindow = new DeveloperToolsWindow(GameState, _driver,
-            () => RefreshAfterGameChange(worldChanged: true));
+            () => RefreshAfterGameChange(worldChanged: true), logging: _logging);
         AddWindow(_developerWindow);
         var developerButton = MakeQuietButton("开发测试", 115, 36);
         developerButton.Name = "DeveloperToolsButton";

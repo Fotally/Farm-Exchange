@@ -26,7 +26,7 @@ public sealed class ScenarioReport
     public int SchemaVersion => 1;
     public string Flow => "buy-process-sell";
     public int FlowVersion => 1;
-    public string RunId { get; internal set; } = "";
+    public required string RunId { get; init; }
     public required ScenarioConfigurationReference Configuration { get; init; }
     public string ConfigurationValidation => "Passed";
     public required string Target { get; init; }
@@ -95,7 +95,6 @@ public sealed class ScenarioReport
 
     internal string Write(string directory)
     {
-        RunId = Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)));
         string destination = Path.Combine(directory, "report.json");
         var options = new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         options.Converters.Add(new JsonStringEnumConverter());

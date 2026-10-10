@@ -23,3 +23,5 @@ Module 内部唯一保存玩家倍率；初始化及视口尺寸变化时，按�
 `TestCameraInteraction.RunChecks` 检查既有选择、拖动释放及边界；`RunResizeChecksAsync` 通过真实主场景、窗口尺寸、公开输入和可见画布变换检查 1280×720、1920×1080、2560×1440 及往返、玩家缩放保持、上下限、UI 比例、点击、拖动、键盘平移与大窗口冷启动。有窗口运行另检查真实全屏，并保存窗口和全屏截图；汇总套件等待异步检查与窗口恢复完成。
 
 它不计算等距坐标、不修改经营状态；输入的玩家可见行为见[地图与操作](../../../gameplay/world/map-and-camera.md)。tests/integration/TestCameraInteraction.cs 检查镜头与地图协作。
+
+表现诊断通过内部 PlayerZoom 读取模块持有的真实玩家倍率；它不是抵消画布拉伸后的 Camera2D.Zoom。Main 只在检测到实际视图变化且局级 ViewChanged 入选时记录，不改变镜头输入或缩放规则。

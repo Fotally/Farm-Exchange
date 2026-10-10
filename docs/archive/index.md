@@ -26,9 +26,16 @@
 | [Farm Exchange 系统组织与深接口设计：已完成计划归档](project/farm-exchange-system-design-and-execution-plan.md) | [现行说明](../project/roadmap.md) | #76、#75；PR #70已合并 |
 | [历史自动化测试与性能验收](project/testing.md) | [现行说明](../project/testing.md) | #36、#42、#75、#78、#86、#87、#94、#100、#101、#105、#116；#116已验收，本地dev交付状态见议题 |
 | [UI 原型与早期验收历史](project/ui-visual-prototype.md) | [现行说明](../project/ui-visual-prototype.md) | #94；PR #95已合并 |
+| [早期 Godot 主界面截图](architecture/ui/main/implementation-early-godot-screenshots.md) | [主界面接口](../architecture/ui/main/interface-main.md) | #24；早期深绿界面，已被现行像素田园界面替代 |
+| [早期市场窗口截图](architecture/ui/market-window/implementation-early-market-screenshots.md) | [市场窗口接口](../architecture/ui/market-window/interface-market-window.md) | #73；早期交易与公告图形取证，视觉已被替代 |
+| [早期委托窗口截图](architecture/ui/trade-orders-window/implementation-early-orders-screenshot.md) | [委托窗口接口](../architecture/ui/trade-orders-window/interface-trade-orders-window.md) | #36；早期委托图形取证，视觉已被替代 |
+| [早期道路建造目录截图](architecture/ui/build-catalog-window/implementation-early-road-catalog-screenshot.md) | [建造目录接口](../architecture/ui/build-catalog-window/interface-build-catalog-window.md) | #94；旧版道路分类界面，视觉已被替代 |
+| [早期道路详情截图](architecture/ui/road-details-panel/implementation-early-road-details-screenshot.md) | [道路详情接口](../architecture/ui/road-details-panel/interface-road-details-panel.md) | #94；旧版道路详情界面，视觉已被替代 |
+| [年度时间图早期取证截图](architecture/ui/cultivation-window/implementation-early-timeline-screenshots.md) | [年度表窗口接口](../architecture/ui/cultivation-window/interface-cultivation-window.md) | #86；1280×720 / 1600×900 原生拖放与修复取证，现行视觉基准为至少 1920×1080 |
+| [早期三名工人布局截图](architecture/world/worker-presentation/implementation-early-three-workers-screenshot.md) | [工人表现接口](../architecture/world/worker-presentation/interface-worker-presentation.md) | #75；旧布局证据，现行主要图形验收基准为 1920×1080 |
 | [系统规划的阶段决策与交付历史](project/roadmap.md) | [现行说明](../project/roadmap.md) | #74～#113的阶段记录；交付状态见归档索引 |
 | [后续功能计划历史](project/deferred-features-plan.md) | [现行说明](../project/deferred-features-plan.md) | #36、#42、#86；PR #81、#84已合并；#43、#44仍待确认 |
 
 ## 历史视觉附件
 
-[architecture/ui/main](architecture/ui/main/)保存#94未采用的A/C候选、1280主稿与上一轮Godot截图；来源和对应画面见[UI历史记录](project/ui-visual-prototype.md)。当前采用的HTML主稿、1080P基准及现行接口使用的图片仍在正式文档目录。本次保持图片原字节，不删除历史证据；移动目录不宣称减少Git历史体积。
+[architecture/ui/main](architecture/ui/main/)保存#94未采用的A/C候选、1280主稿和早期 Godot 截图；[architecture/ui/market-window](architecture/ui/market-window/)与[architecture/ui/trade-orders-window](architecture/ui/trade-orders-window/)保存被替代的窗口截图。当前采用的 HTML 主稿、1080P 基准及现行接口使用的图片仍在正式文档目录。历史图片保持原字节，移动目录不减少 Git 历史体积。

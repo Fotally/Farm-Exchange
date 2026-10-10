@@ -1,6 +1,6 @@
 # 流程目录、配置描述与编辑草稿接口
 
-关联 [#104](https://github.com/Fotally/Farm-Exchange/issues/104)，履行[C分步设计](../ui/developer-tools-window/implementation-step-flow-editor.md)。实现位于 `scripts/development/configuration/`；文件持久化过程见[配置库实现](implementation-scenario-configuration-library.md)。
+窗口操作见[分步设计与实现](../ui/developer-tools-window/implementation-step-flow-editor.md)。实现位于 `scripts/development/configuration/`；文件持久化过程见[配置库实现](implementation-scenario-configuration-library.md)。
 
 ## Module与状态拥有者
 

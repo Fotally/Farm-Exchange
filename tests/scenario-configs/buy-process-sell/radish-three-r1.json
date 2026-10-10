@@ -5,7 +5,7 @@
   "flow": "buy-process-sell",
   "run": { "target": "independent", "seed": 12345 },
   "execution": {
-    "timePlan": [{ "endDate": "01-01-02", "rate": 2 }, { "endDate": "01-02-01", "rate": 20 }]
+    "timePlan": [{ "endDate": "01-01-02", "rate": 2 }, { "endDate": "01-02-01", "rate": 16 }]
   },
   "parameters": {
     "rawCommodity": "Radish.Raw",

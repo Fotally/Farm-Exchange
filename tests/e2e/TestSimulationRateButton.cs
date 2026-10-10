@@ -47,7 +47,7 @@ public partial class TestSimulationRateButton : Node
                     button.Text != expected.ToString(System.Globalization.CultureInfo.InvariantCulture) + "×")
                     return Fail("公共倍率循环、暂停或未完成tick进度不正确");
             }
-            foreach (double rate in new[] { 5.0, 20.0 })
+            foreach (double rate in new[] { 5.0, 16.0 })
             {
                 main.Driver.SetDevelopmentRate(rate, SimulationRateSource.Scenario);
                 if (button.Text != rate + "×" || !button.TooltipText.Contains("1×"))
