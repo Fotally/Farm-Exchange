@@ -53,7 +53,7 @@
 
 ## 实际 Release 门禁
 
-`Test-LoggingRelease.ps1` 从 `tools/logging-release-probe/Program.cs.txt` 在 `build/` 生成临时控制台工程，引用指定的实际 Release 或导出 DLL；不修改正式工程、开发依赖或发布资源。验证 `Capture` 和 `OpenFile(development:true)` 仍禁止开发采集；有毒只读集合的 Count、索引和枚举一旦被读取就抛出，以证明开始入口在范围构造前返回。反射调用实际生产/加工的明细快照入口，以 null 状态依赖确认门禁先于状态读取。随后执行真实买入和 120 秒批量推进，确认 runtime 业务事件仍输出且不创建 debug 文件。
+`Test-LoggingRelease.ps1` 从 `tools/logging-release-probe/Program.cs.txt` 在 `build/` 生成目标框架为 `net10.0` 的临时控制台工程，引用指定的实际 Release 或导出 DLL；不修改正式工程、开发依赖或发布资源。验证 `Capture` 和 `OpenFile(development:true)` 仍禁止开发采集；有毒只读集合的 Count、索引和枚举一旦被读取就抛出，以证明开始入口在范围构造前返回。反射调用实际生产/加工的明细快照入口，以 null 状态依赖确认门禁先于状态读取。随后执行真实买入和 120 秒批量推进，确认 runtime 业务事件仍输出且不创建 debug 文件。
 
 同一个实际程序集随后分别通过 Capture 和 File 目标触发真实批量容量、检查点、驱动容量及预算异常；核对原类型、消息、堆栈、经营上下文和实际阶段。公开命令观察接入真实检查点两次，核对同次传播仅一次、后续独立操作仍有记录、命令终结完整以及异常对象原样抛出。探针输出中两种目标各有六条异常；单 tick 日历上限和故障目标注入仍由统一功能套件验证，探针不反射修改业务状态。
 

@@ -36,11 +36,11 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v7
 
-      - name: 安装固定 .NET SDK 与兼容运行时
+      - name: 安装固定 .NET SDK 与覆盖率工具运行时
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-          # 额外安装只提供 net8.0 测试与引擎运行时；构建 SDK 由 global.json 固定。
+          # dotnet-coverage 仍以 net8.0 发布；保留 8.0.x 供该工具运行。
           dotnet-version: '8.0.x'
 
       - name: 安装 Godot Mono

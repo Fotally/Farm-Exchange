@@ -55,7 +55,7 @@
 
 - [系统规划](project/roadmap.md)与[后续功能计划](project/deferred-features-plan.md)：当前范围、未确认事项及后续入口。
 - [UI视觉基准](project/ui-visual-prototype.md)：已采用的像素田园布局、1080P和固定倍率参考。
-- [构建与验收](project/build-and-validation.md)、[SDK版本约束与CI](project/continuous-integration.md)、[测试方法](project/testing.md)、[手工游玩验收](project/manual-playthrough.md)。
+- [构建与验收](project/build-and-validation.md)、[.NET 10 目标框架、SDK 与 CI](project/continuous-integration.md)、[测试方法](project/testing.md)、[手工游玩验收](project/manual-playthrough.md)。
 - [GitHub协作](project/contribution-workflow.md)、[议题模板](../.github/ISSUE_TEMPLATE/)及[模板来源](research/issue-template-sources.md)。
 - [素材管理](project/asset-organization.md)、[素材来源](project/asset-sources.md)、[清亮v2基准](research/bright-complete-v2.md)。
 - 后续素材与玩法提案：[水域](project/water-terrain-proposal.md)、[设施朝向](project/facility-orientation-proposal.md)、[采收搬运](project/worker-harvest-transport-proposal.md)、[工人加工](project/worker-processing-proposal.md)。

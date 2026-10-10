@@ -6,7 +6,7 @@ Farm Exchange 是使用 Godot 4.7.2 Mono 与 C# 制作的等距视角放置挂�
 
 开发工具链使用 .NET SDK **10.0.401**，确切版本以根目录 [global.json](global.json) 为准，本地与 Windows / macOS CI 共用该约束。安装后在仓库根目录运行 `dotnet --version` 核对；缺少该版本会明确失败，不会自动选择其他 SDK。
 
-使用 Godot 4.7.2 Mono 打开根目录的 project.godot，运行主场景 scenes/main.tscn。本地指定引擎位于 E:\Godot\Godot_v4.7.2-stable_mono_win64。C# 项目目标框架仍为 `net8.0`，测试与引擎另需 .NET 8 运行时；安装及导出模板配置见[构建与验收](docs/project/build-and-validation.md)。
+使用 Godot 4.7.2 Mono 打开根目录的 project.godot，运行主场景 scenes/main.tscn。本地指定引擎位于 E:\Godot\Godot_v4.7.2-stable_mono_win64。C# 项目目标框架为 `net10.0`，游戏编译、运行与导出使用 .NET 10；完整测试中的 `dotnet-coverage` 工具仍需 .NET 8 运行时。安装及导出模板配置见[构建与验收](docs/project/build-and-validation.md)。
 
 ## 开发与文档
 

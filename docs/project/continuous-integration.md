@@ -10,7 +10,7 @@
 | 推送到 `main`（包括人工合并 PR） | 是 | 是 | 否 | 是 | 覆盖率报告及完整 Windows x86_64 目录，保留 14 天 |
 | 手动 `workflow_dispatch` 并勾选 `performance` | 是 | 是 | 是 | 仅在 `main` 执行 | 覆盖率与 FPS JSON 报告，保留 14 天 |
 
-Windows 与 macOS 工作流都通过 `actions/setup-dotnet` 的 `global-json-file` 读取同一 SDK 版本；`global.json` 禁用版本前滚与预览版，仓库内的编译、格式检查和工具命令必须选择该确切 SDK，缺少时明确失败。两平台额外安装 `8.0.x` SDK，只为提供仍以 `net8.0` 为目标的测试与引擎所需运行时，不参与构建 SDK 选择；安装步骤后续均输出 `dotnet --version` 作为实际版本证据。
+Windows 与 macOS 工作流都通过 `actions/setup-dotnet` 的 `global-json-file` 读取同一 SDK 版本；`global.json` 禁用版本前滚与预览版，仓库内的编译、格式检查和工具命令必须选择该确切 SDK，缺少时明确失败。项目目标框架为 `net10.0`；双平台 CI 除固定的 SDK 10.0.401 外暂保留 `8.0.x` 安装，其中 Windows 覆盖率工具 `dotnet-coverage` 仍以 `net8.0` 发布并使用 .NET 8 运行时。安装步骤后续均输出 `dotnet --version` 作为实际版本证据。
 
 Godot、`dotnet-coverage` 和 GitHub 官方 Action 固定到明确主版本或工具版本。升级 SDK 时修改唯一约束 `global.json` 并同步安装说明；升级这些依赖均应通过独立 issue，在 `dev` 验证成功后再合并。`main` 的导出程序启动步骤使用进程退出码检查，成功后才上传 Windows 构建；产物名包含提交 SHA，下载后应保持目录结构完整。它是提交级验收产物，不替代带版本号的正式 Release 压缩包。
 

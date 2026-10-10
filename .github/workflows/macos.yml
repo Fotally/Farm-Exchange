@@ -31,7 +31,7 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-          # 额外安装只提供 net8.0 测试与引擎运行时；构建 SDK 由 global.json 固定。
+          # 按已确认范围暂保留额外 8.0.x 安装；构建与导出使用固定 SDK 10。
           dotnet-version: '8.0.x'
 
       - name: 核对实际 .NET SDK
