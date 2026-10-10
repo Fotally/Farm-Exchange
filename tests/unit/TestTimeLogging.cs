@@ -80,8 +80,8 @@ public partial class TestTimeLogging : Node
             driver.Rate == 0.5 && driver.Progress == 0.25 && game.IsPaused && driver.Advance(100, game) == 0,
             "非法倍率产生接受事件或改速解除暂停/丢失小数进度");
 #if DEBUG
-        driver.SetDevelopmentRate(20, SimulationRateSource.Scenario);
-        Require(Events(text, "SimulationRateSelected").Last().Contains("RequestedRate: 20"), "开发倍率未走同一观察");
+        driver.SetDevelopmentRate(16, SimulationRateSource.Scenario);
+        Require(Events(text, "SimulationRateSelected").Last().Contains("RequestedRate: 16"), "开发倍率未走同一观察");
 #endif
         var original = new InvalidOperationException("原倍率通知异常");
         driver.RateChanged += (_, _) => throw original;

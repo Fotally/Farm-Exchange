@@ -32,12 +32,12 @@ public partial class TestSimulationDriver : Node
             try { driver.Advance(invalid, game); return Fail("驱动接受非法现实时间"); }
             catch (ArgumentOutOfRangeException) { }
         }
-        driver.SetDevelopmentRate(20, SimulationRateSource.Scenario);
-        if (driver.Advance(0.1, game) != 2 || game.Calendar.ElapsedSeconds != 3)
+        driver.SetDevelopmentRate(16, SimulationRateSource.Scenario);
+        if (driver.Advance(0.125, game) != 2 || game.Calendar.ElapsedSeconds != 3)
             return Fail("开发倍率没有使用同一经营入口");
-        foreach (double rate in new[] { 0.5, 1, 2, 5, 10, 20, 1000000000d })
+        foreach (double rate in new[] { 0.5, 1, 2, 5, 10, 16 })
             if (!SimulationDriver.IsDevelopmentRateAllowed(rate)) return Fail("合法开发倍率被拒绝");
-        foreach (double invalid in new[] { 0, -1, 0.25, 1.5, double.NaN, double.PositiveInfinity })
+        foreach (double invalid in new[] { 0, -1, 0.25, 1.5, 17, 20, double.NaN, double.PositiveInfinity })
         {
             try { driver.SetDevelopmentRate(invalid); return Fail("非法开发倍率未被拒绝"); }
             catch (ArgumentOutOfRangeException) { }

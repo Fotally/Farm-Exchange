@@ -3,7 +3,7 @@
 - 本项目是 Godot 放置挂机游戏。地图为 384×384 个 64×32 基础格，采用等距视角；农田与加工场地各占 3×3（192×96），道路占一格。
 - 已确认的核心循环：玩家建造农田，开局 3 名工人按经营秒移动到田、自动播种和浇水；作物成熟后交给对应场地加工，加工品在商店出售，收入用于建造更多建筑。
 - 现有七种作物为小麦、玉米、水稻、马铃薯、向日葵、甘蔗、萝卜。农田独立选种，时长与收获量见 `docs/gameplay/production/crop-growth.md`；原料进入公共库存，可直接出售或免费加工。十四商品各有独立双周报价，供需、季节、事件与原料成本参与目标价格，节日只移动当期报价，消息在实际报价前一日公布，数值以 `docs/gameplay/trading/market-quotes.md` 为准。即时同价零费买卖完整结算，失败金币库存零修改；买入原料下次领取或随后新建场地即时领取，暂停可主动交易。每秒推进一次经营，7 游戏日＝360 秒。
-- 开局地图中心赠送 3 座农田和 2 处配套加工场地；农田以 50% 概率出现 3 块同种或 2+1 两种配置，萝卜参与随机。初始金币为 50.00；生产设施每座 10.00 金币，道路每小格 1.00。任意小格可作锚点，点击任一子格操作整座；工人每秒走 3 小格、在田中心播种浇水，原标准田布局的两日预算保持。顶部显示季、年、月、日。#74 最终尺寸与配套已确认，#75 已完成独立复查和完整运行验收。
+- 开局地图中心赠送 3 座农田和 2 处配套加工场地；农田以 50% 概率出现 3 块同种或 2+1 两种配置，萝卜参与随机。初始金币为 50.00；生产设施每座 10.00 金币，道路每小格 1.00。任意小格可作锚点，点击任一子格操作整座；工人每秒走 3 小格、在田中心播种浇水，原标准田布局的两日预算保持。顶部显示季、年、月、日。
 - Godot 引擎目录：`E:\Godot\Godot_v4.7.2-stable_mono_win64`。
 - 用户使用中文；项目文档、设计讨论与代码修改说明使用中文。
 - UI、原型和图形效果以后以至少 1920×1080（1080P）进行设计、默认分辨率配置与主要验收。窗口扩大时保持设定的 UI 像素倍率；整体 UI 倍率与独立字体倍率由统一接口维护。
@@ -13,6 +13,8 @@
 模块接口的 XML 注释按元素逐行排版，示例见[接口注释格式](docs/static-checks/interface-comments.md)。
 
 - `scripts/gameplay/FarmGame.cs`：经营协调模块。按原种子顺序初始化中心随机多格设施，协调 384×384 基础格的完整建造拆除；任一子格解析同一锚点实例，按稳定实例顺序推进生产、降雨与领取。封装年度表管理与整表删除：解除引用、保留当前作物进度并恢复自动复种；提供独立草稿排程检查与完整保存验证、批量应用及两种手动接管，成熟与换季促熟共用收获入库路径；工人动作后记录实际计划播种，换季清理后同步日期事件。换日推进报价，完整交易委托交易模块；提供执行重验、实际扣费及地块/实例/详情快照。满地图夹具生成 16,384 生产实例、占用 147,456 子格并检查状态一致。
+- `scripts/gameplay/SimulationAdvanceResult.cs`：完整经营检查点、实际推进与宽整数产出汇总。`FarmGame.AdvanceTicks` 请求无外部输入区间，各状态模块提供最近事件并累计平静数据，事件复用完整经营相位；显式降雨仍由单tick入口输入。
+- `scripts/gameplay/ProductionResult.cs`：最近完整经营秒的播种、浇水、收获及加工成功记录。`FarmGame` 唯一持有非持久只读结果，任务成功路径与正式入库路径写入；平静尾段清空，消费方去重并重验有效性，不能由待执行任务或动画推断成功。
 - `scripts/farming/CropCatalog.cs`：七种作物定义的唯一入口，包含适宜季节，提供只读作物表、按种类查询与种类有效性检查。
 - `scripts/farming/PlantingRules.cs`：播种季节与预计成熟的只读判断模块；按相邻适宜季节计算可用时间，干田预留最少 1 秒供水。当前禁生季节拒绝播种，预计时间不足仅提示风险，手动与计划共用同一判断。
 - `scripts/land/LandOccupancy.cs`：实例锚点、类别与基础格到实例映射的唯一拥有者。完整检查、登记及移除全部占地，返回稳定锚点顺序的只读实例快照缓存；不持有金币、作物或加工进度。
@@ -24,13 +26,14 @@
 - `scripts/workers/WorkerScheduler.cs` 与 `WorkerSnapshot.cs`：工人位置、任务、按实例独占认领与稳定锚点轮转游标的唯一拥有者。三人每经营秒推进 3 小格，到农田定义的工作中心播种浇水，执行前重验版本凭据；按单tick或平静区间推进，最近事件距离、行程起点与累计移动公式封装在工人模块；选择算法保持私有以便替换复杂调度。
 - `scripts/inventory/CommodityId.cs` 与 `Inventory.cs`：前者统一十四商品标识与合法性；后者唯一拥有两类公共库存、逐作物底线和冻结数量。总查询含冻结，可用量扣除一次卖单冻结，加工仅从可用原料领取超过底线的一份；买入与自产共用存储，主动出售不受加工底线限制但不能用冻结量。
 - `scripts/trading/TradingService.cs`、`TradeResult.cs` 与 `ProductSaleResult.cs`：完整即时与委托结算模块，先检查数量、执行时报价、可用及本单冻结资源、保留线和容量，再一次提交；即时零费，委托按实际成交额收 1% 向上取分费用，结果分别给出货值与费用。单商品结果保留实际读取的可选单价，全部加工品出售由原结算过程给出七商品明细；宽整数预检，失败资源零修改，调用方不拼装扣款和入库。
-- `scripts/logging/`：独立日志模块。`RuntimeLog` 组装会话与局，`GameLog` 维护局上下文及具名领域入口，`CommandObservation` 共用指令关联与一次终结；领域 Adapter 拥有事件描述、真实资源投影和订单等待去重/有界合并，`LogOutput` 仅处理通用身份、序号、过滤、串行分流及健康，转义及截断元数据合并由 formatter 维护、文件轮转交给 Serilog。#127 覆盖交易/订单/行情；#128 的 `GameplayLog` 观察建拆/底线，`ProductionLog` 统一实际生产增量、资源边界和60秒目标窗口，完整推进结束才封窗、正常局结束补尾。公开手动绑定不冒充自动生产采集，缺口与夹具变更降低覆盖；业务继续拥有资金、库存、执行和判断。修改记录入口、生命周期、分流或字段时读取 `docs/architecture/logging/interface-logging.md` 与 `docs/project/runtime-log-schema-v1.md`；#129 的 `CultivationLog`、`TimeLog`、`ScenarioLog` 分别观察真实耕作结果、已接受时间意图和流程生命周期，#130 的 `DiagnosticCapture` 只维护显式事件/对象范围与时间/条数预算，生产/工人/规则/行情/订单/表现 Adapter 提供真实明细且 Release 前置关闭；`PerformanceLog` 累计真实批次，`FramePerformanceLog` 由 RuntimeLog 单独累计进程帧，保持平静推进。`SimulationLog` 与 `TimeLog` 的短生命周期观察覆盖真实推进与驱动异常，共用异常投影及本次传播关联，保留命令终结和原异常传播；修改异常记录或阶段时读取 `docs/architecture/logging/implementation-exception-observation.md`。
+- `scripts/logging/`：独立日志模块。`RuntimeLog` 组装会话与局，`GameLog` 维护局上下文及具名领域入口，`CommandObservation` 共用指令关联与一次终结；领域 Adapter 拥有事件描述、真实资源投影和订单等待去重/有界合并，`LogOutput` 仅处理通用身份、序号、过滤、串行分流及健康，转义及截断元数据合并由 formatter 维护、文件轮转交给 Serilog。交易、订单和行情观察已接入；`GameplayLog` 观察建拆/底线，`ProductionLog` 统一实际生产增量、资源边界和60秒目标窗口，完整推进结束才封窗、正常局结束补尾。公开手动绑定不冒充自动生产采集，缺口与夹具变更降低覆盖；业务继续拥有资金、库存、执行和判断。修改记录入口、生命周期、分流或字段时读取 `docs/architecture/logging/interface-logging.md` 与 `docs/project/runtime-log-schema-v1.md`；`CultivationLog`、`TimeLog`、`ScenarioLog` 分别观察真实耕作结果、已接受时间意图和流程生命周期，`DiagnosticCapture` 只维护显式事件/对象范围与时间/条数预算，生产/工人/规则/行情/订单/表现 Adapter 提供真实明细且 Release 前置关闭；`PerformanceLog` 累计真实批次，`FramePerformanceLog` 由 RuntimeLog 单独累计进程帧，保持平静推进。`SimulationLog` 与 `TimeLog` 的短生命周期观察覆盖真实推进与驱动异常，共用异常投影及本次传播关联，保留命令终结和原异常传播；修改异常记录或阶段时读取 `docs/architecture/logging/implementation-exception-observation.md`。
 - `scripts/trading/TradeOrderBook.cs`、`TradeOrderRequest.cs`、`TradeOrderSnapshot.cs` 与 `TradeOrderEvaluation.cs`：订单模块唯一持有单据配置、创建顺序、原现金基准、生命周期和各单资源归属。组内全部/组间任一条件，季节仅读日历；一次限价数量或固定预算买单冻结，卖单冻结数量，持续策略不冻结。一次目标差额建单锁定、持续动态算，行情更新后每单检查一次；同 ID 编辑重验、撤销释放，查询返回独立只读快照。实际判断分支提供稳定阻塞事实，日志不从中文原因逆推或补做判断；实际成交在冻结与状态更新后记录一次。任意一次或持续成交且仍有等待单时要求下一经营秒重检；依赖不变且全部等待时保留批量平静推进。
 - `scripts/economy/Wallet.cs`：每局金币总余额与冻结金额的唯一拥有者，提供可用金额；建造与即时交易不能动用冻结，委托消费本单额度并释放差额，所有数值保持原整数容量。
 - `scripts/characters/NpcCharacter.cs` 与 `scenes/npc_character.tscn`：可复用的清亮 v2 NPC 动画角色。加载20名角色的待机、走、跑、播种和浇水 SpriteFrames，保留64×64、脚根(32,60)、四向及逐帧时长；合成帧包含工具，单次作业不重复叠加特效。主地图只展示真实位置和成功结果，动画不执行经营任务。
 - `scripts/market/CommodityCatalog.cs` 与 `CommodityDefinition.cs`：唯一维护十四商品名称和初价，稳定排列，使用库存模块的统一商品标识。
 - `scripts/market/MarketQuotes.cs` 与 `MarketSnapshot.cs`：唯一持有正式报价、固定双周排期、事件与公告，封装供需、季节、成本、整数分限幅及节日改期；接收日历推进并返回独立只读快照，玩家交易量不影响报价。可选本局 `MarketLog` 在实际公告/报价提交处观察已锁定因素，不增加随机抽取或价格计算；构造历史只建立基线。`MarketPriceCurve.cs` 保留为历史独立曲线及测试，不再参与经营。
 - `scripts/time/GameCalendar.cs`、`GameDate.cs` 与 `GameTimeUnits.cs`：日历唯一维护累计 `uint32` 模拟秒与暂停，纯日期查询共用相同年月日与季节换算，为未来实际报价日生成不可变日期；比例模块统一生产和日历的整数比例及剩余秒数换算。`FarmGame` 持有日历，按单tick或平静区间推进并在事件边界完整结算。
+- `scripts/time/SimulationDriver.cs` 与 `SimulationRateSource.cs`：唯一拥有每局倍率与未完成tick进度，现实帧时间转为同一经营批量请求；暂停不累计，改速保留进度，提供玩家/流程来源通知。发布仅0.5/1/2，开发额外提供 1～16 的整数倍率；场景只组装唯一当前局驱动；可选时间观察在已接受倍率赋值后、原通知前记录，同值选择仍保留来源。
 - `scripts/world/MapCoordinates.cs`：固定等距地图的格坐标与地图本地坐标换算入口，使用 `FarmGame.MapSize` 定义的同一地图范围；不读取节点或经营状态。
 - `scripts/world/WorldMap.cs`：地图表现模块。按 8×8 基础格缓存清亮 v2 草地与道路；每实例按真实快照选择干湿土、播种层、七作物三档或七加工建筑，土层固定低层，设施与工人按工作中心和脚根共同深度排序。资源映射、pivot、外观档及可见性留在模块内部，图片跨块不裁切；镜头移动不重建经营状态。候选使用同一设施图，冲突与整实例外围选框独立覆盖；输入转换和占地仍复用正式几何，不维护经营规则。
 - `scripts/world/FacilityMotion.cs` 与 `rooted_wind.gdshader`：世界内部局部动效，封装磨坊塔身/叶片/轮毂、制糖坊蒸汽、三作物逐株固定根风摆及真实产出短效果。地图统一输入可见性、暂停、倍率与成功结果；建筑局部分层不改变全场深度顺序，植株按根点与人物共同排序，不执行经营结算。
@@ -39,9 +42,11 @@
 - `scripts/world/WorkerPresentation.cs`：读取三名工人快照与真实成功结果，复用角色场景和地图共同深度排序；公共倍率插值并调整动画，高倍率显示最新真实位置而不积压动作。最近经营秒去重并重验原作业凭据，改种、拆除或换季使旧动作失效；暂停对齐位置并保留动画帧，动画不推进经营。
 - `scripts/world/CameraController.cs`：输入与镜头模块。唯一保存地图玩家倍率，窗口和全屏扩大时增加地图视野，保持农田与人物像素大小、镜头中心和玩家倍率。订阅尺寸变化并在退出时取消；缩放限制与输入换算保持内部，UI 倍率由 `UiScaling` 独立维护。区分左键点击与拖动，释放即结束拖动，界面收到释放时清除按下凭据；公开拖动及鼠标在窗口内状态供摆放隐藏预览，通过 `WorldMap` 选择格子及限制镜头。
 - `scripts/ui/Main.cs` 与 `scenes/main.tscn`：场景协调入口。组装像素田园浮动布局：顶部日期、点击循环倍率与暂停、右上金币与工人、左侧真实经营近况、右侧设施详情、底部中央经营入口。倍率位于日期竖线右、暂停左，1×→2×→0.5×循环，高开发倍率点击回1×，均提交玩家意图且不解除暂停。唯一持有摆放类型和候选锚点，所有类型逐次建造后保持摆放，右键、Esc、按钮统一取消；每帧在镜头更新后定位，界面遮挡或拖动时隐藏预览，标准费用与可用资金反馈分开显示。分发窗口意图并通过唯一时间驱动推进经营，经营变化后统一刷新，并组装读取工人快照的表现；只在地块变化时同步地图。
+- `scripts/ui/development/DeveloperToolsWindow.cs`、`ScenarioCatalogStep.cs`、`ScenarioEditorStep.cs`、`ScenarioResultStep.cs` 与 `ScenarioConfigurationForm.cs`：C三步协调、换行分类按钮与双列目录、配置编辑和真实运行结果；视觉按已确认C原型逐项比对步骤选中态、卡片与间距。同一表单按描述生成字段与并排分组，窗口唯一维护选择与步骤，草稿及文件规则交给配置库。两种垃圾桶经确认后转交删除意图；脏草稿重选需确认放弃，取消保留选择和输入，失效文件清空选择并禁用运行；运行中锁定编辑；当前局借主驱动、独立局只推进数据，报告引用已保存原文件。修改窗口操作时读取[开发窗口接口](docs/architecture/ui/developer-tools-window/interface-developer-tools-window.md)。
 - `scripts/ui/DraggableWindow.cs`、`BuildCatalogWindow.cs`、`CropSelectionWindow.cs`、`InventoryWindow.cs`、`MarketWindow.cs`、`FarmDetailsPanel.cs`、`ProcessorDetailsPanel.cs`、`RoadDetailsPanel.cs` 与 `UiElements.cs`：分别维护窗口拖动与可用区域、建造目录、固定的选种/库存/市场控件、三类详情及统一木框纸面主题。窗口避让顶部状态与底部入口，长内容可滚动；主题集中维护按钮、输入、勾选及列表各态字色。目录包含九种设施、分类和名称搜索并统一查询费用；道路连续铺设到 Esc/取消为止，详情仅发出拆除意图。库存显示总量、冻结、可用量并保留底线草稿与焦点；设施详情从快照显示实际进度、产量、报价及损失说明。窗口不持有经营状态。
 - `scripts/ui/NpcPreview.cs` 与 `scenes/npc_preview.tscn`：独立角色预览，接收 WASD/方向键移动、Q/E 切换20位角色、数字1～5核验五种已接入动作，显示名称与跟随镜头；不接入主经营场景。
 - `scripts/development/configuration/`：可编辑字段类型与中文元数据、反射描述、严格JSON校验、配置库及独立草稿。配置库唯一负责文件来源、修订、另存/覆盖、单配置删除及流程目录持久移除；按稳定文件身份封装显式重选，返回最新目录、草稿或错误，旧草稿保留原字节冲突保护；内置示例只读，项目内用户配置长期纳入Git。修改字段或保存删除约定时读取[配置编辑接口](docs/architecture/development/interface-scenario-configuration-editor.md)。
+- `scripts/development/scenarios/`：严格持久配置、共用买入→加工→一次卖出流程和JSON报告。流程只使用真实经营命令与稳定检查点，不拥有生产或交易状态；独立局准备受控数据，现场明确证据不足。报告引用原文件及加载时SHA-256，不保存配置副本；首个业务命令前绑定实际报告目录RunId，独立局与主局共享日志会话但拥有不同局身份，真实终结与报告保存分别记录。
 - `scripts/ui/UiScaling.cs`：统一 UI 倍率模块，唯一记录控件原始排版与整体/字体倍率。两个公开设置接口支持独立子树与父子倍率组合，重复设置不累计，动态控件继承；字体变化触发真实重排，自绘时间图共用字号换算。默认1080P且关闭画布拉伸，扩大窗口不改设定倍率；不维护地图或经营状态。
 - `scripts/ui/UiIcons.cs` 与 `FacilityPreview.cs`：复用原型 SVG 的线条图标及设施/作物缩略，只读快照展示真实锚点。图标跟随整体倍率，字体倍率仅调整文字；素材来源见 `assets/ui/source_notes.md`，不替换世界地图与人物素材。
 - `scripts/ui/TradeOrdersWindow.cs`：从市场打开的委托与策略窗口，编辑商品、两种买单预算、数量、现金保留及条件组；列表读取真实状态、冻结和最近成交费用，编辑保留原 ID，每秒刷新不重建草稿控件；窗口不计算费用或修改经营资源。
@@ -57,11 +62,6 @@
 - `export_presets.cfg`：定义 Windows x86_64 与 macOS Universal 2 正式验收构建，以及保留开发节点脚本资源的本地 Windows Dev / macOS Dev 预设；开发包不进入 CI 或正式发布。
 - `.github/ISSUE_TEMPLATE/`：六类中文议题正文模板的唯一维护位置，供 GitHub 网页与 `.codex/skills/farm-exchange-submit-issue/SKILL.md` 共用；skill 负责查重、按模板填写与提交核对。模板在人工合入默认分支后供网页使用，来源说明见 `docs/research/issue-template-sources.md`。
 
-- `scripts/gameplay/SimulationAdvanceResult.cs`：完整经营检查点、实际推进与宽整数产出汇总。`FarmGame.AdvanceTicks` 请求无外部输入区间，各状态模块提供最近事件并累计平静数据，事件复用完整经营相位；显式降雨仍由单tick入口输入。
-- `scripts/gameplay/ProductionResult.cs`：最近完整经营秒的播种、浇水、收获及加工成功记录。`FarmGame` 唯一持有非持久只读结果，任务成功路径与正式入库路径写入；平静尾段清空，消费方去重并重验有效性，不能由待执行任务或动画推断成功。
-- `scripts/time/SimulationDriver.cs` 与 `SimulationRateSource.cs`：唯一拥有每局倍率与未完成tick进度，现实帧时间转为同一经营批量请求；暂停不累计，改速保留进度，提供玩家/流程来源通知。发布仅0.5/1/2，开发额外有限正整数；场景只组装唯一当前局驱动；可选时间观察在已接受倍率赋值后、原通知前记录，同值选择仍保留来源。
-- `scripts/development/scenarios/`：严格持久配置、共用买入→加工→一次卖出流程和JSON报告。流程只使用真实经营命令与稳定检查点，不拥有生产或交易状态；独立局准备受控数据，现场明确证据不足。报告引用原文件及加载时SHA-256，不保存配置副本；首个业务命令前绑定实际报告目录RunId，独立局与主局共享日志会话但拥有不同局身份，真实终结与报告保存分别记录。
-- `scripts/ui/development/DeveloperToolsWindow.cs`、`ScenarioCatalogStep.cs`、`ScenarioEditorStep.cs`、`ScenarioResultStep.cs` 与 `ScenarioConfigurationForm.cs`：C三步协调、换行分类按钮与双列目录、配置编辑和真实运行结果；视觉按已确认C原型逐项比对步骤选中态、卡片与间距。同一表单按描述生成字段与并排分组，窗口唯一维护选择与步骤，草稿及文件规则交给配置库。两种垃圾桶经确认后转交删除意图；脏草稿重选需确认放弃，取消保留选择和输入，失效文件清空选择并禁用运行；运行中锁定编辑；当前局借主驱动、独立局只推进数据，报告引用已保存原文件。修改窗口操作时读取[开发窗口接口](docs/architecture/ui/developer-tools-window/interface-developer-tools-window.md)。
 
 # 工作约定
 
@@ -90,7 +90,7 @@
 
 - 新增、迁移、替换素材或调整导入设置时读取 `docs/project/asset-organization.md`；当前完整清亮 v2 素材入口与使用约定见 `docs/research/bright-complete-v2.md`，v1 分析归入 `docs/archive/research/` 保留历史。素材规则经 `assets/AGENTS.md` 加载，原始包归档不代表已接入或获准公开分发。
 
-- 修改 UI 视觉或布局时读取 `docs/project/ui-visual-prototype.md`：#94 采用田园布局与像素木作主题，保留当前地图与人物素材；HTML 为设计示例，Godot 窗口接入真实经营状态。
+- 修改 UI 视觉或布局时读取 `docs/project/ui-visual-prototype.md`：采用田园布局与像素木作主题，保留当前地图与人物素材；HTML 为设计示例，Godot 窗口接入真实经营状态。
 
 - `docs/README.md`：玩法、架构、项目协作、调研与静态检查的中文导航。
 - `docs/gameplay/`：玩家可观察的作物、加工、交易、土地和地图操作规则。

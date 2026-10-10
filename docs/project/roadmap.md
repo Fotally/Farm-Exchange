@@ -20,7 +20,7 @@
 - 每种原料的公共库存保留底线默认为 0，在库存窗口按非负整数设置；设置本身不触发领取，下一经营步的领取阶段使用新底线。新建加工场地仍按稳定格序即时尝试全场领取；自动加工只取超过底线的部分，手动出售不受底线限制，提高底线不退回已投入原料。详见[加工](../gameplay/production/processing.md)。
 - 农田可留存雨水；降雨与工人浇水使用同一供水状态，已获水作物生长中再次遇雨不重置，收获清除本轮水分。改种保水、拆除清水；具体顺序见[农田供水与降雨](../gameplay/production/water-and-rain.md)。当前主场景暂无天气生成。
 - 七种作物各有适宜季节；手动和耕作表共用播种判断，当前适季即可播种，预计时间不足只提示风险。干田最低预留 1 秒供水，成熟恰在边界先结算；换季结算后其余禁生未成熟作物清理本轮作物和水分，保留农田与选种，不增加清理劳动或费用。具体表与口径见[作物与选种](../gameplay/production/crop-growth.md)。
-- 工人横纵斜向每秒移动 3 基础格，即一个标准田跨度，直线穿越占用，到田中间格工作，不受道路连通影响；播种与浇水各占完整 1 秒。三人共享稳定锚点轮转与实例独占认领，完成或失效释放。两日目标从空田具备条件开始计经过时间；三人和 24 田在同一 8×8 标准田范围内验收，超范围仍照料但不承诺两日达标，详见[实施方案](../architecture/workers/worker-scheduler/implementation-movement-proposal.md)。
+- 工人横纵斜向每秒移动 3 基础格，即一个标准田跨度，直线穿越占用，到田中间格工作，不受道路连通影响；播种与浇水各占完整 1 秒。三人共享稳定锚点轮转与实例独占认领，完成或失效释放。两日目标从空田具备条件开始计经过时间；三人和 24 田在同一 8×8 标准田范围内验收，超范围仍照料但不承诺两日达标，详见[实现说明](../architecture/workers/worker-scheduler/implementation-movement-proposal.md)。
 - 道路独占一格、每格 1.00 金币；目录选择后逐格连续点击铺设，Esc 或取消退出。路面灰色，详情可拆除且不退款；当前只影响布局与外观，不进入生产或改变工人速度。规则见[道路铺设与移除](../gameplay/land/roads.md)。
 
 ## 当前已确认范围入口
@@ -31,8 +31,8 @@
 | 行情、即时交易与委托 | [报价](../gameplay/trading/market-quotes.md)、[即时交易](../gameplay/trading/sales.md)、[委托](../gameplay/trading/orders.md) |
 | 季节耕作与共享年度表 | [作物](../gameplay/production/crop-growth.md)、[年度表规则](../gameplay/production/seasonal-cultivation.md)、[窗口操作](../gameplay/production/seasonal-cultivation-ui.md) |
 | 1080P界面、整体和字体倍率 | [视觉基准](ui-visual-prototype.md)、[统一倍率接口](../architecture/ui/ui-scaling/interface-ui-scaling.md) |
-| 清亮v2首批素材、真实动作、局部动效与环境 | [素材基准](../research/bright-complete-v2.md)、[地图接口](../architecture/world/world-map/interface-world-map.md)；#106～#109已由PR #122合并，#105仍跟踪后续设计 |
-| 公共倍率、批量经营、参数化开发流程 | [经营倍率](../gameplay/world/simulation-rate.md)、[批量实现](../architecture/game-state/farm-game/implementation-batched-simulation.md)、[开发测试使用说明](parameterized-tests-usage.md)；#100/#101/#104已由PR #102合并 |
+| 清亮v2首批素材、真实动作、局部动效与环境 | [素材基准](../research/bright-complete-v2.md)、[地图接口](../architecture/world/world-map/interface-world-map.md) |
+| 公共倍率、批量经营、参数化开发流程 | [经营倍率](../gameplay/world/simulation-rate.md)、[批量实现](../architecture/game-state/farm-game/implementation-batched-simulation.md)、[开发测试使用说明](parameterized-tests-usage.md) |
 | 本地开发包与双平台正式发布 | [开发构建](development-build.md)、[正式发布](release.md) |
 
 当前玩法、接口和操作以上述专题为准。已完成方案、授权经过和交付结果统一通过[归档索引](../archive/index.md)查阅。
@@ -43,7 +43,7 @@
 - 存档与离线收益规则。
 - 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、设施朝向 #111、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[朝向](facility-orientation-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。这些待确认项不作为已实施功能。
 
-日志 #82 的初版 #126 已随 PR #132 合并；#127 的职责修正、主动交易、订单等待/成交与实际行情已完成独立审查和编译/测试/导出/启动验收，交付见 PR #139。#128 建造与生产窗口已完成独立审查和完整运行验收，提交 7c38c62 并入同一 PR #139；#129 耕作与开发流程已通过独立审查和完整运行验收，提交213c615；#130 接入有界诊断及真实批次/帧统计，并补齐命令、推进和驱动的共用异常观察；功能验收后统一更新同一PR，阶段交付状态以 #82 顶部验收记录为准。剩余16×图形压测与性能达标转 #66，不阻塞日志功能交付，也不记作性能通过。领域入口维护事件描述与投影，底座维持通用提交契约；观察关联与终结共用，业务保留原执行权。阶段安排见[后续修正方向](../research/runtime-logging.md#已确认的后续修正方向)。实际覆盖以[日志接口](../architecture/logging/interface-logging.md)为准，字段见[schema v1](runtime-log-schema-v1.md)。普通日志不提供可靠重放。
+运行日志的现行事件和字段以[日志接口](../architecture/logging/interface-logging.md)与[schema v1](runtime-log-schema-v1.md)为准；领域入口维护事件描述与投影，底座负责通用提交，业务保留执行权。普通日志不提供可靠重放。16×图形压测与性能达标仍由 #66 跟踪，不记作已通过。
 
 ## 系统划分
 
@@ -67,7 +67,7 @@
 
 ## 分阶段交付
 
-1. **地图基础（已实现）**：384×384 基础格、多格设施与整实例操作，等距地图、镜头与格定位；#75 已完成完整验收。
+1. **地图基础（已实现）**：384×384 基础格、多格设施与整实例操作，等距地图、镜头与格定位。
 2. **最小可玩循环（已实现）**：三名工人自动到田播种浇水，成熟自动收获、对应场地加工、按当前市场价出售，再用收入建造农田和加工场地。
 3. **进度持续性**：按已确认规则加入存档、加载与离线收益。
 4. **扩展内容（七种作物与配套加工已实现）**：按[作物](../gameplay/production/crop-growth.md)与[交易](../gameplay/trading/sales.md)规则提供独立农田选种、对应加工场地与全部加工品交易；其他建筑、目标与数值平衡待后续确认。

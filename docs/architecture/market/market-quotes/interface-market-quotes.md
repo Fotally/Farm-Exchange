@@ -1,6 +1,6 @@
 # MarketQuotes 对外接口
 
-对应 `FarmExchange.Market.MarketQuotes`，实现位于 `scripts/market/MarketQuotes.cs`，只读结果位于 `MarketSnapshot.cs`。来源为 [T09B #71](https://github.com/Fotally/Farm-Exchange/issues/71)，履行[独立报价与真实消息规则](../../../gameplay/trading/market-quotes.md)。
+对应 `FarmExchange.Market.MarketQuotes`，实现位于 `scripts/market/MarketQuotes.cs`，只读结果位于 `MarketSnapshot.cs`。履行[独立报价与真实消息规则](../../../gameplay/trading/market-quotes.md)。
 
 | 成员 | 调用约定 |
 | --- | --- |
@@ -19,7 +19,7 @@
 
 内部 `NextEventDay` 返回当前排期下一次公告准备或正式报价的累计绝对游戏日，已准备时指向报价，否则指向报价前一日。经营批量推进据此定位事件 tick，日历比例由日历模块转换，不由行情维护经营秒数。无行情事件的区间可一次 `Advance` 到终点；每次实际事件仍沿原 `AdvanceTo` 顺序调用，不合并随机抽取或报价递推。参见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。
 
-## 行情日志（#127）
+## 行情日志
 
 `FarmGame` 在两条真实推进路径传入同一 `GameLog.Market`。`MarketQuotes` 仍唯一拥有行情、排期和随机源；`MarketLog` 是日志领域 Adapter，维护事件描述、日期和商品字段投影，不计算价格或维护另一份行情。
 
@@ -27,9 +27,9 @@
 
 构造器按已有日期回放只建立初始化基线，不绑定行情记录入口，也不补造过去的公告或报价事件。初始化日期已处于公告与报价之间时，之后实际发生的正式报价会记录，但不会补发过去公告。查询、重复日期、暂停和已结束的局不产生行情记录；日志关闭或写入故障不改变行情结果。
 
-`NewsPublished` 与 `QuoteUpdated` 为 runtime/debug 共用结果；#130 的 `QuoteCalculated` 仅按下节约定显式采集。测试入口 `TestMarketLogging.RunChecks()` 通过真实经营推进和日志 formatter 核对公告/生效分离、十四商品实际因素、节日和跨年、初始化历史、暂停恢复、局身份、日志开关与写入故障、批量与逐秒等价；执行结果以统一验收记录为准。
+`NewsPublished` 与 `QuoteUpdated` 为 runtime/debug 共用结果；`QuoteCalculated` 仅按下节约定显式采集。测试入口 `TestMarketLogging.RunChecks()` 通过真实经营推进和日志 formatter 核对公告/生效分离、十四商品实际因素、节日和跨年、初始化历史、暂停恢复、局身份、日志开关与写入故障、批量与逐秒等价；执行结果以统一验收记录为准。
 
-## 待发布报价计算诊断（#130）
+## 待发布报价计算诊断
 
 只有显式选择 `QuoteCalculated` 且 `IncludeGameEvents=true` 的开发采集，才在每种商品的原准备分支完成后构造明细。原料先算、加工品后算，计算面对下一实际报价日，事件头日期仍是当前经营日；不把准备价提前写成正式价。正式 `QuoteUpdated` 的提交点和字段保持原约定。
 

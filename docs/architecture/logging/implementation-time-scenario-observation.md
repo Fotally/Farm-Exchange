@@ -1,6 +1,6 @@
 # 时间与开发流程日志实现
 
-履行[日志 Interface](interface-logging.md)，对应 #129。字段、单位和事件组合以 [schema v1](../../project/runtime-log-schema-v1.md) 为准；本文说明实际记录时点与组装责任。
+履行[日志 Interface](interface-logging.md)。字段、单位和事件组合以 [schema v1](../../project/runtime-log-schema-v1.md) 为准；本文说明实际记录时点与组装责任。
 
 ## 时间指令
 

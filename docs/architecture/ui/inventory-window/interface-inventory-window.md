@@ -1,6 +1,6 @@
 # InventoryWindow 接口
 
-本轮默认视觉基准为1920×1080，另检查2560×1440与3840×2160。整体和额外字体倍率通过统一 `UiScaling` 接口调整；窗口局部设置保留搜索、底线草稿、焦点与光标，重复设置不累积尺寸。分辨率扩大时维持已设定的物理像素大小，只按共享窗口规则定位。九组倍率与真实控件保持检查见 `tests/e2e/TestUiScaling.cs`，图形证据写入 `build/issue94-scale-validation/`。
+默认视觉基准为1920×1080，另检查2560×1440与3840×2160。整体和额外字体倍率通过统一 `UiScaling` 接口调整；窗口局部设置保留搜索、底线草稿、焦点与光标，重复设置不累积尺寸。分辨率扩大时维持已设定的物理像素大小，只按共享窗口规则定位。九组倍率与真实控件保持检查见 `tests/e2e/TestUiScaling.cs`，图形证据写入 `build/issue94-scale-validation/`。
 
 原生滚动条的增减箭头为空纹理时，调整整体或字体倍率仍保持零尺寸，不产生新按钮。倍率回归同时检查这类无箭头控件与标题栏按真实鼠标时序精确移动60×24像素。
 
@@ -12,7 +12,7 @@
 
 窗口名 `InventoryWindow`，内容容器名 `InventoryRows`，滚动容器名 `InventoryScroll`。各品种控件名为 `RawReserve{CropKind}Input` 和 `SetRawReserve{CropKind}Button`。窗口不执行交易；出售入口留在市场窗口。
 
-各行保留底线标签关闭自动换行，以自然单行宽度参与横向布局；输入和设置按钮垂直居中，基准约36像素高，不随标签或行高度拉伸。#94 基准尺寸660×510，首次在可用视口居中，使用共享木框、纸面与深棕文字；统一定位和避让范围见[可拖动窗口](../draggable-window/interface-draggable-window.md)，十四商品通过 `InventoryScroll` 纵向滚动访问。
+各行保留底线标签关闭自动换行，以自然单行宽度参与横向布局；输入和设置按钮垂直居中，基准约36像素高，不随标签或行高度拉伸。窗口基准尺寸660×510，首次在可用视口居中，使用共享木框、纸面与深棕文字；统一定位和避让范围见[可拖动窗口](../draggable-window/interface-draggable-window.md)，十四商品通过 `InventoryScroll` 纵向滚动访问。
 
 `InventoryFilter0Button`、`InventoryFilter1Button`、`InventoryFilter2Button` 分别筛选全部、原料、加工品；`InventorySearchInput` 按商品名称做包含搜索，与类别共同生效。筛选只控制已有商品行的显示，不重建、清空或提交底线控件，隐藏原料行后未提交草稿仍保留。名称和类别没有匹配时显示 `InventoryEmptyMessage`。刷新及关闭重开保留搜索文字、类别、草稿；原料底线仍只按按钮或回车显式提交。
 

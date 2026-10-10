@@ -61,7 +61,7 @@ public partial class TestScenarioLogging : Node
     private static void Advance(BuyProcessSellScenario scenario)
     {
         var driver = new SimulationDriver(scenario.Game.Log?.Time);
-        driver.SetDevelopmentRate(20, SimulationRateSource.Scenario);
+        driver.SetDevelopmentRate(16, SimulationRateSource.Scenario);
         driver.Advance(1000, scenario.Game, scenario.ObserveCheckpoint, scenario.GetMaxAdvanceTicks);
     }
 

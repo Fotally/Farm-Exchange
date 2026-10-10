@@ -14,7 +14,7 @@
 - [开局与建造](gameplay/land/opening-and-building.md)：预置建筑、建造收费与扩张。
 - [道路铺设与移除](gameplay/land/roads.md)：灰色道路、逐格连续铺设、独占与拆除，以及当前不影响生产和移动的规则。
 - [地图与操作](gameplay/world/map-and-camera.md)：坐标、选择、镜头与画面含义；窗口和全屏扩大时增加地图视野，保持农田大小。
-- [经营速率与暂停](gameplay/world/simulation-rate.md)：发布0.5×/1×/2×、暂停保留未完成tick进度与工人动画；开发额外倍率入口及现场流程中断语义。
+- [经营速率与暂停](gameplay/world/simulation-rate.md)：发布0.5×/1×/2×、暂停保留未完成tick进度与工人动画；开发倍率最高16×及现场流程中断语义。
 
 ## 代码架构
 
@@ -25,10 +25,10 @@
 - [内部换季成熟实现](architecture/farming/farming-system/implementation-season-maturity.md)：禁生边界的精确比较、本轮结束预测、共同收获终结与原入库路径。
 - [耕作表接口](architecture/cultivation/interface-cultivation-plan-book.md)及[年度事件实现](architecture/cultivation/implementation-annual-events.md)：共享配置、独立草稿排程与完整保存检查、生命周期条编号、整表删除及引用解除、逐田引用与预备缓存、年度环绕、休耕缓冲及逐轮执行重验。
 - [耕作表窗口接口](architecture/ui/cultivation-window/interface-cultivation-window.md)及[年度时间图实现](architecture/ui/cultivation-window/implementation-annual-timeline.md)：草稿、共享应用、整条居中拖动、跨季片段与候选完整排程预检；可读条内信息及短片段悬浮提示。
-- [三人工人移动与调度实施方案](architecture/workers/worker-scheduler/implementation-movement-proposal.md)：已确认初始速度、工作耗时、独占认领、布局保证与稳定接口。
+- [三人工人移动与调度实现](architecture/workers/worker-scheduler/implementation-movement-proposal.md)：已确认初始速度、工作耗时、独占认领、布局保证与稳定接口。
 - [商品目录接口](architecture/market/commodity-catalog/interface-commodity-catalog.md)、[报价接口](architecture/market/market-quotes/interface-market-quotes.md)与[报价实现](architecture/market/market-quotes/implementation-quote-cycle.md)：十四商品、实际排期和真实因素消息。
 - [完整交易接口](architecture/trading/trading-service/interface-trading-service.md)：一次命令封装资源检查、执行时价格与原子结算。
-- [日志接口](architecture/logging/interface-logging.md)及[统一输出实现](architecture/logging/implementation-event-output.md)：领域描述与通用输出分离，共用命令关联和一次终结；#127 接入主动交易、订单等待/成交和实际行情，#128 接入[建拆与底线观察](architecture/logging/implementation-building-observation.md)和生产窗口；#129 接入[耕作与手动接管](architecture/logging/implementation-cultivation-observation.md)、[暂停/倍率和开发流程](architecture/logging/implementation-time-scenario-observation.md)关联；#130 接入有界诊断、[生产与工人明细](architecture/logging/implementation-production-diagnostics.md)、真实批次/帧统计及[共用异常观察](architecture/logging/implementation-exception-observation.md)。
+- [日志接口](architecture/logging/interface-logging.md)及[统一输出实现](architecture/logging/implementation-event-output.md)：领域描述与通用输出分离，共用命令关联和一次终结；覆盖主动交易、订单等待/成交、实际行情、[建拆与底线观察](architecture/logging/implementation-building-observation.md)、生产窗口、[耕作与手动接管](architecture/logging/implementation-cultivation-observation.md)、[暂停/倍率和开发流程](architecture/logging/implementation-time-scenario-observation.md)、有界诊断、[生产与工人明细](architecture/logging/implementation-production-diagnostics.md)、真实批次/帧统计及[共用异常观察](architecture/logging/implementation-exception-observation.md)。
 - [订单接口](architecture/trading/trade-order-book/interface-trade-order-book.md)：单据创建与原 ID 编辑、冻结归属、条件检查和生命周期；任意成交后重检剩余等待单。
 - [委托窗口接口](architecture/ui/trade-orders-window/interface-trade-orders-window.md)：条件分组、订单管理与真实冻结/成交展示，刷新保留编辑草稿。
 - [历史市场曲线接口](architecture/market/market-price-curve/interface-market-price-curve.md)及[曲线实现](architecture/market/market-price-curve/implementation-bounded-curve.md)：保留独立曲线测试，正式经营改走报价模块。
@@ -61,7 +61,7 @@
 - 后续素材与玩法提案：[水域](project/water-terrain-proposal.md)、[设施朝向](project/facility-orientation-proposal.md)、[采收搬运](project/worker-harvest-transport-proposal.md)、[工人加工](project/worker-processing-proposal.md)。
 - [macOS构建](project/macos-build.md)、[本地开发构建](project/development-build.md)、[双平台正式发布](project/release.md)。
 - [参数化开发测试使用说明](project/parameterized-tests-usage.md)：三步操作、配置管理、长期用例、运行结果及报告；协议见[固定流程接口](architecture/development/interface-parameterized-scenario.md)。
-- [运行时日志设计](research/runtime-logging.md)及[schema v1](project/runtime-log-schema-v1.md)：#82 初版基线、模块职责、分阶段覆盖与字段释义；交易、等待与行情见 #127，建拆与生产汇总见 #128，耕作、时间和流程见 #129，专项诊断与性能见 #130，实际验收以父issue阶段记录为准。
+- [运行时日志设计](research/runtime-logging.md)及[schema v1](project/runtime-log-schema-v1.md)：设计依据、模块职责与字段释义；实际采集入口及覆盖范围见[日志接口](architecture/logging/interface-logging.md)，验收步骤见[日志专项验收](architecture/logging/implementation-validation.md)。
 - [日志参数与分层耦合调研](research/logging-coupling-practices.md)：业界如何减少重复传参、集中领域投影，并隔离日志底座与子系统的修改；研究保留当时候选，现行实现见日志接口。
 - 研究依据：[市场曲线](research/market-price-curve.md)、[测试分类](research/test-taxonomy.md)、[基础格细分](research/grid-subdivision.md)、[窗口与地图缩放](research/window-size-and-map-zoom.md)、[建造预览案例](research/build-placement-preview.md)、[开发构建机制](research/developer-tools-builds.md)、[C#开发工具案例](research/developer-tools-csharp-cases.md)。研究记录保留当时证据，不覆盖现行专题规则。
 - [EditorConfig](static-checks/editorconfig.md)、[CI静态检查、SDK版本与格式错误定位](static-checks/ci.md)、[逐模块覆盖率门禁](static-checks/coverage.md)、[接口注释格式](static-checks/interface-comments.md)、[规则加载对应表](../.codex/rule-loading.md)。

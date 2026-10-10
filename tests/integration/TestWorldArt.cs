@@ -208,7 +208,7 @@ public partial class TestWorldArt : Node
         map.SetProcess(false);
         try
         {
-            foreach (double rate in new[] { .5, 1, 2, 1000 })
+            foreach (double rate in new[] { .5, 1, 2, 16 })
             {
                 driver.SetDevelopmentRate(rate, SimulationRateSource.Scenario);
                 double before = wind.GetShaderParameter("visual_time").AsDouble();

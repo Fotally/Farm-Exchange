@@ -1,10 +1,10 @@
 # 后续功能计划
 
-本页维护尚未实施、需要继续确认的事项。#36委托交易、#42季节耕作及#86后续修复已分别通过PR #81、#84合并；当前行为见[委托规则](../gameplay/trading/orders.md)与[年度表规则](../gameplay/production/seasonal-cultivation.md)，交付历史通过[归档索引](../archive/index.md)查阅。
+本页维护尚未实施、需要继续确认的事项。当前行为见[委托规则](../gameplay/trading/orders.md)与[年度表规则](../gameplay/production/seasonal-cultivation.md)，交付历史通过[归档索引](../archive/index.md)查阅。
 
 ## 后续扩充人力：#43
 
-**已确认方向：**农田扩张后可以增加人力，先服务播种与浇水。开局三名真实工人及多人调度已完成，不列为剩余任务；现行移动与两日目标的适用布局见[三人工人实施方案](../architecture/workers/worker-scheduler/implementation-movement-proposal.md)。
+**已确认方向：**农田扩张后可以增加人力，先服务播种与浇水。开局三名真实工人及多人调度已完成，不列为剩余任务；现行移动与两日目标的适用布局见[三人工人实现说明](../architecture/workers/worker-scheduler/implementation-movement-proposal.md)。
 
 **启动前需确认：**
 
@@ -37,7 +37,7 @@
 
 ## 开发工具的未选用候选能力
 
-#97的旧草案中，单步及推进至日/季/报价边界、设施和工人状态诊断及目标连线、可控实验命令、固定种子启动与复现信息展示、性能观察、文本控制台、专项Trace控制仍为候选，不因归档视为完成或取消。公共倍率与固定买入加工卖出流程已交付；日志继续由[#82](https://github.com/Fotally/Farm-Exchange/issues/82)及[日志设计](../research/runtime-logging.md)承接。其他候选启动前应明确对应issue、操作边界与验收标准。
+单步及推进至日/季/报价边界、设施和工人状态诊断及目标连线、可控实验命令、固定种子启动与复现信息展示、性能观察、文本控制台、专项 Trace 控制仍为候选。公共倍率与固定买入加工卖出流程已实现；日志现行范围见[日志接口](../architecture/logging/interface-logging.md)。其他候选启动前应明确对应议题、操作边界与验收标准。
 
 ## 后续启动与交付
 

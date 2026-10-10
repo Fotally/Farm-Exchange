@@ -34,4 +34,4 @@
 
 [TestParameterizedScenario](../../../tests/unit/TestParameterizedScenario.cs) 通过真实共用驱动及公开经营接口验证严格配置、文件修改后参数固定、原始BOM摘要、Q=1与Q=3、倍率变段、暂停、现场已有批次/订单、手动改速中断、预算与日期边界、正式拒绝、底线阻塞、目标移除、撤单、中止、终止快照及路径/输出错误。长期用例保存在 [tests/scenario-configs/buy-process-sell](../../../tests/scenario-configs/buy-process-sell/)，复用现有TestSuite。
 
-`TestScenarioLogging` 补充八种真实终结结果、实际加载凭据固定、提前 RunId、主局/独立局身份、同值选择中断顺序、报告成功/冲突失败及采集开关/写入故障等价；真实双文件样例保存在 `build/logging-samples/issue-129-flow-*`。实际通过状态以本 issue 的统一验收记录为准。
+`TestScenarioLogging` 覆盖八种真实终结结果、实际加载凭据固定、提前 RunId、主局/独立局身份、同值选择中断顺序、报告成功/冲突失败及采集开关/写入故障等价；运行结果见项目验收记录。

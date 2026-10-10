@@ -1,6 +1,6 @@
 # 禁生换季成熟与收获实现
 
-履行 [FarmingSystem 接口](interface-farming-system.md)，实现位于 `scripts/farming/FarmingSystem.cs`；经营入库顺序见 [FarmGame 推进相位](../../game-state/farm-game/implementation-tick-order.md)。本规则由 #42 确认，只记录在内部文档与测试中，界面不展示阈值或专门收益提示。
+履行 [FarmingSystem 接口](interface-farming-system.md)，实现位于 `scripts/farming/FarmingSystem.cs`；经营入库顺序见 [FarmGame 推进相位](../../game-state/farm-game/implementation-tick-order.md)。内部阈值只记录在设计文档与测试中，界面不展示阈值或专门收益提示。
 
 每轮生长开始时，以 `CropCatalog` 的完整天数乘 `GameTimeUnits.PerDay` 保存精确周期；每个经营秒减 `GameTimeUnits.PerSecond`。`FarmSnapshot.RemainingTimeUnits` 保留精确值，`RemainingSeconds` 仅供显示。
 

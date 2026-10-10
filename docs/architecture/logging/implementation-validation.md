@@ -22,7 +22,7 @@
 - 受控 `Exception.ToString()` 投影故障及仅拒绝 `BusinessException` 的 Capture 输出故障均检查原异常身份、健康故障和投影/写入尝试次数；失败不导致外层换上下文重试，仍独立提交 `CommandFinished=Faulted`。`TestLoggingFaults` 另用真实 File 滚动路径冲突重复验证命令 → 批量 → 驱动链，确认只投影一次。
 - 相同种子在开启、关闭和未配置日志时，先对照同一正常推进终点的结果，再分别验证异常传播；检查点抛异常前已经完成的真实推进不作为正常对照基线。正常短推进不增加逐 tick 成功事件。初始化 `FatalException` 和报告保存的 `ScenarioReportSaveFailed` 继续由既有 `TestLogging` / `TestScenarioLogging` 核对各自语义。
 
-上述用例注册在统一 `TestSuite`。异常功能验收与图形 FPS、16×长帧优化分别记录；本轮执行统一功能套件、逐模块覆盖率、Release 探针及正式导出启动，剩余性能达标继续归 #66，不以本页的测试清单代替实际通过证据。
+上述用例注册在统一 `TestSuite`。异常功能验收与图形 FPS、16×长帧优化分别记录；验收执行统一功能套件、逐模块覆盖率、Release 探针及正式导出启动，剩余性能达标继续归 #66，不以本页的测试清单代替实际通过证据。
 
 ## 65 秒图形矩阵
 

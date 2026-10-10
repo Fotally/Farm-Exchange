@@ -1,6 +1,6 @@
 # 主界面目标接口与交互层级
 
-本页对应 [UI issue #24](https://github.com/Fotally/Farm-Exchange/issues/24) 与 [像素田园 UI/UX #94](https://github.com/Fotally/Farm-Exchange/issues/94)，记录 `scenes/main.tscn` 与 `scripts/ui/Main.cs` 的已实现界面接口。正式样式依据为[#94 像素田园主稿与实施范围](../../../project/ui-visual-prototype.md)；旧 #24 原型和截图保留为历史记录。具体经营规则仍以 `docs/gameplay/` 为准。
+本页记录 `scenes/main.tscn` 与 `scripts/ui/Main.cs` 的当前界面接口。正式样式依据为[像素田园主稿与实施范围](../../../project/ui-visual-prototype.md)；具体经营规则仍以 `docs/gameplay/` 为准。
 
 [单文件 HTML 原型](prototype-main.html)用于查看界面层级和点击流程，仅演示视觉与交互；其中的原料价格是首日示意值，库存、交易和建造费不参与真实经营计算。下图为原型市场，实际 Godot 市场采用十四商品固定行、单一数量输入和独立消息滚动区，见[市场窗口接口](../market-window/interface-market-window.md)。
 
@@ -10,21 +10,9 @@
 
 ![HTML 原型加工场地加工品详情示意](prototype-processor-detail.png)
 
-## #24 阶段 Godot 截图
-
-以下为此前深绿界面的历史截图。#94 正式像素田园界面采用上文的新主稿主题、顶部独立状态、左侧近况和底部四入口，图形验收工件保存于 `build/issue94-validation/`。
-
-![建造目录](godot-build.png)
-
-![日历与七作物满地图表现](godot-calendar-radish.png)
-
-![雨后未播种农田显示已有水分](godot-rain-water.png)
-
-![春季甘蔗农田显示不适宜播种原因](godot-season-check.png)
-
 ## 1080P 原型比例与倍率
 
-正式设计和默认物理窗口使用 1920×1080。依据用户参考图按 1080 高度归一化，默认几何为品牌 277×93、日期 520×93、资源 373×107、近况宽 299、详情 409×727、底部操作栏 774×93。#104 将倍率放入日期卡；日期文字或字体倍率增加时，卡片按实际最小内容宽度重排并保持水平居中。顶部三个独立牌面、左侧近况、右侧设施和底部工具图标保留主稿的信息与留白比例；既有地图和人物素材继续使用。
+正式设计和默认物理窗口使用 1920×1080。依据用户参考图按 1080 高度归一化，默认几何为品牌 277×93、日期 520×93、资源 373×107、近况宽 299、详情 409×727、底部操作栏 774×93。倍率位于日期卡；日期文字或字体倍率增加时，卡片按实际最小内容宽度重排并保持水平居中。顶部三个独立牌面、左侧近况、右侧设施和底部工具图标保留主稿的信息与留白比例；既有地图和人物素材继续使用。
 
 项目关闭画布自动拉伸。扩大到 2560×1440 或 3840×2160 时，面板保留物理像素尺寸并通过原锚点靠边或居中，地图沿用镜头的“扩大视野、对象保留大小”策略。需要单独调整面板时，使用 [UiScaling 两倍率接口](../ui-scaling/interface-ui-scaling.md)：整体与字体默认为 1，各窗口或面板可分别设置，不增加设置菜单与存档。
 
@@ -59,9 +47,9 @@
 
 `Main` 负责组装窗口、唯一保留摆放类型与候选生命周期、保留普通所选格、分发玩家命令，并在命令或 tick 完成后统一刷新。建造目录发出建筑意图，地图短按松开时调用 `FarmGame.TryPlace` 重验，失败显示真实原因，成功显示实际扣费 `ChargedCents`；所有类型成功和失败都保留模式，并清普通选框、不弹详情。右键、Esc、按钮交给同一个 `CancelPlacement()`，统一清类型、候选和地图预览；重新打开目录或年度表也经该入口结束摆放。Esc 在摆放期间优先取消，输入在 `_Input` 接收，避免被已聚焦的界面控件拦截。
 
-#100 移除主场景 `TickTimer`，`Main._Process(delta)` 通过唯一 [SimulationDriver](../../time/simulation-driver/interface-simulation-driver.md) 推进完整经营。内部 `AdvanceSimulation(delta)` 也是场景测试使用的真实入口，不发出人工计时器信号。`SetProcess(false)` 停止主场景逐帧经营推进及预览、悬停费用刷新，`_Input` 等输入回调仍处理鼠标取消和摆放；`Game.SetPaused(true)` 只暂停经营，保留真实主场景帧。需要验证暂停中的界面自动刷新时，夹具应暂停经营并保持 `Main` 处理启用；`TestBuildPlacement.CheckFunds` 验证撤销冻结后悬停费用自动恢复，`CheckNativeInput` 验证拖动、镜头、缩放和离窗后的预览逐帧更新，并保留累计经营秒为0的断言。#104 用 `SimulationRateButton` 替换原倍率下拉，日期卡内顺序为日期、`CalendarActionSeparator` 竖线、倍率、暂停；点击按1×→2×→0.5×→1×循环，开发高倍率显示实际值、点击回1×。按钮提交 `SimulationDriver.SetRate(..., Player)`，保留未完成tick；暂停时改速不恢复经营。倍率通知立即刷新显示与下一次点击提示，退出场景时解除订阅。暂停按钮立即同步工人真实位置；每帧经营后再显示最新人物，界面与地图统一刷新。
+`Main._Process(delta)` 通过唯一 [SimulationDriver](../../time/simulation-driver/interface-simulation-driver.md) 推进完整经营。内部 `AdvanceSimulation(delta)` 也是场景测试使用的真实入口，不发出人工计时器信号。`SetProcess(false)` 停止主场景逐帧经营推进及预览、悬停费用刷新，`_Input` 等输入回调仍处理鼠标取消和摆放；`Game.SetPaused(true)` 只暂停经营，保留真实主场景帧。需要验证暂停中的界面自动刷新时，夹具应暂停经营并保持 `Main` 处理启用；`TestBuildPlacement.CheckFunds` 验证撤销冻结后悬停费用自动恢复，`CheckNativeInput` 验证拖动、镜头、缩放和离窗后的预览逐帧更新，并保留累计经营秒为0的断言。`SimulationRateButton` 位于日期卡，顺序为日期、`CalendarActionSeparator` 竖线、倍率、暂停；点击按1×→2×→0.5×→1×循环，开发高倍率显示实际值、点击回1×。按钮提交 `SimulationDriver.SetRate(..., Player)`，保留未完成tick；暂停时改速不恢复经营。倍率通知立即刷新显示与下一次点击提示，退出场景时解除订阅。暂停按钮立即同步工人真实位置；每帧经营后再显示最新人物，界面与地图统一刷新。
 
-#101 在集中 `DEBUG` 组装区创建[DeveloperToolsWindow](../developer-tools-window/interface-developer-tools-window.md)和“开发测试”按钮；所有开发字段与调用均在同一编译条件内。当前流程只接入本驱动完整检查点和下一边界限额，独立对象由窗口用同一时间模块推进数据。公共经营不引用开发流程类型，发布保留公共速率入口。容量拒绝显示实际原因，不截断请求或改用其他倍率。
+集中 `DEBUG` 组装区创建[DeveloperToolsWindow](../developer-tools-window/interface-developer-tools-window.md)和“开发测试”按钮；所有开发字段与调用均在同一编译条件内。当前流程只接入本驱动完整检查点和下一边界限额，独立对象由窗口用同一时间模块推进数据。公共经营不引用开发流程类型，发布保留公共速率入口。容量拒绝显示实际原因，不截断请求或改用其他倍率。
 
 每帧在镜头处理后读取当前鼠标位置，检查窗口内状态、镜头拖动及可见界面矩形，使用 `WorldMap.ScreenToCell` 得到未裁剪的候选锚点并调用 `UpdatePlacementPreview`。界面遮挡检查递归穿过忽略鼠标的透明容器，遇到接收鼠标的面板只检查其自身矩形，不读取滚动区域外被裁切子项的矩形。透明 `TopBar` 容器忽略鼠标、仅三个真实顶部面板阻挡地图；间隙可继续操作地图。界面遮挡、离窗或拖动时清候选并调用 `ClearPlacementPreview`，不重同步生产地图块。整体原因复用 `FarmGame.CheckPlacement` 的现有顺序；空间逐格染色由地图读取实际占用，费用独立读取 `GetBuildingCostCents`，不能使用失败预检的零费用。摆放反馈每帧读取 `AvailableMoneyCents`，使经营、交易和冻结变化即时反映；预览不持有金币或生产状态，不推进经营，进入摆放保持暂停状态。
 
@@ -81,7 +69,7 @@
 
 当前农田详情显示“生长周期：获得水后 N 天成熟”，加工详情显示“加工周期：投入原料后 N 天完成”。生产详情各显示自己负责的库存与售价，库存仍按品种共享；道路详情仅显示当前用途和拆除操作。主界面不计算建造费用、价格曲线或生产时间，也不暴露内部 `tick`。窗口实现见 [DraggableWindow](../draggable-window/interface-draggable-window.md)、[BuildCatalogWindow](../build-catalog-window/interface-build-catalog-window.md)、[CropSelectionWindow](../crop-selection-window/interface-crop-selection-window.md)、[InventoryWindow](../inventory-window/interface-inventory-window.md)、[MarketWindow](../market-window/interface-market-window.md)、[FarmDetailsPanel](../farm-details-panel/interface-farm-details-panel.md)、[ProcessorDetailsPanel](../processor-details-panel/interface-processor-details-panel.md)、[RoadDetailsPanel](../road-details-panel/interface-road-details-panel.md) 和 [UiElements](../ui-elements/interface-ui-elements.md)。
 
-[建造规则 issue #26](https://github.com/Fotally/Farm-Exchange/issues/26)已按当前约定取消土地解锁，并实行暂定的 10.00 金币建造费。年月日和季节由 `GameCalendar` 给出；独立双周行情与即时交易对应[市场 issue #25](https://github.com/Fotally/Farm-Exchange/issues/25)及[完整接入 issue #73](https://github.com/Fotally/Farm-Exchange/issues/73)。[原料交易 issue #27](https://github.com/Fotally/Farm-Exchange/issues/27)是按品种出售原料快捷操作的历史来源；当前独立报价与完整结算遵循 #25 / T09 [市场规则](../../../gameplay/trading/market-quotes.md)，详情、作物选择列表与市场均从 `FarmGame` 查询当前报价和公共库存，现行交易规则见[出售与价格](../../../gameplay/trading/sales.md)。
+建造不要求土地解锁，生产设施费用为 10.00 金币。年月日和季节由 `GameCalendar` 给出；独立报价规则见[市场规则](../../../gameplay/trading/market-quotes.md)。详情、作物选择列表与市场均从 `FarmGame` 查询当前报价和公共库存，即时交易规则见[出售与价格](../../../gameplay/trading/sales.md)。
 
 ## 验收对应
 
@@ -95,13 +83,13 @@
 
 市场数量意图由 Main 调用 FarmGame.Buy/Sell/SellCommodityAll；主界面与市场内反馈同时显示实际数量、金额或 TradeResult.ErrorMessage。七原料快捷与全部加工品快捷同样检查 SaleResult.Success，并显示容量不足等原因，不把拒绝当成交。金额格式接受 long，金币和库存经营容量仍为 int。输入非法时窗口不发出交易意图，Main 只同步输入错误消息。暂停允许主动交易；刷新不改数量草稿或商品选择。
 
-#36 从市场“委托与策略”打开 [TradeOrdersWindow](../trade-orders-window/interface-trade-orders-window.md)。Main 组装创建、同 ID 编辑、撤销、持续启停意图到 `FarmGame` 的真实命令，成功和拒绝交回窗口并统一刷新；不计算条件、手续费、保留线或冻结资源。委托命令只刷新经营窗口，不启动加工或重同步地图。每个未暂停 tick 在经营模块完成委托执行后，Main 刷新可见委托窗口；经营暂停只停止 tick，仍允许管理单据。Esc 优先关闭委托窗口，打开库存、市场、建造或选择地图时也关闭它，重新打开保留草稿和位置。顶栏主数值显示可用金币，悬停补充总余额和冻结；委托窗口明确区分总、可用和冻结资源，建造费用和实际可用资金仍由经营入口重验。
+从市场“委托与策略”打开 [TradeOrdersWindow](../trade-orders-window/interface-trade-orders-window.md)。Main 组装创建、同 ID 编辑、撤销、持续启停意图到 `FarmGame` 的真实命令，成功和拒绝交回窗口并统一刷新；不计算条件、手续费、保留线或冻结资源。委托命令只刷新经营窗口，不启动加工或重同步地图。每个未暂停 tick 在经营模块完成委托执行后，Main 刷新可见委托窗口；经营暂停只停止 tick，仍允许管理单据。Esc 优先关闭委托窗口，打开库存、市场、建造或选择地图时也关闭它，重新打开保留草稿和位置。顶栏主数值显示可用金币，悬停补充总余额和冻结；委托窗口明确区分总、可用和冻结资源，建造费用和实际可用资金仍由经营入口重验。
 
 委托端到端验收由 `tests/e2e/TestTradeOrdersWindow.cs` 通过真实主场景完成，包含创建与同单编辑、条件分组、锁定现金基准、单次冻结撤销、持续启停、暂停编辑、真实成交费用、终态记录与市场可售按钮。窗口布局检查读取挂树后的真实矩形和滚动结果，不只检查构造尺寸。
 
 市场端到端检查额外覆盖数量与资金/库存失败零修改、暂停交易、买卖两类商品、全售、报价变化后按执行时报价成交、草稿/焦点/光标/滚动与关闭重开，以及有真实十五行公告时窗口/消息/按钮与最后一行的可见布局。
 
-#75 接入384×384基础格后，`Main._Ready` 用同一地图换算将镜头定位到分数中心 `(191.5,191.5)`。建造目录标明当前生产设施3×3、道路1×1；#87 摆放提示改为从占地属性动态计数。任意空小格可作生产设施锚点。`Main` 保留实际点击小格，详情标题通过 `GetBuildingSpace` 显示唯一锚点及占用格数；改种、农田/加工详情和拆除全部将该小格交给经营入口解析整座实例，不自行遍历九份状态。地图同步仍只在改变地块外观的命令和经营tick之后执行，库存/市场/只读详情刷新不全图重同步。
+`Main._Ready` 用同一地图换算将镜头定位到分数中心 `(191.5,191.5)`。建造目录标明当前生产设施3×3、道路1×1；摆放提示从占地属性动态计数。任意空小格可作生产设施锚点。`Main` 保留实际点击小格，详情标题通过 `GetBuildingSpace` 显示唯一锚点及占用格数；改种、农田/加工详情和拆除全部将该小格交给经营入口解析整座实例，不自行遍历九份状态。地图同步仍只在改变地块外观的命令和经营tick之后执行，库存/市场/只读详情刷新不全图重同步。
 
 `TestCoreLoop.CheckFootprintUi` 验证真实主场景中心五座免费3×3布局、各田中央工人出生、九子格同详情、非三格对齐锚点一次扣费、子格改种与末端子格拆整座。坐标/输入测试迁移到新中心与四边；生产负载按16,384实例和147,456占用子格分别验收，避免把小格数量作为实体数量。
 
@@ -115,7 +103,7 @@
 
 农田两个手动按钮分别组装作物窗口模式。立即改种继续调用 `SetFarmCrop`，预备下一轮调用 `PrepareFarmCrop`；窗口选种前告知清空本田安排和立即改种损失。农田详情独立显示实际进度与计划引用。窗口与经营的约定见[耕作表窗口接口](../cultivation-window/interface-cultivation-window.md)。
 
-## 日志帧观察（#130）
+## 日志帧观察
 
 Main._Process 开头唯一调用 RuntimeLog.ProcessFrame，主局与独立局共用一次进程帧采样，暂停仍轮询诊断现实预算。帧末传实际窗口、视口、玩家倍率、地图本地镜头中心及已绘制缓存累计给日志模块，稳定帧不输出 ViewChanged。摆放预览、农田详情和选种预检均保持纯查询，不因每帧刷新输出 RuleChecked。DEBUG 内部 LoggingFactory/InitialSeed 供 1080P 专项验收父节点在 _EnterTree 设置；必须早于首次 Game/Driver 初始化，结束清空，不进入发布接口。
 

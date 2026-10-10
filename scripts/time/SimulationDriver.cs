@@ -52,16 +52,16 @@ public sealed class SimulationDriver
 
 #if DEBUG
     /**
-     * <summary>检查开发版本允许的公共倍率或有限正整数倍率。</summary>
+     * <summary>检查开发版本允许的公共倍率或不超过 16 的正整数倍率。</summary>
      * <param name="rate">经营 tick / 现实秒。</param>
      * <returns>符合开发倍率规则时返回 true。</returns>
      */
     public static bool IsDevelopmentRateAllowed(double rate) => IsPublicRateAllowed(rate) ||
-        double.IsFinite(rate) && rate > 0 && rate == Math.Truncate(rate);
+        double.IsFinite(rate) && rate >= 1 && rate <= 16 && rate == Math.Truncate(rate);
 
     /**
      * <summary>在开发构建设置额外倍率，保留未完成 tick。</summary>
-     * <param name="rate">公共倍率或有限正整数。</param>
+     * <param name="rate">公共倍率或 1～16 的整数。</param>
      * <param name="source">发起来源。</param>
      */
     public void SetDevelopmentRate(double rate, SimulationRateSource source = SimulationRateSource.Player)

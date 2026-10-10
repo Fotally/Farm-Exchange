@@ -16,4 +16,4 @@ dotnet format whitespace FarmExchange.sln --verify-no-changes 根据 .editorconf
 
 定位本地与 CI 差异时，先在仓库目录运行 `dotnet --version` 和 `dotnet --list-sdks`，确认选择与 `global.json` 一致，再对同一提交执行完整格式检查。仅安装其他版本 SDK 时，仓库内的 SDK 命令应明确失败；安装确切版本后再执行，不能放宽版本前滚或绕开仓库约束。
 
-#130 的 `Main.InitializeGame` 曾在 `#endif` 两侧连接 `else if`：SDK 8.0.425、9.0.304 检查通过，10.0.401 可复现 CI 的16条空白错误。修复使用显式语句块表达工厂与公共平台选择，保留原编译条件和分支语义；涉及条件编译的排版调整须同时检查本地与 CI 使用的 SDK，不通过放宽门禁解决差异。
+涉及条件编译的排版调整须使用仓库锁定的 SDK 验证，保留编译条件与分支语义；`Main.InitializeGame` 的工厂与公共平台选择使用显式语句块，不在 `#endif` 两侧连接 `else if`。

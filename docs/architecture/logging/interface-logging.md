@@ -1,8 +1,8 @@
-# 运行时日志 Interface（#126～#130）
+# 运行时日志 Interface
 
-代码位于 `scripts/logging/`；字段与单位只在 [schema v1](../../project/runtime-log-schema-v1.md) 维护。当前覆盖会话、经营局、完整主动交易、订单命令/等待/成交、实际公告及正式报价、建拆与底线命令、每局生产窗口、耕作表和手动接管、暂停与倍率选择及开发流程生命周期，并包含对应指令关联、初始化异常和日志健康。#130 接入受控诊断、批次/进程帧性能汇总及推进异常观察；验收结果单独记录。
+代码位于 `scripts/logging/`；字段与单位只在 [schema v1](../../project/runtime-log-schema-v1.md) 维护。当前覆盖会话、经营局、完整主动交易、订单命令/等待/成交、实际公告及正式报价、建拆与底线命令、每局生产窗口、耕作表和手动接管、暂停与倍率选择及开发流程生命周期，并包含对应指令关联、初始化异常、日志健康、受控诊断、批次/进程帧性能汇总及推进异常观察。
 
-## 共用异常观察与真实推进（#130）
+## 共用异常观察与真实推进
 
 `GameLog.Simulation.BeginTick()`、`BeginBatch()` 和 `GameLog.Time.BeginAdvance()` 返回可空的 `SimulationLogOperation`。采集关闭或局已结束时返回 null；正常推进不新增逐 tick、逐批或逐帧成功日志。调用方用 `using` 限定本次同步调用，在实际步骤前调用 `EnterPhase(SimulationLogPhase)`，捕获原异常后调用 `Faulted(error)`，随后保留 `throw;`。`Dispose` 仅清理传播凭据，不把未调用 Faulted 解释为成功，不执行、补做或重试业务。
 
@@ -12,7 +12,7 @@
 
 传播凭据只属于本局的活跃同步调用，没有全局、线程或永久异常表，不修改 Exception.Data。在原异常投影和输出之前登记“已观察”，所以投影或写盘失败由既有健康机制报告，外层不改换上下文重试；失败不替换原业务异常。异常投影失败也不阻止命令单独提交 Faulted 终结。初始化 FatalException 与 ScenarioReportSaveFailed 仅共用纯异常字段投影，保留各自真实事件和调用语义。设计与生命周期细节见[异常观察实现](implementation-exception-observation.md)。
 
-## 有界诊断与真实性能（#130）
+## 有界诊断与真实性能
 
 `GameLog.Diagnostics.Start(DiagnosticCaptureRequest)` 是显式采集入口。请求复制事件集合、实例锚点、订单编号、工人编号和坐标；最多 32 个锚点与坐标合计、8 张订单、3 名工人，最长 120000 毫秒、最多 5000 条。可请求更小预算；空事件、过大预算、非法工人、非现存实例锚点或无效订单拒绝。`IncludeGameEvents` 默认 false，只有显式 true 才接收不带对象的局级事件，例如行情计算、交易检查、事件秒计时与视图变化。没有对象且未启用局级事件的请求拒绝；不根据业务名称推断对象范围。已有采集、结束的局、关闭或非开发输出返回 false。
 
@@ -34,7 +34,7 @@
 
 ## 当前职责与通用提交
 
-[#127](https://github.com/Fotally/Farm-Exchange/issues/127) 先完成领域 Adapter 与通用输出的职责修正，再接入完整交易、订单与行情。本文说明当前接口，测试实际结果以统一验收记录为准。职责方向见[已确认安排](../../research/runtime-logging.md#已确认的后续修正方向)。
+领域 Adapter 负责事件描述和业务投影，通用输出只处理提交、分流和健康。具体职责见下表述，字段与输出约定以本接口和 [schema v1](../../project/runtime-log-schema-v1.md) 为准。
 
 - `RuntimeLog` 是公开组装 facade，负责进程生命周期、已绑定局的集合和关闭顺序；不维护交易字段或业务事件名称名单。
 - `GameLog` 拥有局身份、局内命令编号、日历上下文与局生命周期，公开 `Trading`、`Orders`、`Market`、`Gameplay`、`Cultivation`、`Time`、`Scenario`、`Simulation`，内部组装 `Production` 并维护本局活跃推进观察关联。初始化设施和库存基线属于其生命周期投影，关闭前封存订单等待和生产窗口尾段。
@@ -50,7 +50,7 @@
 
 ## 低侵入接入与维护约定
 
-### 耕作、时间和开发流程（#129）
+### 耕作、时间和开发流程
 
 `GameLog.Cultivation.BeginCreate/BeginUpdate/BeginDelete/BeginApply/BeginManualControl` 只开始观察原请求；真实经营调用完成后传入原结果，异常经 `Faulted` 关联后继续原样抛出。`FarmGame` 六个耕作命令接受默认 Player 的来源，并在业务或记录前拒绝非法来源。预检与快照查询不形成命令。`GetCultivationPlan(id)` 直接返回指定表的独立快照或 null，日志不为单表观察复制整套表目录。
 
@@ -64,7 +64,7 @@
 
 `TestCultivationLogging`、`TestTimeLogging`、`TestScenarioLogging` 注册到统一 `TestSuite`，验收覆盖真实成功/拒绝、前后语义、批量去重、来源与一次终结、主局/独立局关联、报告保存及关闭顺序；实际运行结果以统一验收记录为准。
 
-### 建拆、底线和生产窗口（#128）
+### 建拆、底线和生产窗口
 
 公开 `RuntimeLog.BindGame(game, seed)` 保留手动领域观察语义，不把日志重新安装到已存在的 FarmGame，也不启动生产窗口。手动调用交易/建拆观察仍有生命周期及真实领域记录，但不能据此声称自动生产覆盖。只有 `new FarmGame(seed, logging)` 在真实初始化后通过内部自动绑定启动生产累计；其 Dispose 和宿主关闭才补生产尾段。`TestProductionLogging.CheckManualBinding` 验证手动绑定后真实推进不会产生貌似完整的生产汇总。
 
@@ -92,7 +92,7 @@
 
 框架替换、字段布局、文件策略和采集预算的调整应局限在日志 Implementation；仅新增领域或实际业务事实需求才扩展对应领域 Interface。后续接入若使调用方重复编排身份、快照、过滤或结束手续，应先收敛日志 Interface，再继续铺设调用。优先在现有日志 Module 内局部重构，业务执行权和检查顺序仍由原 Module 维护。审查以一次日志实现调整需要改动多少业务调用点核对维护成本。
 
-当前交易和订单命令仍有显式开始观察、完成或异常终结调用，不承诺零侵入；FarmGame 在本层局部收敛同类命令的执行手续。日志只接受原输入和真实结果，MEL/Serilog/File 与字段协议保持在日志模块内部；#128～#130 沿用这一职责划分。
+当前交易和订单命令仍有显式开始观察、完成或异常终结调用；FarmGame 在本层局部收敛同类命令的执行手续。日志只接受原输入和真实结果，MEL/Serilog/File 与字段协议保持在日志模块内部。
 
 ## 调用入口与生命周期
 

@@ -1,6 +1,6 @@
 # 建造、拆除与原料底线观察
 
-本文履行[日志 Interface](interface-logging.md)，字段和事件含义以 [schema v1](../../project/runtime-log-schema-v1.md) 为准，关联 #128。`GameplayLog` 拥有三个命令的原请求投影和前后观察；设施、钱包及底线仍由原经营模块拥有。
+本文履行[日志 Interface](interface-logging.md)，字段和事件含义以 [schema v1](../../project/runtime-log-schema-v1.md) 为准。`GameplayLog` 拥有三个命令的原请求投影和前后观察；设施、钱包及底线仍由原经营模块拥有。
 
 ## 实际提交位置
 

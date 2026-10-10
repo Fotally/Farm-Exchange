@@ -28,7 +28,7 @@
 
 库存接口见[统一公共库存](../../inventory/inventory/interface-inventory.md)，委托配置和相位见[委托模块](../trade-order-book/interface-trade-order-book.md)，经营顺序见[经营步进](../../game-state/farm-game/implementation-tick-order.md)。`tests/unit/TestTradingService.cs` 验证十四商品收支守恒、失败零修改、库存与钱包容量、全成品出售完整性、执行时价格、暂停交易与买入后的加工领取，以及费用取整、含费精确余额、现金保留、净收入容量和即时零费。
 
-## 有界规则诊断（#130）
+## 有界规则诊断
 
 `SetLogging(TradingLog?)` 在局绑定后接入同一领域观察入口。只有显式选择 `RuleChecked` 且 `IncludeGameEvents=true` 的开发采集才创建 `TradeRuleObservation`；未选择、关闭或 runtime 采集不构造检查字典。公开采集范围与预算归 `DiagnosticCapture`，交易模块不持有第二份采集状态。
 

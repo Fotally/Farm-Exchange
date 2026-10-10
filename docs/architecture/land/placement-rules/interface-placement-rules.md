@@ -16,4 +16,4 @@
 
 玩家规则见[开局与建筑建造](../../../gameplay/land/opening-and-building.md)；经营入口见[FarmGame 接口](../../game-state/farm-game/interface-farm-game.md)。
 
-#130 的 PlacementDiagnostics 只由实际 TryPlace 命令重验后调用，接收同次 CheckPlacementCore 返回的稳定失败码，按现有短路顺序投影已执行的 Building/Crop/Bounds/Occupancy/Funds；非法建筑早拒只记录 Building=false，道路不补造作物检查，拒绝后不补查后续项。显式 Cells 坐标范围命中后才构造字段。公开 CheckPlacement 与实际执行共享同一私有规则入口，纯预检不输出 RuleChecked 或命令，不消耗执行诊断预算；实际重验只执行一次，RuleChecked 也不等于最终建造已经成功。
+PlacementDiagnostics 只由实际 TryPlace 命令重验后调用，接收同次 CheckPlacementCore 返回的稳定失败码，按现有短路顺序投影已执行的 Building/Crop/Bounds/Occupancy/Funds；非法建筑早拒只记录 Building=false，道路不补造作物检查，拒绝后不补查后续项。显式 Cells 坐标范围命中后才构造字段。公开 CheckPlacement 与实际执行共享同一私有规则入口，纯预检不输出 RuleChecked 或命令，不消耗执行诊断预算；实际重验只执行一次，RuleChecked 也不等于最终建造已经成功。

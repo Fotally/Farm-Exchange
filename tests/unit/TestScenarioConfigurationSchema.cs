@@ -35,7 +35,7 @@ public partial class TestScenarioConfigurationSchema : Node
             foreach (string invalid in new[] { "00-01-01", "01-13-01", "01-01-29", "01-1-01", "1a-01-01", "" })
                 if (draft.SetValue("execution.timePlan[0].endDate", invalid)) return Fail("非法游戏日期被接受");
             draft.SetValue("execution.timePlan[0].endDate", "01-02-01");
-            foreach (string invalid in new[] { "1.5", "0", "-1", "NaN", "Infinity" })
+            foreach (string invalid in new[] { "1.5", "0", "-1", "17", "20", "NaN", "Infinity" })
                 if (draft.SetValue("execution.timePlan[0].rate", invalid)) return Fail("非法倍率被接受");
             draft.SetValue("execution.timePlan[0].rate", "0.5");
             if (draft.SetValue("run.seed", "bad") || !draft.Errors.ContainsKey("run.seed")) return Fail("种子错误未定位");
@@ -46,11 +46,11 @@ public partial class TestScenarioConfigurationSchema : Node
             if (!Throws(() => draft.SetValue("revision", "3")) || !Throws(() => draft.SetValue("missing", "x"))) return Fail("只读或未知字段可修改");
             draft.AddArrayItem("execution.timePlan");
             draft.SetValue("execution.timePlan[1].endDate", "01-03-01");
-            if (!draft.SetValue("execution.timePlan[1].rate", "20") || draft.Errors.Count != 0) return Fail("数组新行不可编辑");
+            if (!draft.SetValue("execution.timePlan[1].rate", "16") || draft.Errors.Count != 0) return Fail("数组新行不可编辑");
             draft.SetValue("execution.timePlan[1].rate", "bad");
             draft.MoveArrayItem("execution.timePlan", 1, 0);
             if (!Equals(draft.GetValue("execution.timePlan[0].rate"), "bad") || !draft.Errors.ContainsKey("execution.timePlan[0].rate")) return Fail("移动未保留行错误");
-            draft.SetValue("execution.timePlan[0].rate", "20");
+            draft.SetValue("execution.timePlan[0].rate", "16");
             if (!draft.Errors.ContainsKey("execution.timePlan[1].endDate")) return Fail("非递增数组未拒绝");
             draft.MoveArrayItem("execution.timePlan", 0, 1);
             draft.RemoveArrayItem("execution.timePlan", 0);

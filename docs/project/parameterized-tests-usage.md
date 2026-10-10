@@ -1,6 +1,6 @@
 # 参数化开发测试使用说明
 
-关联 [#101](https://github.com/Fotally/Farm-Exchange/issues/101) 与 [#104](https://github.com/Fotally/Farm-Exchange/issues/104)。固定流程与配置协议见[固定流程接口](../architecture/development/interface-parameterized-scenario.md)，分步界面见[窗口接口](../architecture/ui/developer-tools-window/interface-developer-tools-window.md)。工具仅在编辑器Debug与本地dev导出可用，release不包含开发窗口、流程或配置资源。
+固定流程与配置协议见[固定流程接口](../architecture/development/interface-parameterized-scenario.md)，分步界面见[窗口接口](../architecture/ui/developer-tools-window/interface-developer-tools-window.md)。工具仅在编辑器Debug与本地dev导出可用，release不包含开发窗口、流程或配置资源。
 
 ## 选择配置并运行
 
@@ -13,7 +13,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | `wheat-basic-r1.json` | 独立局小麦Q=1，2×，真实付费准备与完整成交 |
-| `radish-three-r1.json` | 独立局萝卜Q=3，2×到01-01-02后20×，加工79 tick与订单1 tick的精确预算 |
+| `radish-three-r1.json` | 独立局萝卜Q=3，2×到01-01-02后16×，加工79 tick与订单1 tick的精确预算 |
 | `current-radish-r1.json` | 现场萝卜Q=1，1×；需要真实萝卜加工场地锚点(0,0)，不自动建造或改底线 |
 
 这三份用例作为内置只读示例，可以编辑草稿并另存为自己的配置，不能直接覆盖、删除或运行。现场用例应按照实际场地调整锚点，不能假定默认开局已有(0,0)加工场。加载后本次参数固定；文件修改下次启动生效。dev包仅分发权威示例生成的白名单资源，用户配置和测试场景不进入导出包。
@@ -36,7 +36,7 @@
 
 `run.target` 为 `independent` 或 `current`。独立局必填int32 `seed`；现场禁止seed字段。`execution.timePlan` 为非空列表，每段只包含 `endDate` 和 `rate`。游戏日期严格使用 `yy-MM-dd`（每月28日），终点严格递增，首个终点必须晚于实际游戏时点。终点是该日期起点首次达到的完整tick，最后日期限制最大推进范围，提前完成会提前结束。
 
-倍率接受0.5、1、2或有限正整数；5、10、20为快捷项，非整数1.5等拒绝。倍率只改变现实等待速度，不改变tick预算或加工时长。玩家主动改速立即中止整个自动流程并保留玩家选择；不会恢复旧倍率或自动续跑。
+倍率接受0.5、1、2或1～16的整数；5、10、16为快捷项，非整数1.5及超过16的值拒绝。倍率只改变现实等待速度，不改变tick预算或加工时长。玩家主动改速立即中止整个自动流程并保留玩家选择；不会恢复旧倍率或自动续跑。
 
 `parameters` 必须完整提供：七种合法 `Crop.Raw` 之一的 `rawCommodity`、正int32 `quantity`、整数基础格锚点 `processorAnchor.x/y`、正uint32经营tick预算 `processingWaitLimitTicks` 与 `orderWaitLimitTicks`。数量Q统一用于买入、产品目标及一次卖单。目标产品按同一作物确定，不另填产品或加工时长。未知/重复字段、类型错误、缺失值和非法日期均在业务操作前明确拒绝；工具不补默认值。
 

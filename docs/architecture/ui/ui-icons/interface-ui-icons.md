@@ -1,6 +1,6 @@
 # UiIcons 接口
 
-对应 `scripts/ui/UiIcons.cs`。这是 UI 内部图标入口，统一复用 [#94 原型](../main/prototype-visual.html) 的 15 个线条 symbol，不使用 Unicode 方格、锤子或暂停字符替代图形。
+对应 `scripts/ui/UiIcons.cs`。这是 UI 内部图标入口，统一复用 [界面原型](../main/prototype-visual.html) 的 15 个线条 symbol，不使用 Unicode 方格、锤子或暂停字符替代图形。
 
 `UiIcons.Create(UiIcon, float size = 21, Color? color = null)` 返回忽略鼠标的 `TextureRect`：图形保持正方形框中的原比例，尺寸使用 `CustomMinimumSize`，默认调色为深棕正文色。`UiIcons.Texture(UiIcon)` 返回同一资源的缓存纹理，供原生按钮使用。`UiIcon` 包含种芽、建造工具、库存箱、商店、日历、金币、工人、暂停、继续、关闭、箭头、水滴、小麦、磨坊与回中心；命名仅在 UI 内部使用。
 

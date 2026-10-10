@@ -1,6 +1,6 @@
 # 参数化固定流程接口
 
-关联 [#101](https://github.com/Fotally/Farm-Exchange/issues/101)，配置字段与运行操作见[使用说明](../../project/parameterized-tests-usage.md)，固定步骤与证据范围由本文和[实现说明](implementation-buy-process-sell.md)维护。实现为 [ScenarioConfiguration](../../../scripts/development/scenarios/ScenarioConfiguration.cs)、[BuyProcessSellScenario](../../../scripts/development/scenarios/BuyProcessSellScenario.cs) 和 [ScenarioReport](../../../scripts/development/scenarios/ScenarioReport.cs)，位于开发编译目录、命名空间为 `FarmExchange.Development`，发布构建不包含这些类型。公共经营实现不依赖它们。
+配置字段与运行操作见[使用说明](../../project/parameterized-tests-usage.md)，固定步骤与证据范围由本文和[实现说明](implementation-buy-process-sell.md)维护。实现为 [ScenarioConfiguration](../../../scripts/development/scenarios/ScenarioConfiguration.cs)、[BuyProcessSellScenario](../../../scripts/development/scenarios/BuyProcessSellScenario.cs) 和 [ScenarioReport](../../../scripts/development/scenarios/ScenarioReport.cs)，位于开发编译目录、命名空间为 `FarmExchange.Development`，发布构建不包含这些类型。公共经营实现不依赖它们。
 
 ## 加载与启动
 
@@ -35,4 +35,4 @@
 
 报告位置及操作说明见[参数化测试使用说明](../../project/parameterized-tests-usage.md)，内部顺序见[固定流程实现](implementation-buy-process-sell.md)。
 
-#129 日志观察只使用已加载配置的 `Revision/Sha256`，不重新读原文件。开发侧把既有结果投影为字符串和标量交给公共 `ScenarioLog`，公共日志不引用发布构建排除的开发类型。日志字段及生命周期见[时间与流程日志](../logging/implementation-time-scenario-observation.md)。
+日志观察只使用已加载配置的 `Revision/Sha256`，不重新读原文件。开发侧把既有结果投影为字符串和标量交给公共 `ScenarioLog`，公共日志不引用发布构建排除的开发类型。日志字段及生命周期见[时间与流程日志](../logging/implementation-time-scenario-observation.md)。

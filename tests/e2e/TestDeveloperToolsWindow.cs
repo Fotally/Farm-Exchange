@@ -47,7 +47,7 @@ public partial class TestDeveloperToolsWindow : Node
             string independentJson = """
                 {"schemaVersion":1,"caseId":"window-independent","revision":1,"flow":"buy-process-sell",
                  "run":{"target":"independent","seed":12345},
-                 "execution":{"timePlan":[{"endDate":"01-04-01","rate":20}]},
+                 "execution":{"timePlan":[{"endDate":"01-04-01","rate":16}]},
                  "parameters":{"rawCommodity":"Radish.Raw","quantity":1,"processorAnchor":{"x":0,"y":0},
                  "processingWaitLimitTicks":1000,"orderWaitLimitTicks":10}}
                 """;

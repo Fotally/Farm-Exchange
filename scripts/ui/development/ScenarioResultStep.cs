@@ -60,7 +60,7 @@ internal partial class ScenarioResultStep : VBoxContainer
         content.AddChild(MakeLabel("当前局经营倍率", 14, Ink));
         var rates = new HBoxContainer();
         content.AddChild(rates);
-        foreach (double rate in new[] { 0.5, 1, 2, 5, 10, 20 })
+        foreach (double rate in new[] { 0.5, 1, 2, 5, 10, 16 })
         {
             Button button = MakeQuietButton(rate.ToString(CultureInfo.InvariantCulture) + "×", 70, 38);
             button.Name = "DevelopmentRate" + rate.ToString(CultureInfo.InvariantCulture).Replace(".", "_") + "Button";
@@ -69,7 +69,7 @@ internal partial class ScenarioResultStep : VBoxContainer
         }
         var custom = new HBoxContainer();
         content.AddChild(custom);
-        var value = new LineEdit { Name = "DevelopmentRateInput", PlaceholderText = "正整数倍率", CustomMinimumSize = new Vector2(180, 38) };
+        var value = new LineEdit { Name = "DevelopmentRateInput", PlaceholderText = "1～16 整数倍率", CustomMinimumSize = new Vector2(180, 38) };
         custom.AddChild(value);
         Button apply = MakeQuietButton("应用倍率", 120, 38);
         apply.Name = "DevelopmentRateApplyButton";
@@ -78,7 +78,7 @@ internal partial class ScenarioResultStep : VBoxContainer
             if (!double.TryParse(value.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double rate) ||
                 !SimulationDriver.IsDevelopmentRateAllowed(rate))
             {
-                feedback("倍率只接受0.5、1、2或有限正整数。");
+                feedback("倍率只接受0.5、1、2或1～16的整数。");
                 return;
             }
             currentDriver.SetDevelopmentRate(rate);

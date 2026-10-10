@@ -4,7 +4,7 @@
 
 ## 自动化测试与覆盖率
 
-建筑放置预览（#87，设计来源 #83）由 `tests/integration/test_placement_preview.tscn` 检查独立覆盖层、真实占用、局部冲突、越界、跨块、取消和镜头定位；`tests/unit/TestWorldMap.cs` 以 2×4 偏移数据验证同一几何的覆盖、阻塞与外围。`tests/e2e/test_build_placement.tscn` 使用主场景验证农田、七种加工场地和道路的逐次建造、统一取消、冻结资金与费用提示、暂停及原生鼠标跨界面输入。三组接入 `TestSuite`；独立有窗口运行摆放场景保存 `build/issue87-validation/valid.png`、`conflict.png`、`camera.png`、`edge.png`，地图预览场景另保存 `coverage/placement-*.png`。图像产物仅在有图形后端时生成。
+建筑放置预览由 `tests/integration/test_placement_preview.tscn` 检查独立覆盖层、真实占用、局部冲突、越界、跨块、取消和镜头定位；`tests/unit/TestWorldMap.cs` 以 2×4 偏移数据验证同一几何的覆盖、阻塞与外围。`tests/e2e/test_build_placement.tscn` 使用主场景验证农田、七种加工场地和道路的逐次建造、统一取消、冻结资金与费用提示、暂停及原生鼠标跨界面输入。三组接入 `TestSuite`；独立有窗口运行摆放场景保存 `build/issue87-validation/valid.png`、`conflict.png`、`camera.png`、`edge.png`，地图预览场景另保存 `coverage/placement-*.png`。图像产物仅在有图形后端时生成。
 
 满地图性能场景保留原夹具；追加 `-- --placement-preview` 用户参数时启用随当前镜头移动的候选预览负载，写入 `coverage/performance-placement.json` 和同前缀的前后截图。先运行普通场景进行同条件比较，再运行预览负载；两者均须满足平均至少 60 FPS、P95 帧间隔不超过 16.67 ms。预览不得增加地图块重建。
 
@@ -31,7 +31,7 @@
 
 脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码。以 `scripts/` 的每个一级目录为模块，**每个模块及业务脚本总体的行覆盖率均不得低于 80%**；高覆盖率模块不能抵消未达标模块。`Run-Tests.ps1` 调用统一的 `Test-Coverage.ps1`，动态发现一级目录，按文件与行号去重、同一行任一记录命中即覆盖，自动输出并检查各模块与总体的有效行、已覆盖行及百分比；任一项低于 80% 或缺少有效数据即失败。本地与 CI 共用该门禁，不再要求人工另算模块结果。路径口径、缺失检查及独立夹具命令见[自动覆盖率门禁](../static-checks/coverage.md)。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
 
-## 日志专项验收（#130）
+## 日志专项验收
 
 先完成 Debug 编译和资源导入，再串行执行下列工具。工具不重编正式项目、不修改采集实现，每次指定不存在的输出目录以防混入旧证据；普通 `-Performance` 仍使用原 8 秒满图场景。详细用例、故障含义与 Release 门禁见[日志验收实现](../architecture/logging/implementation-validation.md)。
 

@@ -1,6 +1,6 @@
 # 原异常投影与同步传播观察
 
-关联 #130，履行[日志 Interface](interface-logging.md)与 [schema v1](../../project/runtime-log-schema-v1.md)。本实现补齐真实推进异常的证据，不修改经营调度、时间换算、性能预算或异常处理决策。
+履行[日志 Interface](interface-logging.md)与 [schema v1](../../project/runtime-log-schema-v1.md)。本实现记录真实推进异常，不修改经营调度、时间换算、性能预算或异常处理决策。
 
 ## Module 与 Interface
 

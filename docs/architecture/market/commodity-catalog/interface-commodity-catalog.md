@@ -1,6 +1,6 @@
 # CommodityCatalog 对外接口
 
-对应 `FarmExchange.Market.CommodityCatalog`、`CommodityDefinition`，实现位于 `scripts/market/CommodityCatalog.cs` 与 `CommodityDefinition.cs`。来源为 [#71](https://github.com/Fotally/Farm-Exchange/issues/71)。商品标识复用库存模块的 `CommodityId(Crop, Kind)`，`Kind` 为 `Raw` 或 `Product`。
+对应 `FarmExchange.Market.CommodityCatalog`、`CommodityDefinition`，实现位于 `scripts/market/CommodityCatalog.cs` 与 `CommodityDefinition.cs`。商品标识复用库存模块的 `CommodityId(Crop, Kind)`，`Kind` 为 `Raw` 或 `Product`。
 
 | 成员 | 调用约定 |
 | --- | --- |
