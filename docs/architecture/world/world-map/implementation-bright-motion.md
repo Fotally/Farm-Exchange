@@ -4,11 +4,11 @@
 
 ## 已确认范围与实际 Seam
 
-本期仅 q0 磨坊、制糖坊、小麦/甘蔗/萝卜三档植株；其他设施沿用清亮 v2 默认静态。用户已确认播种/浇水直接使用人物合成帧，收获/加工只在可见实例显示短促产出 FX；开发高倍率只显示最新有效结果，跳过过期动作，不排队补播。工人采收、搬运、加工和四向动效均不在此范围。
+本期仅 q0 磨坊、制糖坊、小麦/甘蔗/萝卜三档植株；其他设施沿用清亮 v2 对应朝向静态。#111已核对原包 `default/motion/docs/validation.json` 的 `building_dynamic_directions` 仅有q0，根点合同也仅有 `q0_field_roots`；因此q1～q3使用各自静态原图，不新增或伪造动效。用户已确认播种/浇水直接使用人物合成帧，收获/加工只在可见实例显示短促产出 FX；开发高倍率只显示最新有效结果，跳过过期动作，不排队补播。工人采收、搬运、加工和四向动效均不在此范围。
 
-`WorldMap` 以私有 `FacilityVisual` 保存每实例 Soil、Surface 及可见时创建的 `FacilityMotion`，工作中心定位；Soil 固定低层，Surface/Motion 在共同 YSort 层。Motion 仅替换覆盖状态的 Surface，但所有生产设施均可使用短产出。外观 key 不含精确进度，重复配置不重建；离屏不创建 15 株节点与材质。`Main` 只传同局 `SimulationDriver`，不逐栋操作叶片、轮毂或粒子。
+`WorldMap` 以私有 `FacilityVisual` 保存每实例 Soil、Surface 及可见时创建的 `FacilityMotion`，工作中心定位；Soil 固定低层，Surface/Motion 在共同 YSort 层。Motion 仅替换覆盖状态的 Surface，但所有生产设施均可使用短产出。外观 key 包含固定实例朝向但不含精确进度，重复配置不重建；离屏不创建 15 株节点与材质。`Main` 只传同局 `SimulationDriver`，不逐栋操作叶片、轮毂或粒子。
 
-`FacilityMotion` 无独立 `_Process`、经营状态或时钟。内部 Interface 为 `ReplacesSurface(plot)` 判断外观替换、`Configure(plot,growthStage)` 配置零起始三档、`Advance(seconds,processing)` 接收已含倍率与暂停的视觉秒和真实加工状态、`ShowResult(result)` 消费 Harvest/Product 并防重复、`ClearResult()` 清除短效果但不回退消费凭据。WorldMap 仅为可见实例调用推进，先验 `IsPresentationResultCurrent` 再启动结果；首次绑定不播放已有结果。已经启动的效果以 `IsPresentationTargetCurrent` 校验原实例，允许跨经营秒自然结束；不拿“最近秒新消费窗口”截断在播片段。保守局部包围范围为 (-128,-208)、大小 256×272。
+`FacilityMotion` 无独立 `_Process`、经营状态或时钟。内部 Interface 为 `ReplacesSurface(plot,orientation)` 仅在q0判断外观替换、`Configure(plot,growthStage,orientation)` 配置零起始三档、`Advance(seconds,processing)` 接收已含倍率与暂停的视觉秒和真实加工状态、`ShowResult(result)` 消费 Harvest/Product 并防重复、`ClearResult()` 清除短效果但不回退消费凭据。WorldMap 仅为可见实例调用推进，先验 `IsPresentationResultCurrent` 再启动结果；首次绑定不播放已有结果。已经启动的效果以 `IsPresentationTargetCurrent` 校验原实例，允许跨经营秒自然结束；不拿“最近秒新消费窗口”截断在播片段。保守局部包围范围为 (-128,-208)、大小 256×272。
 
 生产权威继续由 `FarmingSystem` / `ProcessingSystem` 拥有，`FarmGame` 聚合逐实例真实成功结果；动画仅拥有视觉时间和消费记录。与人物作业复用同一经营结果 Seam，不能从“上一帧忙、下一帧空闲”推断完成，因为批次可同一经营秒完成并立即续批。消费记录不属于存档或经营幂等机制。
 
@@ -28,7 +28,7 @@
 
 `docs/building_layers.json` 明确磨坊局部顺序为 body→sails→hub→局部前景 FX；叶片世界偏移为 `(-3,-72)`，中心不可按纹理包围盒猜测。不能在 `default/static/buildings/png/wheat_workshop_q0.png` 上加活动叶片，该整图仍有固定叶片。叶片是预渲染等距平面帧，不用 Sprite 屏幕平面 rotation 旋转。
 
-磨坊实际仅加工时按 0.53 弧度/视觉秒转，缺料/底线等待固定当前角度，未采用示例环境慢转。制糖坊烟囱锚 `(158,46)`、产出锚 `(112,169)` 转为局部 `(30,-130)`、`(-16,-7)`；磨坊产出锚 `(117,168)` 即 `(-11,-8)`。其他静态加工设施使用工作中心附近 `(0,-8)`，收获 `(0,-10)`。蒸汽只在真实加工中新增，等待停止新增，现存短效果按视觉生命周期结束。
+磨坊实际仅加工时按 0.53 弧度/视觉秒转，缺料/底线等待固定当前角度，未采用示例环境慢转。制糖坊烟囱锚 `(158,46)`、产出锚 `(112,169)` 转为局部 `(30,-130)`、`(-16,-7)`；磨坊产出锚 `(117,168)` 即 `(-11,-8)`。其他静态加工设施及q1～q3使用工作中心附近 `(0,-8)`，收获 `(0,-10)`。蒸汽只在真实加工中新增，等待停止新增，现存短效果按视觉生命周期结束。
 
 包内 `building_visual.gd.show_completion` 示例位置和清单产出锚不同；正式实现使用上述清单锚。FX 留在所属实例的空间关系中，没有全局高 Z。浮动数量采用真实结果的 `+数量`，默认数字字体 13px，背景按文字实际宽度绘制，不使用示例固定值。
 

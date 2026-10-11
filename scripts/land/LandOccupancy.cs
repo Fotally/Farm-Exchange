@@ -25,10 +25,14 @@ internal sealed class LandOccupancy
 
     internal BuildingSpaceSnapshot? GetSpace(int index) => _spaces[index];
 
-    internal LandFailure CheckFootprint(Vector2I anchorCell, BuildingKind building)
+    internal LandFailure CheckFootprint(Vector2I anchorCell, BuildingKind building,
+        BuildingOrientation orientation = BuildingOrientation.Q0)
     {
         if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
             return LandFailure.InvalidBuilding;
+        if (orientation is not (BuildingOrientation.Q0 or BuildingOrientation.Q1 or BuildingOrientation.Q2 or BuildingOrientation.Q3) ||
+            (building == BuildingKind.Road && orientation != BuildingOrientation.Q0))
+            return LandFailure.InvalidOrientation;
         BuildingFootprint footprint = BuildingFootprint.Get(building);
         foreach (Vector2I offset in footprint.Offsets)
             if (!MapCoordinates.ContainsCell(anchorCell + offset))
@@ -39,17 +43,19 @@ internal sealed class LandOccupancy
         return LandFailure.None;
     }
 
-    internal void Place(int index, BuildingKind building)
+    internal void Place(int index, BuildingKind building, BuildingOrientation orientation = BuildingOrientation.Q0)
     {
         Vector2I anchorCell = new(index % FarmGame.MapSize, index / FarmGame.MapSize);
-        LandFailure failure = CheckFootprint(anchorCell, building);
+        LandFailure failure = CheckFootprint(anchorCell, building, orientation);
         if (failure == LandFailure.InvalidBuilding)
             throw new ArgumentOutOfRangeException(nameof(building));
+        if (failure == LandFailure.InvalidOrientation)
+            throw new ArgumentOutOfRangeException(nameof(orientation));
         if (failure == LandFailure.OutOfBounds)
             throw new ArgumentOutOfRangeException(nameof(index));
         if (failure == LandFailure.Occupied)
             throw new InvalidOperationException("土地已有建筑");
-        var space = new BuildingSpaceSnapshot(index, building, anchorCell);
+        var space = new BuildingSpaceSnapshot(index, building, anchorCell, orientation);
         int insertion = _instances.BinarySearch(space, AnchorOrder);
         _instances.Insert(~insertion, space);
         foreach (Vector2I offset in space.Footprint.Offsets)

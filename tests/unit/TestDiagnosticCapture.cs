@@ -110,6 +110,18 @@ public static class TestDiagnosticCapture
         Require(Lines(text, "RuleChecked").Last().Contains("CheckResults: { Building: false }"), "非法建筑早拒丢失或补造后续检查");
         Require(Lines(text, "RuleChecked").Length == 3 && Lines(text, "CommandReceived").Length == 3 &&
             Lines(text, "CommandFinished").Length == 3, "实际检查或命令被重复执行和记录");
+        Require(game.TryPlace(cell, BuildingKind.Farm, CropKind.Wheat, orientation: (BuildingOrientation)99).Failure ==
+            LandFailure.InvalidOrientation, "实际非法朝向未拒绝");
+        placement = Lines(text, "RuleChecked").Last();
+        Require(placement.Contains("Orientation: \"99\"") &&
+            placement.Contains("CheckResults: { Building: true, Crop: true, Orientation: false }") &&
+            !placement.Contains("Bounds:") && !placement.Contains("Occupancy:") && !placement.Contains("Funds:"),
+            "朝向早拒后补造几何或资金检查");
+        Require(game.TryPlace(cell, BuildingKind.Road, default, orientation: BuildingOrientation.Q1).Failure ==
+            LandFailure.InvalidOrientation, "道路非 q0 朝向未拒绝");
+        placement = Lines(text, "RuleChecked").Last();
+        Require(placement.Contains("CheckResults: { Building: true, Orientation: false }") && !placement.Contains("Bounds:"),
+            "道路朝向拒绝补造作物或后续检查");
         var view = game.Log.View;
         view.Observe(new(1920, 1080), new(1920, 1080), 1.5f, Vector2.Zero, 0);
         view.Observe(new(1920, 1080), new(1920, 1080), 1.5f, Vector2.Zero, 0);

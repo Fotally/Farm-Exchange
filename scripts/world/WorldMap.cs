@@ -27,12 +27,12 @@ public partial class WorldMap : Node2D
 
     private readonly bool[] _roads = new bool[MapSize * MapSize];
     private readonly Dictionary<int, FacilityVisual> _facilities = new();
-    private readonly Texture2D[] _buildings = new Texture2D[7];
-    private readonly Texture2D[,] _crops = new Texture2D[7, 3];
+    private readonly Texture2D[,] _buildings = new Texture2D[7, 4];
+    private readonly Texture2D[,,] _crops = new Texture2D[7, 3, 4];
     private Texture2D _grass = null!;
-    private Texture2D _drySoil = null!;
-    private Texture2D _wetSoil = null!;
-    private Texture2D _seeds = null!;
+    private readonly Texture2D[] _drySoil = new Texture2D[4];
+    private readonly Texture2D[] _wetSoil = new Texture2D[4];
+    private readonly Texture2D[] _seeds = new Texture2D[4];
     private Node2D _soilLayer = null!;
     private Node2D _depthLayer = null!;
     private Rect2 _viewBounds;
@@ -121,7 +121,8 @@ public partial class WorldMap : Node2D
             }
             PlotSnapshot plot = _game.GetPlot(space.AnchorCell);
             var appearance = new FacilityAppearance(plot.Building, plot.CropKind, plot.Crop,
-                plot.HasWater, plot.Crop == CropStage.Growing ? Math.Min(2, (int)(plot.GrowthProgress * 3)) : 0);
+                plot.HasWater, plot.Crop == CropStage.Growing ? Math.Min(2, (int)(plot.GrowthProgress * 3)) : 0,
+                space.Orientation);
             remaining.Remove(index);
             if (!_facilities.TryGetValue(index, out FacilityVisual? visual))
             {
@@ -137,13 +138,14 @@ public partial class WorldMap : Node2D
             if (visual.Appearance != appearance)
             {
                 visual.Appearance = appearance;
-                visual.Soil.Texture = plot.Building == BuildingKind.Farm ? (plot.HasWater ? _wetSoil : _drySoil) : null;
+                int orientation = (int)space.Orientation;
+                visual.Soil.Texture = plot.Building == BuildingKind.Farm ? (plot.HasWater ? _wetSoil[orientation] : _drySoil[orientation]) : null;
                 visual.Surface.Offset = -(plot.Building == BuildingKind.Farm ? FarmPivot : BuildingPivot);
-                visual.Surface.Texture = plot.Building == BuildingKind.Processor ? _buildings[(int)plot.CropKind] :
+                visual.Surface.Texture = plot.Building == BuildingKind.Processor ? _buildings[(int)plot.CropKind, orientation] :
                     plot.Crop switch
                     {
-                        CropStage.Seeded => _seeds,
-                        CropStage.Growing => _crops[(int)plot.CropKind, appearance.GrowthStage],
+                        CropStage.Seeded => _seeds[orientation],
+                        CropStage.Growing => _crops[(int)plot.CropKind, appearance.GrowthStage, orientation],
                         _ => null,
                     };
             }
@@ -169,14 +171,17 @@ public partial class WorldMap : Node2D
     private void LoadTextures()
     {
         _grass = GD.Load<Texture2D>("res://assets/gameplay/terrain/terrain_81_mesh.png");
-        _drySoil = GD.Load<Texture2D>("res://assets/gameplay/soil/field_dry_q0.png");
-        _wetSoil = GD.Load<Texture2D>("res://assets/gameplay/soil/field_wet_q0.png");
-        _seeds = GD.Load<Texture2D>("res://assets/gameplay/crops/field_seeded_q0.png");
-        for (int crop = 0; crop < CropNames.Length; crop++)
+        for (int orientation = 0; orientation < 4; orientation++)
         {
-            _buildings[crop] = GD.Load<Texture2D>($"res://assets/gameplay/buildings/{CropNames[crop]}_workshop_q0.png");
-            for (int stage = 0; stage < 3; stage++)
-                _crops[crop, stage] = GD.Load<Texture2D>($"res://assets/gameplay/crops/{CropNames[crop]}_growing_{stage + 1:D2}_q0.png");
+            _drySoil[orientation] = GD.Load<Texture2D>($"res://assets/gameplay/soil/field_dry_q{orientation}.png");
+            _wetSoil[orientation] = GD.Load<Texture2D>($"res://assets/gameplay/soil/field_wet_q{orientation}.png");
+            _seeds[orientation] = GD.Load<Texture2D>($"res://assets/gameplay/crops/field_seeded_q{orientation}.png");
+            for (int crop = 0; crop < CropNames.Length; crop++)
+            {
+                _buildings[crop, orientation] = GD.Load<Texture2D>($"res://assets/gameplay/buildings/{CropNames[crop]}_workshop_q{orientation}.png");
+                for (int stage = 0; stage < 3; stage++)
+                    _crops[crop, stage, orientation] = GD.Load<Texture2D>($"res://assets/gameplay/crops/{CropNames[crop]}_growing_{stage + 1:D2}_q{orientation}.png");
+            }
         }
     }
 
@@ -237,8 +242,9 @@ public partial class WorldMap : Node2D
                 visual.Motion = new FacilityMotion { Position = visual.Position };
                 _depthLayer.AddChild(visual.Motion);
             }
-            visual.Motion.Configure(visual.Snapshot, visual.Appearance!.Value.GrowthStage);
-            visual.SetSurfaceVisible(!FacilityMotion.ReplacesSurface(visual.Snapshot));
+            FacilityAppearance appearance = visual.Appearance!.Value;
+            visual.Motion.Configure(visual.Snapshot, appearance.GrowthStage, appearance.Orientation);
+            visual.SetSurfaceVisible(!FacilityMotion.ReplacesSurface(visual.Snapshot, appearance.Orientation));
             _visibleFacilities.Add(visual);
         }
     }
@@ -307,14 +313,18 @@ public partial class WorldMap : Node2D
      * <param name="building">当前可摆放建筑类型。</param>
      * <param name="crop">当前选定作物，用于农田或加工类型标记。</param>
      * <param name="anchorCell">鼠标指向的候选锚点，可在地图范围外。</param>
+     * <param name="orientation">合法世界朝向；省略时为 Q0，朝向不改变占地与工作中心。</param>
      * <remarks>只检查当前占地的越界与实际占用，不登记建筑、不改金币，不同步地图块。</remarks>
      */
-    public void UpdatePlacementPreview(BuildingKind building, CropKind crop, Vector2I anchorCell)
+    public void UpdatePlacementPreview(BuildingKind building, CropKind crop, Vector2I anchorCell,
+        BuildingOrientation orientation = BuildingOrientation.Q0)
     {
+        if ((uint)orientation >= 4)
+            throw new ArgumentOutOfRangeException(nameof(orientation));
         BuildingFootprint footprint = BuildingFootprint.Get(building);
         PlacementPreviewGeometry.PreviewCell[] cells = PlacementPreviewGeometry.GetCells(anchorCell, footprint.Offsets, _game);
         bool changed = _placement == null || _placement.Building != building ||
-            _placement.Crop != crop || _placement.AnchorCell != anchorCell;
+            _placement.Crop != crop || _placement.AnchorCell != anchorCell || _placement.Orientation != orientation;
         for (int index = 0; index < cells.Length; index++)
         {
             if (!changed && _placement!.Cells[index] != cells[index])
@@ -322,7 +332,7 @@ public partial class WorldMap : Node2D
         }
         if (!changed)
             return;
-        _placement = new PlacementVisual(building, crop, anchorCell, cells);
+        _placement = new PlacementVisual(building, crop, anchorCell, cells, orientation);
         _placementOverlay.QueueRedraw();
     }
 
@@ -365,7 +375,7 @@ public partial class WorldMap : Node2D
     }
 
     private readonly record struct FacilityAppearance(BuildingKind Building, CropKind Crop,
-        CropStage Stage, bool Wet, int GrowthStage);
+        CropStage Stage, bool Wet, int GrowthStage, BuildingOrientation Orientation);
 
     private sealed class FacilityVisual
     {
@@ -409,7 +419,7 @@ public partial class WorldMap : Node2D
     }
 
     private sealed record PlacementVisual(BuildingKind Building, CropKind Crop, Vector2I AnchorCell,
-        PlacementPreviewGeometry.PreviewCell[] Cells);
+        PlacementPreviewGeometry.PreviewCell[] Cells, BuildingOrientation Orientation);
 
     private sealed partial class PlacementOverlay : Node2D
     {
@@ -430,9 +440,9 @@ public partial class WorldMap : Node2D
             Vector2 center = MapCoordinates.GridPositionToLocal((Vector2)(preview.AnchorCell + footprint.WorkOffset));
             Color tint = new(1f, 1f, 1f, 0.65f);
             if (preview.Building == BuildingKind.Farm)
-                DrawTexture(_map._drySoil, center - FarmPivot, tint);
+                DrawTexture(_map._drySoil[(int)preview.Orientation], center - FarmPivot, tint);
             else if (preview.Building == BuildingKind.Processor)
-                DrawTexture(_map._buildings[(int)preview.Crop], center - BuildingPivot, tint);
+                DrawTexture(_map._buildings[(int)preview.Crop, (int)preview.Orientation], center - BuildingPivot, tint);
             else
                 DrawLine(center - new Vector2(9f, 0f), center + new Vector2(9f, 0f), new Color(RoadColor, 0.65f), 4f);
             for (int index = 0; index < footprint.Offsets.Count; index++)

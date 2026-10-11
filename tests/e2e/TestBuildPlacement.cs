@@ -28,6 +28,7 @@ public partial class TestBuildPlacement : Node
             window.Size = new Vector2I(1920, 1080);
             await Frames(parent);
             if (!CheckPausedFeedback(parent)) return false;
+            if (!await CheckRotation(parent)) return false;
             foreach (BuildingKind kind in new[] { BuildingKind.Farm, BuildingKind.Processor, BuildingKind.Road })
             {
                 IEnumerable<CropKind> crops = kind == BuildingKind.Processor
@@ -102,6 +103,10 @@ public partial class TestBuildPlacement : Node
             Vector2I first = new(186, 192), second = new(183, 192);
             int cost = FarmGame.GetBuildingCostCents(kind);
             Start(main, kind, crop);
+            Button rotate = Find<Button>(main, "RotatePlacementButton");
+            if (rotate.Visible != (kind != BuildingKind.Road))
+                return Fail("旋转入口没有限定为农田和加工设施");
+            if (kind != BuildingKind.Road) rotate.EmitSignal(Button.SignalName.Pressed);
             Label hint = Find<Label>(main, "BuildHint");
             if (!hint.Text.Contains($"占地 {BuildingFootprint.Get(kind).Offsets.Count} 格") || !main.Game.IsPaused)
                 return Fail("占地提示没有读取属性或进入摆放改变了暂停状态");
@@ -110,6 +115,10 @@ public partial class TestBuildPlacement : Node
             if (main.Game.MoneyCents != 5000 - 2 * cost || main.Game.GetPlot(first).Building != kind ||
                 main.Game.GetPlot(second).Building != kind || !cancel.Visible || detail.Visible)
                 return Fail($"{kind}/{crop}连续建造没有一次扣费、保持模式或误弹详情");
+            if (main.Game.GetBuildingSpace(first)?.Orientation !=
+                    (kind == BuildingKind.Road ? BuildingOrientation.Q0 : BuildingOrientation.Q1) ||
+                main.Game.GetBuildingSpace(second)?.Orientation != BuildingOrientation.Q0)
+                return Fail($"{kind}/{crop}没有提交候选朝向或成功后下一座没有重置q0");
             int money = main.Game.MoneyCents;
             map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
             if (main.Game.MoneyCents != money || !cancel.Visible ||
@@ -143,6 +152,86 @@ public partial class TestBuildPlacement : Node
             map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
             if (!detail.Visible || main.Game.MoneyCents != money)
                 return Fail("取消后选择仍触发建造或没有恢复详情");
+            return true;
+        }
+        finally { main.Free(); }
+    }
+
+    private static async Task<bool> CheckRotation(Node parent)
+    {
+        Main main = CreateMain(parent);
+        try
+        {
+            main.Game.SetPaused(true);
+            uint seconds = main.Game.Calendar.ElapsedSeconds;
+            int instances = main.Game.GetBuildingSpaces().Count;
+            var map = main.GetNode<WorldMap>("WorldMap");
+            Start(main, BuildingKind.Farm);
+            Button rotate = Find<Button>(main, "RotatePlacementButton");
+            void PressR(bool echo = false, bool ctrl = false)
+            {
+                Input.ParseInputEvent(new InputEventKey
+                {
+                    Keycode = Key.R,
+                    Unicode = 'r',
+                    Pressed = true,
+                    Echo = echo,
+                    CtrlPressed = ctrl
+                });
+                Input.ParseInputEvent(new InputEventKey { Keycode = Key.R, Pressed = false });
+                Input.FlushBufferedEvents();
+            }
+            bool HasDirection(int direction) => rotate.Text.EndsWith($"q{direction}");
+            for (int direction = 1; direction <= 4; direction++)
+            {
+                if (direction % 2 == 1) PressR();
+                else rotate.EmitSignal(Button.SignalName.Pressed);
+                if (!HasDirection(direction % 4)) return Fail("R和旋转按钮没有按四向循环回到q0");
+            }
+            PressR(echo: true);
+            PressR(ctrl: true);
+            if (!HasDirection(0)) return Fail("长按重复或编辑快捷键误触发旋转");
+            Find<Button>(main, "InventoryButton").EmitSignal(Button.SignalName.Pressed);
+            var input = Find<LineEdit>(main, "InventorySearchInput");
+            input.GrabFocus();
+            PressR();
+            if (!HasDirection(0) || input.Text != "r") return Fail("旋转快捷键抢走输入字段的R");
+            if (main.Game.MoneyCents != 5000 || main.Game.GetBuildingSpaces().Count != instances)
+                return Fail("候选旋转修改金币或正式占地");
+            Start(main, BuildingKind.Farm);
+            for (int direction = 0; direction < 4; direction++)
+            {
+                for (int step = 0; step < direction; step++)
+                    if (step % 2 == 0) PressR();
+                    else rotate.EmitSignal(Button.SignalName.Pressed);
+                if (direction == 3)
+                {
+                    int money = main.Game.MoneyCents;
+                    map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(186, 192));
+                    if (!HasDirection(3) || main.Game.MoneyCents != money)
+                        return Fail("失败建造没有保留候选朝向或扣了费");
+                }
+                Vector2I cell = new(186 - direction * 3, 192);
+                map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+                if (main.Game.GetBuildingSpace(cell)?.Orientation != (BuildingOrientation)direction || !HasDirection(0))
+                    return Fail("四向建造没有提交实际朝向或下一座没有重置q0");
+                await Frames(parent);
+                if (!CheckFooterLayout(main)) return false;
+            }
+            rotate.EmitSignal(Button.SignalName.Pressed);
+            Start(main, BuildingKind.Processor);
+            if (!HasDirection(0)) return Fail("新选建造类型沿用了旧候选方向");
+            rotate.EmitSignal(Button.SignalName.Pressed);
+            Find<Button>(main, "CancelPlacementButton").EmitSignal(Button.SignalName.Pressed);
+            if (rotate.Visible) return Fail("取消摆放后仍显示旋转入口");
+            Start(main, BuildingKind.Processor);
+            if (!HasDirection(0)) return Fail("取消后新候选没有从q0开始");
+            Start(main, BuildingKind.Road);
+            PressR();
+            if (rotate.Visible) return Fail("道路提供了旋转入口");
+            if (main.Game.MoneyCents != 1000 || main.Game.GetBuildingSpaces().Count != instances + 4 ||
+                !main.Game.IsPaused || main.Game.Calendar.ElapsedSeconds != seconds)
+                return Fail("旋转操作改变建造费用、暂停或经营进度");
             return true;
         }
         finally { main.Free(); }
@@ -439,12 +528,12 @@ public partial class TestBuildPlacement : Node
         Rect2 activity = Find<Control>(main, "MessagePanel").GetGlobalRect();
         if (!viewport.Encloses(footer)) return Fail("底栏伸出可见窗口");
         if (!viewport.Encloses(activity)) return Fail("近况和摆放反馈伸出可见窗口");
-        foreach (string name in new[] { "BuildButton", "InventoryButton", "MarketButton", "CultivationButton", "BuildHint", "BuildCost", "CancelPlacementButton" })
+        foreach (string name in new[] { "BuildButton", "InventoryButton", "MarketButton", "CultivationButton", "BuildHint", "BuildCost", "RotatePlacementButton", "CancelPlacementButton" })
         {
             Control control = Find<Control>(main, name);
             if (!control.IsVisibleInTree()) continue;
             Rect2 rect = control.GetGlobalRect();
-            Rect2 panel = name is "BuildHint" or "BuildCost" or "CancelPlacementButton" ? activity : footer;
+            Rect2 panel = name is "BuildHint" or "BuildCost" or "RotatePlacementButton" or "CancelPlacementButton" ? activity : footer;
             if (!panel.Encloses(rect)) return Fail($"经营控件{name}伸出所属面板或被裁切");
             string text = control is Label label ? label.Text : ((Button)control).Text;
             Font font = control.GetThemeFont("font");
@@ -463,6 +552,10 @@ public partial class TestBuildPlacement : Node
         Rect2 cancel = Find<Control>(main, "CancelPlacementButton").GetGlobalRect();
         if (hint.End.Y > cost.Position.Y || cost.End.Y > cancel.Position.Y)
             return Fail("近况面板的提示、费用和取消按钮相互重叠");
+        Control rotate = Find<Control>(main, "RotatePlacementButton");
+        if (rotate.IsVisibleInTree() && (cost.End.Y > rotate.GetGlobalRect().Position.Y ||
+            rotate.GetGlobalRect().End.X > cancel.Position.X))
+            return Fail("近况面板旋转按钮与费用或取消按钮重叠");
         return true;
     }
 

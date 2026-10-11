@@ -113,7 +113,7 @@ public partial class TestWorldArt : Node
             finally { scope.Free(); }
         }
         GD.Print("世界美术：七作物三档、播种/干湿土、七建筑、重启重建及前后遮挡通过");
-        return true;
+        return await TestFacilityOrientations.RunChecksAsync(parent);
     }
 
     private static async Task<bool> CheckDepth(Node parent, FarmGame game, WorldMap map, Camera2D camera)

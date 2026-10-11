@@ -16,7 +16,8 @@ internal sealed class PlacementDiagnostics
     private readonly GameLog _context;
     internal PlacementDiagnostics(GameLog context) => _context = context;
 
-    internal void Completed(Vector2I cell, BuildingKind building, CropKind crop, PlacementCheck result)
+    internal void Completed(Vector2I cell, BuildingKind building, CropKind crop,
+        BuildingOrientation orientation, PlacementCheck result)
     {
         if (!_context.Diagnostics.ShouldCapture(Checked.Name, cell: cell)) return;
         _context.Observe(() =>
@@ -27,17 +28,22 @@ internal sealed class PlacementDiagnostics
             fields["Cell"] = new Dictionary<string, object?> { ["X"] = cell.X, ["Y"] = cell.Y };
             fields["BuildingKind"] = building.ToString();
             fields["Crop"] = crop.ToString();
+            fields["Orientation"] = orientation.ToString();
             var checks = new Dictionary<string, object?> { ["Building"] = result.Failure != LandFailure.InvalidBuilding };
             if (result.Failure != LandFailure.InvalidBuilding)
             {
                 if (building != BuildingKind.Road) checks["Crop"] = result.Failure != LandFailure.InvalidCrop;
                 if (result.Failure != LandFailure.InvalidCrop)
                 {
-                    checks["Bounds"] = result.Failure != LandFailure.OutOfBounds;
-                    if (result.Failure != LandFailure.OutOfBounds)
+                    checks["Orientation"] = result.Failure != LandFailure.InvalidOrientation;
+                    if (result.Failure != LandFailure.InvalidOrientation)
                     {
-                        checks["Occupancy"] = result.Failure != LandFailure.Occupied;
-                        if (result.Failure != LandFailure.Occupied) checks["Funds"] = result.Failure != LandFailure.InsufficientFunds;
+                        checks["Bounds"] = result.Failure != LandFailure.OutOfBounds;
+                        if (result.Failure != LandFailure.OutOfBounds)
+                        {
+                            checks["Occupancy"] = result.Failure != LandFailure.Occupied;
+                            if (result.Failure != LandFailure.Occupied) checks["Funds"] = result.Failure != LandFailure.InsufficientFunds;
+                        }
                     }
                 }
             }

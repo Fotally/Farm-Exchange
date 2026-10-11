@@ -36,8 +36,22 @@ public partial class TestEnvironmentDecorations : Node
             if (initial.Count == 0 || initial.Keys.Any(cell => game.GetBuildingSpace(cell) != null))
                 return Fail("初始环境未出现或覆盖真实开局占地");
             string[] manual = { "hay_bale", "timber_store", "fence", "farm_sign", "bush_hedge" };
-            if (manual.Any(name => !initial.Values.Any(sprite => sprite.Texture.ResourcePath.EndsWith($"/{name}_q0.png"))))
+            if (manual.Any(name => !initial.Values.Any(sprite => sprite.Texture.ResourcePath.Contains($"/{name}_q"))))
                 return Fail("开局外围没有实际采用全部五类人工环境陈设");
+            for (int direction = 0; direction < 4; direction++)
+                if (!initial.Values.Any(sprite => sprite.Texture.ResourcePath.EndsWith($"_q{direction}.png")))
+                    return Fail("开局环境没有随机采用全部四向图");
+            var initialPaths = initial.ToDictionary(pair => pair.Key, pair => pair.Value.Texture.ResourcePath);
+            var repeatedMap = new WorldMap();
+            scope.AddChild(repeatedMap);
+            repeatedMap.SetGame(new FarmGame(98765));
+            await Frames(parent);
+            var repeated = VisibleDecorations(repeatedMap);
+            bool stable = initialPaths.Count == repeated.Count && initialPaths.All(pair =>
+                repeated.TryGetValue(pair.Key, out Sprite2D? sprite) && sprite.Texture.ResourcePath == pair.Value);
+            repeatedMap.Free();
+            await Frames(parent);
+            if (!stable) return Fail("环境根点或朝向随开局作物随机种子变化");
             if (graphical) Save(parent, "environment-center.png");
             foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
             map.SyncFromGame();
@@ -67,6 +81,7 @@ public partial class TestEnvironmentDecorations : Node
             map.SyncFromGame();
             await Frames(parent);
             var after = VisibleDecorations(map);
+            var afterPaths = after.ToDictionary(pair => pair.Key, pair => pair.Value.Texture.ResourcePath);
             if (inside.Any(after.ContainsKey) || before.Count - after.Count != inside.Length ||
                 before.Keys.Except(inside).Any(cell => !after.ContainsKey(cell)) ||
                 game.MoneyCents != balance - FarmGame.BuildingCostCents ||
@@ -82,6 +97,8 @@ public partial class TestEnvironmentDecorations : Node
             camera.ForceUpdateScroll();
             await Frames(parent);
             if (!SameRoots(after, VisibleDecorations(map))) return Fail("拆除或镜头往返恢复已清环境");
+            if (VisibleDecorations(map).Any(pair => !afterPaths.TryGetValue(pair.Key, out string? path) ||
+                pair.Value.Texture.ResourcePath != path)) return Fail("镜头往返改变剩余环境朝向");
             Vector2I road = after.Keys.First();
             if (!game.TryPlace(road, BuildingKind.Road, default).Success) return Fail("环境根点上的道路建造失败");
             map.SyncFromGame();

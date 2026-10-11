@@ -361,23 +361,44 @@ public sealed class FarmGame : IDisposable
         return occupiedCells == expectedOccupiedCells;
     }
 
-    public PlacementCheck CheckPlacement(Vector2I cell, BuildingKind building, CropKind crop) =>
-        CheckPlacementCore(cell, building, crop);
+    /**
+     * <summary>只读预检整座设施的描述、朝向、占地和可用资金。</summary>
+     * <param name="cell">候选锚点基础格。</param>
+     * <param name="building">农田、加工场地或道路。</param>
+     * <param name="crop">生产设施的作物；道路忽略此参数。</param>
+     * <param name="orientation">生产设施的 q0～q3 朝向；道路仅允许 q0，默认 q0。</param>
+     * <returns>允许及建造费用，或稳定拒绝原因和零费用。</returns>
+     */
+    public PlacementCheck CheckPlacement(Vector2I cell, BuildingKind building, CropKind crop,
+        BuildingOrientation orientation = BuildingOrientation.Q0) =>
+        CheckPlacementCore(cell, building, crop, orientation);
 
-    private PlacementCheck CheckPlacementCore(Vector2I cell, BuildingKind building, CropKind crop)
+    private PlacementCheck CheckPlacementCore(Vector2I cell, BuildingKind building, CropKind crop,
+        BuildingOrientation orientation)
     {
         if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
             return new PlacementCheck(LandFailure.InvalidBuilding, 0);
         return PlacementRules.Check(cell, building, crop, _occupancy, _wallet.AvailableCents,
-            GetBuildingCostCents(building));
+            GetBuildingCostCents(building), orientation);
     }
 
-    public PlacementResult TryPlace(Vector2I cell, BuildingKind building, CropKind crop, CommandOrigin origin = CommandOrigin.Player)
+    /**
+     * <summary>重验并完整建造一座指定朝向的设施，只收取标准建造费。</summary>
+     * <param name="cell">候选锚点基础格。</param>
+     * <param name="building">农田、加工场地或道路。</param>
+     * <param name="crop">生产设施的作物；道路忽略此参数。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <param name="orientation">生产设施的 q0～q3 朝向；道路仅允许 q0，默认 q0。</param>
+     * <returns>实际扣费，或稳定拒绝原因；正常拒绝不修改资源或实例。</returns>
+     * <remarks>朝向由土地登记后固定；当前生产设施均为 3×3，占地、工作中心和生产规则不随朝向改变。</remarks>
+     */
+    public PlacementResult TryPlace(Vector2I cell, BuildingKind building, CropKind crop,
+        CommandOrigin origin = CommandOrigin.Player, BuildingOrientation orientation = BuildingOrientation.Q0)
     {
         ValidateCommandOrigin(origin);
-        var observation = _log?.Gameplay.BeginPlace(cell, building, crop, origin);
+        var observation = _log?.Gameplay.BeginPlace(cell, building, crop, origin, orientation);
         PlacementResult result;
-        try { result = TryPlaceCore(cell, building, crop); }
+        try { result = TryPlaceCore(cell, building, crop, orientation); }
         catch (Exception error)
         {
             observation?.Faulted(error);
@@ -387,17 +408,18 @@ public sealed class FarmGame : IDisposable
         return result;
     }
 
-    private PlacementResult TryPlaceCore(Vector2I cell, BuildingKind building, CropKind crop)
+    private PlacementResult TryPlaceCore(Vector2I cell, BuildingKind building, CropKind crop,
+        BuildingOrientation orientation)
     {
-        PlacementCheck check = CheckPlacementCore(cell, building, crop);
-        _log?.Placement.Completed(cell, building, crop, check);
+        PlacementCheck check = CheckPlacementCore(cell, building, crop, orientation);
+        _log?.Placement.Completed(cell, building, crop, orientation, check);
         if (!check.Allowed)
             return new PlacementResult(check.Failure, 0);
 
         int index = IndexOf(cell);
         if (!_wallet.TrySpend(check.CostCents))
             throw new InvalidOperationException("放置检查与扣费状态不一致");
-        PlaceBuilding(index, building, crop);
+        PlaceBuilding(index, building, crop, orientation);
         if (building == BuildingKind.Processor)
             StartIdleProcessors();
         return new PlacementResult(LandFailure.None, check.CostCents);
@@ -1210,30 +1232,31 @@ public sealed class FarmGame : IDisposable
                 _log?.Production?.Consumed(_processing.Get(space.AnchorIndex).CropKind);
     }
 
-    private void PlaceFarm(int index, CropKind crop)
+    private void PlaceFarm(int index, CropKind crop, BuildingOrientation orientation)
     {
         _farming.Place(index, crop);
-        _occupancy.Place(index, BuildingKind.Farm);
+        _occupancy.Place(index, BuildingKind.Farm, orientation);
     }
 
-    private void PlaceProcessor(int index, CropKind crop)
+    private void PlaceProcessor(int index, CropKind crop, BuildingOrientation orientation)
     {
         _processing.Place(index, crop);
-        _occupancy.Place(index, BuildingKind.Processor);
+        _occupancy.Place(index, BuildingKind.Processor, orientation);
     }
 
-    private void PlaceBuilding(int index, BuildingKind building, CropKind crop)
+    private void PlaceBuilding(int index, BuildingKind building, CropKind crop,
+        BuildingOrientation orientation = BuildingOrientation.Q0)
     {
         switch (building)
         {
             case BuildingKind.Farm:
-                PlaceFarm(index, crop);
+                PlaceFarm(index, crop, orientation);
                 break;
             case BuildingKind.Processor:
-                PlaceProcessor(index, crop);
+                PlaceProcessor(index, crop, orientation);
                 break;
             case BuildingKind.Road:
-                _occupancy.Place(index, BuildingKind.Road);
+                _occupancy.Place(index, BuildingKind.Road, orientation);
                 break;
         }
     }

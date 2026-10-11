@@ -32,6 +32,7 @@
 | 季节耕作与共享年度表 | [作物](../gameplay/production/crop-growth.md)、[年度表规则](../gameplay/production/seasonal-cultivation.md)、[窗口操作](../gameplay/production/seasonal-cultivation-ui.md) |
 | 1080P界面、整体和字体倍率 | [视觉基准](ui-visual-prototype.md)、[统一倍率接口](../architecture/ui/ui-scaling/interface-ui-scaling.md) |
 | 清亮v2首批素材、真实动作、局部动效与环境 | [素材基准](../research/bright-complete-v2.md)、[地图接口](../architecture/world/world-map/interface-world-map.md) |
+| 建前设施朝向与装饰随机四向 | [建造操作](../gameplay/land/opening-and-building.md)、[地图接口](../architecture/world/world-map/interface-world-map.md)、[实施范围](facility-orientation-proposal.md) |
 | 公共倍率、批量经营、参数化开发流程 | [经营倍率](../gameplay/world/simulation-rate.md)、[批量实现](../architecture/game-state/farm-game/implementation-batched-simulation.md)、[开发测试使用说明](parameterized-tests-usage.md) |
 | 本地开发包与双平台正式发布 | [开发构建](development-build.md)、[正式发布](release.md) |
 
@@ -41,7 +42,7 @@
 
 - 农田、七种配套加工场地与道路以外的建筑类型与建造规则。
 - 存档与离线收益规则。
-- 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、设施朝向 #111、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[朝向](facility-orientation-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。这些待确认项不作为已实施功能。
+- 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。道路两斜向及交汇的连接细节由 [#143](https://github.com/Fotally/Farm-Exchange/issues/143) 跟踪，素材来源待明确。这些待确认项不作为已实施功能。
 
 运行日志的现行事件和字段以[日志接口](../architecture/logging/interface-logging.md)与[schema v1](runtime-log-schema-v1.md)为准；领域入口维护事件描述与投影，底座负责通用提交，业务保留执行权。普通日志不提供可靠重放。16×图形压测与性能达标仍由 #66 跟踪，不记作已通过。
 

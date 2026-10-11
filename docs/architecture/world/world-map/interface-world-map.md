@@ -9,7 +9,7 @@
 | AttachDepthSorted | 尚未挂树的Node2D表现容器 | SetGame后调用；设零位置并启用嵌套YSort，子节点原点为脚根，不另设ZIndex；地图负责生命周期 |
 | SelectAtScreenPosition | 屏幕坐标 | 有效格发出SelectionChanged(cell)，保留原点击子格 |
 | ScreenToCell | 逻辑视口坐标→基础格 | 返回未限制格坐标，使越界候选完整显示 |
-| UpdatePlacementPreview | 建筑类型、作物、锚点 | 只读更新完整占地、局部冲突、半透明实例图及外围，不更新地面块 |
+| UpdatePlacementPreview | 建筑类型、作物、锚点、可选BuildingOrientation（默认Q0） | 只读更新完整占地、局部冲突、半透明实例图及外围，不更新地面块 |
 | ClearPlacementPreview | 无参数 | 隐藏预览，不改变摆放生命周期或经营资源 |
 | PlacementPreviewAnchor | 可空格坐标 | 查询实际候选锚点，隐藏时为空 |
 | GetCellWorldCenter | 有效格→全局位置 | 在地图本地格中心应用节点变换 |
@@ -17,17 +17,17 @@
 | ClampGlobalCameraCenter | 全局镜头中心→受限位置 | 限制在同一地图菱形 |
 | LocalBounds | 本地外接矩形 | 用于地图范围检查，不表示全局矩形 |
 
-WorldMap通过`FarmGame.GetBuildingSpaces()`读取稳定空间快照，每实例只读取一次`GetPlot(anchor)`；`GetBuildingSpace(anyCell)`解析整座占地。Sync次数、镜头位置或可见数量不得影响作物、加工、库存、日期或任务。暂停也可同步建造/改种，倍率只改变经营快照到来的时刻，不改变视觉档边界。
+WorldMap通过`FarmGame.GetBuildingSpaces()`读取包含固定实例朝向的稳定空间快照，每实例只读取一次`GetPlot(anchor)`；`GetBuildingSpace(anyCell)`解析整座占地。Sync次数、镜头位置或可见数量不得影响作物、加工、库存、日期或任务。暂停也可同步建造/改种，倍率只改变经营快照到来的时刻，不改变视觉档边界。
 
-主场景通过`AttachDepthSorted`挂接[WorkerPresentation](../worker-presentation/interface-worker-presentation.md)。中间人物容器启用嵌套YSort，实际人物脚根参与共同排序；土层固定在人物之下，三种动效作物每株按根点排序，其余静态整田与建筑按工作中心排序。人物位置和完成时机仍由调度拥有。完整层级、静态粒度及跨块可见性见[实现](implementation-chunk-cache.md)。
+主场景通过`AttachDepthSorted`挂接[WorkerPresentation](../worker-presentation/interface-worker-presentation.md)。中间人物容器启用嵌套YSort，实际人物脚根参与共同排序；土层固定在人物之下，q0三种动效作物每株按根点排序，其余静态整田与建筑按工作中心排序。人物位置和完成时机仍由调度拥有。完整层级、静态粒度及跨块可见性见[实现](implementation-chunk-cache.md)。
 
 ## 实际外观与交互
 
-固定使用清亮v2 q0草地、干湿土、通用播种、七作物三档、七加工设施与32类环境。小麦/甘蔗/萝卜生长层采用原包独立植株和固定根点风摆，磨坊/制糖坊采用拆分底图与局部活动层；其余作物/加工保持静态原图。Growing按精确`GrowthProgress`等分三档，不用向上取整的RemainingSeconds反算；成熟自动收获，没有新增待采收状态。None无作物层，种类仍在详情里显示；HasWater独立控制土层。道路保持原灰色路面。原图画布和pivot对齐工作中心，选取与费用仍由3×3/1×1逻辑占地定义。
+草地维持现行表现，32类环境按固定独立种子选择q0～q3静态原图；干湿土、通用播种、七作物三档与七加工设施按实例只读 `Orientation` 选择清亮v2 q0～q3原图。所有农田图层取同一q，画布和pivot在四向均保持一致。q0小麦/甘蔗/萝卜生长层采用原包独立植株和固定根点风摆，q0磨坊/制糖坊采用拆分底图与局部活动层；其余作物/加工及全部q1～q3保持各自静态原图。包内只提供q0动效，不伪造其他方向动效。Growing按精确`GrowthProgress`等分三档，不用向上取整的RemainingSeconds反算；成熟自动收获，没有新增待采收状态。None无作物层，种类仍在详情里显示；HasWater独立控制土层。道路保持原灰色路面。原图画布和pivot对齐工作中心，选取与费用仍由3×3/1×1逻辑占地定义。
 
 `Main`唯一持有建造类型、候选生命周期、整体CheckPlacement结果与费用文字。鼠标处于地图且不拖动时，每帧用ScreenToCell获取候选；离窗、界面遮挡、拖动或取消即隐藏。经营入口实际提交时重验，预览不保存成功承诺。
 
-候选通过同一BuildingFootprint偏移生成占地、逐格阻塞及外围边；空闲格淡绿，真实占用或越界格红，金币不足只影响文字。候选越界保留全部格、不自动移位。农田使用干土图，加工使用真实品种q0建筑图，道路用灰线；图半透明且位于真实对象前，之后叠加逐格颜色与外围，使图片不能挡住冲突反馈。小环表示鼠标锚点。相同候选外观不重复重绘，悬停/清除不调用全图同步或修改经营。
+候选通过同一BuildingFootprint偏移生成占地、逐格阻塞及外围边；空闲格淡绿，真实占用或越界格红，金币不足只影响文字。候选越界保留全部格、不自动移位。农田使用候选朝向的干土图，加工使用真实品种和候选朝向的建筑图，道路用灰线；图半透明且位于真实对象前，之后叠加逐格颜色与外围，使图片不能挡住冲突反馈。小环表示鼠标锚点。朝向只改变候选选图，不改变锚点、占地、冲突和工作中心；非法枚举抛出 `ArgumentOutOfRangeException`，不改成Q0。相同候选外观不重复重绘，悬停/清除不调用全图同步或修改经营。
 
 选中任一生产子格仍发出原格坐标，由经营入口解析同实例；金色选框按占地外边完整绘制，拆除后恢复为选中空小格。选框独立于地面缓存并位于设施/人物上方。地图位置转换及玩家操作见[地图规则](../../../gameplay/world/map-and-camera.md)。
 
@@ -46,3 +46,5 @@ WorldMap唯一持有表现缓存、环境剩余落点、最近消费经营秒与
 环境初始化使用独立固定视觉种子，不消费开局作物随机数。每次SyncFromGame对真实BuildingSpaceSnapshot的完整Footprint.Offsets清除环境根点，包含开局免费设施；预览、失败建造和选择不产生新占地，因此不清环境。已清根点永久删除，拆除不复生；视野开关只释放/恢复剩余根点的绘制节点。环境没有碰撞、正式占地、费用或产物。分布参数及32类采用表见[环境实现](implementation-environment-decoration.md)，局部动效层级与根点见[动效实现](implementation-bright-motion.md)。
 
 ViewChanged 以既有 ChunkRedrawCount（MapChunk._Draw 实际执行）计算本次观察区间的 RebuiltChunkCount，QueueRedraw 调度不计作已重建。Main 读取该累计和地图本地镜头中心，由日志模块去重；地图不维护诊断预算或日志对象状态。
+
+#111新增的 `TestFacilityOrientations` 由 `TestWorldArt` 调用，经真实带朝向建造核对q1～q3七建筑、七作物三档、干湿土/播种同q与pivot；headless观察真实节点及加载，有窗口核对来源原图的不透明像素并保存1080P截图。`TestPlacementPreview`核对四次候选方向切换回q0、半透明屋顶原图、资源和锚点不变。环境测试同时核对四向随机分布、不同开局作物种子及镜头往返方向稳定。

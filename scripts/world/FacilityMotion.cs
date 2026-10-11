@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Land;
 
 namespace FarmExchange.World;
 
@@ -20,7 +21,8 @@ internal sealed partial class FacilityMotion : Node2D
     private readonly Node2D _art = new() { Name = "Art" };
     private readonly ProductionBurst _burst = new() { Name = "Output" };
     private readonly SteamPuffs _steam = new() { Name = "Steam", Position = new Vector2(30, -130) };
-    private (BuildingKind, CropKind, CropStage, int)? _appearance;
+    private (BuildingKind, CropKind, CropStage, int, BuildingOrientation)? _appearance;
+    private BuildingOrientation _orientation;
     private Sprite2D? _sails;
     private ShaderMaterial? _wind;
     private ProductionResult? _lastResult;
@@ -37,23 +39,25 @@ internal sealed partial class FacilityMotion : Node2D
         AddChild(_burst);
     }
 
-    internal static bool ReplacesSurface(PlotSnapshot plot) =>
+    internal static bool ReplacesSurface(PlotSnapshot plot, BuildingOrientation orientation = BuildingOrientation.Q0) =>
+        orientation == BuildingOrientation.Q0 && (
         plot.Building == BuildingKind.Processor && plot.CropKind is CropKind.Wheat or CropKind.Sugarcane ||
         plot.Building == BuildingKind.Farm && plot.Crop == CropStage.Growing &&
-            plot.CropKind is CropKind.Wheat or CropKind.Sugarcane or CropKind.Radish;
+            plot.CropKind is CropKind.Wheat or CropKind.Sugarcane or CropKind.Radish);
 
-    internal void Configure(PlotSnapshot plot, int growthStage)
+    internal void Configure(PlotSnapshot plot, int growthStage, BuildingOrientation orientation = BuildingOrientation.Q0)
     {
-        var appearance = (plot.Building, plot.CropKind, plot.Crop, growthStage);
+        var appearance = (plot.Building, plot.CropKind, plot.Crop, growthStage, orientation);
         if (_appearance == appearance) return;
         _appearance = appearance;
+        _orientation = orientation;
         foreach (Node child in _art.GetChildren()) child.Free();
         _sails = null;
         _wind = null;
-        _sugarworks = plot.Building == BuildingKind.Processor && plot.CropKind == CropKind.Sugarcane;
+        _sugarworks = orientation == BuildingOrientation.Q0 && plot.Building == BuildingKind.Processor && plot.CropKind == CropKind.Sugarcane;
         _steam.Clear();
         YSortEnabled = _art.YSortEnabled = plot.Building == BuildingKind.Farm;
-        if (!ReplacesSurface(plot)) return;
+        if (!ReplacesSurface(plot, orientation)) return;
         if (plot.Building == BuildingKind.Processor)
         {
             bool mill = plot.CropKind == CropKind.Wheat;
@@ -138,6 +142,7 @@ internal sealed partial class FacilityMotion : Node2D
             result == _lastResult) return;
         _lastResult = result;
         Vector2 origin = result.Kind == ProductionResultKind.Harvest ? new Vector2(0, -10) :
+            _orientation != BuildingOrientation.Q0 ? new Vector2(0, -8) :
             result.CropKind == CropKind.Wheat ? new Vector2(-11, -8) :
             result.CropKind == CropKind.Sugarcane ? new Vector2(-16, -7) : new Vector2(0, -8);
         _burst.Show(result.Quantity, origin, result.Kind == ProductionResultKind.Harvest);

@@ -43,6 +43,7 @@ public partial class Main : Node2D
     private Label _workerStatusLabel = null!;
     private Label _buildHint = null!;
     private Label _buildCost = null!;
+    private Button _rotatePlacementButton = null!;
     private Button _cancelPlacementButton = null!;
     private DraggableWindow _detailWindow = null!;
     private BuildCatalogWindow _buildWindow = null!;
@@ -61,7 +62,8 @@ public partial class Main : Node2D
     private Vector2I? _placementCell;
     private LandFailure _placementFailure;
 
-    private readonly record struct Placement(BuildingKind Kind, CropKind Crop)
+    private readonly record struct Placement(BuildingKind Kind, CropKind Crop,
+        BuildingOrientation Orientation = BuildingOrientation.Q0)
     {
         public string Name => Kind == BuildingKind.Farm ? "农田" :
             Kind == BuildingKind.Road ? "道路" : FarmGame.GetCrop(Crop).BuildingName;
@@ -217,6 +219,17 @@ public partial class Main : Node2D
             CancelPlacement();
             GetViewport().SetInputAsHandled();
         }
+        else if (inputEvent is InputEventKey
+        {
+            Pressed: true, Echo: false, Keycode: Key.R,
+            CtrlPressed: false, AltPressed: false, MetaPressed: false
+        } &&
+                 _placement is Placement { Kind: BuildingKind.Farm or BuildingKind.Processor } &&
+                 GetViewport().GuiGetFocusOwner() is not (LineEdit or TextEdit))
+        {
+            RotatePlacement();
+            GetViewport().SetInputAsHandled();
+        }
         else if (inputEvent is InputEventMouseMotion motion)
             RefreshPlacementPreview(motion.Position);
         else if (inputEvent is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: false } mouse)
@@ -262,8 +275,9 @@ public partial class Main : Node2D
     private void SetPlacementCandidate(Vector2I cell, Placement placement)
     {
         _placementCell = cell;
-        _worldMap.UpdatePlacementPreview(placement.Kind, placement.Crop, cell);
-        _placementFailure = GameState.CheckPlacement(_placementCell.Value, placement.Kind, placement.Crop).Failure;
+        _worldMap.UpdatePlacementPreview(placement.Kind, placement.Crop, cell, placement.Orientation);
+        _placementFailure = GameState.CheckPlacement(_placementCell.Value, placement.Kind, placement.Crop,
+            placement.Orientation).Failure;
         RefreshFooter();
     }
 
@@ -594,11 +608,21 @@ public partial class Main : Node2D
         _buildCost.AutowrapMode = TextServer.AutowrapMode.Off;
         _buildCost.Hide();
         body.AddChild(_buildCost);
-        _cancelPlacementButton = MakeSecondaryButton("取消摆放 Esc", 0, 36);
+        var placementActions = new HBoxContainer();
+        placementActions.AddThemeConstantOverride("separation", 8);
+        body.AddChild(placementActions);
+        _rotatePlacementButton = MakeSecondaryButton("旋转 R · q0", 0, 36);
+        _rotatePlacementButton.Name = "RotatePlacementButton";
+        _rotatePlacementButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _rotatePlacementButton.Pressed += RotatePlacement;
+        _rotatePlacementButton.Hide();
+        placementActions.AddChild(_rotatePlacementButton);
+        _cancelPlacementButton = MakeSecondaryButton("取消 Esc", 0, 36);
         _cancelPlacementButton.Name = "CancelPlacementButton";
+        _cancelPlacementButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _cancelPlacementButton.Pressed += CancelPlacement;
         _cancelPlacementButton.Hide();
-        body.AddChild(_cancelPlacementButton);
+        placementActions.AddChild(_cancelPlacementButton);
     }
 
     private static Control ActivityItem(UiIcon icon, string caption, string note, out Label label)
@@ -620,7 +644,8 @@ public partial class Main : Node2D
         if (_placement is Placement placement)
         {
             SetPlacementCandidate(cell, placement);
-            PlacementResult result = GameState.TryPlace(cell, placement.Kind, placement.Crop);
+            PlacementResult result = GameState.TryPlace(cell, placement.Kind, placement.Crop,
+                orientation: placement.Orientation);
             if (!result.Success)
             {
                 SetMessage(result.ErrorMessage);
@@ -628,6 +653,7 @@ public partial class Main : Node2D
                 RefreshPlacementPreview();
                 return;
             }
+            _placement = placement with { Orientation = BuildingOrientation.Q0 };
             SetMessage($"{placement.Name}已建造，花费 {FormatCoins(result.ChargedCents)} 金币");
             _worldMap.ClearSelection();
             RefreshAfterGameChange(worldChanged: true);
@@ -678,6 +704,14 @@ public partial class Main : Node2D
         ClearPlacementPreview();
         SetMessage("已取消摆放");
         RefreshFooter();
+    }
+
+    private void RotatePlacement()
+    {
+        if (_placement is not Placement { Kind: BuildingKind.Farm or BuildingKind.Processor } placement)
+            return;
+        _placement = placement with { Orientation = (BuildingOrientation)(((int)placement.Orientation + 1) % 4) };
+        RefreshPlacementPreview();
     }
 
     private void CloseDetail()
@@ -914,6 +948,7 @@ public partial class Main : Node2D
             _buildHint.Text = "建造 → 选择设施\n点击地图空位连续摆放";
             _buildHint.Hide();
             _buildCost.Hide();
+            _rotatePlacementButton.Hide();
             _cancelPlacementButton.Hide();
             return;
         }
@@ -931,6 +966,8 @@ public partial class Main : Node2D
         if (_buildCost.GetThemeColor("font_color") != costColor)
             _buildCost.AddThemeColorOverride("font_color", costColor);
         _buildCost.Show();
+        _rotatePlacementButton.Text = $"旋转 R · q{(int)placement.Orientation}";
+        _rotatePlacementButton.Visible = placement.Kind is BuildingKind.Farm or BuildingKind.Processor;
         _cancelPlacementButton.Show();
     }
 

@@ -23,7 +23,96 @@ public partial class TestFarmGame : Node
         CheckInvalidCrops() && CheckStateOwnership() &&
         CheckPlacementRules() && CheckRawReservePhases() && CheckRawReserveConstruction() &&
         CheckRoadPlacement() && CheckRoadDoesNotClaimInventory() && CheckRoadIndependentProduction() &&
-        CheckMultiCellFacilities();
+        CheckMultiCellFacilities() && CheckBuildingOrientations() && CheckOrientationFailures();
+
+    private static bool CheckBuildingOrientations()
+    {
+        foreach (BuildingOrientation orientation in System.Enum.GetValues<BuildingOrientation>())
+        {
+            using var baseline = new FarmGame(12345);
+            using var game = new FarmGame(12345);
+            foreach (BuildingSpaceSnapshot space in game.GetBuildingSpaces())
+                if (space.Orientation != BuildingOrientation.Q0)
+                    return Fail("开局设施不是默认 q0 朝向");
+            RemoveInitialBuildings(baseline);
+            RemoveInitialBuildings(game);
+            Vector2I farm = new(189, 189);
+            Vector2I processor = new(192, 192);
+            baseline.TryPlace(farm, BuildingKind.Farm, CropKind.Radish);
+            baseline.TryPlace(processor, BuildingKind.Processor, CropKind.Radish);
+            game.SetPaused(true);
+            if (game.CheckPlacement(farm, BuildingKind.Farm, CropKind.Radish, orientation) !=
+                    new PlacementCheck(LandFailure.None, 1000) ||
+                game.TryPlace(farm, BuildingKind.Farm, CropKind.Radish, orientation: orientation) !=
+                    new PlacementResult(LandFailure.None, 1000) ||
+                game.TryPlace(processor, BuildingKind.Processor, CropKind.Radish, orientation: orientation) !=
+                    new PlacementResult(LandFailure.None, 1000) || game.MoneyCents != 3000)
+                return Fail("暂停中合法朝向建造被拒绝或额外收费");
+            foreach (Vector2I anchor in new[] { farm, processor })
+            {
+                BuildingSpaceSnapshot space = game.GetBuildingSpace(anchor)!;
+                if (space.Orientation != orientation || space.WorkCell != anchor + Vector2I.One)
+                    return Fail("经营登记没有保存朝向或改变工作中心");
+                foreach (Vector2I offset in space.Footprint.Offsets)
+                    if (!ReferenceEquals(space, game.GetBuildingSpace(anchor + offset)))
+                        return Fail("经营查询没有统一子格朝向实例");
+            }
+            game.SetPaused(false);
+            for (int tick = 0; tick < 260; tick++)
+            {
+                if (baseline.AdvanceTick(tick == 0) != game.AdvanceTick(tick == 0) ||
+                    baseline.GetPlot(farm) != game.GetPlot(farm) ||
+                    baseline.GetPlot(processor) != game.GetPlot(processor) ||
+                    baseline.GetRawStock(CropKind.Radish) != game.GetRawStock(CropKind.Radish) ||
+                    baseline.GetProductStock(CropKind.Radish) != game.GetProductStock(CropKind.Radish) ||
+                    baseline.MoneyCents != game.MoneyCents)
+                    return Fail("设施朝向改变真实农田、加工、库存或资金推进");
+                var originalWorkers = baseline.GetWorkers();
+                var workers = game.GetWorkers();
+                for (int index = 0; index < workers.Count; index++)
+                    if (originalWorkers[index] != workers[index])
+                        return Fail("设施朝向改变工人位置、任务或动作");
+            }
+            if (game.GetProductStock(CropKind.Radish) == 0 || !game.HasConsistentState())
+                return Fail("朝向等价测试没有覆盖真实完整收获和加工");
+        }
+        return true;
+    }
+
+    private static bool CheckOrientationFailures()
+    {
+        using var game = new FarmGame(12345);
+        var before = game.GetBuildingSpaces();
+        Vector2I anchor = new(0, 0);
+        foreach (BuildingKind kind in new[] { BuildingKind.Farm, BuildingKind.Processor, BuildingKind.Road })
+            foreach (BuildingOrientation orientation in new[] { (BuildingOrientation)(-1), (BuildingOrientation)4 })
+                if (game.CheckPlacement(anchor, kind, CropKind.Wheat, orientation) !=
+                        new PlacementCheck(LandFailure.InvalidOrientation, 0) ||
+                    game.TryPlace(anchor, kind, CropKind.Wheat, orientation: orientation) !=
+                        new PlacementResult(LandFailure.InvalidOrientation, 0))
+                    return Fail("非法朝向预检与执行未统一拒绝");
+        if (game.TryPlace(anchor, BuildingKind.Road, default, orientation: BuildingOrientation.Q1).Failure !=
+                LandFailure.InvalidOrientation || game.MoneyCents != 5000 ||
+            !ReferenceEquals(before, game.GetBuildingSpaces()) || game.GetBuildingSpace(anchor) != null)
+            return Fail("朝向拒绝修改资金或空间实例");
+        foreach (CropDefinition crop in FarmGame.Crops)
+            if (game.GetRawStock(crop.Kind) != 0 || game.GetProductStock(crop.Kind) != 0)
+                return Fail("朝向拒绝修改库存");
+        foreach (BuildingOrientation orientation in System.Enum.GetValues<BuildingOrientation>())
+            if (game.CheckPlacement(new(189, 189), BuildingKind.Farm, CropKind.Wheat, orientation).Failure != LandFailure.Occupied ||
+                game.TryPlace(new(189, 189), BuildingKind.Farm, CropKind.Wheat, orientation: orientation).Failure != LandFailure.Occupied ||
+                game.TryPlace(new(383, 383), BuildingKind.Farm, CropKind.Wheat, orientation: orientation).Failure != LandFailure.OutOfBounds ||
+                game.MoneyCents != 5000 || !ReferenceEquals(before, game.GetBuildingSpaces()))
+                return Fail("合法朝向绕过占用或范围检查，或失败留下修改");
+        for (int col = 0; col < 15; col += 3)
+            game.TryPlace(new(col, 0), BuildingKind.Farm, CropKind.Wheat);
+        before = game.GetBuildingSpaces();
+        if (game.TryPlace(new(18, 0), BuildingKind.Processor, CropKind.Radish, orientation: BuildingOrientation.Q3).Failure !=
+                LandFailure.InsufficientFunds || game.MoneyCents != 0 ||
+            !ReferenceEquals(before, game.GetBuildingSpaces()) || game.GetBuildingSpace(new(18, 0)) != null)
+            return Fail("指定朝向建造绕过可用资金检查");
+        return true;
+    }
 
     private static bool CheckMultiCellFacilities()
     {

@@ -68,7 +68,7 @@
 
 公开 `RuntimeLog.BindGame(game, seed)` 保留手动领域观察语义，不把日志重新安装到已存在的 FarmGame，也不启动生产窗口。手动调用交易/建拆观察仍有生命周期及真实领域记录，但不能据此声称自动生产覆盖。只有 `new FarmGame(seed, logging)` 在真实初始化后通过内部自动绑定启动生产累计；其 Dispose 和宿主关闭才补生产尾段。`TestProductionLogging.CheckManualBinding` 验证手动绑定后真实推进不会产生貌似完整的生产汇总。
 
-`GameLog.Gameplay.BeginPlace/BeginRemove/BeginSetRawReserve` 记录原请求并返回一次观察；经营仍按原顺序执行，真实结果传给 `Complete`，异常传给 `Faulted` 后原样传播。`FarmGame.TryPlace/BuildFarm/BuildProcessor/RemoveBuilding/SetRawReserve` 增加默认 `Player` 的 `CommandOrigin`，开发流程准备显式传 `Scenario`；非法来源在记录和业务修改前抛出。建造预检不形成命令。建造实际扣款来自 `PlacementResult.ChargedCents`，拆除和拒绝为零；拆除前保存真实子格对应的实例，库存底线不触发领取。建造触发的全场加工领取归生产流量，不混入资金事件。
+`GameLog.Gameplay.BeginPlace/BeginRemove/BeginSetRawReserve` 记录原请求并返回一次观察；经营仍按原顺序执行，真实结果传给 `Complete`，异常传给 `Faulted` 后原样传播。`FarmGame.TryPlace/BuildFarm/BuildProcessor/RemoveBuilding/SetRawReserve` 增加默认 `Player` 的 `CommandOrigin`，开发流程准备显式传 `Scenario`；非法来源在记录和业务修改前抛出。`BeginPlace` 保留第4参数 `origin`，第5可选参数为 `orientation=Q0`，原请求和非法枚举值保持原样；成功建造结果读取已登记朝向，拆除前保存真实实例朝向。建造预检不形成命令。建造实际扣款来自 `PlacementResult.ChargedCents`，拆除和拒绝为零；拆除前保存真实子格对应的实例，库存底线不触发领取。建造触发的全场加工领取归生产流量，不混入资金事件。实际放置诊断按 Building、生产设施 Crop、Orientation、Bounds、Occupancy、Funds 的短路路径记录，`InvalidOrientation` 后不补造后续检查。
 
 `ProductionLog` 内部入口只接收真实事实：`Harvested(crop, quantity)`、`Consumed(crop)`、`Produced(crop)`、`WorkerCompleted(kind)`、`Cleared(CropClearResult)`。收获和完工均在库存提交成功后累计；开工只在 `TryStart` 成功后计一份；工人只消费调度器成功回调，降雨、等待、重复供水不计入。清理结果由农田原遍历返回逐作物实际轮数，未成熟清除不是库存损失份数。没有从表现结果缓存或额外全场扫描推导事实。
 
