@@ -2,6 +2,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Land;
 using FarmExchange.World;
 
 public partial class TestRoadMap : Node
@@ -82,7 +83,8 @@ public partial class TestRoadMap : Node
             map.SelectAtScreenPosition(ScreenCenter(map, secondRoad));
             if (selected != secondRoad)
                 return Fail("道路移除后，相邻道路无法继续选择");
-            return await CheckProductionFootprints(parent, game, map);
+            return await CheckSameCountRoadReplacement(parent, game, map, secondRoad) &&
+                await CheckProductionFootprints(parent, game, map);
 
         }
         finally
@@ -90,6 +92,35 @@ public partial class TestRoadMap : Node
             parent.RemoveChild(scope);
             scope.Free();
         }
+    }
+
+    private static async Task<bool> CheckSameCountRoadReplacement(Node parent, FarmGame game, WorldMap map,
+        Vector2I oldRoad)
+    {
+        var previousSpaces = game.GetBuildingSpaces();
+        int redraws = map.ChunkRedrawCount;
+        map.SyncFromGame();
+        await LayoutFrames(parent);
+        if (!ReferenceEquals(previousSpaces, game.GetBuildingSpaces()) || map.ChunkRedrawCount != redraws)
+            return Fail("占地不变的同步改变了空间快照或重绘地面");
+        Vector2I newRoad = oldRoad + Vector2I.Right;
+        if (game.RemoveBuilding(oldRoad) != null || !game.TryPlace(newRoad, BuildingKind.Road, default).Success)
+            return Fail("同数量道路替换夹具失败");
+        if (previousSpaces.Count != game.GetBuildingSpaces().Count ||
+            ReferenceEquals(previousSpaces, game.GetBuildingSpaces()))
+            return Fail("同数量道路替换没有产生新的真实空间快照");
+        map.ClearSelection();
+        map.SyncFromGame();
+        await LayoutFrames(parent);
+        if (map.ChunkRedrawCount <= redraws) return Fail("同数量道路替换没有更新地面");
+        if (DisplayServer.GetName() != "headless")
+        {
+            Image image = parent.GetViewport().GetTexture().GetImage();
+            Color cleared = PixelAt(image, map, oldRoad);
+            if (cleared.G <= cleared.R + .05f || !IsGray(PixelAt(image, map, newRoad)))
+                return Fail("同数量道路替换沿用了旧路面缓存");
+        }
+        return true;
     }
 
     private static async Task<bool> CheckProductionFootprints(Node parent, FarmGame game, WorldMap map)
@@ -172,6 +203,28 @@ public partial class TestRoadMap : Node
                 return Fail("拆除农田清除了相邻加工设施原图");
             SaveScreenshot(after, "production-footprint-after.png");
         }
+        // 一次同步前拆除并重建，同数量/同锚点也必须撤掉旧建筑层并使用新朝向。
+        var oldSpaces = game.GetBuildingSpaces();
+        if (game.RemoveBuilding(processor) != null ||
+            !game.TryPlace(processor, BuildingKind.Farm, CropKind.Radish, orientation: BuildingOrientation.Q1).Success)
+            return Fail("同锚点同数量生产设施替换夹具失败");
+        if (oldSpaces.Count != game.GetBuildingSpaces().Count || ReferenceEquals(oldSpaces, game.GetBuildingSpaces()))
+            return Fail("同锚点替换没有产生新的空间快照");
+        map.ClearSelection();
+        map.SyncFromGame();
+        await LayoutFrames(parent);
+        Vector2 expectedCenter = MapCoordinates.CellToLocalCenter(processor + Vector2I.One);
+        bool HasOldSurface(Node node)
+        {
+            if (node is Sprite2D sprite && map.ToLocal(sprite.GlobalPosition) == expectedCenter &&
+                sprite.Texture?.ResourcePath == "res://assets/gameplay/buildings/corn_workshop_q0.png") return true;
+            foreach (Node child in node.GetChildren()) if (HasOldSurface(child)) return true;
+            return false;
+        }
+        if (HasOldSurface(map)) return Fail("同锚点替换仍保留旧加工建筑层");
+        if (graphical && !TestWorldArt.MatchesTexture(parent.GetViewport().GetTexture().GetImage(), map,
+                processor + Vector2I.One, "soil/field_dry_q1.png", new Vector2(112, 128)))
+            return Fail("同锚点替换未显示真实新类别及朝向");
         return true;
     }
 

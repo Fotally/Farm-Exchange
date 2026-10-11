@@ -5,6 +5,7 @@
 ## 游戏规则
 
 - [作物与选种](gameplay/production/crop-growth.md)：七种作物、适宜季节、播种前检查、越季失败与恢复、收获数量和切换规则。
+- [地区天气](gameplay/world/weather.md)：自然预排、矩形互斥、整田天气判定与程序云雨表现；作物整轮产量见作物专题。
 - [农田供水与降雨](gameplay/production/water-and-rain.md)：留水、雨中播种、改种与收获后的水分处理。
 - [季节耕作表](gameplay/production/seasonal-cultivation.md)及[窗口操作](gameplay/production/seasonal-cultivation-ui.md)：共享年度安排、两种执行方式、休耕与手动接管，四季纸面时间图、周刻度、居中拖动、未命名草稿编辑、落位前校验、短条悬浮与可读列表；整表删除解除引用，保留当前轮并恢复自动复种。
 - [加工](gameplay/production/processing.md)：对应场地、加工时间、原料保留底线、领取顺序、场地详情与投入损失。
@@ -19,6 +20,7 @@
 ## 代码架构
 
 - [当前系统组织与状态归属](architecture/implementation-system-organization.md)：已落地模块关系和修改入口。
+- [天气接口](architecture/weather/interface-weather-system.md)及[预排与循环实现](architecture/weather/implementation-weather-schedule.md)：具名配置、自然／显式模式、当前状态与事件距离。
 - [FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)、[推进顺序](architecture/game-state/farm-game/implementation-tick-order.md)及[等价批量实现](architecture/game-state/farm-game/implementation-batched-simulation.md)：单tick和批量共用相位，平静区间直接累计，真实事件提供稳定检查点。
 - [CropCatalog 接口](architecture/farming/crop-catalog/interface-crop-catalog.md)、[Inventory 接口](architecture/inventory/inventory/interface-inventory.md)与[Wallet 接口](architecture/economy/wallet/interface-wallet.md)：作物定义、分类库存和余额的唯一拥有者。
 - [LandOccupancy 接口](architecture/land/land-occupancy/interface-land-occupancy.md)、[PlacementRules 接口](architecture/land/placement-rules/interface-placement-rules.md)、[FarmingSystem 接口](architecture/farming/farming-system/interface-farming-system.md)、[PlantingRules 接口](architecture/farming/planting-rules/interface-planting-rules.md)、[ProcessingSystem 接口](architecture/processing/processing-system/interface-processing-system.md)和[WorkerScheduler 接口](architecture/workers/worker-scheduler/interface-worker-scheduler.md)：地块占用、放置与播种检查、生产状态和三人工人调度。
@@ -40,6 +42,7 @@
 - [开发窗口接口](architecture/ui/developer-tools-window/interface-developer-tools-window.md)：文件选择、显式重选恢复与草稿冲突保护、启动/中止、当前局与独立数据局接入、真实进度及报告保存结果。
 - [MapCoordinates 接口](architecture/world/map-coordinates/interface-map-coordinates.md)：格坐标与地图本地坐标的统一换算。
 - [WorldMap 接口](architecture/world/world-map/interface-world-map.md)及[分块缓存实现](architecture/world/world-map/implementation-chunk-cache.md)：清亮 v2 草地、干湿土、七作物三档、七设施四向、候选同向图和人物共同深度排序。
+- [天气表现实现](architecture/world/world-map/implementation-weather-presentation.md)：真实可见区域云影、斜雨及短落地效果，暂停与倍率表现；不执行经营结算。
 - [局部动效实现](architecture/world/world-map/implementation-bright-motion.md)与[环境装饰实现](architecture/world/world-map/implementation-environment-decoration.md)：建筑内部层级、逐株根点、真实产出反馈、32类纯环境的随机四向与建造清除。
 - [WorkerPresentation 接口](architecture/world/worker-presentation/interface-worker-presentation.md)：三人工人快照、真实成功作业、清亮 v2 动作、脚根排序、暂停与倍率插值；[FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)统一定义最近经营秒结果。
 - [镜头输入接口](architecture/world/camera-controller/interface-camera-controller.md)：内部封装玩家倍率、窗口适配和输入换算，场景与 UI 无需协调缩放步骤。

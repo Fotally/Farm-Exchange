@@ -18,7 +18,7 @@
 - 每秒推进一次经营；7 个游戏日等于 360 秒。十四商品按固定双周锚点独立报价，供需、季节、事件与成本关系参与价格，节日只移动本次，公告在实际报价前一日出现。初价、整数分限幅及完整公式见[独立报价与消息](../gameplay/trading/market-quotes.md)。
 - 十四商品同价零费即时买卖，买入与自产进入同一公共库存；完整检查资金、货量和容量后提交，失败零修改，暂停可交易。七种原料保留按品种全部出售，加工品可全部出售；已投入加工的原料不可卖，手动出售不受保留底线限制。详见[即时交易](../gameplay/trading/sales.md)。
 - 每种原料的公共库存保留底线默认为 0，在库存窗口按非负整数设置；设置本身不触发领取，下一经营步的领取阶段使用新底线。新建加工场地仍按稳定格序即时尝试全场领取；自动加工只取超过底线的部分，手动出售不受底线限制，提高底线不退回已投入原料。详见[加工](../gameplay/production/processing.md)。
-- 农田可留存雨水；降雨与工人浇水使用同一供水状态，已获水作物生长中再次遇雨不重置，收获清除本轮水分。改种保水、拆除清水；具体顺序见[农田供水与降雨](../gameplay/production/water-and-rain.md)。当前主场景暂无天气生成。
+- 农田可留存雨水；降雨与工人浇水使用同一供水状态，已获水作物生长中再次遇雨不重置，收获清除本轮水分。改种保水、拆除清水；具体顺序见[农田供水与降雨](../gameplay/production/water-and-rain.md)。主场景加载时生成10年循环地区天气预排，运行只执行生效与结束；整田供水和产量共用九格雨＞云＞晴判定，详见[地区天气](../gameplay/world/weather.md)。
 - 七种作物各有适宜季节；手动和耕作表共用播种判断，当前适季即可播种，预计时间不足只提示风险。干田最低预留 1 秒供水，成熟恰在边界先结算；换季结算后其余禁生未成熟作物清理本轮作物和水分，保留农田与选种，不增加清理劳动或费用。具体表与口径见[作物与选种](../gameplay/production/crop-growth.md)。
 - 工人横纵斜向每秒移动 3 基础格，即一个标准田跨度，直线穿越占用，到田中间格工作，不受道路连通影响；播种与浇水各占完整 1 秒。三人共享稳定锚点轮转与实例独占认领，完成或失效释放。两日目标从空田具备条件开始计经过时间；三人和 24 田在同一 8×8 标准田范围内验收，超范围仍照料但不承诺两日达标，详见[实现说明](../architecture/workers/worker-scheduler/implementation-movement-proposal.md)。
 - 道路独占一格、每格 1.00 金币；目录选择后逐格连续点击铺设，Esc 或取消退出。路面灰色，详情可拆除且不退款；当前只影响布局与外观，不进入生产或改变工人速度。规则见[道路铺设与移除](../gameplay/land/roads.md)。
@@ -29,6 +29,7 @@
 | --- | --- |
 | 基础格、多格设施、连续建造与预览 | [建造](../gameplay/land/opening-and-building.md)、[道路](../gameplay/land/roads.md)、[地图镜头](../gameplay/world/map-and-camera.md) |
 | 行情、即时交易与委托 | [报价](../gameplay/trading/market-quotes.md)、[即时交易](../gameplay/trading/sales.md)、[委托](../gameplay/trading/orders.md) |
+| 地区天气与整轮随机产量 | [天气](../gameplay/world/weather.md)、[作物产量](../gameplay/production/crop-growth.md)、[天气 Interface](../architecture/weather/interface-weather-system.md) |
 | 季节耕作与共享年度表 | [作物](../gameplay/production/crop-growth.md)、[年度表规则](../gameplay/production/seasonal-cultivation.md)、[窗口操作](../gameplay/production/seasonal-cultivation-ui.md) |
 | 1080P界面、整体和字体倍率 | [视觉基准](ui-visual-prototype.md)、[统一倍率接口](../architecture/ui/ui-scaling/interface-ui-scaling.md) |
 | 清亮v2首批素材、真实动作、局部动效与环境 | [素材基准](../research/bright-complete-v2.md)、[地图接口](../architecture/world/world-map/interface-world-map.md) |
@@ -42,9 +43,9 @@
 
 - 农田、七种配套加工场地与道路以外的建筑类型与建造规则。
 - 存档与离线收益规则。
-- 天气生成及效果仍在对应 issue 中；后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。道路两斜向及交汇的连接细节由 [#143](https://github.com/Fotally/Farm-Exchange/issues/143) 跟踪，素材来源待明确。这些待确认项不作为已实施功能。
+- 天气灾害、玩家主动控制及预报尚未确认；首版温和天气与随机产量按 #34 实施。后续人力扩充与行情学习反馈的待确认范围统一见[后续功能计划](deferred-features-plan.md)。水域 #110、采收搬运 #112、工人加工 #113 仍待选择规则，分别见[水域](water-terrain-proposal.md)、[采收搬运](worker-harvest-transport-proposal.md)、[工人加工](worker-processing-proposal.md)。道路两斜向及交汇的连接细节由 [#143](https://github.com/Fotally/Farm-Exchange/issues/143) 跟踪，素材来源待明确。这些待确认项不作为已实施功能。
 
-运行日志的现行事件和字段以[日志接口](../architecture/logging/interface-logging.md)与[schema v1](runtime-log-schema-v1.md)为准；领域入口维护事件描述与投影，底座负责通用提交，业务保留执行权。普通日志不提供可靠重放。16×图形压测与性能达标仍由 #66 跟踪，不记作已通过。
+运行日志的现行事件和字段以[日志接口](../architecture/logging/interface-logging.md)与[schema v1](runtime-log-schema-v1.md)为准；领域入口维护事件描述与投影，底座负责通用提交，业务保留执行权。普通日志不提供可靠重放。日志专项16×图形矩阵与性能达标仍由 #66 跟踪，不记作已通过；地区天气的独立1080P图形验收按[测试说明](testing.md#地区天气与随机产量验收)执行，不替代日志矩阵。
 
 ## 系统划分
 
@@ -57,6 +58,7 @@
 | `CropCatalog`、`Inventory`、`Wallet` | 分别唯一维护七作物定义、原料与加工品公共库存、金币余额 | `FarmGame` 查询定义并协调生产入库、出售和建造收支 |
 | `CommodityCatalog`、`MarketQuotes` | 分别维护十四商品元数据、正式报价/排期/真实因素公告 | 读取目录，按日历推进并返回独立只读报价与消息 |
 | `TradingService` | 一次性检查商品、数量、当前价、资金货物与容量，并完整结算 | 买入、卖出或全部出售命令返回真实结果/稳定失败原因 |
+| `WeatherSystem` | 唯一维护地区天气预排、循环和当前活动矩形 | 提供位置／整田查询、当前快照与最近事件距离；开发／测试显式设置与自然预排在建局时分开 |
 | 日历 `GameCalendar` 与比例 `GameTimeUnits` | 唯一维护累计模拟秒与暂停，换算年月日、季节和生产精确时长 | `FarmGame` 每步推进一秒；界面读取季、年、月、日 |
 | 地图表现 `WorldMap` | 分块缓存地块与作物绘制结果，绘制边缘，转换等距坐标，选择土地 | 接收游戏状态并在经营变化后同步外观，发出所选格坐标，限制镜头中心在菱形内 |
 | 镜头输入 `CameraController` | 区分左键点击与拖动，处理缩放和平移 | 将短按交给地图选择，将镜头位置交给地图限制 |

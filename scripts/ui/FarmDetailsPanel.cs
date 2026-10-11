@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Weather;
 using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
@@ -12,6 +13,7 @@ public partial class FarmDetailsPanel : VBoxContainer
     private readonly Label _title;
     private readonly Label _harvest;
     private readonly Label _water;
+    private readonly Label _weather;
     private readonly FacilityPreview _preview;
     private readonly Label _growth;
     private readonly Label _price;
@@ -54,11 +56,15 @@ public partial class FarmDetailsPanel : VBoxContainer
         _water.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         water.AddChild(_water);
         AddChild(water);
+        _weather = MakeLabel("", 14, Muted);
+        _weather.Name = "FarmCurrentWeather";
+        _weather.TooltipText = "九格占地有降雨即整田降雨；无雨但有多云即整田多云，其余为晴天。";
+        AddChild(_weather);
         _growth = MakeLabel("", 12, Muted);
         AddChild(_growth);
         var metrics = new HBoxContainer();
         metrics.AddThemeConstantOverride("separation", 11);
-        metrics.AddChild(MakeMetric("每轮收获", "份", "FarmHarvestQuantity", out _harvest));
+        metrics.AddChild(MakeMetric("基准产量", "份", "FarmHarvestQuantity", out _harvest));
         metrics.AddChild(MakeMetric("原料当前报价", "金币", "FarmRawPrice", out _price));
         AddChild(metrics);
         _stock = MakeLabel("", 12, Muted);
@@ -126,6 +132,12 @@ public partial class FarmDetailsPanel : VBoxContainer
         };
         _title.Text = details.Crop.CropName;
         _status.Text = status;
+        _weather.Text = "当前天气：" + (details.CurrentWeather switch
+        {
+            WeatherKind.Rain => "降雨",
+            WeatherKind.Cloudy => "多云",
+            _ => "晴天",
+        });
         _growth.Text = $"生长周期：获得水后 {details.Crop.GrowthDays} 天成熟";
         if (details.Status == FarmStatus.WrongSeason)
             _growth.Text += "\n当前季节不适宜播种";

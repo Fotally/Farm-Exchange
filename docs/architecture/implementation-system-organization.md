@@ -28,7 +28,10 @@ flowchart LR
     FarmGame --> PlacementRules[PlacementRules：放置预检与执行规则]
     PlacementRules --> LandOccupancy
     PlacementRules --> MapCoordinates
-    FarmGame --> FarmingSystem[FarmingSystem：农田状态]
+    FarmGame --> FarmingSystem[FarmingSystem：农田与本轮产量状态]
+    FarmGame --> WeatherSystem[WeatherSystem：地区天气与循环预排]
+    WorldMap --> WeatherPresentation[WeatherPresentation：当前地区云雨表现]
+    WeatherPresentation --> FarmGame
     FarmGame --> Cultivation[CultivationPlanBook：共享年度表与执行安排]
     Cultivation --> FarmingSystem
     Cultivation --> CropCatalog
@@ -71,7 +74,8 @@ flowchart LR
 | 当前摆放类型与候选锚点 | `Main` | 每帧在镜头输入后重新定位，界面遮挡、离窗或拖动时隐藏；所有类型逐次建造后保持摆放，右键、Esc、按钮共用取消。`WorldMap` 只保留候选绘制数据，不登记经营占用。 |
 | 固定形状偏移与工作中心 | `BuildingFootprint` | 土地、工人和地图共享定义；当前农田/加工 3×3、道路 1×1，不在各调用方重复计算。 |
 | 建筑描述、范围、占用与余额的放置检查 | `PlacementRules` | `FarmGame` 预检和执行使用同一规则；执行时重新检查并返回实际扣费。 |
-| 农田选种、水分、阶段与剩余精确时长 | `FarmingSystem` | `FarmGame` 在步进开始传入显式降雨，协调按作物收获量入库；禁生换季先促成符合内部阈值的成熟，再完整清理未成熟作物。播种启停支持计划休耕，`WorkerScheduler` 只通过受控工作操作照料。 |
+| 农田选种、水分、阶段、剩余精确时长、本轮随机基础量与天气累计 | `FarmingSystem` | `FarmGame` 在步进开始读取权威整田天气供水，农田按实际消耗时间累计天气，正常与促熟结算实际收获量后由经营入口入库；禁生换季先促成符合内部阈值的成熟，再完整清理未成熟作物。播种启停支持计划休耕，`WorkerScheduler` 只通过受控工作操作照料。 |
+| 当前天气矩形、自然10年预排与循环执行 | `WeatherSystem` | 配置加载与完整区域校验集中在天气 Module；经营按事件推进，地图只读取当前状态；开发／测试显式模式不执行自然预排。 |
 | 共享年度表、农田引用、逐条年度执行凭据、预备安排与下一日期事件 | `CultivationPlanBook` | `FarmGame` 封装计划及手动命令，传入实际农田状态与日历推进；配置与执行缓存集中在计划 Module，UI 只维护未提交草稿。应用和修改保留本轮，编辑及重应用保留本年已执行条的凭据，日期事件区分两种表模式，同条不重复、过期不补种。 |
 | 播种适宜季节与预计成熟判断 | `PlantingRules` | `FarmingSystem` 执行播种和 `FarmGame` 查询详情共用同一只读结果；仅当前禁生季节禁止播种，预计时间不足为风险提示。 |
 | 加工场地配对与进行中批次 | `ProcessingSystem` | `FarmGame` 协调完工入库与领取相位；模块从 `Inventory` 领取原料。 |

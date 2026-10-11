@@ -24,7 +24,7 @@ public partial class TestCultivationDeletion : Node
 
     private static bool CheckPreservedFarms(CultivationMode mode, CropStage stage, bool wet)
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces().Where(space => space.Building == BuildingKind.Processor))
             game.RemoveBuilding(space.AnchorCell);
         Vector2I[] targets = { new(189, 189), new(192, 189) };
@@ -43,7 +43,7 @@ public partial class TestCultivationDeletion : Node
         int id = game.CreateCultivationPlan(request).Id;
         if (game.ApplyCultivationPlan(id, targets) != null) return Fail("多田共享表夹具应用失败");
         int ticks = stage == CropStage.Growing ? 2 : stage == CropStage.Seeded ? 1 : 10;
-        for (int tick = 0; tick < ticks; tick++) game.AdvanceTick(isRaining: wet);
+        for (int tick = 0; tick < ticks; tick++) WeatherTestInput.AdvanceTick(game, wet);
         if (targets.Any(farm => game.GetPlot(farm).Crop != stage ||
             stage == CropStage.None && (game.GetPlot(farm).HasWater != wet || !game.GetFarmCultivation(farm).IsResting)) ||
             game.GetPlot(manual).Crop == CropStage.None || game.PrepareFarmCrop(manual, CropKind.Corn) != null ||

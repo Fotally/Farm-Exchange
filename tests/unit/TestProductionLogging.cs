@@ -34,7 +34,7 @@ public static class TestProductionLogging
 
     private static FarmGame Empty(RuntimeLog? logging = null, uint second = 0)
     {
-        var game = new FarmGame(12345, second, logging);
+        var game = new FarmGame(12345, second, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         return game;
     }
@@ -100,8 +100,8 @@ public static class TestProductionLogging
         {
             game.TryPlace(Farm, BuildingKind.Farm, CropKind.Radish);
             game.AdvanceTicks(2);
-            game.AdvanceTick(true);
-            game.AdvanceTick(true);
+            WeatherTestInput.AdvanceTick(game, true);
+            WeatherTestInput.AdvanceTick(game, true);
         }
         string work = Events(text).Single();
         Require(Number(work, "SownCount") == 1 && Number(work, "WateredCount") == 1, "成功工人次数错误或降雨重复计水");
@@ -110,7 +110,7 @@ public static class TestProductionLogging
         {
             game.TryPlace(Farm, BuildingKind.Farm, CropKind.Radish);
             game.AdvanceTick();
-            game.AdvanceTick(true);
+            WeatherTestInput.AdvanceTick(game, true);
         }
         Require(Number(Events(text).Single(), "WateredCount") == 0, "降雨被当成工人供水");
         text.GetStringBuilder().Clear();
@@ -123,18 +123,21 @@ public static class TestProductionLogging
         Require(Value(clear, "ClearedByCrop", "Radish") == 1 && Value(clear, "HarvestedByCrop", "Radish") == 0 &&
             Stock(clear, "End", Raw) == 0, "越季清理没有按实际轮次记录");
         text.GetStringBuilder().Clear();
+        int rescuedQuantity;
         using (var game = Empty(logging, 4120))
         {
             game.TryPlace(Farm, BuildingKind.Farm, CropKind.Radish);
             game.AdvanceTicks(200);
-            Require(game.GetPresentationResults().Any(result => result.Kind == ProductionResultKind.Harvest && result.Quantity == 6) &&
+            rescuedQuantity = game.GetRawStock(CropKind.Radish);
+            Require(rescuedQuantity >= 36 && rescuedQuantity <= 54, "促熟随机基础量越界");
+            Require(game.GetPresentationResults().Any(result => result.Kind == ProductionResultKind.Harvest && result.Quantity == game.GetRawStock(CropKind.Radish)) &&
                 game.GetPresentationResults().Any(result => result.Kind == ProductionResultKind.Sow),
                 "换季事件秒没有先促熟收获再由工人播下新一轮");
         }
         string rescue = Events(text).Single();
         // 促熟在工人阶段前完成；同秒重新播种的新轮次由随后换季清理，不能把它误认成收获轮次重复清理。
-        Require(Value(rescue, "HarvestedByCrop", "Radish") == 6 && Value(rescue, "ClearedByCrop", "Radish") == 1 &&
-            Number(rescue, "SownCount") == 2 && Number(rescue, "WateredCount") == 1 && Stock(rescue, "End", Raw) == 6,
+        Require(Value(rescue, "HarvestedByCrop", "Radish") == rescuedQuantity && Value(rescue, "ClearedByCrop", "Radish") == 1 &&
+            Number(rescue, "SownCount") == 2 && Number(rescue, "WateredCount") == 1 && Stock(rescue, "End", Raw) == rescuedQuantity,
             "促熟收获与同秒新播轮次清理不符：" + rescue);
     }
 
@@ -228,7 +231,7 @@ public static class TestProductionLogging
         long now = 0;
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text, () => clockFails ? throw new IOException("首次窗口时钟故障") : now, _ => { });
-        using var game = new FarmGame(12345, 4120, logging);
+        using var game = new FarmGame(12345, 4120, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         clockFails = false;
         Require(game.Buy(Raw, 1).Success, "首次时钟失败影响真实业务");
         string first = Events(text).Single();

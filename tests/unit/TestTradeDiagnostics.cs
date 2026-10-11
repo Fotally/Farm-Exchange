@@ -37,7 +37,7 @@ public static class TestTradeDiagnostics
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(73, logging);
+        using var game = new FarmGame(73, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveFacilities(game);
         game.Buy(Raw, 1);
         Require(Events(text, "RuleChecked").Length == 0, "未选择专项仍构造交易明细");
@@ -74,7 +74,7 @@ public static class TestTradeDiagnostics
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(79, logging);
+        using var game = new FarmGame(79, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveFacilities(game);
         var shortCircuit = Request() with
         {
@@ -137,7 +137,7 @@ public static class TestTradeDiagnostics
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(77, logging);
+        using var game = new FarmGame(77, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveFacilities(game);
         game.Log!.Diagnostics.Start(new(new[] { "RuleChecked" }, IncludeGameEvents: true));
         game.SellCommodityAll(new CommodityId((CropKind)99, CommodityKind.Raw));
@@ -174,8 +174,8 @@ public static class TestTradeDiagnostics
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(83, logging);
-        using var plain = new FarmGame(83);
+        using var game = new FarmGame(83, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var plain = new FarmGame(83, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveFacilities(game);
         RemoveFacilities(plain);
         game.Log!.Diagnostics.Start(new(new[] { "QuoteCalculated" }, IncludeGameEvents: true));
@@ -224,7 +224,7 @@ public static class TestTradeDiagnostics
         var results = new List<string>();
         foreach (RuntimeLog log in new[] { disabled, runtime, development, bad })
         {
-            using var game = new FarmGame(89, log);
+            using var game = new FarmGame(89, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             RemoveFacilities(game);
             int order = game.CreateTradeOrder(Request() with { ConditionGroups = new[] { new[] { FalsePrice } } }).Id;
             bool capture = game.Log?.Diagnostics.Start(new(new[] { "RuleChecked", "OrderEvaluated", "QuoteCalculated" },

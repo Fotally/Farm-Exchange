@@ -33,7 +33,7 @@ public static class TestExceptionLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(130, logging);
+        using var game = new FarmGame(130, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         game.AdvanceTick();
         Exception capacity = Caught(() => game.AdvanceTicks(uint.MaxValue));
         Require(capacity is InvalidOperationException, "批量容量异常类型改变");
@@ -52,7 +52,7 @@ public static class TestExceptionLogging
         Require(Events(text, "ProductionSummary").Last().Contains("BoundaryMissing"), "异常记录遗漏生产覆盖缺口");
 
         // 复用已有日历构造夹具，真实调用单 tick 容量检查；不反射修改私有日历。
-        using var exhausted = new FarmGame(130, uint.MaxValue, logging);
+        using var exhausted = new FarmGame(130, uint.MaxValue, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         Exception tick = Caught(() => exhausted.AdvanceTick());
         Require(tick is InvalidOperationException && tick.StackTrace!.Contains("AdvanceTickCore"), "单 tick 容量异常改变");
         AssertException(Events(text, "BusinessException").Last(), tick, "AdvanceValidation", uint.MaxValue, false);
@@ -64,7 +64,7 @@ public static class TestExceptionLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(130, logging);
+        using var game = new FarmGame(130, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var driver = new SimulationDriver(game.Log!.Time);
         foreach (double delta in new[] { double.NaN, -1d, (double)uint.MaxValue + 1 })
         {
@@ -95,7 +95,7 @@ public static class TestExceptionLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(130, logging);
+        using var game = new FarmGame(130, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var driver = new SimulationDriver(game.Log!.Time);
         var original = new InvalidOperationException("相同对象可再次用于独立操作");
         for (int attempt = 0; attempt < 2; attempt++)
@@ -138,8 +138,8 @@ public static class TestExceptionLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var first = new FarmGame(130, logging);
-        using var second = new FarmGame(130, logging);
+        using var first = new FarmGame(130, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var second = new FarmGame(130, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         string[] identities = Events(text, "GameInitialized").Select(line => Field(line, "GameInstanceId")).ToArray();
         var original = new InvalidOperationException("跨局同对象");
         Exception received = Caught(() => first.AdvanceTicks(1, _ => ThrowObservedCommand(second, original)));
@@ -155,7 +155,7 @@ public static class TestExceptionLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(130, logging);
+        using var game = new FarmGame(130, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var original = new InvalidOperationException("非栈式命令观察生命周期");
         var first = game.Log!.Trading.BeginBuy(Wheat, 1)!;
         var second = game.Log.Trading.BeginBuy(Wheat, 1)!;
@@ -177,7 +177,7 @@ public static class TestExceptionLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text, diagnostic: _ => { });
-        using var game = new FarmGame(130, logging);
+        using var game = new FarmGame(130, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var driver = new SimulationDriver(game.Log!.Time);
         var projection = new CountingException("投影故障原异常", failProjection: true);
         Require(ReferenceEquals(Caught(() => driver.Advance(1, game, _ => ThrowObservedCommand(game, projection))), projection),
@@ -188,7 +188,7 @@ public static class TestExceptionLogging
 
         using var writer = new ExceptionFailingWriter();
         using var broken = RuntimeLog.Capture(writer, diagnostic: _ => { });
-        using var brokenGame = new FarmGame(130, broken);
+        using var brokenGame = new FarmGame(130, broken, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var brokenDriver = new SimulationDriver(brokenGame.Log!.Time);
         var original = new CountingException("输出故障原异常");
         Require(ReferenceEquals(Caught(() => brokenDriver.Advance(1, brokenGame,
@@ -204,9 +204,9 @@ public static class TestExceptionLogging
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
         using var disabled = RuntimeLog.Disabled();
-        using var traced = new FarmGame(130, logging);
-        using var muted = new FarmGame(130, disabled);
-        using var plain = new FarmGame(130);
+        using var traced = new FarmGame(130, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var muted = new FarmGame(130, disabled, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var plain = new FarmGame(130, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var games = new[] { traced, muted, plain };
         SimulationAdvanceResult? expected = null;
         foreach (var game in games)

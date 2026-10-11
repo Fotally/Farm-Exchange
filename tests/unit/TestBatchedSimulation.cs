@@ -48,7 +48,7 @@ public partial class TestBatchedSimulation : Node
                 CompareAdvance(reference, batched, (uint)random.Next(1, 380));
                 if (segment % 7 == 0)
                 {
-                    Require(reference.AdvanceTick(true) == batched.AdvanceTick(true), "显式雨 tick 相位不同");
+                    Require(WeatherTestInput.AdvanceTick(reference, true) == WeatherTestInput.AdvanceTick(batched, true), "显式雨 tick 相位不同");
                     Compare(reference, batched);
                 }
                 if (segment % 11 == 0)
@@ -91,7 +91,7 @@ public partial class TestBatchedSimulation : Node
             FarmGame reference = ProductionGame(993, start, CropKind.Potato);
             FarmGame batched = ProductionGame(993, start, CropKind.Potato);
             SimulationAdvanceResult result = CompareAdvance(reference, batched, 4320 - start);
-            Require(result.Harvested == (start == 3669 ? 8 : 0), "禁生严格阈值不一致");
+            Require(start == 3669 ? result.Harvested >= 48 && result.Harvested <= 72 && result.Harvested == reference.GetRawStock(CropKind.Potato) + 2 : result.Harvested == 0, "禁生严格阈值不一致");
             CompareAdvance(reference, batched, 40);
         }
     }
@@ -455,7 +455,7 @@ public partial class TestBatchedSimulation : Node
 
     private static FarmGame EmptyGame(int seed, uint seconds = 0)
     {
-        var game = new FarmGame(seed, seconds);
+        var game = new FarmGame(seed, seconds, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces().ToArray())
             game.RemoveBuilding(space.AnchorCell);
         return game;

@@ -5,7 +5,7 @@ paths:
 
 # C# 游戏代码规则
 
-- 脚本目录与命名空间对应：scripts/gameplay → FarmExchange.Gameplay，scripts/farming → FarmExchange.Farming，scripts/cultivation → FarmExchange.Cultivation，scripts/land → FarmExchange.Land，scripts/processing → FarmExchange.Processing，scripts/workers → FarmExchange.Workers，scripts/inventory → FarmExchange.Inventory，scripts/economy → FarmExchange.Economy，scripts/characters → FarmExchange.Characters，scripts/market → FarmExchange.Market，scripts/trading → FarmExchange.Trading，scripts/time → FarmExchange.Time，scripts/world → FarmExchange.World，scripts/ui → FarmExchange.UI。C# 文件名与主要类型名一致并使用 PascalCase。
+- 脚本目录与命名空间对应：scripts/gameplay → FarmExchange.Gameplay，scripts/farming → FarmExchange.Farming，scripts/cultivation → FarmExchange.Cultivation，scripts/land → FarmExchange.Land，scripts/processing → FarmExchange.Processing，scripts/workers → FarmExchange.Workers，scripts/inventory → FarmExchange.Inventory，scripts/economy → FarmExchange.Economy，scripts/characters → FarmExchange.Characters，scripts/market → FarmExchange.Market，scripts/trading → FarmExchange.Trading，scripts/time → FarmExchange.Time，scripts/weather → FarmExchange.Weather，scripts/world → FarmExchange.World，scripts/ui → FarmExchange.UI。C# 文件名与主要类型名一致并使用 PascalCase。
 - `scripts/logging/` 使用 `FarmExchange.Logging`，日志模块内的领域记录目录沿用同一命名空间。
 - `scripts/development/` 使用 `FarmExchange.Development`；模块内的 `development/` 子目录沿用所属模块命名空间，子目录标记开发编译范围。
 - 类型、公开成员、方法、常量使用 PascalCase；参数与局部变量使用 camelCase；私有实例字段使用 _camelCase。金额使用 Cents、tick 数使用 Ticks、格坐标使用 Cell 等明确单位或坐标域。

@@ -272,7 +272,7 @@ public partial class TestWorkerPresentation : Node
     {
         foreach (bool sow in new[] { true, false })
         {
-            var game = new FarmGame(12345);
+            var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
             Vector2I farm = new(189, 189);
             game.TryPlace(farm, BuildingKind.Farm, CropKind.Radish);
@@ -283,7 +283,7 @@ public partial class TestWorkerPresentation : Node
             {
                 var character = presentation.GetNode<NpcCharacter>("Worker1");
                 var sprite = character.GetNode<AnimatedSprite2D>("AnimatedSprite2D");
-                game.AdvanceTick(isRaining: sow);
+                WeatherTestInput.AdvanceTick(game, sow);
                 if (!sow) game.AdvanceTick();
                 presentation._Process(0);
                 string expected = sow ? "sow_down" : "water_down";
@@ -311,7 +311,7 @@ public partial class TestWorkerPresentation : Node
                 if (sprite.Animation != "idle_down") return Fail("自然结束没有返回独立待机");
                 // 同一过期记录不能被开发高倍率补播或保留。
                 game.SetFarmCrop(farm, CropKind.Radish);
-                game.AdvanceTick(isRaining: true);
+                WeatherTestInput.AdvanceTick(game, true);
                 driver.SetDevelopmentRate(16);
                 presentation._Process(0);
                 if (sprite.Animation != "sow_down") return Fail("高倍率未呈现最新有效成功结果");
@@ -320,7 +320,7 @@ public partial class TestWorkerPresentation : Node
                 if (sprite.Animation != "idle_down") return Fail("高倍率没有跳过过期动作");
                 driver.SetDevelopmentRate(2);
                 game.SetFarmCrop(farm, CropKind.Radish);
-                game.AdvanceTick(isRaining: true);
+                WeatherTestInput.AdvanceTick(game, true);
                 presentation._Process(0);
                 game.TryPlace(new Vector2I(186, 189), BuildingKind.Farm, CropKind.Radish);
                 game.AdvanceTick();

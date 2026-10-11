@@ -101,7 +101,7 @@ public partial class TestProductionState : Node
         for (int second = 1; second < 206; second++)
             if (farms.AdvanceGrowth(0, out _) || farms.Get(0).Stage != CropStage.Growing)
                 return Fail("萝卜在目标秒数之前成熟");
-        if (!farms.AdvanceGrowth(0, out CropKind harvested) || harvested != CropKind.Radish ||
+        if (!farms.AdvanceGrowth(0, out CropHarvestResult harvested) || harvested.Crop != CropKind.Radish ||
             farms.Get(0) != new FarmSnapshot(CropKind.Radish, CropStage.None, 0))
             return Fail("萝卜到期后没有一次性收获并清除进度");
         farms.Remove(0);
@@ -361,8 +361,8 @@ public partial class TestProductionState : Node
             farms.TryMatureBeforeDisallowedSeason(3, Season.Summer, out _) ||
             farms.TryMatureBeforeDisallowedSeason(4, Season.Summer, out _) ||
             farms.TryMatureBeforeDisallowedSeason(5, Season.Summer, out _) ||
-            !farms.TryMatureBeforeDisallowedSeason(2, Season.Summer, out CropKind harvested) ||
-            harvested != CropKind.Potato || farms.Get(2) != new FarmSnapshot(CropKind.Potato, CropStage.None, 0) ||
+            !farms.TryMatureBeforeDisallowedSeason(2, Season.Summer, out CropHarvestResult harvested) ||
+            harvested.Crop != CropKind.Potato || farms.Get(2) != new FarmSnapshot(CropKind.Potato, CropStage.None, 0) ||
             farms.TryMatureBeforeDisallowedSeason(2, Season.Summer, out _) || farms.AdvanceGrowth(2, out _))
             return Fail("禁生阈值未严格小于十分之一，待水被补救，或收获重复发生");
         farms.ClearDisallowedCrops(Season.Summer);
@@ -378,7 +378,7 @@ public partial class TestProductionState : Node
         farms.TryWork(0, spring);
         for (int second = 0; second < 205; second++)
             farms.AdvanceGrowth(0, out _);
-        if (!farms.AdvanceGrowth(0, out harvested) || harvested != CropKind.Radish ||
+        if (!farms.AdvanceGrowth(0, out harvested) || harvested.Crop != CropKind.Radish ||
             farms.TryMatureBeforeDisallowedSeason(0, Season.Summer, out _) || farms.AdvanceGrowth(0, out _))
             return Fail("正常边界收获后补救重复报告收成");
         return true;

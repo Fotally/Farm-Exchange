@@ -36,8 +36,8 @@ public static class TestLogging
     {
         using var output = new StringWriter();
         var log = RuntimeLog.Capture(output);
-        var game = new FarmGame(17, log);
-        var second = new FarmGame(17, log);
+        var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var second = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         int price = game.GetQuote(Wheat).PriceCents;
         Require(game.Buy(Wheat, 2).Success, "真实买入失败");
         Require(game.Buy(Wheat, -3).Failure == FarmExchange.Trading.TradeFailure.InvalidQuantity, "负量未正常拒绝");
@@ -100,8 +100,8 @@ public static class TestLogging
         using var disabled = RuntimeLog.Disabled();
         using var memory = new StringWriter();
         using var log = RuntimeLog.Capture(memory);
-        using var plain = new FarmGame(41, disabled);
-        using var traced = new FarmGame(41, log);
+        using var plain = new FarmGame(41, disabled, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var traced = new FarmGame(41, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (int quantity in new[] { 3, -1, 2, int.MaxValue })
             Require(plain.Buy(Wheat, quantity) == traced.Buy(Wheat, quantity), "开关日志改变交易结果");
         Require(plain.AdvanceTicks(120) == traced.AdvanceTicks(120), "开关日志改变经营推进");
@@ -113,7 +113,7 @@ public static class TestLogging
     {
         using var output = new StringWriter();
         using var log = RuntimeLog.Capture(output);
-        using var game = new FarmGame(17, log);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         int actualPrice = game.GetQuote(Wheat).PriceCents;
         var negative = game.Buy(Wheat, -1);
         var zero = game.Buy(Wheat, 0);
@@ -138,7 +138,7 @@ public static class TestLogging
         using var writer = new SwitchableWriter();
         int diagnostics = 0;
         using var log = RuntimeLog.Capture(writer, diagnostic: _ => diagnostics++);
-        using var game = new FarmGame(17, log);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         writer.ThrowWrites = true;
         int before = game.MoneyCents;
         var result = game.Buy(Wheat, 1);
@@ -155,7 +155,7 @@ public static class TestLogging
         Require(diagnostics == 2 && log.Health.FailureCount == 93, "恢复未仅通知一次或抑制被当作日志丢失");
         using var failing = new SwitchableWriter { ThrowWrites = true };
         using var isolated = RuntimeLog.Capture(failing, diagnostic: _ => throw new IOException("诊断目标故障"));
-        using var isolatedGame = new FarmGame(17, isolated);
+        using var isolatedGame = new FarmGame(17, isolated, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         Require(isolatedGame.Buy(Wheat, 1).Success, "独立诊断异常进入业务");
     }
 
@@ -163,7 +163,7 @@ public static class TestLogging
     {
         using var output = new StringWriter();
         using var log = RuntimeLog.Capture(output);
-        using var game = new FarmGame(17, log);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         int length = output.ToString().Length;
         try { game.Buy(Wheat, 1, (CommandOrigin)42); Require(false, "非法来源被默认转换或接受"); }
         catch (ArgumentOutOfRangeException error) { Require(error.ParamName == "origin", "来源错误没有明确参数"); }
@@ -171,7 +171,7 @@ public static class TestLogging
             "非法来源仍提交业务或无契约事件");
         Require(game.Buy(Wheat, 1).Success && Lines(output.ToString()).Last().Contains("CommandId: 1"),
             "非法来源影响有效输入的指令身份");
-        using var plain = new FarmGame(17);
+        using var plain = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         try { plain.Buy(Wheat, 1, (CommandOrigin)42); Require(false, "关闭日志后来源约束失效"); }
         catch (ArgumentOutOfRangeException) { }
         Require(plain.MoneyCents == 5000 && plain.GetStock(Wheat) == 0, "关闭采集仍提交非法来源业务");
@@ -181,7 +181,7 @@ public static class TestLogging
     {
         using var output = new StringWriter();
         using var log = RuntimeLog.Capture(output);
-        using var game = new FarmGame(17);
+        using var game = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         using var context = log.BindGame(game, 17)!;
         var successful = context.Trading.BeginBuy(Wheat, 2, CommandOrigin.Scenario)!;
         var actual = game.Buy(Wheat, 2, CommandOrigin.Scenario);

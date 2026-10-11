@@ -34,7 +34,7 @@ public static class TestProductionDiagnostics
 
     private static FarmGame Empty(RuntimeLog? log = null, uint seconds = 0)
     {
-        var game = new FarmGame(12345, seconds, log);
+        var game = new FarmGame(12345, seconds, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         return game;
     }
@@ -48,7 +48,7 @@ public static class TestProductionDiagnostics
         game.TryPlace(new(192, 189), BuildingKind.Farm, CropKind.Radish);
         Require(game.Log!.Diagnostics.Start(new(new[] { "ProductionStateChanged", "WorkerTaskChanged" },
             new[] { Farm }, WorkerNumbers: new[] { 1 })), "开启选定湿田诊断失败");
-        game.AdvanceTick(true);
+        WeatherTestInput.AdvanceTick(game, true);
         string[] production = Events(text, "ProductionStateChanged");
         Require(production.Length == 3 && Transition(production[0], "Watered", "None", "None") &&
             Transition(production[1], "Sown", "None", "Seeded") && Transition(production[2], "GrowthStarted", "Seeded", "Growing"),
@@ -56,7 +56,7 @@ public static class TestProductionDiagnostics
         Require(production[0].Contains("HasWaterBefore: false, HasWaterAfter: true") &&
             production.All(line => line.Contains("Anchor: { X: 189, Y: 189 }") && line.Contains("CaptureId:")),
             "雨水前后或锚点范围不正确");
-        game.AdvanceTick(true);
+        WeatherTestInput.AdvanceTick(game, true);
         Require(Events(text, "ProductionStateChanged").Length == 3, "重复雨水虚构Watered转换");
         string[] tasks = Events(text, "WorkerTaskChanged");
         Require(tasks.Any(line => line.Contains("ActivityBefore: \"Idle\", ActivityAfter: \"Sowing\"") &&
@@ -82,7 +82,10 @@ public static class TestProductionDiagnostics
             "干田播种/供水/生长转换不对应实际赋值");
         Require(Events(text, "WorkerTaskChanged").Any(line => line.Contains("ActivityBefore: \"Sowing\", ActivityAfter: \"Watering\"")),
             "播种后原田供水任务转换遗漏");
-        game.AdvanceTicks(498);
+        game.AdvanceTicks(206);
+        int firstHarvestQuantity = game.GetPresentationResults().Single(r => r.Kind == ProductionResultKind.Harvest).Quantity;
+        Require(game.Sell(new CommodityId(CropKind.Radish, CommodityKind.Raw), game.GetRawStock(CropKind.Radish) - 1).Success, "建立最后一份原料领取边界失败");
+        game.AdvanceTicks(292);
         game.Dispose();
         string[] details = Events(text, "ProductionStateChanged");
         string summary = Events(text, "ProductionSummary").Single();
@@ -96,7 +99,7 @@ public static class TestProductionDiagnostics
         Require(details.Any(line => Transition(line, "RawClaimed", "ReadyToProcess", "WaitingForRaw")) &&
             details.Any(line => Transition(line, "Processed", "Processing", "ReadyToProcess")),
             "加工状态没有读取真实库存可领取状态");
-        Require(details.Any(line => Transition(line, "Harvested", "Growing", "None") && line.Contains("Quantity: 6")),
+        Require(details.Any(line => Transition(line, "Harvested", "Growing", "None") && Number(line, "Quantity") == firstHarvestQuantity),
             "收获没有在真实入库后记录");
     }
 
@@ -185,7 +188,7 @@ public static class TestProductionDiagnostics
         game.Log.Diagnostics.Start(new(new[] { "ProductionStateChanged" }, new[] { Farm }, EventLimit: 1));
         Require(game.Log.ProductionDiagnostics.BeginFarm(int.MaxValue, new FarmingSystem(1)) == null && log.Health.FailureCount == 0,
             "未选中实例仍读取明细状态");
-        game.AdvanceTick(true);
+        WeatherTestInput.AdvanceTick(game, true);
         Require(Events(text, "ProductionStateChanged").Length == 1 && !game.Log.Diagnostics.IsActive &&
             game.GetPlot(Farm).Crop == CropStage.Growing, "条数预算终止改变湿田业务或继续输出明细");
 

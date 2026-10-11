@@ -4,7 +4,7 @@
 
 对应类型：FarmExchange.Gameplay.FarmGame，代码位于 scripts/gameplay/FarmGame.cs。调用方为主场景和地图；测试也通过该公开接口验证行为。当前只有一个实现，未声明 C# interface 类型。
 
-`FarmGame(seed?, logging?, purpose?)` 默认不采集日志；显式传入 `RuntimeLog` 时通过内部自动绑定在真实开局完成后建立局身份、初始化基线与生产观察。`purpose` 默认为 `GamePurpose.Main`，独立开发流程指定 `ScenarioIndependent`；非法用途在初始化前抛参数异常。只读 `Log` 返回已绑定上下文或 null，不允许重新安装。公开 `RuntimeLog.BindGame` 仍只用于手动领域观察，不自动采集已有局的生产。
+`FarmGame(seed?, logging?, purpose?, weatherMode=Natural)` 默认不采集日志；显式传入 `RuntimeLog` 时通过内部自动绑定在真实开局完成后建立局身份、初始化基线与生产观察。`purpose` 默认为 `GamePurpose.Main`，独立开发流程指定 `ScenarioIndependent`；非法用途在初始化前抛参数异常。只读 `Log` 返回已绑定上下文或 null，不允许重新安装。公开 `RuntimeLog.BindGame` 仍只用于手动领域观察，不自动采集已有局的生产。
 
 主动交易、订单、建拆、原料底线、六个耕作命令和暂停设置关联原指令、真实结果和一次结束，相关命令均接受可选 `origin=Player`。经营语义来源 `FarmExchange.Gameplay.CommandOrigin` 只有 Player/Scenario，其他值在记录与业务提交前抛出 `ArgumentOutOfRangeException(nameof(origin))`，资源零修改且不依赖采集开关。开发流程真实命令显式传 Scenario；自动订单成交、实际等待、行情与生产由所属领域观察，不伪造玩家命令。经营层保留原业务执行权和检查顺序，不持有日志字段或前后投影，日志不执行业务回调。输出失败不改业务结果、不重试命令，业务异常原样传播。`Dispose()` 幂等结束本局关联，先封存订单等待与生产尾段且不改变资源；开发宿主先终结流程和报告，再释放独立局，最后由 Main 关闭主局和会话，具体约定见[日志 Interface](../../logging/interface-logging.md)。
 
@@ -23,7 +23,7 @@
 | 旧命令与编辑 | BuildFarm、BuildProcessor、SetFarmCrop、PrepareFarmCrop、RemoveBuilding | 旧建造命令转发 `TryPlace`；成功返回 null，失败返回给玩家的原因；立即改种强制丢弃当前轮并保水，预备下一轮保留当前轮，两者都只解除本田耕作表；任一占用子格操作同一整座设施；拆除释放全部 footprint、计划引用且不退款；对地图外都返回“地图外地块” |
 | 年度耕作表 | CheckCultivationEntries、CheckCultivationPlan、CreateCultivationPlan、UpdateCultivationPlan、DeleteCultivationPlan、ApplyCultivationPlan、GetCultivationPlans、GetFarmCultivation | 条目检查允许未命名草稿编辑；完整提交检查及创建/更新仍要求名称和有效模式，复用同一年度排程判断。快照含每表生命周期下一条编号 `NextEntryId`，保存空表不回退；更新拒绝新条复用历史编号，移动原条保留年度凭据。批量重验全列表且子格去重，失败全部不修改。应用/编辑保留当前轮；计划收获先关闭播种并缓存目标，日历推进后才重验启用，不能借旧季工人相位提前执行。工人完成后、换季清理前先登记实际计划播种，季末播后即清除也计为该条已执行。快照分开计划日期和真实生产，规则与缓存约定见[计划 Interface](../../cultivation/interface-cultivation-plan-book.md) |
 | 选种风险 | GetPlantingCheck(cell,crop) | 只读查询 `PlantingFailure`；`InsufficientTime` 是可播种风险提示，`WrongSeason` 才禁止实际播种。手动目标仍可选任一合法作物，不通过查询执行或清理 |
-| 时间与降雨 | AdvanceTick(bool isRaining = false)、Calendar、IsPaused、SetPaused | 每次未暂停步进推进一模拟秒并返回 `TickResult`；显式降雨在步进开始时供水，默认无雨；正常成熟与换季内部促熟走原入库，再让三名工人各推进完整一秒；之后推进日期、清理其余禁生作物、更新缓存计划事件并检查委托。`WorkerActed` 仅表示实际播种或供水，移动不计；暂停不执行任何经营相位 |
+| 时间与降雨 | AdvanceTick()、Calendar、IsPaused、SetPaused | 每次未暂停步进推进一模拟秒并返回 `TickResult`；读取唯一地区天气，整田降雨在步进开始时供水；正常成熟与换季内部促熟走原入库，再让三名工人各推进完整一秒；之后推进日期、清理其余禁生作物、更新缓存计划事件并检查委托。`WorkerActed` 仅表示实际播种或供水，移动不计；暂停不执行任何经营相位 |
 | 交易 | Buy、Sell、SellCommodityAll、SellRaw、SellAll | `Buy/Sell(CommodityId, int quantity)` 按当前报价买卖指定数量；`SellCommodityAll` 卖出单商品全部，旧 `SellRaw` 卖出该种原料，`SellAll` 一次卖出全部成品。统一委托完整交易检查，失败零修改；空库存全售成功返回零，显式零数量交易拒绝。原料底线不限制主动出售，不出售已投入物 |
 | 只读状态 | MoneyCents、BuildingCostCents、CurrentDay、CurrentFlourPriceCents、DailyPriceChangePercent | 余额由 `Wallet` 持有并委托查询，金额以分保存；`BuildingCostCents` 保留原生产建筑 1000 分常量，按类型查询统一用 `GetBuildingCostCents`；`CurrentDay` 从日历已过天数换算，`CurrentFlourPriceCents` 为当前面粉报价，兼容名 `DailyPriceChangePercent` 为本次面粉相对上次报价的实际涨跌，不表示每天变化 |
 
@@ -49,7 +49,7 @@
 
 ## 等价批量推进
 
-`AdvanceTicks(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint = null)` 推进没有外部降雨输入的区间。暂停或零请求返回零且不调用检查点；未暂停时先核对完整请求是否超过 `uint32` 日历容量，超过则抛出 `InvalidOperationException` 且资源与时间零修改。调用方有显式雨输入时，先推进雨 tick 之前的无雨区间，再调用原 `AdvanceTick(true)`，随后继续无雨区间，不预报或补造天气。
+`AdvanceTicks(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint = null)` 推进没有外部输入的区间。暂停或零请求返回零且不调用检查点；未暂停时先核对完整请求是否超过 `uint32` 日历容量，超过则抛出 `InvalidOperationException` 且资源与时间零修改。单秒和批量读取同一当前天气；自然模式以预排开始／结束事件分隔区间，显式模式由开发宿主在请求间设置或清除区域。没有第二份全局降雨布尔状态。
 
 `SimulationAdvanceResult` 给出实际 `AdvancedTicks`、`long Harvested/Produced`、是否发生工人动作/换日、`StoppedAtCheckpoint`，以及执行成本 `QuietTicks/EventTicks`。平静秒数一次累计；事件秒数按完整相位结算。两种计数之和等于实际推进数，密集持续成交仍逐秒逐笔执行。
 
@@ -71,3 +71,12 @@
 
 
 建拆及底线入口 `TryPlace/BuildFarm/BuildProcessor/RemoveBuilding/SetRawReserve` 接受默认 Player 的 `CommandOrigin`，开发流程显式传 Scenario；非法来源在修改前抛参数异常。已启用日志时，预检无命令记录，实际提交记录原输入和真实结果。`AdvanceTick/AdvanceTicks` 请求结束及完整命令结束作为生产汇总安全边界，生命周期尾段先于 GameEnded；详见[日志 Interface](../../logging/interface-logging.md)。这些观察不修改生产推进、领取时点或资源结算。
+
+
+## 地区天气 Interface
+
+局创建时固定 `WeatherMode.Natural` 或 `Explicit`，默认自然；显式仅供开发／测试，不执行自然预排。FarmGame用同一局种子创建独立天气与产量随机源，开局设施和市场仍使用原抽取顺序。`ActiveWeatherRegions` 是当前活动矩形的只读快照，`GetWeather(cell)` 查询单格，农田详情的 `CurrentWeather` 按真实九格雨＞云＞晴判定，不提供未来事件、随机倍率或收获预测。
+
+`TrySetWeatherRegion(cells,kind,out error)` 和 `TryClearWeatherRegion(cells,out error)` 委托天气 Module 完整验证矩形、越界、互斥与模式，失败零修改；自然模式拒绝显式设置。成功只改变天气，供水仍等下一经营秒。设置多云或降雨，清除既有完整矩形恢复默认晴。当前最多3片的规则由天气 Module 维护。设置界面不向玩家提供。
+
+天气快照在完整秒后与 `Calendar.ElapsedSeconds` 同步；刚生效或结束的天气作用于下一秒，不回溯刚结算的生长。同一 `CropHarvestResult.Quantity` 用于正常／促熟入库、TickResult 汇总、ProductionResult 和日志，经营不重算收成。模块职责见[天气 Interface](../../weather/interface-weather-system.md)，作物基准和天气系数见[作物规则](../../../gameplay/production/crop-growth.md)。

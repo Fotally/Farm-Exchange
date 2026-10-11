@@ -9,7 +9,7 @@ public partial class TestSimulationDriver : Node
 
     public static bool RunChecks()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var driver = new SimulationDriver();
         if (driver.Advance(0.5, game) != 0 || driver.Progress != 0.5) return Fail("未保存半tick");
         game.SetPaused(true);
@@ -46,7 +46,7 @@ public partial class TestSimulationDriver : Node
         catch (InvalidOperationException) { }
         if (game.Calendar.ElapsedSeconds != 3) return Fail("溢出拒绝修改了经营对象");
 
-        var switched = new FarmGame(12345);
+        var switched = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var switchingDriver = new SimulationDriver();
         uint boundary = 1;
         uint advanced = switchingDriver.Advance(2, switched, point =>

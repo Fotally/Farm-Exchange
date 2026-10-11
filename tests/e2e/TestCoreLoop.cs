@@ -7,6 +7,7 @@ using FarmExchange.Market;
 using FarmExchange.Trading;
 using FarmExchange.UI;
 using FarmExchange.World;
+using FarmExchange.Weather;
 
 public partial class TestCoreLoop : Node
 {
@@ -339,15 +340,16 @@ public partial class TestCoreLoop : Node
 
     private static bool CheckRainUi(Node parent)
     {
-        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
-        parent.AddChild(main);
+        var main = CreateExplicitMain(parent);
         main.Game.SetFarmCrop(new Vector2I(189, 189), CropKind.Radish);
         main.Game.SetFarmCrop(new Vector2I(192, 189), CropKind.Radish);
         main.Game.SetFarmCrop(new Vector2I(195, 189), CropKind.Radish);
         Vector2I wetFarm = new(198, 189);
         main.Game.BuildFarm(wetFarm);
         main.Game.SetFarmCrop(wetFarm, CropKind.Radish);
-        main.Game.AdvanceTick(isRaining: true);
+        if (!main.Game.TrySetWeatherRegion(new Rect2I(189, 189, 12, 3), WeatherKind.Rain, out _))
+            return Fail("天气区域夹具设置失败");
+        main.Game.AdvanceTick();
         main.GetNode<WorldMap>("WorldMap").EmitSignal(
             WorldMap.SignalName.SelectionChanged, wetFarm);
         Control detail = Find<Control>(main.GetNode<Control>("CanvasLayer/UiRoot"), "DetailWindow");
@@ -357,15 +359,15 @@ public partial class TestCoreLoop : Node
             Find<Label>(detail, "FarmCurrentStatus").IsVisibleInTree() &&
             Find<Label>(detail, "FarmCurrentStatus").Text == "待播种" &&
             Find<Label>(detail, "FarmWaterStatus").IsVisibleInTree() &&
-            Find<Label>(detail, "FarmWaterStatus").Text.Contains("水分充足");
+            Find<Label>(detail, "FarmWaterStatus").Text.Contains("水分充足") &&
+            Find<Label>(detail, "FarmCurrentWeather").Text == "当前天气：降雨";
         main.QueueFree();
         return visible || Fail("雨后未播种农田的已湿润状态没有显示在详情中");
     }
 
     private static bool CheckReserveUi(Node parent)
     {
-        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
-        parent.AddChild(main);
+        var main = CreateExplicitMain(parent);
         bool passed = CheckReserveControls(main);
         main.QueueFree();
         return passed;
@@ -376,12 +378,17 @@ public partial class TestCoreLoop : Node
         foreach (var space in main.Game.GetBuildingSpaces()) main.Game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
         Vector2I processor = new(15, 12);
-        main.Game.SetRawReserve(CropKind.Radish, 6);
         main.Game.BuildFarm(farm);
         main.Game.SetFarmCrop(farm, CropKind.Radish);
-        main.Game.AdvanceTick(isRaining: true);
+        if (!main.Game.TrySetWeatherRegion(new Rect2I(farm, new Vector2I(3, 3)), WeatherKind.Rain, out _))
+            return Fail("底线测试雨区设置失败");
+        main.Game.AdvanceTick();
         for (int i = 0; i < 206; i++) main.Game.AdvanceTick();
         main.Game.RemoveBuilding(farm);
+        int harvested = main.Game.GetRawStock(CropKind.Radish);
+        if (harvested <= 1) return Fail("底线夹具没有取得真实收获");
+        int loweredReserve = harvested - 1;
+        main.Game.SetRawReserve(CropKind.Radish, harvested);
         main.Game.BuildProcessor(processor, CropKind.Radish);
 
         var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
@@ -394,7 +401,7 @@ public partial class TestCoreLoop : Node
         var input = Find<LineEdit>(window, "RawReserveRadishInput");
         var apply = Find<Button>(window, "SetRawReserveRadishButton");
         var scroll = Find<ScrollContainer>(window, "InventoryScroll");
-        if (input.Text != "6")
+        if (input.Text != harvested.ToString(CultureInfo.InvariantCulture))
             return Fail("库存输入未显示经营模块的已提交底线");
 
         input.GrabFocus();
@@ -407,7 +414,7 @@ public partial class TestCoreLoop : Node
             scroll.ScrollVertical != scrollPosition ||
             !object.ReferenceEquals(input, Find<LineEdit>(window, "RawReserveRadishInput")) ||
             !object.ReferenceEquals(apply, Find<Button>(window, "SetRawReserveRadishButton")) ||
-            main.Game.GetRawReserve(CropKind.Radish) != 6)
+            main.Game.GetRawReserve(CropKind.Radish) != harvested)
             return Fail("经营刷新丢失底线输入、光标、焦点、滚动或控件身份");
         input.ReleaseFocus();
         main.AdvanceSimulation(1);
@@ -416,9 +423,9 @@ public partial class TestCoreLoop : Node
         if (input.Text != "123")
             return Fail("输入失焦或窗口关闭重开丢失未提交草稿");
 
-        EnterText(input, "5");
+        EnterText(input, loweredReserve.ToString(CultureInfo.InvariantCulture));
         apply.EmitSignal(Button.SignalName.Pressed);
-        if (main.Game.GetRawReserve(CropKind.Radish) != 5 || main.Game.GetRawStock(CropKind.Radish) != 6 ||
+        if (main.Game.GetRawReserve(CropKind.Radish) != loweredReserve || main.Game.GetRawStock(CropKind.Radish) != harvested ||
             main.Game.GetPlot(processor).RemainingSeconds != 0 ||
             main.Game.GetProcessorDetails(processor).Status != ProcessorStatus.ReadyToProcess ||
             !Find<Label>(detail, "ProcessorCurrentStatus").IsVisibleInTree() ||
@@ -428,19 +435,19 @@ public partial class TestCoreLoop : Node
         {
             EnterText(input, invalid);
             apply.EmitSignal(Button.SignalName.Pressed);
-            if (main.Game.GetRawReserve(CropKind.Radish) != 5 || main.Game.GetRawStock(CropKind.Radish) != 6 ||
+            if (main.Game.GetRawReserve(CropKind.Radish) != loweredReserve || main.Game.GetRawStock(CropKind.Radish) != harvested ||
                 input.Text != invalid || !ContainsVisibleText(window, "请输入 0 到 2147483647 之间的整数"))
                 return Fail("非法底线输入改变了经营状态或丢失错误提示/文本");
         }
-        EnterText(input, "5");
+        EnterText(input, loweredReserve.ToString(CultureInfo.InvariantCulture));
         input.EmitSignal(LineEdit.SignalName.TextSubmitted, input.Text);
         main.AdvanceSimulation(1);
-        if (main.Game.GetRawStock(CropKind.Radish) != 5 || main.Game.GetPlot(processor).RemainingSeconds != 26 ||
+        if (main.Game.GetRawStock(CropKind.Radish) != loweredReserve || main.Game.GetPlot(processor).RemainingSeconds != 26 ||
             !ContainsVisibleText(detail, "加工中"))
             return Fail("回车提交后下次经营领取未正确启动加工");
         EnterText(input, "99");
         apply.EmitSignal(Button.SignalName.Pressed);
-        if (main.Game.GetRawReserve(CropKind.Radish) != 99 || main.Game.GetRawStock(CropKind.Radish) != 5 ||
+        if (main.Game.GetRawReserve(CropKind.Radish) != 99 || main.Game.GetRawStock(CropKind.Radish) != loweredReserve ||
             main.Game.GetPlot(processor).RemainingSeconds != 26)
             return Fail("界面提高底线退回了加工投入或重置进度");
         return true;
@@ -450,6 +457,19 @@ public partial class TestCoreLoop : Node
     {
         input.Text = text;
         input.EmitSignal(LineEdit.SignalName.TextChanged, text);
+    }
+
+    private static Main CreateExplicitMain(Node parent)
+    {
+        WeatherMode previous = Main.InitialWeatherMode;
+        Main.InitialWeatherMode = WeatherMode.Explicit;
+        try
+        {
+            var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            parent.AddChild(main);
+            return main;
+        }
+        finally { Main.InitialWeatherMode = previous; }
     }
 
     private static bool CheckRoadUi(Node parent)

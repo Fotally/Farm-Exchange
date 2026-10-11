@@ -85,7 +85,7 @@ public partial class CropSelectionWindow : DraggableWindow
                 _ => "当前季节可播种",
             } : "";
             _options[(int)crop.Kind].Text =
-                $"{crop.CropName} · 获水后 {crop.GrowthDays} 天\n每轮 {crop.HarvestQuantity} 份\n" +
+                $"{crop.CropName} · 获水后 {crop.GrowthDays} 天\n基准产量 {crop.HarvestQuantity} 份\n" +
                 $"适宜：{FormatSeasons(crop.GrowingSeasons)}\n" +
                 $"原料报价 {FormatCoins(game.GetRawPriceCents(crop.Kind))} 金币\n" +
                 $"原料库存 {game.GetRawStock(crop.Kind)}\n{ShortPlantingNotice(planting)}";

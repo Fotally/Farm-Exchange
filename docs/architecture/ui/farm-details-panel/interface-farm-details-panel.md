@@ -1,6 +1,8 @@
 # FarmDetailsPanel 接口
 
-对应 `scripts/ui/FarmDetailsPanel.cs`，由 `Main` 放在地块详情窗口内。`Refresh(FarmDetailsSnapshot)` 只更新现有状态、周期、每轮产量、原料当前报价和库存标签；`ChangeCropRequested`、`RemoveRequested` 把按钮意图交给 `Main`。
+对应 `scripts/ui/FarmDetailsPanel.cs`，由 `Main` 放在地块详情窗口内。`Refresh(FarmDetailsSnapshot)` 只更新现有状态、周期、基准产量、当前整田天气、原料当前报价和库存标签；`ChangeCropRequested`、`RemoveRequested` 把按钮意图交给 `Main`。
+
+`FarmCurrentWeather` 显示快照的晴天、多云或降雨，不查询天气预排表。九格中有降雨即整田降雨；无雨但有多云即整田多云，其余为晴天，悬停说明同一判定。原 `FarmHarvestQuantity` 节点保留，但指标名称改为「基准产量」，值仍读取 `CropDefinition.HarvestQuantity`；它不表示本轮已确定收成。详情不展示随机倍率、天气修正系数、已历天气均值、预测或计算过程。
 
 状态语义由 `FarmGame.GetFarmDetails` 提供，面板把等待工人、湿润待播种、等待浇水、生长中、不适季与计划休耕映射为玩家文案；预计剩余时间不足显示“可播种、有枯萎风险”，不表示禁止播种。周期显示“获得水后 N 天成熟”。
 
@@ -8,7 +10,7 @@
 
 `FarmCultivationStatus` 标签展示预备日期。初年春初引用冬春连续条时，计划原起点可能在游戏时间零点之前；按年度位置显示“上一年度 X月X日”，不转成无符号累计日期、不夹到开局日、不虚构第0年。非负绝对起点继续显示真实的“第N年 X月X日”。
 
-详情按「当前状态 → 真实剩余与水分 → 本轮时间进度 → 周期与每轮产量 → 原料报价及库存 → 年度表与下一轮 → 下一步操作」组织详情。`FarmActualProgress` 独立显示实际剩余、待水或未播种；`FarmProgress` 仅在生长中可见。进度条依据同一 `PlotSnapshot.RemainingSeconds` 和作物定义周期换算，并受剩余秒向上取整的精度限制，不伪造精确完成百分比或确定收获预测；动画和刷新都不推进经营。
+详情按「当前状态 → 真实剩余与水分 → 当前天气 → 本轮时间进度 → 周期与基准产量 → 原料报价及库存 → 年度表与下一轮 → 下一步操作」组织详情。`FarmActualProgress` 独立显示实际剩余、待水或未播种；`FarmProgress` 仅在生长中可见。进度条依据同一 `PlotSnapshot.RemainingSeconds` 和作物定义周期换算，并受剩余秒向上取整的精度限制，不伪造精确完成百分比或确定收获预测；动画和刷新都不推进经营。
 
 共享年度表标签继续保留 `FarmCultivationStatus` 节点名及预备日期语义。预备下一轮为主按钮，立即改种与年度表为纸色次按钮；末尾低强调移除按钮上方明确说明「丢失本轮未收获作物，不退还建造费」。长详情由外层滚动承载，现有事件签名、按钮节点名和经营命令保持。`tests/e2e/TestUiFacilities.cs` 以真实经营推进后的快照核对剩余天数，原有主场景及年度表测试检查改种、预备和移除效果。
 

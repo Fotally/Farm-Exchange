@@ -88,7 +88,7 @@ public partial class TestWorldMap : Node
             for (int col = 0; col < 2; col++)
                 offsets.Add(new Vector2I(col, row));
         var anchor = new Vector2I(7, 382);
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         Vector2I conflict = anchor + new Vector2I(0, 1);
         if (!game.TryPlace(conflict, BuildingKind.Road, default).Success)
         {

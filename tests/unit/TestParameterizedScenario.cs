@@ -177,7 +177,7 @@ public partial class TestParameterizedScenario : Node
 
     private static FarmGame Current(uint ticks = 0)
     {
-        var game = new FarmGame(12345, ticks);
+        var game = new FarmGame(12345, ticks, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var cells = new List<Vector2I>();
         foreach (var space in game.GetBuildingSpaces()) cells.Add(space.AnchorCell);
         foreach (var cell in cells) game.RemoveBuilding(cell);
@@ -273,7 +273,7 @@ public partial class TestParameterizedScenario : Node
         if (scenario.Outcome != ScenarioOutcome.PreconditionsRejected || scenario.Report.Operations.Count != 0)
             return Fail("独立场地非法占地未正常拒绝");
         ScenarioConfiguration current = Load(directory, Config("current"));
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         scenario = Start(directory, current, game);
         if (scenario.Outcome != ScenarioOutcome.PreconditionsRejected || scenario.Report.Operations.Count != 0)
             return Fail("现场目标不存在仍买入");

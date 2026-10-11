@@ -12,6 +12,7 @@ using FarmExchange.Processing;
 using FarmExchange.Time;
 using FarmExchange.Trading;
 using FarmExchange.Workers;
+using FarmExchange.Weather;
 using FarmExchange.World;
 using GoodsInventory = FarmExchange.Inventory.Inventory;
 
@@ -38,7 +39,7 @@ public readonly record struct PlotSnapshot(
     BuildingKind Building, CropKind CropKind, CropStage Crop, int RemainingSeconds,
     bool HasWater = false, double GrowthProgress = 0);
 public readonly record struct FarmDetailsSnapshot(
-    CropDefinition Crop, FarmStatus Status, int RawPriceCents, int RawStock);
+    CropDefinition Crop, FarmStatus Status, int RawPriceCents, int RawStock, WeatherKind CurrentWeather = WeatherKind.Sunny);
 public readonly record struct ProcessorDetailsSnapshot(
     CropDefinition Crop, ProcessorStatus Status, int ProductPriceCents, int ProductStock);
 public readonly record struct TickResult(int Harvested, int Produced, bool WorkerActed, bool DayAdvanced);
@@ -66,7 +67,8 @@ public sealed class FarmGame : IDisposable
     };
 
     private readonly LandOccupancy _occupancy = new(CellCount);
-    private readonly FarmingSystem _farming = new(CellCount);
+    private readonly FarmingSystem _farming;
+    private readonly WeatherSystem _weather;
     private readonly ProcessingSystem _processing = new(CellCount);
     private readonly WorkerScheduler _workerScheduler = new(
         Array.ConvertAll(InitialFarmCells, cell => BuildingFootprint.WorkCell(cell, BuildingKind.Farm)));
@@ -89,6 +91,37 @@ public sealed class FarmGame : IDisposable
     public bool IsPaused => _calendar.IsPaused;
 
     /**
+     * <summary>读取当前真实活动天气区域，不提供未来预排表。</summary>
+     */
+    public IReadOnlyList<WeatherRegionSnapshot> ActiveWeatherRegions => _weather.ActiveRegions;
+
+    /**
+     * <summary>按基础格查询当前真实天气。</summary>
+     * <param name="cell">地图内基础格。</param>
+     * <returns>晴天、多云或降雨。</returns>
+     */
+    public WeatherKind GetWeather(Vector2I cell) => _weather.GetWeather(cell);
+
+    /**
+     * <summary>开发／测试显式模式设置互斥矩形天气，自然模式拒绝修改。</summary>
+     * <param name="cells">地图内非空基础格矩形。</param>
+     * <param name="kind">所设置天气。</param>
+     * <param name="error">拒绝原因；失败零修改。</param>
+     * <returns>是否成功设置；设置不推进经营或立即供水。</returns>
+     */
+    public bool TrySetWeatherRegion(Rect2I cells, WeatherKind kind, out string error) =>
+        _weather.TrySetRegion(cells, kind, out error);
+
+    /**
+     * <summary>开发／测试显式模式移除指定矩形天气，恢复默认晴天。</summary>
+     * <param name="cells">既有区域完整矩形。</param>
+     * <param name="error">拒绝原因。</param>
+     * <returns>是否成功清除，失败零修改。</returns>
+     */
+    public bool TryClearWeatherRegion(Rect2I cells, out string error) =>
+        _weather.TryClearRegion(cells, out error);
+
+    /**
      * <summary>查询本局已绑定的日志观察上下文；未启用采集时为空。</summary>
      */
     public GameLog? Log => _log;
@@ -101,17 +134,20 @@ public sealed class FarmGame : IDisposable
      * <param name="marketSeed">报价与初始设施随机种子；省略时沿用原随机来源。</param>
      * <param name="logging">组装点持有的采集会话；省略时不采集或写文件。</param>
      * <param name="purpose">本局的真实用途，默认玩家主局。</param>
+     * <param name="weatherMode">默认自然预排；开发／测试可选显式区域模式，创建后不切换。</param>
      * <remarks>日志不拥有经营资源；调用方先释放局再关闭会话。</remarks>
      */
-    public FarmGame(int? marketSeed = null, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main) : this(marketSeed, 0, logging, purpose) { }
+    public FarmGame(int? marketSeed = null, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural) : this(marketSeed, 0, logging, purpose, weatherMode) { }
 
-    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main)
+    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural)
     {
         if (purpose is not (GamePurpose.Main or GamePurpose.ScenarioIndependent))
             throw new ArgumentOutOfRangeException(nameof(purpose));
         _calendar = new GameCalendar(elapsedSeconds);
-        _cultivation = new CultivationPlanBook(_farming);
         int seed = marketSeed ?? Random.Shared.Next();
+        _farming = new FarmingSystem(CellCount, seed);
+        _weather = new WeatherSystem(seed, weatherMode, elapsedSeconds);
+        _cultivation = new CultivationPlanBook(_farming);
         _market = new MarketQuotes(seed, _calendar.Snapshot.ElapsedDays);
         _trading = new TradingService(_inventory, _wallet, _market);
         _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
@@ -274,7 +310,7 @@ public sealed class FarmGame : IDisposable
             _ => FarmStatus.WaitingForWorker,
         };
         return new FarmDetailsSnapshot(crop, status, GetRawPriceCents(crop.Kind),
-            GetRawStock(crop.Kind));
+            GetRawStock(crop.Kind), _weather.GetFarmWeather(_occupancy.GetSpace(IndexOf(cell))!));
     }
 
     public ProcessorDetailsSnapshot GetProcessorDetails(Vector2I cell)
@@ -702,14 +738,14 @@ public sealed class FarmGame : IDisposable
         return null;
     }
 
-    public TickResult AdvanceTick(bool isRaining = false)
+    public TickResult AdvanceTick()
     {
         using var observation = _log?.Simulation.BeginTick();
         _log?.Production?.BeginAdvance();
         bool completed = false;
         try
         {
-            TickResult result = AdvanceTickCore(isRaining, observation);
+            TickResult result = AdvanceTickCore(observation);
             completed = true;
             return result;
         }
@@ -725,18 +761,18 @@ public sealed class FarmGame : IDisposable
         }
     }
 
-    private TickResult AdvanceTickCore(bool isRaining, SimulationLogOperation? observation)
+    private TickResult AdvanceTickCore(SimulationLogOperation? observation)
     {
         if (_calendar.IsPaused)
             return default;
         if (_calendar.Snapshot.ElapsedSeconds == uint.MaxValue)
             throw new InvalidOperationException("模拟时间已达到上限");
-        return AdvanceEventTick(isRaining, observation);
+        return AdvanceEventTick(observation);
     }
 
     /**
-     * <summary>一次请求推进无外部降雨输入区间，平静数据直接累计，真实事件按原相位结算。</summary>
-     * <remarks>整段先校验日历容量；检查点可提交正式命令，修改后须返回 false 停止并重算请求。显式雨 tick 由宿主先拆段再调用 AdvanceTick。</remarks>
+     * <summary>一次请求推进无外部输入区间，平静数据直接累计，真实事件按原相位结算。</summary>
+     * <remarks>整段先校验日历容量；检查点可提交正式命令，修改后须返回 false 停止并重算请求。单秒与批量读取同一天气状态；天气开始与结束是完整经营事件。</remarks>
      * <param name="maxTicks">最多推进的完整经营秒数；零或暂停时不推进。</param>
      * <param name="checkpoint">真实事件及请求终点的稳定回调，true 继续，false 停止；不能嵌套推进。</param>
      * <returns>实际秒数、宽整数产出、事件/平静秒数及检查点停止标识。</returns>
@@ -798,7 +834,7 @@ public sealed class FarmGame : IDisposable
             bool isEvent = advanced < maxTicks;
             if (isEvent)
             {
-                result = AdvanceEventTick(false, observation);
+                result = AdvanceEventTick(observation);
                 advanced++;
                 events++;
                 interval++;
@@ -824,6 +860,7 @@ public sealed class FarmGame : IDisposable
     {
         uint next = Math.Min(_calendar.SecondsUntilNextSeason,
             _calendar.SecondsUntilDay(_market.NextEventDay));
+        next = Math.Min(next, _weather.GetNextEventSeconds(Calendar.ElapsedSeconds));
         next = Math.Min(next, _cultivation.GetNextEventSeconds(Calendar.ElapsedSeconds));
         next = Math.Min(next, _workerScheduler.GetNextEventSeconds(_farming, Calendar));
         if (_tradeOrders.NeedsNextTickCheck)
@@ -831,7 +868,11 @@ public sealed class FarmGame : IDisposable
         foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
         {
             if (space.Building == BuildingKind.Farm)
+            {
                 next = Math.Min(next, _farming.GetNextEventSeconds(space.AnchorIndex));
+                if (!_farming.Get(space.AnchorIndex).HasWater && _weather.GetFarmWeather(space) == WeatherKind.Rain)
+                    next = 1;
+            }
             else if (space.Building == BuildingKind.Processor)
                 next = Math.Min(next, _processing.GetNextEventSeconds(space.AnchorIndex, _inventory));
         }
@@ -846,7 +887,7 @@ public sealed class FarmGame : IDisposable
         foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
         {
             if (space.Building == BuildingKind.Farm)
-                _farming.AdvanceQuietSeconds(space.AnchorIndex, seconds);
+                _farming.AdvanceQuietSeconds(space.AnchorIndex, seconds, _weather.GetFarmWeather(space));
             else if (space.Building == BuildingKind.Processor)
                 _processing.AdvanceQuietSeconds(space.AnchorIndex, seconds);
         }
@@ -854,19 +895,19 @@ public sealed class FarmGame : IDisposable
         observation?.EnterPhase(SimulationLogPhase.Calendar);
         if (!_calendar.TryAdvanceSeconds(seconds))
             throw new InvalidOperationException("模拟时间已达到上限");
+        _weather.AdvanceTo(Calendar.ElapsedSeconds);
         if (Calendar.ElapsedDays == previousDay)
             return false;
         _market.Advance(Calendar, _log?.Market);
         return true;
     }
 
-    private TickResult AdvanceEventTick(bool isRaining, SimulationLogOperation? observation)
+    private TickResult AdvanceEventTick(SimulationLogOperation? observation)
     {
         observation?.EnterPhase(SimulationLogPhase.TickPreparation);
         var timing = _log?.Performance?.BeginEventTick(Calendar.ElapsedSeconds);
         ClearPresentationResults();
-        if (isRaining)
-            ApplyRain();
+        ApplyRain();
         int harvested = 0;
         int produced = 0;
         long nextTimeUnits = ((long)_calendar.Snapshot.ElapsedSeconds + 1) * GameTimeUnits.PerSecond;
@@ -879,8 +920,8 @@ public sealed class FarmGame : IDisposable
                 observation?.EnterPhase(SimulationLogPhase.Harvest);
                 timing?.BeginStage();
                 var before = _log?.ProductionDiagnostics.BeginFarm(i, _farming);
-                if (_farming.AdvanceGrowth(i, out CropKind harvestedCrop))
-                    harvested += CollectHarvest(i, harvestedCrop, nextTimeUnits, before);
+                if (_farming.AdvanceGrowth(i, out CropHarvestResult harvest, _weather.GetFarmWeather(space)))
+                    harvested += CollectHarvest(i, harvest, nextTimeUnits, before);
                 timing?.EndStage("Harvest");
             }
             else if (building == BuildingKind.Processor)
@@ -907,8 +948,8 @@ public sealed class FarmGame : IDisposable
             foreach (int index in _farming.Indices)
             {
                 var before = _log?.ProductionDiagnostics.BeginFarm(index, _farming);
-                if (_farming.TryMatureBeforeDisallowedSeason(index, nextSeason, out CropKind rescuedCrop))
-                    harvested += CollectHarvest(index, rescuedCrop, nextTimeUnits, before);
+                if (_farming.TryMatureBeforeDisallowedSeason(index, nextSeason, out CropHarvestResult rescue))
+                    harvested += CollectHarvest(index, rescue, nextTimeUnits, before);
             }
             timing?.EndStage("Harvest");
         }
@@ -941,9 +982,10 @@ public sealed class FarmGame : IDisposable
         return new TickResult(harvested, produced, workerActed, dayAdvanced);
     }
 
-    private int CollectHarvest(int index, CropKind crop, long nextTimeUnits, FarmSnapshot? before)
+    private int CollectHarvest(int index, CropHarvestResult harvest, long nextTimeUnits, FarmSnapshot? before)
     {
-        int quantity = GetCrop(crop).HarvestQuantity;
+        CropKind crop = harvest.Crop;
+        int quantity = harvest.Quantity;
         _inventory.AddRaw(crop, quantity);
         _log?.Production?.Harvested(crop, quantity);
         _log?.ProductionDiagnostics.Harvested(index, before, _farming, quantity);
@@ -1175,6 +1217,7 @@ public sealed class FarmGame : IDisposable
         if (!_calendar.TryAdvanceSeconds(1))
             throw new InvalidOperationException("模拟时间已达到上限");
         CalendarSnapshot calendar = _calendar.Snapshot;
+        _weather.AdvanceTo(calendar.ElapsedSeconds);
         if (calendar.Season != previousCalendar.Season)
         {
             CropClearResult cleared = _farming.ClearDisallowedCrops(calendar.Season);
@@ -1208,7 +1251,7 @@ public sealed class FarmGame : IDisposable
     private void ApplyRain()
     {
         foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
-            if (space.Building == BuildingKind.Farm)
+            if (space.Building == BuildingKind.Farm && _weather.GetFarmWeather(space) == WeatherKind.Rain)
                 _farming.SupplyWater(space.AnchorIndex);
     }
 

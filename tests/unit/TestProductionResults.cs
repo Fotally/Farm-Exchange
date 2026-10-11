@@ -14,7 +14,7 @@ public partial class TestProductionResults : Node
 
     private static FarmGame Empty(uint second = 0)
     {
-        var game = new FarmGame(12345, second);
+        var game = new FarmGame(12345, second, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         return game;
     }
@@ -58,7 +58,7 @@ public partial class TestProductionResults : Node
         var game = Empty();
         game.TryPlace(new Vector2I(189, 189), BuildingKind.Farm, CropKind.Radish);
         game.AdvanceTick();
-        game.AdvanceTick(isRaining: true);
+        WeatherTestInput.AdvanceTick(game, true);
         if (game.GetPresentationResults().Any(r => r.Kind == ProductionResultKind.Water))
             return Fail("降雨代替供水后仍伪造工人浇水");
         var distant = Empty();
@@ -79,8 +79,8 @@ public partial class TestProductionResults : Node
             return Fail("实际生长进度退回向上取整秒数");
         game.AdvanceTicks(205);
         var harvest = game.GetPresentationResults().Single(r => r.Kind == ProductionResultKind.Harvest);
-        if (harvest.Quantity != 6 || harvest.AnchorCell != farm || harvest.ElapsedSeconds != 208 ||
-            game.GetRawStock(CropKind.Radish) != 6)
+        if (harvest.Quantity < 36 || harvest.Quantity > 54 || harvest.AnchorCell != farm || harvest.ElapsedSeconds != 208 ||
+            game.GetRawStock(CropKind.Radish) != harvest.Quantity)
             return Fail("成熟入库没有产生逐实例实际产量");
         game.AdvanceTicks(4);
         if (game.GetPresentationResults().Count != 0 || game.IsPresentationResultCurrent(harvest))
@@ -119,7 +119,7 @@ public partial class TestProductionResults : Node
         rescued.TryPlace(farm, BuildingKind.Farm, CropKind.Radish);
         rescued.AdvanceTicks(200);
         if (!rescued.GetPresentationResults().Any(r => r.Kind == ProductionResultKind.Harvest &&
-            r.Quantity == 6 && rescued.IsPresentationResultCurrent(r)))
+            r.Quantity >= 36 && r.Quantity <= 54 && r.Quantity == rescued.GetRawStock(CropKind.Radish) && rescued.IsPresentationResultCurrent(r)))
             return Fail("换季促熟没有经过真实收成结果入口");
         return true;
     }

@@ -197,7 +197,7 @@ public partial class TestTradingService : Node
 
     private static bool CheckGameplayPhases()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (Vector2I cell in new[] { new Vector2I(189, 189), new(192, 189), new(195, 189), new(189, 192), new(192, 192) })
             game.RemoveBuilding(cell);
         CommodityId raw = new(CropKind.Radish, CommodityKind.Raw);
