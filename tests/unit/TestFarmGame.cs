@@ -6,6 +6,7 @@ using FarmExchange.Land;
 using FarmExchange.Market;
 using FarmExchange.Time;
 using FarmExchange.Workers;
+using FarmExchange.Weather;
 
 public partial class TestFarmGame : Node
 {
@@ -24,7 +25,48 @@ public partial class TestFarmGame : Node
         CheckInvalidCrops() && CheckStateOwnership() &&
         CheckPlacementRules() && CheckRawReservePhases() && CheckRawReserveConstruction() &&
         CheckRoadPlacement() && CheckRoadDoesNotClaimInventory() && CheckRoadIndependentProduction() &&
-        CheckMultiCellFacilities() && CheckBuildingOrientations() && CheckOrientationFailures();
+        CheckMultiCellFacilities() && CheckBuildingOrientations() && CheckOrientationFailures() &&
+        CheckStableSnapshotForwarding();
+
+    private static bool CheckStableSnapshotForwarding()
+    {
+        using var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+        var initialSpaces = game.GetBuildingSpaces();
+        BuildingSpaceSnapshot[] savedSpaces = initialSpaces.ToArray();
+        var initialWeather = game.ActiveWeatherRegions;
+        Vector2I farm = new(189, 189);
+        Rect2I rain = new(189, 189, 1, 1);
+        if (!ReferenceEquals(initialSpaces, game.GetBuildingSpaces()) ||
+            game.TryPlace(farm, BuildingKind.Farm, CropKind.Wheat).Success ||
+            game.RemoveBuilding(Vector2I.Zero) == null ||
+            !ReferenceEquals(initialSpaces, game.GetBuildingSpaces()) ||
+            !game.TrySetWeatherRegion(rain, WeatherKind.Rain, out _) ||
+            ReferenceEquals(initialWeather, game.ActiveWeatherRegions) || initialWeather.Count != 0)
+            return Fail("占地／天气转发未保留稳定引用，或失败建拆改变了占地快照");
+        var rainyWeather = game.ActiveWeatherRegions;
+        game.AdvanceTick();
+        if (!game.GetPlot(farm).HasWater ||
+            !ReferenceEquals(initialSpaces, game.GetBuildingSpaces()) ||
+            !ReferenceEquals(rainyWeather, game.ActiveWeatherRegions) ||
+            game.TrySetWeatherRegion(rain, WeatherKind.Cloudy, out _) ||
+            game.TryClearWeatherRegion(new(189, 189, 2, 2), out _) ||
+            !ReferenceEquals(rainyWeather, game.ActiveWeatherRegions) ||
+            !game.TryClearWeatherRegion(rain, out _) ||
+            ReferenceEquals(rainyWeather, game.ActiveWeatherRegions) || rainyWeather.Count != 1 ||
+            rainyWeather[0].Kind != WeatherKind.Rain)
+            return Fail("动态生产错误失效占地快照，或天气失败／清除改变旧快照");
+        if (game.RemoveBuilding(farm + Vector2I.One) != null ||
+            ReferenceEquals(initialSpaces, game.GetBuildingSpaces()) ||
+            !initialSpaces.SequenceEqual(savedSpaces) ||
+            !game.TryPlace(farm, BuildingKind.Processor, CropKind.Wheat).Success)
+            return Fail("成功建拆没有发布新空间快照或改写了已发布快照");
+        var rebuilt = game.GetBuildingSpaces();
+        if (rebuilt.Count != initialSpaces.Count || ReferenceEquals(rebuilt, initialSpaces) ||
+            initialSpaces.Single(space => space.AnchorCell == farm).Building != BuildingKind.Farm ||
+            rebuilt.Single(space => space.AnchorCell == farm).Building != BuildingKind.Processor)
+            return Fail("同数量同锚点重建未以新引用发布真实空间变化");
+        return true;
+    }
 
     private static bool CheckBuildingOrientations()
     {

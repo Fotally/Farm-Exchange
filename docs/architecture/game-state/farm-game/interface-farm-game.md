@@ -4,7 +4,7 @@
 
 对应类型：FarmExchange.Gameplay.FarmGame，代码位于 scripts/gameplay/FarmGame.cs。调用方为主场景和地图；测试也通过该公开接口验证行为。当前只有一个实现，未声明 C# interface 类型。
 
-`FarmGame(seed?, logging?, purpose?, weatherMode=Natural)` 默认不采集日志；显式传入 `RuntimeLog` 时通过内部自动绑定在真实开局完成后建立局身份、初始化基线与生产观察。`purpose` 默认为 `GamePurpose.Main`，独立开发流程指定 `ScenarioIndependent`；非法用途在初始化前抛参数异常。只读 `Log` 返回已绑定上下文或 null，不允许重新安装。公开 `RuntimeLog.BindGame` 仍只用于手动领域观察，不自动采集已有局的生产。
+`FarmGame(seed?, logging?, purpose?, weatherMode=Natural, weatherRules=null)` 默认不采集日志；显式传入 `RuntimeLog` 时通过内部自动绑定在真实开局完成后建立局身份、初始化基线与生产观察。`purpose` 默认为 `GamePurpose.Main`，独立开发流程指定 `ScenarioIndependent`；非法用途在初始化前抛参数异常。天气配置在此建局组装点选择：省略时采用正式 `WeatherRules.Default`，开发／测试可传入 `WeatherRules.Parse` 返回的已验证不可变配置；天气执行器只接收该配置，局创建后不替换规则。只读 `Log` 返回已绑定上下文或 null，不允许重新安装。公开 `RuntimeLog.BindGame` 仍只用于手动领域观察，不自动采集已有局的生产。
 
 主动交易、订单、建拆、原料底线、六个耕作命令和暂停设置关联原指令、真实结果和一次结束，相关命令均接受可选 `origin=Player`。经营语义来源 `FarmExchange.Gameplay.CommandOrigin` 只有 Player/Scenario，其他值在记录与业务提交前抛出 `ArgumentOutOfRangeException(nameof(origin))`，资源零修改且不依赖采集开关。开发流程真实命令显式传 Scenario；自动订单成交、实际等待、行情与生产由所属领域观察，不伪造玩家命令。经营层保留原业务执行权和检查顺序，不持有日志字段或前后投影，日志不执行业务回调。输出失败不改业务结果、不重试命令，业务异常原样传播。`Dispose()` 幂等结束本局关联，先封存订单等待与生产尾段且不改变资源；开发宿主先终结流程和报告，再释放独立局，最后由 Main 关闭主局和会话，具体约定见[日志 Interface](../../logging/interface-logging.md)。
 
@@ -75,7 +75,9 @@
 
 ## 地区天气 Interface
 
-局创建时固定 `WeatherMode.Natural` 或 `Explicit`，默认自然；显式仅供开发／测试，不执行自然预排。FarmGame用同一局种子创建独立天气与产量随机源，开局设施和市场仍使用原抽取顺序。`ActiveWeatherRegions` 是当前活动矩形的只读快照，`GetWeather(cell)` 查询单格，农田详情的 `CurrentWeather` 按真实九格雨＞云＞晴判定，不提供未来事件、随机倍率或收获预测。
+局创建时固定 `WeatherMode.Natural` 或 `Explicit`，默认自然；显式仅供开发／测试，不执行自然预排。FarmGame用同一局种子与组装时选定的天气配置创建独立天气执行器，产量也有独立随机源，开局设施和市场仍使用原抽取顺序。配置值可被多个局共享，运行排程、活动状态、缓存与生产完全隔离。`ActiveWeatherRegions` 原样转发天气模块的不可变快照：状态未变复用同一对象引用，实际变化发布新快照，不改写已返回对象；失败设置／清除不使其失效。`GetWeather(cell)` 查询单格，农田详情的 `CurrentWeather` 按真实九格雨＞云＞晴判定，不提供未来事件、随机倍率或收获预测。
+
+`GetBuildingSpaces()` 同样原样转发土地模块的稳定不可变快照，占地未变时复用同一引用；成功建拆后发布新快照，失败命令保留引用，旧对象不被修改。水分、作物、加工、天气或日历推进不改变占地，因此不使此快照失效；地图使用该约定区分空间同步与逐次动态刷新。生产者约定见[土地 Interface](../../land/land-occupancy/interface-land-occupancy.md)，转发回归在 `TestFarmGame.CheckStableSnapshotForwarding`。
 
 `TrySetWeatherRegion(cells,kind,out error)` 和 `TryClearWeatherRegion(cells,out error)` 委托天气 Module 完整验证矩形、越界、互斥与模式，失败零修改；自然模式拒绝显式设置。成功只改变天气，供水仍等下一经营秒。设置多云或降雨，清除既有完整矩形恢复默认晴。当前最多3片的规则由天气 Module 维护。设置界面不向玩家提供。
 

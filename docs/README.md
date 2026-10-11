@@ -20,7 +20,7 @@
 ## 代码架构
 
 - [当前系统组织与状态归属](architecture/implementation-system-organization.md)：已落地模块关系和修改入口。
-- [天气接口](architecture/weather/interface-weather-system.md)及[预排与循环实现](architecture/weather/implementation-weather-schedule.md)：具名配置、自然／显式模式、当前状态与事件距离。
+- [天气接口](architecture/weather/interface-weather-system.md)及[预排与循环实现](architecture/weather/implementation-weather-schedule.md)：具名不可变配置、每局组装、自然／显式模式、当前状态、事件距离与快照引用契约。
 - [FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)、[推进顺序](architecture/game-state/farm-game/implementation-tick-order.md)及[等价批量实现](architecture/game-state/farm-game/implementation-batched-simulation.md)：单tick和批量共用相位，平静区间直接累计，真实事件提供稳定检查点。
 - [CropCatalog 接口](architecture/farming/crop-catalog/interface-crop-catalog.md)、[Inventory 接口](architecture/inventory/inventory/interface-inventory.md)与[Wallet 接口](architecture/economy/wallet/interface-wallet.md)：作物定义、分类库存和余额的唯一拥有者。
 - [LandOccupancy 接口](architecture/land/land-occupancy/interface-land-occupancy.md)、[PlacementRules 接口](architecture/land/placement-rules/interface-placement-rules.md)、[FarmingSystem 接口](architecture/farming/farming-system/interface-farming-system.md)、[PlantingRules 接口](architecture/farming/planting-rules/interface-planting-rules.md)、[ProcessingSystem 接口](architecture/processing/processing-system/interface-processing-system.md)和[WorkerScheduler 接口](architecture/workers/worker-scheduler/interface-worker-scheduler.md)：地块占用、放置与播种检查、生产状态和三人工人调度。

@@ -130,10 +130,10 @@ internal sealed class FarmingSystem
      * <summary>推进实际生长并累计本秒整田天气，成熟时返回已结算的作物与数量。</summary>
      * <param name="index">农田锚点索引。</param>
      * <param name="harvest">本轮真实收获；失败时为默认值。</param>
-     * <param name="weather">本秒开始时整田九格判定的天气。</param>
+     * <param name="weather">本秒开始时权威天气查询得到的整田九格判定，晴天也须显式传入。</param>
      * <returns>完成本轮并清水返回 true；未生长或尚未成熟返回 false。</returns>
      */
-    internal bool AdvanceGrowth(int index, out CropHarvestResult harvest, WeatherKind weather = WeatherKind.Sunny)
+    internal bool AdvanceGrowth(int index, out CropHarvestResult harvest, WeatherKind weather)
     {
         harvest = default;
         FarmState? farm = _farms[index];
@@ -162,9 +162,9 @@ internal sealed class FarmingSystem
      * <summary>一次累计成熟之前的无事件生长区间。</summary>
      * <param name="index">现有农田锚点。</param>
      * <param name="seconds">严格小于该轮剩余经营秒数的区间。</param>
-     * <param name="weather">整个平静区间不变化的整田天气。</param>
+     * <param name="weather">权威天气查询得到的整田天气，调用方保证整个平静区间不变化。</param>
      */
-    internal void AdvanceQuietSeconds(int index, uint seconds, WeatherKind weather = WeatherKind.Sunny)
+    internal void AdvanceQuietSeconds(int index, uint seconds, WeatherKind weather)
     {
         FarmState farm = _farms[index]!;
         if (farm.Stage == CropStage.Growing)

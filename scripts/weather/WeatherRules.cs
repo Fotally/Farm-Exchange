@@ -7,7 +7,7 @@ using FarmExchange.Time;
 namespace FarmExchange.Weather;
 
 /**
- * <summary>由正式天气 JSON 提供的具名预排数据，加载失败直接报告异常。</summary>
+ * <summary>经完整验证的不可变天气配置，可由多个独立经营局共享。</summary>
  */
 public sealed class WeatherRules
 {
@@ -15,18 +15,50 @@ public sealed class WeatherRules
     private static readonly Lazy<WeatherRules> Shared = new(() => Parse(FileAccess.GetFileAsString(ResourcePath)));
     public static WeatherRules Default => Shared.Value;
 
-    public int CycleYears { get; init; }
-    public int DaysPerYear { get; init; }
-    public int MinimumIntervalDays { get; init; }
-    public int MaximumIntervalDays { get; init; }
-    public int MinimumDurationDays { get; init; }
-    public int MaximumDurationDays { get; init; }
-    public int MinimumRegionSizeCells { get; init; }
-    public int MaximumRegionSizeCells { get; init; }
-    public int MaximumActiveRegions { get; init; }
-    public int CloudyWeight { get; init; }
-    public int RainWeight { get; init; }
+    public int CycleYears { get; }
+    public int DaysPerYear { get; }
+    public int MinimumIntervalDays { get; }
+    public int MaximumIntervalDays { get; }
+    public int MinimumDurationDays { get; }
+    public int MaximumDurationDays { get; }
+    public int MinimumRegionSizeCells { get; }
+    public int MaximumRegionSizeCells { get; }
+    public int MaximumActiveRegions { get; }
+    public int CloudyWeight { get; }
+    public int RainWeight { get; }
     public uint CycleSeconds => checked((uint)((long)CycleYears * DaysPerYear * GameTimeUnits.PerDay / GameTimeUnits.PerSecond));
+
+    // JSON 描述仅用于加载；只有 Parse 完整验证后才能产生对外配置值。
+    private sealed class JsonConfiguration
+    {
+        public JsonConfiguration() { }
+        public int CycleYears { get; init; }
+        public int DaysPerYear { get; init; }
+        public int MinimumIntervalDays { get; init; }
+        public int MaximumIntervalDays { get; init; }
+        public int MinimumDurationDays { get; init; }
+        public int MaximumDurationDays { get; init; }
+        public int MinimumRegionSizeCells { get; init; }
+        public int MaximumRegionSizeCells { get; init; }
+        public int MaximumActiveRegions { get; init; }
+        public int CloudyWeight { get; init; }
+        public int RainWeight { get; init; }
+    }
+
+    private WeatherRules(JsonConfiguration data)
+    {
+        CycleYears = data.CycleYears;
+        DaysPerYear = data.DaysPerYear;
+        MinimumIntervalDays = data.MinimumIntervalDays;
+        MaximumIntervalDays = data.MaximumIntervalDays;
+        MinimumDurationDays = data.MinimumDurationDays;
+        MaximumDurationDays = data.MaximumDurationDays;
+        MinimumRegionSizeCells = data.MinimumRegionSizeCells;
+        MaximumRegionSizeCells = data.MaximumRegionSizeCells;
+        MaximumActiveRegions = data.MaximumActiveRegions;
+        CloudyWeight = data.CloudyWeight;
+        RainWeight = data.RainWeight;
+    }
 
     /**
      * <summary>解析并完整检查天气配置，不为缺失或非法数值补默认值。</summary>
@@ -35,7 +67,7 @@ public sealed class WeatherRules
      */
     public static WeatherRules Parse(string json)
     {
-        WeatherRules rules = JsonSerializer.Deserialize<WeatherRules>(json,
+        JsonConfiguration rules = JsonSerializer.Deserialize<JsonConfiguration>(json,
             new JsonSerializerOptions { UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow })
             ?? throw new JsonException("天气配置不能为空。");
         long cycleDays = (long)rules.CycleYears * rules.DaysPerYear;
@@ -50,9 +82,10 @@ public sealed class WeatherRules
             rules.CloudyWeight <= 0 || rules.RainWeight <= 0 ||
             (long)rules.CloudyWeight + rules.RainWeight > int.MaxValue ||
             rules.MaximumDurationDays >= cycleDays || rules.MaximumIntervalDays >= cycleDays ||
-            cycleDays > (long)uint.MaxValue * GameTimeUnits.PerSecond / GameTimeUnits.PerDay ||
+            (cycleDays - 1 + rules.MaximumDurationDays) * GameTimeUnits.PerDay >
+                (long)uint.MaxValue * GameTimeUnits.PerSecond ||
             cycleDays * GameTimeUnits.PerDay % GameTimeUnits.PerSecond != 0)
             throw new JsonException("天气配置的周期、区间、区域尺寸、数量或类型权重无效。");
-        return rules;
+        return new WeatherRules(rules);
     }
 }

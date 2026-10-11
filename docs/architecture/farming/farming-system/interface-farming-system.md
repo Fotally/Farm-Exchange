@@ -18,7 +18,7 @@
 | `Get(index)` | 返回独立只读 `FarmSnapshot`，含作物、阶段、向上取整的 `RemainingSeconds`、`HasWater`、精确 `RemainingTimeUnits` 和 `SowingEnabled`。生长进度仍唯一归属本模块。 |
 | `GetExpectedRoundEndTimeUnits(index, now)` | 只读预测本轮结束的累计比例单位：生长中按精确剩余量向上对齐实际经营 tick，再与首个禁生季起点取早；空田或待水返回空。`now` 为本步推进后的累计单位。适季跨季不截短；禁生边界可能促熟或清理，本结果不承诺收成、不修改农田、不猜测供水。计划直接读取本结果，不复制生长或季节结局规则。 |
 | `SupplyWater(index)` | 雨水与工人浇水共用的一次供水操作；空田留水、已播种作物开始生长，生长中重复调用不重置进度。 |
-| `AdvanceGrowth(index, out harvest, weather=Sunny)` | 每经营秒推进生长中的农田；成熟时清除本轮阶段和水分，累计实际消耗的生长单位与整田天气，报告已结算的 `CropHarvestResult(Crop, Quantity)`；调用方按实际数量入库，不从基准量重算。 |
+| `AdvanceGrowth(index, out harvest, weather)` | 每经营秒推进生长中的农田；天气参数必传，包括查询确认的晴天。成熟时清除本轮阶段和水分，累计实际消耗的生长单位与整田天气，报告已结算的 `CropHarvestResult(Crop, Quantity)`；调用方按实际数量入库，不从基准量重算。 |
 | `TryMatureBeforeDisallowedSeason(index, season, out harvest)` | 仅由经营换季相位调用，当前生长中作物在传入季节禁生且精确剩余时间严格小于完整周期的 10% 时，共用正常收获终结并报告实际作物及数量，促熟只统计已经历部分，入库仍由 `FarmGame` 处理。其他阶段、适季跨季及等于或超过阈值返回 `false` 且零修改；同轮不能重复报告收成。 |
 | `GetWorkNeed(index, calendar)` | 返回可空只读 `FarmWorkRequest`：空田、启用播种且当前适季时需 `Sow`，干燥已播种田需 `Water`；无田、生长中、休耕空田或不适季返回空。预计时间不足仅提示风险，仍可播种。只查询、不认领或修改农田；需求不包含工人优先级、游标或路线成本。 |
 | `TryCompleteWork(request, calendar)` | 使用执行时日历重新查询需求，并逐项匹配目标锚点、本实例版本与指定动作；不匹配返回 `false` 且零修改。有效 `Sow` 使农田进入已播种，已有水则直接生长；有效 `Water` 调用同一 `SupplyWater` 后生长。不会把过期浇水转为播种。 |
@@ -32,7 +32,9 @@
 
 模块不解析占用子格或决定设施形状；`FarmGame` 在土地接口解析锚点后调用，`WorkerScheduler` 从 `Indices` 取得真实锚点。少量容量测试数组直接验证生产状态，完整空间几何由土地测试负责。
 
-批量内部接口 `GetNextEventSeconds(index)` 返回正常成熟的剩余完整秒数，未生长返回 `uint.MaxValue`；`AdvanceQuietSeconds(index, seconds, weather=Sunny)` 只累计严格位于成熟之前的区间，一次扣除 `7×seconds` 精确单位并累计同一天气积分，不收获或更改凭据；调用方保证区间内天气不变化。换季仍是经营入口独立事件，促熟与清理沿用原操作。单秒与批量都在正常到期的事件秒调用原 `AdvanceGrowth`，不会对跨轮总时长统一取整。调用顺序见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。
+批量内部接口 `GetNextEventSeconds(index)` 返回正常成熟的剩余完整秒数，未生长返回 `uint.MaxValue`；`AdvanceQuietSeconds(index, seconds, weather)` 只累计严格位于成熟之前的区间，一次扣除 `7×seconds` 精确单位并累计同一天气积分，不收获或更改凭据；调用方必须显式传入权威查询结果并保证区间内天气不变化。换季仍是经营入口独立事件，促熟与清理沿用原操作。单秒与批量都在正常到期的事件秒调用原 `AdvanceGrowth`，不会对跨轮总时长统一取整。调用顺序见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。
+
+晴天是天气模块确认的默认状态，不是农田推进时遗漏参数的替代值。正式调用在当前经营相位查询真实整田天气，再显式传入生长累计；直接农田模块测试可以明确传入 `Sunny` 来表达受控晴天。天气开始／结束由经营推进的事件边界处理，持续雨中的收获清水与下一秒再供水仍按原操作，不增加农田订阅或第二份天气状态，取舍见[天气执行设计](../../weather/implementation-weather-schedule.md#事件边界与查询职责)。
 
 ## 已完成工作凭据的表现校验
 

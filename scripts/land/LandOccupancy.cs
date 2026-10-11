@@ -16,6 +16,10 @@ internal sealed class LandOccupancy
 
     internal LandOccupancy(int cellCount) => _spaces = new BuildingSpaceSnapshot?[cellCount];
 
+    /**
+     * <summary>读取按锚点升序排列的不可变实例空间快照。</summary>
+     * <remarks>占地未变时复用同一引用；成功建拆使下次读取发布新快照，失败操作保留引用，旧快照不被改写。Clear 后空快照可复用。</remarks>
+     */
     internal IReadOnlyList<BuildingSpaceSnapshot> Instances =>
         _snapshot ??= Array.AsReadOnly(_instances.ToArray());
 
@@ -74,6 +78,8 @@ internal sealed class LandOccupancy
 
     internal void Clear()
     {
+        if (_instances.Count == 0)
+            return;
         Array.Clear(_spaces);
         _instances.Clear();
         _snapshot = Array.Empty<BuildingSpaceSnapshot>();

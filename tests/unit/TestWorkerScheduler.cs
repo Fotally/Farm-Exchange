@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using FarmExchange.Weather;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
@@ -124,7 +125,7 @@ public partial class TestWorkerScheduler : Node
         if (farms.TryCompleteWork(water, spring) || farms.Get(0) != growing)
             return Fail("雨水满足后旧浇水请求重复操作或重置进度");
         for (int second = 0; second < 206; second++)
-            farms.AdvanceGrowth(0, out _);
+            farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
         FarmSnapshot harvested = farms.Get(0);
         if (farms.TryCompleteWork(sow, spring) || farms.Get(0) != harvested)
             return Fail("收获新轮被同格旧播种请求启动");
@@ -362,7 +363,7 @@ public partial class TestWorkerScheduler : Node
         for (int second = 0; second < 1000; second++)
         {
             for (int field = 0; field < cells.Length; field++)
-                if (farms.AdvanceGrowth(IndexOf(cells[field]), out _))
+                if (farms.AdvanceGrowth(IndexOf(cells[field]), out _, WeatherKind.Sunny))
                 {
                     waiting[field] = true;
                     readySeconds[field] = calendar.Snapshot.ElapsedSeconds;
@@ -445,7 +446,7 @@ public partial class TestWorkerScheduler : Node
             foreach (Vector2I cell in cells)
                 farms.SupplyWater(IndexOf(cell));
         foreach (Vector2I cell in cells)
-            farms.AdvanceGrowth(IndexOf(cell), out _);
+            farms.AdvanceGrowth(IndexOf(cell), out _, WeatherKind.Sunny);
         workers.AdvanceOneSecond(farms, calendar.Snapshot);
         calendar.TryAdvanceSeconds(1);
     }

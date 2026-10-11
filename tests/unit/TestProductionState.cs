@@ -1,5 +1,6 @@
 using System;
 using Godot;
+using FarmExchange.Weather;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
@@ -71,7 +72,7 @@ public partial class TestProductionState : Node
         var farms = new FarmingSystem(2);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         CropKind invalid = (CropKind)999;
-        if (farms.TryWork(0, spring) || farms.AdvanceGrowth(0, out _) ||
+        if (farms.TryWork(0, spring) || farms.AdvanceGrowth(0, out _, WeatherKind.Sunny) ||
             !Throws<InvalidOperationException>(() => farms.Get(0)) ||
             !Throws<InvalidOperationException>(() => farms.Remove(0)) ||
             !Throws<InvalidOperationException>(() => farms.SetCrop(0, CropKind.Radish)) ||
@@ -89,7 +90,7 @@ public partial class TestProductionState : Node
             return Fail("空农田没有进入已播种阶段");
         farms.SetCrop(0, CropKind.Wheat);
         if (farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.Seeded, 0) ||
-            farms.AdvanceGrowth(0, out _))
+            farms.AdvanceGrowth(0, out _, WeatherKind.Sunny))
             return Fail("选择相同作物清除了播种状态，或播种后提前生长");
         farms.SetCrop(0, CropKind.Radish);
         if (farms.Get(0) != new FarmSnapshot(CropKind.Radish, CropStage.None, 0) ||
@@ -99,13 +100,13 @@ public partial class TestProductionState : Node
             return Fail("改种没有清除旧进度，或生长中仍允许工人工作");
 
         for (int second = 1; second < 206; second++)
-            if (farms.AdvanceGrowth(0, out _) || farms.Get(0).Stage != CropStage.Growing)
+            if (farms.AdvanceGrowth(0, out _, WeatherKind.Sunny) || farms.Get(0).Stage != CropStage.Growing)
                 return Fail("萝卜在目标秒数之前成熟");
-        if (!farms.AdvanceGrowth(0, out CropHarvestResult harvested) || harvested.Crop != CropKind.Radish ||
+        if (!farms.AdvanceGrowth(0, out CropHarvestResult harvested, WeatherKind.Sunny) || harvested.Crop != CropKind.Radish ||
             farms.Get(0) != new FarmSnapshot(CropKind.Radish, CropStage.None, 0))
             return Fail("萝卜到期后没有一次性收获并清除进度");
         farms.Remove(0);
-        if (farms.HasFarm(0) || farms.AdvanceGrowth(0, out _) || farms.TryWork(0, spring))
+        if (farms.HasFarm(0) || farms.AdvanceGrowth(0, out _, WeatherKind.Sunny) || farms.TryWork(0, spring))
             return Fail("拆除后仍能推进或照料农田");
         return true;
     }
@@ -186,7 +187,7 @@ public partial class TestProductionState : Node
             farms.Get(0) != new FarmSnapshot(CropKind.Wheat, CropStage.Growing, 823, true, 5760))
             return Fail("空田留水后播种没有直接开始生长");
 
-        farms.AdvanceGrowth(0, out _);
+        farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
         farms.SupplyWater(0);
         if (farms.Get(0).RemainingSeconds != 822)
             return Fail("生长中重复供水重置了进度");
@@ -196,9 +197,9 @@ public partial class TestProductionState : Node
             !farms.TryWork(0, spring) || farms.Get(0).RemainingSeconds != 206)
             return Fail("改种没有保留水分供下一轮播种使用");
         for (int second = 0; second < 205; second++)
-            if (farms.AdvanceGrowth(0, out _))
+            if (farms.AdvanceGrowth(0, out _, WeatherKind.Sunny))
                 return Fail("获水后萝卜提前成熟");
-        if (!farms.AdvanceGrowth(0, out _) ||
+        if (!farms.AdvanceGrowth(0, out _, WeatherKind.Sunny) ||
             farms.Get(0) != new FarmSnapshot(CropKind.Radish, CropStage.None, 0))
             return Fail("收获没有清除本轮水分");
 
@@ -256,7 +257,7 @@ public partial class TestProductionState : Node
                 if (!farms.TryWork(0, plantingDate) || !farms.TryWork(1, plantingDate) ||
                     !farms.TryWork(1, plantingDate))
                     return Fail("越季测试没有建立待水与生长中的作物");
-                farms.AdvanceGrowth(1, out _);
+                farms.AdvanceGrowth(1, out _, WeatherKind.Sunny);
                 FarmSnapshot seeded = farms.Get(0);
                 FarmSnapshot growing = farms.Get(1);
                 FarmSnapshot empty = farms.Get(2);
@@ -270,7 +271,7 @@ public partial class TestProductionState : Node
                     return Fail($"{crop.CropName}进入{season}时未按阶段清理，或清理了空田留水");
                 if (!allowed)
                 {
-                    if (farms.AdvanceGrowth(0, out _) || farms.AdvanceGrowth(1, out _) ||
+                    if (farms.AdvanceGrowth(0, out _, WeatherKind.Sunny) || farms.AdvanceGrowth(1, out _, WeatherKind.Sunny) ||
                         farms.TryWork(0, new GameCalendar((uint)season * 4320).Snapshot))
                         return Fail("越季失败仍收获，或禁生季节清理后反复播种");
                     farms.SupplyWater(1);
@@ -319,7 +320,7 @@ public partial class TestProductionState : Node
             return Fail("禁播影响了待水本轮或旧工作凭据没有失效");
         farms.SetSowingEnabled(0, false);
         for (int second = 0; second < 206; second++)
-            farms.AdvanceGrowth(0, out _);
+            farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
         if (farms.GetWorkNeed(0, spring) != null || farms.Get(0).HasWater)
             return Fail("禁播田收获后自动复种或遗留水分");
 
@@ -345,7 +346,7 @@ public partial class TestProductionState : Node
             {
                 farms.SupplyWater(index);
                 for (int second = 0; second < 647 + index; second++)
-                    if (farms.AdvanceGrowth(index, out _))
+                    if (farms.AdvanceGrowth(index, out _, WeatherKind.Sunny))
                         return Fail("禁生补救测试在建立阈值状态时已提前成熟");
             }
         }
@@ -363,7 +364,7 @@ public partial class TestProductionState : Node
             farms.TryMatureBeforeDisallowedSeason(5, Season.Summer, out _) ||
             !farms.TryMatureBeforeDisallowedSeason(2, Season.Summer, out CropHarvestResult harvested) ||
             harvested.Crop != CropKind.Potato || farms.Get(2) != new FarmSnapshot(CropKind.Potato, CropStage.None, 0) ||
-            farms.TryMatureBeforeDisallowedSeason(2, Season.Summer, out _) || farms.AdvanceGrowth(2, out _))
+            farms.TryMatureBeforeDisallowedSeason(2, Season.Summer, out _) || farms.AdvanceGrowth(2, out _, WeatherKind.Sunny))
             return Fail("禁生阈值未严格小于十分之一，待水被补救，或收获重复发生");
         farms.ClearDisallowedCrops(Season.Summer);
         for (int index = 0; index < 4; index++)
@@ -377,9 +378,9 @@ public partial class TestProductionState : Node
         farms.SupplyWater(0);
         farms.TryWork(0, spring);
         for (int second = 0; second < 205; second++)
-            farms.AdvanceGrowth(0, out _);
-        if (!farms.AdvanceGrowth(0, out harvested) || harvested.Crop != CropKind.Radish ||
-            farms.TryMatureBeforeDisallowedSeason(0, Season.Summer, out _) || farms.AdvanceGrowth(0, out _))
+            farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
+        if (!farms.AdvanceGrowth(0, out harvested, WeatherKind.Sunny) || harvested.Crop != CropKind.Radish ||
+            farms.TryMatureBeforeDisallowedSeason(0, Season.Summer, out _) || farms.AdvanceGrowth(0, out _, WeatherKind.Sunny))
             return Fail("正常边界收获后补救重复报告收成");
         return true;
     }
@@ -397,7 +398,7 @@ public partial class TestProductionState : Node
         long expected = 14 + 206 * GameTimeUnits.PerSecond;
         if (farms.GetExpectedRoundEndTimeUnits(0, 14) != expected || farms.Get(0) != growing)
             return Fail("自然成熟预测未对齐实际 tick，或只读预测修改了生长状态");
-        farms.AdvanceGrowth(0, out _);
+        farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
         if (farms.GetExpectedRoundEndTimeUnits(0, 21) != expected)
             return Fail("正常推进使同一轮结束缓存每日漂移");
 
@@ -411,7 +412,7 @@ public partial class TestProductionState : Node
         if (farms.GetExpectedRoundEndTimeUnits(0, 88004) != 252 * GameTimeUnits.PerDay)
             return Fail("甘蔗秋冬未成熟清理结局未纳入结束日期");
         for (int tick = 0; tick < 2000; tick++)
-            farms.AdvanceGrowth(0, out _);
+            farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
         growing = farms.Get(0);
         if (farms.GetExpectedRoundEndTimeUnits(0, 12905 * 7) != 252 * GameTimeUnits.PerDay ||
             farms.Get(0) != growing || !farms.TryMatureBeforeDisallowedSeason(0, Season.Winter, out _))
@@ -421,9 +422,9 @@ public partial class TestProductionState : Node
         farms.SupplyWater(0);
         farms.TryWork(0, spring);
         for (int tick = 0; tick < 205; tick++)
-            farms.AdvanceGrowth(0, out _);
+            farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
         if (farms.GetExpectedRoundEndTimeUnits(0, 4319 * 7) != 4320 * 7 ||
-            !farms.AdvanceGrowth(0, out _) || farms.GetExpectedRoundEndTimeUnits(0, 4320 * 7) != null ||
+            !farms.AdvanceGrowth(0, out _, WeatherKind.Sunny) || farms.GetExpectedRoundEndTimeUnits(0, 4320 * 7) != null ||
             farms.TryMatureBeforeDisallowedSeason(0, Season.Summer, out _))
             return Fail("正常成熟恰在禁生边界时预测错误或重复补救收获");
         return true;

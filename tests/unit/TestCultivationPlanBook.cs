@@ -1,5 +1,6 @@
 using System;
 using Godot;
+using FarmExchange.Weather;
 using FarmExchange.Cultivation;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
@@ -254,7 +255,7 @@ public partial class TestCultivationPlanBook : Node
         if (book.GetFarm(0).PreparedTimeUnits != 334 * 360 || farming.Get(0).SowingEnabled)
             return Fail("冬春同一轮未定位到本年冬季下一次安排");
         for (int tick = 0; tick < 206; tick++)
-            farming.AdvanceGrowth(0, out _);
+            farming.AdvanceGrowth(0, out _, WeatherKind.Sunny);
         book.Harvested(0, 1449);
         if (farming.Get(0).SowingEnabled || !book.GetFarm(0).IsResting)
             return Fail("同一作物条收获后重复播种");

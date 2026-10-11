@@ -14,7 +14,7 @@ public partial class TestWeatherSystem : Node
     public override void _Ready() => GetTree().Quit(
         OS.GetCmdlineUserArgs().Contains("--weather-query-probe") ? RunQueryProbe() : RunChecks() ? 0 : 1);
 
-    public static bool RunChecks() => CheckConfiguration() && CheckExplicitRegions() &&
+    public static bool RunChecks() => CheckConfiguration() && CheckConfiguredExecution() && CheckExplicitRegions() &&
         CheckFarmPriority() && CheckFarmQueryTransitions() && CheckNaturalCycles();
 
     // 此探针只由专用场景显式运行，用相同满地图几何隔离真实天气查询成本。
@@ -25,11 +25,11 @@ public partial class TestWeatherSystem : Node
             for (int column = 0; column < FarmGame.MapSize; column += 6)
                 land.Place(row * FarmGame.MapSize + column, BuildingKind.Farm);
         IReadOnlyList<BuildingSpaceSnapshot> farms = land.Instances;
-        var queryWarmup = new WeatherSystem(34, WeatherMode.Explicit);
+        var queryWarmup = new WeatherSystem(34, WeatherRules.Default, WeatherMode.Explicit);
         for (int query = 0; query < 1000; query++)
             queryWarmup.GetFarmWeather(farms[0]);
-        var sunny = new WeatherSystem(34, WeatherMode.Explicit);
-        var regions = new WeatherSystem(34, WeatherMode.Explicit);
+        var sunny = new WeatherSystem(34, WeatherRules.Default, WeatherMode.Explicit);
+        var regions = new WeatherSystem(34, WeatherRules.Default, WeatherMode.Explicit);
         if (!regions.TrySetRegion(new Rect2I(96, 96, 96, 192), WeatherKind.Rain, out _) ||
             !regions.TrySetRegion(new Rect2I(192, 96, 96, 192), WeatherKind.Cloudy, out _) ||
             !regions.TrySetRegion(new Rect2I(96, 288, 192, 96), WeatherKind.Rain, out _))
@@ -138,15 +138,100 @@ public partial class TestWeatherSystem : Node
             json.Replace("\"CycleYears\": 10", "\"CycleYears\": 2147483647"),
             json.Replace("\"RainWeight\": 3", "\"RainWeight\": 2147483647"),
             json.Replace("\"CloudyWeight\": 4", "\"TypoWeight\": 4"),
+            json.Replace("\"CycleYears\": 10", "\"CycleYears\": 248551")
+                .Replace("\"MaximumDurationDays\": 4", "\"MaximumDurationDays\": 1000"),
         })
             if (!Throws<JsonException>(() => WeatherRules.Parse(invalid)))
                 return Fail("非法或缺失天气数据未明确拒绝");
         return true;
     }
 
+    private static WeatherRules Configuration(int years, int interval, int duration, int size,
+        int cloudyWeight, int rainWeight) => WeatherRules.Parse(JsonSerializer.Serialize(new
+        {
+            CycleYears = years,
+            DaysPerYear = 336,
+            MinimumIntervalDays = interval,
+            MaximumIntervalDays = interval,
+            MinimumDurationDays = duration,
+            MaximumDurationDays = duration,
+            MinimumRegionSizeCells = size,
+            MaximumRegionSizeCells = size,
+            MaximumActiveRegions = 1,
+            CloudyWeight = cloudyWeight,
+            RainWeight = rainWeight,
+        }));
+
+    private static bool CheckConfiguredExecution()
+    {
+        WeatherRules shortRules = Configuration(1, 1, 2, 12, 10000, 1);
+        WeatherRules longRules = Configuration(2, 5, 7, 30, 1, 10000);
+        var shortWeather = new WeatherSystem(777, shortRules);
+        var longWeather = new WeatherSystem(777, longRules);
+        if (shortWeather.CycleSeconds != 17280 || longWeather.CycleSeconds != 34560 ||
+            shortWeather.GetNextEventSeconds(0) != 52 || longWeather.GetNextEventSeconds(0) != 258 ||
+            !Throws<ArgumentNullException>(() => new WeatherSystem(1, null!)))
+            return Fail("执行器没有采用传入配置的周期与候选间隔，或接受空配置");
+        foreach (var sample in new[]
+        {
+            (Weather: shortWeather, First: 52u, End: 155u, Size: 12),
+            (Weather: longWeather, First: 258u, End: 618u, Size: 30),
+        })
+        {
+            sample.Weather.AdvanceTo(sample.First);
+            IReadOnlyList<WeatherRegionSnapshot> first = sample.Weather.ActiveRegions;
+            if (first.Count != 1 || first[0].Cells.Size != new Vector2I(sample.Size, sample.Size))
+                return Fail("两份合法配置的区域尺寸未在真实排程生效");
+            sample.Weather.AdvanceTo(sample.End - 1);
+            if (!ReferenceEquals(first, sample.Weather.ActiveRegions))
+                return Fail("配置持续期之前区域提前结束或快照引用改变");
+            sample.Weather.AdvanceTo(sample.End);
+            if (sample.Weather.ActiveRegions.Contains(first[0]) || first.Count != 1)
+                return Fail("配置持续期未生效或结束改写了旧快照");
+        }
+
+        int cloudBiasedClouds = 0, rainBiasedClouds = 0;
+        foreach (int seed in Enumerable.Range(0, 8))
+        {
+            WeatherRules rainRules = Configuration(1, 1, 2, 12, 1, 10000);
+            var cloudBiased = new WeatherSystem(seed, shortRules);
+            var sameRules = new WeatherSystem(seed, shortRules);
+            var rainBiased = new WeatherSystem(seed, rainRules);
+            uint time = 0;
+            while (time < cloudBiased.CycleSeconds)
+            {
+                time += cloudBiased.GetNextEventSeconds(time);
+                IReadOnlyList<WeatherRegionSnapshot> rainBefore = rainBiased.ActiveRegions;
+                cloudBiased.AdvanceTo(time);
+                if (!ReferenceEquals(rainBefore, rainBiased.ActiveRegions))
+                    return Fail("共享配置的另一天气实例被推进污染");
+                sameRules.AdvanceTo(time);
+                rainBiased.AdvanceTo(time);
+                if (!cloudBiased.ActiveRegions.SequenceEqual(sameRules.ActiveRegions) ||
+                    !cloudBiased.ActiveRegions.Select(region => region.Cells)
+                        .SequenceEqual(rainBiased.ActiveRegions.Select(region => region.Cells)))
+                    return Fail("相同配置种子未复现，或仅变类型权重改变了区域几何排程");
+                cloudBiasedClouds += cloudBiased.ActiveRegions.Count(region => region.Kind == WeatherKind.Cloudy);
+                rainBiasedClouds += rainBiased.ActiveRegions.Count(region => region.Kind == WeatherKind.Cloudy);
+            }
+        }
+        if (cloudBiasedClouds <= rainBiasedClouds)
+            return Fail("固定种子实际执行的类型分布未采纳不同权重");
+
+        var explicitWeather = new WeatherSystem(777, shortRules, WeatherMode.Explicit);
+        Rect2I region = new(0, 0, 1, 1);
+        IReadOnlyList<WeatherRegionSnapshot> otherBefore = shortWeather.ActiveRegions;
+        if (!explicitWeather.TrySetRegion(region, WeatherKind.Rain, out _) ||
+            explicitWeather.TrySetRegion(new(2, 0, 1, 1), WeatherKind.Cloudy, out _) ||
+            !ReferenceEquals(otherBefore, shortWeather.ActiveRegions) ||
+            !explicitWeather.TryClearRegion(region, out _))
+            return Fail("显式执行未采纳同一配置的区域上限或修改了其他实例");
+        return true;
+    }
+
     private static bool CheckExplicitRegions()
     {
-        var weather = new WeatherSystem(23, WeatherMode.Explicit);
+        var weather = new WeatherSystem(23, WeatherRules.Default, WeatherMode.Explicit);
         IReadOnlyList<WeatherRegionSnapshot> initial = weather.ActiveRegions;
         Rect2I first = new(0, 0, 10, 10);
         if (initial.Count != 0 || weather.GetWeather(Vector2I.Zero) != WeatherKind.Sunny ||
@@ -180,9 +265,9 @@ public partial class TestWeatherSystem : Node
             weather.TryClearRegion(first, out _) || weather.TryClearRegion(new Rect2I(-1, 0, 1, 1), out _) ||
             !Throws<ArgumentOutOfRangeException>(() => weather.AdvanceTo(399999)) ||
             !Throws<ArgumentOutOfRangeException>(() => weather.GetWeather(new Vector2I(384, 0))) ||
-            !Throws<ArgumentOutOfRangeException>(() => new WeatherSystem(1, (WeatherMode)99)))
+            !Throws<ArgumentOutOfRangeException>(() => new WeatherSystem(1, WeatherRules.Default, (WeatherMode)99)))
             return Fail("显式天气被自然推进覆盖，或非法输入未拒绝");
-        var wholeMap = new WeatherSystem(1, WeatherMode.Explicit);
+        var wholeMap = new WeatherSystem(1, WeatherRules.Default, WeatherMode.Explicit);
         if (!wholeMap.TrySetRegion(new Rect2I(0, 0, 384, 384), WeatherKind.Rain, out _) ||
             wholeMap.GetWeather(new Vector2I(383, 383)) != WeatherKind.Rain ||
             !Throws<NotSupportedException>(() => ((IList<WeatherRegionSnapshot>)one).Clear()))
@@ -196,7 +281,7 @@ public partial class TestWeatherSystem : Node
         int index = 10 * FarmGame.MapSize + 10;
         land.Place(index, BuildingKind.Farm);
         BuildingSpaceSnapshot farm = land.GetSpace(index)!;
-        var weather = new WeatherSystem(1, WeatherMode.Explicit);
+        var weather = new WeatherSystem(1, WeatherRules.Default, WeatherMode.Explicit);
         if (weather.GetFarmWeather(farm) != WeatherKind.Sunny ||
             !weather.TrySetRegion(new Rect2I(10, 10, 1, 1), WeatherKind.Cloudy, out _) ||
             weather.GetFarmWeather(farm) != WeatherKind.Cloudy ||
@@ -214,7 +299,7 @@ public partial class TestWeatherSystem : Node
     private static bool CheckFarmQueryTransitions()
     {
         var land = new LandOccupancy(FarmGame.MapSize * FarmGame.MapSize);
-        var weather = new WeatherSystem(34, WeatherMode.Explicit);
+        var weather = new WeatherSystem(34, WeatherRules.Default, WeatherMode.Explicit);
         Rect2I rain = new(96, 96, 96, 192);
         Rect2I cloud = new(192, 96, 96, 192);
         Rect2I tailRain = new(96, 288, 192, 96);
@@ -259,7 +344,7 @@ public partial class TestWeatherSystem : Node
         foreach (uint initial in new[] { 0u, 172790u })
         {
             uint elapsed = initial;
-            var natural = new WeatherSystem(23, WeatherMode.Natural, elapsed);
+            var natural = new WeatherSystem(23, WeatherRules.Default, WeatherMode.Natural, elapsed);
             for (int step = 0; step < 12; step++)
             {
                 foreach (BuildingSpaceSnapshot farm in naturalLand.Instances)
@@ -301,8 +386,8 @@ public partial class TestWeatherSystem : Node
     {
         foreach (int seed in new[] { 1, 23, -500 })
         {
-            var weather = new WeatherSystem(seed);
-            var equivalent = new WeatherSystem(seed);
+            var weather = new WeatherSystem(seed, WeatherRules.Default);
+            var equivalent = new WeatherSystem(seed, WeatherRules.Default);
             if (weather.ActiveRegions.Count != 0 || weather.CycleSeconds != 172800 ||
                 weather.TrySetRegion(new Rect2I(0, 0, 1, 1), WeatherKind.Rain, out _) ||
                 weather.TryClearRegion(new Rect2I(0, 0, 1, 1), out _) ||
@@ -321,11 +406,15 @@ public partial class TestWeatherSystem : Node
                     return Fail("下一自然天气事件距离无效");
                 uint next = Math.Min(limit, time + distance);
                 IReadOnlyList<WeatherRegionSnapshot> before = weather.ActiveRegions;
+                WeatherRegionSnapshot[] saved = before.ToArray();
                 weather.AdvanceTo(next - 1);
-                if (!weather.ActiveRegions.SequenceEqual(before))
+                if (!ReferenceEquals(weather.ActiveRegions, before))
                     return Fail("自然天气在真实事件前变化");
                 weather.AdvanceTo(next);
                 equivalent.AdvanceTo(next);
+                if (!before.SequenceEqual(saved) ||
+                    (!weather.ActiveRegions.SequenceEqual(before) && ReferenceEquals(weather.ActiveRegions, before)))
+                    return Fail("自然事件未发布新快照或改写了已发布旧快照");
                 if (!weather.ActiveRegions.SequenceEqual(equivalent.ActiveRegions) ||
                     !ValidRegions(weather.ActiveRegions))
                     return Fail("相同种子不同批量或循环接缝违反互斥状态");
@@ -346,12 +435,12 @@ public partial class TestWeatherSystem : Node
                 time = next;
             }
             uint sample = weather.CycleSeconds + 170;
-            var later = new WeatherSystem(seed, WeatherMode.Natural, sample);
-            var cyclic = new WeatherSystem(seed, WeatherMode.Natural, sample + weather.CycleSeconds);
+            var later = new WeatherSystem(seed, WeatherRules.Default, WeatherMode.Natural, sample);
+            var cyclic = new WeatherSystem(seed, WeatherRules.Default, WeatherMode.Natural, sample + weather.CycleSeconds);
             if (completed < 100 || !sawCloud || !sawRain ||
                 !later.ActiveRegions.SequenceEqual(cyclic.ActiveRegions))
                 return Fail("自然排程未覆盖两种天气或循环复用结果不同");
-            var maximum = new WeatherSystem(seed, WeatherMode.Natural, uint.MaxValue);
+            var maximum = new WeatherSystem(seed, WeatherRules.Default, WeatherMode.Natural, uint.MaxValue);
             if (!ValidRegions(maximum.ActiveRegions) || maximum.GetNextEventSeconds(uint.MaxValue) == 0)
                 return Fail("宽累计时间天气查询错误");
         }

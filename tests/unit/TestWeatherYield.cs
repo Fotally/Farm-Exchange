@@ -18,6 +18,7 @@ public partial class TestWeatherYield : Node
             CheckPreciseDurationAndPromotion();
             CheckDrawTimingAndRepeatedWater();
             CheckRegionalRainPhases();
+            CheckConfiguredGameCreation();
             CheckNaturalAndExplicitBatchParity();
             GD.Print("天气产量、精确末秒、抽取时点与自然／显式批量等价检查通过");
             return true;
@@ -32,7 +33,7 @@ public partial class TestWeatherYield : Node
         var calendar = new GameCalendar(crop == CropKind.Sugarcane ? 4320u : 0u).Snapshot;
         Require(farms.TryWork(0, calendar), "播种失败");
         for (int i = 0; i < delay; i++)
-            Require(!farms.AdvanceGrowth(0, out _), "干田等待期间开始生长");
+            Require(!farms.AdvanceGrowth(0, out _, WeatherKind.Sunny), "干田等待期间开始生长");
         farms.SupplyWater(0);
         return farms;
     }
@@ -66,8 +67,8 @@ public partial class TestWeatherYield : Node
         for (int seed = 0; seed < 64; seed++)
         {
             FarmingSystem farms = Growing(seed, CropKind.Sunflower);
-            farms.AdvanceQuietSeconds(0, 874);
-            Require(farms.AdvanceGrowth(0, out CropHarvestResult result) && result.Quantity >= 6 && result.Quantity <= 9,
+            farms.AdvanceQuietSeconds(0, 874, WeatherKind.Sunny);
+            Require(farms.AdvanceGrowth(0, out CropHarvestResult result, WeatherKind.Sunny) && result.Quantity >= 6 && result.Quantity <= 9,
                 "每轮随机基础量越出6～9倍范围");
         }
     }
@@ -97,7 +98,7 @@ public partial class TestWeatherYield : Node
         farms.AdvanceQuietSeconds(0, 1, WeatherKind.Rain);
         Require(!farms.TryMatureBeforeDisallowedSeason(0, Season.Summer, out _) &&
             farms.ClearDisallowedCrops(Season.Summer).Count(CropKind.Radish) == 1 &&
-            !farms.AdvanceGrowth(0, out _), "禁生清理产生收成");
+            !farms.AdvanceGrowth(0, out _, WeatherKind.Sunny), "禁生清理产生收成");
     }
 
     private static void CheckDrawTimingAndRepeatedWater()
@@ -189,6 +190,54 @@ public partial class TestWeatherYield : Node
             }
             Require(harvested > 0 && produced > 0, "等价测试未经历真实生产");
         }
+    }
+
+    private static void CheckConfiguredGameCreation()
+    {
+        string json = FileAccess.GetFileAsString(WeatherRules.ResourcePath)
+            .Replace("\"CycleYears\": 10", "\"CycleYears\": 1")
+            .Replace("\"MaximumIntervalDays\": 3", "\"MaximumIntervalDays\": 1")
+            .Replace("\"MaximumDurationDays\": 4", "\"MaximumDurationDays\": 2")
+            .Replace("\"MinimumRegionSizeCells\": 96", "\"MinimumRegionSizeCells\": 384")
+            .Replace("\"MaximumRegionSizeCells\": 192", "\"MaximumRegionSizeCells\": 384")
+            .Replace("\"MaximumActiveRegions\": 3", "\"MaximumActiveRegions\": 1");
+        WeatherRules rules = WeatherRules.Parse(json);
+        using FarmGame one = new(973, weatherRules: rules);
+        using FarmGame batch = new(973, weatherRules: rules);
+        var expectedWeather = new WeatherSystem(973, rules);
+        long harvested = 0;
+        foreach (uint count in new[] { 51u, 1u, 103u, 206u, 1440u, 15520u })
+        {
+            long expectedHarvested = 0, expectedProduced = 0;
+            var batchBefore = batch.ActiveWeatherRegions;
+            for (uint i = 0; i < count; i++)
+            {
+                TickResult tick = one.AdvanceTick();
+                expectedHarvested += tick.Harvested;
+                expectedProduced += tick.Produced;
+            }
+            Require(ReferenceEquals(batchBefore, batch.ActiveWeatherRegions) && batch.Calendar != one.Calendar,
+                "共享天气配置的经营局相互污染");
+            SimulationAdvanceResult result = batch.AdvanceTicks(count);
+            expectedWeather.AdvanceTo(one.Calendar.ElapsedSeconds);
+            Require(one.ActiveWeatherRegions.SequenceEqual(expectedWeather.ActiveRegions) &&
+                one.ActiveWeatherRegions.SequenceEqual(batch.ActiveWeatherRegions) &&
+                result.Harvested == expectedHarvested && result.Produced == expectedProduced &&
+                one.Calendar == batch.Calendar && one.GetWorkers().SequenceEqual(batch.GetWorkers()),
+                "建局传入配置未实际采纳或事件／循环的单批推进不等价");
+            if (one.Calendar.ElapsedSeconds == 52)
+                Require(one.ActiveWeatherRegions.Count == 1 &&
+                    one.ActiveWeatherRegions[0].Cells == new Rect2I(0, 0, 384, 384) &&
+                    one.GetFarmDetails(new Vector2I(189, 189)).CurrentWeather == one.GetWeather(Vector2I.Zero),
+                    "建局配置的间隔、尺寸或农田权威天气未生效");
+            foreach (var space in one.GetBuildingSpaces())
+                Require(one.GetPlot(space.AnchorCell) == batch.GetPlot(space.AnchorCell), "配置局生产状态不等价");
+            foreach (CropKind crop in Enum.GetValues<CropKind>())
+                Require(one.GetRawStock(crop) == batch.GetRawStock(crop) &&
+                    one.GetProductStock(crop) == batch.GetProductStock(crop), "配置局实际库存不等价");
+            harvested += expectedHarvested;
+        }
+        Require(harvested > 0, "配置局推进未经历真实收获");
     }
 
     private static void Require(bool condition, string message)

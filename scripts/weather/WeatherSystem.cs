@@ -31,21 +31,24 @@ public sealed class WeatherSystem
 
     /**
      * <summary>当前活动区域的只读独立快照，不包含未来天气。</summary>
+     * <remarks>活动状态未变时复用同一引用；实际变化发布新快照，已返回对象不被改写，失败设置／清除及无变化推进保留引用。</remarks>
      */
     public IReadOnlyList<WeatherRegionSnapshot> ActiveRegions => _activeRegions;
 
     /**
      * <summary>创建局天气，并在自然模式下一次生成完整循环排程。</summary>
      * <param name="seed">独立天气随机种子，不消费开局或行情随机流。</param>
+     * <param name="rules">局组装点选定的已验证不可变配置；可共享值，不共享运行状态。</param>
      * <param name="mode">本局固定的自然或显式输入模式。</param>
      * <param name="elapsedSeconds">局开始的累计经营秒。</param>
      */
-    public WeatherSystem(int seed, WeatherMode mode = WeatherMode.Natural, uint elapsedSeconds = 0)
+    public WeatherSystem(int seed, WeatherRules rules, WeatherMode mode = WeatherMode.Natural, uint elapsedSeconds = 0)
     {
+        ArgumentNullException.ThrowIfNull(rules);
         if (!Enum.IsDefined(mode))
             throw new ArgumentOutOfRangeException(nameof(mode));
         Mode = mode;
-        _rules = WeatherRules.Default;
+        _rules = rules;
         _schedule = mode == WeatherMode.Natural ? BuildSchedule(new Random(seed)) : Array.Empty<ScheduledRegion>();
         _firstBoundaries = _schedule.SelectMany(region => new[] { region.StartSeconds, region.EndSeconds })
             .Where(seconds => seconds <= CycleSeconds).Distinct().Order().ToArray();

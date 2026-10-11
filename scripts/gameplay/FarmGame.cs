@@ -92,6 +92,7 @@ public sealed class FarmGame : IDisposable
 
     /**
      * <summary>读取当前真实活动天气区域，不提供未来预排表。</summary>
+     * <remarks>原样转发天气模块的不可变快照；活动状态未变化复用引用，实际变化发布新快照且不改写旧对象。</remarks>
      */
     public IReadOnlyList<WeatherRegionSnapshot> ActiveWeatherRegions => _weather.ActiveRegions;
 
@@ -135,18 +136,19 @@ public sealed class FarmGame : IDisposable
      * <param name="logging">组装点持有的采集会话；省略时不采集或写文件。</param>
      * <param name="purpose">本局的真实用途，默认玩家主局。</param>
      * <param name="weatherMode">默认自然预排；开发／测试可选显式区域模式，创建后不切换。</param>
+     * <param name="weatherRules">本局已验证不可变天气配置；省略时在此组装点选择正式 Default，创建后不替换。</param>
      * <remarks>日志不拥有经营资源；调用方先释放局再关闭会话。</remarks>
      */
-    public FarmGame(int? marketSeed = null, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural) : this(marketSeed, 0, logging, purpose, weatherMode) { }
+    public FarmGame(int? marketSeed = null, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null) : this(marketSeed, 0, logging, purpose, weatherMode, weatherRules) { }
 
-    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural)
+    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null)
     {
         if (purpose is not (GamePurpose.Main or GamePurpose.ScenarioIndependent))
             throw new ArgumentOutOfRangeException(nameof(purpose));
         _calendar = new GameCalendar(elapsedSeconds);
         int seed = marketSeed ?? Random.Shared.Next();
         _farming = new FarmingSystem(CellCount, seed);
-        _weather = new WeatherSystem(seed, weatherMode, elapsedSeconds);
+        _weather = new WeatherSystem(seed, weatherRules ?? WeatherRules.Default, weatherMode, elapsedSeconds);
         _cultivation = new CultivationPlanBook(_farming);
         _market = new MarketQuotes(seed, _calendar.Snapshot.ElapsedDays);
         _trading = new TradingService(_inventory, _wallet, _market);
@@ -194,6 +196,11 @@ public sealed class FarmGame : IDisposable
         _ => throw new ArgumentOutOfRangeException(nameof(building)),
     };
     public IReadOnlyList<WorkerSnapshot> GetWorkers() => _workerScheduler.GetSnapshots();
+    /**
+     * <summary>读取按锚点升序排列的当前建筑空间快照。</summary>
+     * <remarks>原样转发土地模块的不可变快照；占地未变复用引用，成功建拆后发布新快照，旧对象不变；生产和天气变化不使占地快照失效。</remarks>
+     * <returns>只读空间实例集合。</returns>
+     */
     public IReadOnlyList<BuildingSpaceSnapshot> GetBuildingSpaces() => _occupancy.Instances;
     public BuildingSpaceSnapshot? GetBuildingSpace(Vector2I cell) =>
         MapCoordinates.ContainsCell(cell) ? _occupancy.GetSpace(IndexOf(cell)) : null;
