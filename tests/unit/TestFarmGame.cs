@@ -3,6 +3,7 @@ using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
 using FarmExchange.Land;
 using FarmExchange.Market;
+using FarmExchange.Time;
 using FarmExchange.Workers;
 
 public partial class TestFarmGame : Node
@@ -16,7 +17,7 @@ public partial class TestFarmGame : Node
     }
 
     public static bool RunChecks() =>
-        CheckInitialCenter() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
+        CheckInitialCenter() && CheckInitialOtherSeasons() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
         CheckWorkerParticipation() && CheckContinuousProduction() && CheckRainSupply() && CheckSeasonalSowing() &&
         CheckSeasonFailure() && CheckSeasonBoundaries() && CheckRawSales() &&
         CheckInvalidCrops() && CheckStateOwnership() &&
@@ -98,12 +99,14 @@ public partial class TestFarmGame : Node
         bool sawSame = false;
         bool sawSplit = false;
         bool sawRadish = false;
+        // 种子 0、2、4 在旧的七作物抽样中会选中春季禁生的甘蔗。
         for (int seed = 0; seed < 64; seed++)
         {
             var game = new FarmGame(seed);
             var repeat = new FarmGame(seed);
-            if (game.MoneyCents != 5000)
-                return Fail("开局金币错误");
+            if (game.MoneyCents != 5000 || game.Calendar.Season != Season.Spring ||
+                game.GetBuildingSpaces().Count != 5 || !game.HasConsistentState())
+                return Fail("开局季节、金币或五座设施状态错误");
             var workers = game.GetWorkers();
             if (workers.Count != 3)
                 return Fail("开局没有三名真实经营工人");
@@ -119,6 +122,8 @@ public partial class TestFarmGame : Node
                 if (plot.Building != BuildingKind.Farm ||
                     plot.Crop != CropStage.None || plot.CropKind != repeat.GetPlot(cell).CropKind)
                     return Fail("中心农田提前播种或固定种子不可复现");
+                if ((FarmGame.GetCrop(plot.CropKind).GrowingSeasons & GrowingSeasons.Spring) == 0)
+                    return Fail("春季开局随机到禁生作物");
             }
             if (game.GetPlot(farms[1]).CropKind != primary)
                 return Fail("开局农田没有形成 3+0 或 2+1");
@@ -134,9 +139,48 @@ public partial class TestFarmGame : Node
                 sawRadish = true;
             sawSame |= primary == secondary;
             sawSplit |= primary != secondary;
+
+            if (!game.AdvanceTick().WorkerActed)
+                return Fail("开局三田首秒没有播种");
+            foreach (Vector2I cell in farms)
+                if (game.GetPlot(cell).Crop != CropStage.Seeded)
+                    return Fail("开局赠送农田没有全部播种");
+            if (!game.AdvanceTick().WorkerActed)
+                return Fail("开局三田次秒没有浇水");
+            foreach (Vector2I cell in farms)
+                if (game.GetPlot(cell).Crop != CropStage.Growing || !game.GetPlot(cell).HasWater)
+                    return Fail("开局赠送农田没有全部开始生长");
+            int[] remaining = new int[farms.Length];
+            for (int i = 0; i < farms.Length; i++)
+                remaining[i] = game.GetPlot(farms[i]).RemainingSeconds;
+            game.AdvanceTick();
+            for (int i = 0; i < farms.Length; i++)
+                if (remaining[i] <= 1 || game.GetPlot(farms[i]).RemainingSeconds != remaining[i] - 1)
+                    return Fail("开局赠送农田没有继续生长");
         }
         if (!sawSame || !sawSplit || !sawRadish)
             return Fail("固定种子未覆盖两种开局配置");
+        return true;
+    }
+
+    private static bool CheckInitialOtherSeasons()
+    {
+        Vector2I[] farms = { new(189, 189), new(192, 189), new(195, 189) };
+        (uint seconds, Season season)[] starts =
+        {
+            (4320u, Season.Summer), (8640u, Season.Autumn), (12960u, Season.Winter),
+        };
+        foreach ((uint seconds, Season season) in starts)
+            for (int seed = 0; seed < 16; seed++)
+            {
+                var game = new FarmGame(seed, seconds);
+                if (game.Calendar.Season != season)
+                    return Fail("非春季开局日期错误");
+                GrowingSeasons currentSeason = (GrowingSeasons)(1 << (int)season);
+                foreach (Vector2I cell in farms)
+                    if ((FarmGame.GetCrop(game.GetPlot(cell).CropKind).GrowingSeasons & currentSeason) == 0)
+                        return Fail("非春季开局随机到禁生作物");
+            }
         return true;
     }
 
