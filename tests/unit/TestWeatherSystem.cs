@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
@@ -126,24 +127,51 @@ public partial class TestWeatherSystem : Node
             rules.MinimumRegionSizeCells != 96 || rules.MaximumRegionSizeCells != 192 ||
             rules.MaximumActiveRegions != 3)
             return Fail("正式天气数据与确认的 Demo 基线不一致");
-        foreach (string invalid in new[]
-        {
-            "null", "{}", json.Replace("\"CloudyWeight\": 4", "\"CloudyWeight\": 0"),
-            json.Replace("\"RainWeight\": 3", "\"RainWeight\": -1"),
-            json.Replace("\"DaysPerYear\": 336", "\"DaysPerYear\": 335"),
-            json.Replace("\"MaximumRegionSizeCells\": 192", "\"MaximumRegionSizeCells\": 385"),
-            json.Replace("\"MaximumDurationDays\": 4", "\"MaximumDurationDays\": 1"),
-            json.Replace("\"MinimumIntervalDays\": 1", "\"MinimumIntervalDays\": 0"),
-            json.Replace("\"MaximumActiveRegions\": 3", "\"MaximumActiveRegions\": 0"),
-            json.Replace("\"CycleYears\": 10", "\"CycleYears\": 2147483647"),
-            json.Replace("\"RainWeight\": 3", "\"RainWeight\": 2147483647"),
-            json.Replace("\"CloudyWeight\": 4", "\"TypoWeight\": 4"),
-            json.Replace("\"CycleYears\": 10", "\"CycleYears\": 248551")
-                .Replace("\"MaximumDurationDays\": 4", "\"MaximumDurationDays\": 1000"),
-        })
+        foreach (string invalid in new[] { "null", "{}" })
             if (!Throws<JsonException>(() => WeatherRules.Parse(invalid)))
                 return Fail("非法或缺失天气数据未明确拒绝");
+        foreach (bool indented in new[] { false, true })
+        {
+            var formatting = new JsonSerializerOptions { WriteIndented = indented };
+            string formattedJson = JsonNode.Parse(json)!.ToJsonString(formatting);
+            foreach (JsonObject invalid in new[]
+            {
+                Variant(formattedJson, data => data["CloudyWeight"] = 0),
+                Variant(formattedJson, data => data["RainWeight"] = -1),
+                Variant(formattedJson, data => data["DaysPerYear"] = 335),
+                Variant(formattedJson, data => data["MaximumRegionSizeCells"] = 385),
+                Variant(formattedJson, data => data["MaximumDurationDays"] = 1),
+                Variant(formattedJson, data => data["MinimumIntervalDays"] = 0),
+                Variant(formattedJson, data => data["MaximumActiveRegions"] = 0),
+                Variant(formattedJson, data => data["CycleYears"] = int.MaxValue),
+                Variant(formattedJson, data => data["RainWeight"] = int.MaxValue),
+                Variant(formattedJson, data => data.Remove("RainWeight")),
+                Variant(formattedJson, data =>
+                {
+                    int weight = data["CloudyWeight"]!.GetValue<int>();
+                    data.Remove("CloudyWeight");
+                    data["TypoWeight"] = weight;
+                }),
+                Variant(formattedJson, data =>
+                {
+                    data["CycleYears"] = 248551;
+                    data["MaximumDurationDays"] = 1000;
+                }),
+            })
+                if (!Throws<JsonException>(() => WeatherRules.Parse(invalid.ToJsonString(formatting))))
+                    return Fail("紧凑或缩进天气配置中的非法、缺失或未知字段未明确拒绝");
+            if (WeatherRules.Parse(formattedJson).CloudyWeight != rules.CloudyWeight ||
+                WeatherRules.Parse(json).RainWeight != rules.RainWeight)
+                return Fail("非法配置变体污染了后续原配置解析");
+        }
         return true;
+    }
+
+    private static JsonObject Variant(string json, Action<JsonObject> change)
+    {
+        JsonObject data = JsonNode.Parse(json)!.AsObject();
+        change(data);
+        return data;
     }
 
     private static WeatherRules Configuration(int years, int interval, int duration, int size,

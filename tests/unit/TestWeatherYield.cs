@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Godot;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
@@ -194,14 +196,31 @@ public partial class TestWeatherYield : Node
 
     private static void CheckConfiguredGameCreation()
     {
-        string json = FileAccess.GetFileAsString(WeatherRules.ResourcePath)
-            .Replace("\"CycleYears\": 10", "\"CycleYears\": 1")
-            .Replace("\"MaximumIntervalDays\": 3", "\"MaximumIntervalDays\": 1")
-            .Replace("\"MaximumDurationDays\": 4", "\"MaximumDurationDays\": 2")
-            .Replace("\"MinimumRegionSizeCells\": 96", "\"MinimumRegionSizeCells\": 384")
-            .Replace("\"MaximumRegionSizeCells\": 192", "\"MaximumRegionSizeCells\": 384")
-            .Replace("\"MaximumActiveRegions\": 3", "\"MaximumActiveRegions\": 1");
-        WeatherRules rules = WeatherRules.Parse(json);
+        string originalJson = FileAccess.GetFileAsString(WeatherRules.ResourcePath);
+        JsonObject data = JsonNode.Parse(originalJson)!.AsObject();
+        data["CycleYears"] = 1;
+        data["MaximumIntervalDays"] = 1;
+        data["MaximumDurationDays"] = 2;
+        data["MinimumRegionSizeCells"] = 384;
+        data["MaximumRegionSizeCells"] = 384;
+        data["MaximumActiveRegions"] = 1;
+        WeatherRules rules = WeatherRules.Parse(data.ToJsonString());
+        WeatherRules indentedRules = WeatherRules.Parse(data.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        var compactWeather = new WeatherSystem(973, rules);
+        var indentedWeather = new WeatherSystem(973, indentedRules);
+        uint time = 0;
+        while (time < compactWeather.CycleSeconds)
+        {
+            uint distance = compactWeather.GetNextEventSeconds(time);
+            Require(distance == indentedWeather.GetNextEventSeconds(time), "JSON排版改变合法配置的真实事件距离");
+            time += distance;
+            compactWeather.AdvanceTo(time);
+            indentedWeather.AdvanceTo(time);
+            Require(compactWeather.ActiveRegions.SequenceEqual(indentedWeather.ActiveRegions),
+                "JSON排版改变合法配置的真实区域执行");
+        }
+        Require(WeatherRules.Parse(originalJson).CycleSeconds == WeatherRules.Default.CycleSeconds,
+            "合法配置变体污染了正式配置");
         using FarmGame one = new(973, weatherRules: rules);
         using FarmGame batch = new(973, weatherRules: rules);
         var expectedWeather = new WeatherSystem(973, rules);

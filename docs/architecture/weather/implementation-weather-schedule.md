@@ -18,6 +18,30 @@
 
 当前固定地图与候选规模使用简单数组和局部区间集合即可。未建立通用叠加矩阵、灾害框架或可编辑未来排程。
 
+## 预排规模变更的建局验收
+
+`BuildSchedule` 逐候选生成，并在接纳检查中遍历已有排程的完整存续区间。周期变长或候选间隔变小会增加尝试次数，持续、尺寸和活动上限也会影响已接纳排程数量与检查成本。配置数学上合法只表示规则与数值可以执行，不能据此认定任意规模都适合启动。实际调整这些参数时，保持生成算法与公开 Interface，在同一环境、同一种子下比较修改前后配置的真实自然模式构造成本。
+
+文件读取、`WeatherRules.Parse` 和 JIT 预热均放在采样之前；如果需要评估加载成本，应单独记录，不与预排构造混算。可以在既有 Godot 测试上下文中，对已经解析的配置执行以下采样，不需要读取私有排程或新增诊断框架：
+
+```csharp
+// rules、seed、sampleCount 由本次对照配置与采样安排明确给定。
+_ = new WeatherSystem(seed, rules, WeatherMode.Natural); // 采样外预热
+for (int sample = 0; sample < sampleCount; sample++)
+{
+    long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+    long start = System.Diagnostics.Stopwatch.GetTimestamp();
+    var weather = new WeatherSystem(seed, rules, WeatherMode.Natural);
+    double elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+    long allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+    GD.Print($"样本 {sample}：周期 {weather.CycleSeconds} 秒，构造 {elapsedMs:F3} ms，线程分配 {allocatedBytes} bytes");
+}
+```
+
+两份配置使用相同种子列表、样本数量、构建模式与采样条件，分别预热后采样；记录每个样本，不能只保留最好的一次。线程分配指标只统计当前线程的托管分配，不能当作整个进程的内存峰值。证据保存到既有 `build/` 或 `coverage/` 目录，包含实际输入配置、种子、Godot／.NET 版本、构建模式、操作系统与硬件、采样安排和修改前后结果；配置与种子用于复现，不向玩家公开未来排程。根据实际变化评估启动成本，不引入未经确认的固定阈值或任意规模上限。
+
+下文 `--weather-query-probe` 测量的是已经建局后的整田查询，不能替代这里的预排构造耗时。字段扩展时的描述、只读属性、复制构造与校验维护约定见[配置 Interface](interface-weather-system.md#配置字段扩展与规模变更)。
+
 ## 执行与快照
 
 构造后不保留生成用随机对象。首次周期只使用本周期已经开始且未结束的事件，保持零秒晴天；第二周期开始后按模周期相位额外启用前周期合法尾部。结束不清除其他区域，也不存在被覆盖天气恢复。
