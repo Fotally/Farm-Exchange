@@ -104,7 +104,7 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 | `UpdateTradeOrder` | OrderId、RequestedOrderRequest |
 | `CancelTradeOrder` | OrderId |
 | `SetTradeOrderEnabled` | OrderId、Enabled（布尔原输入） |
-| `PlaceBuilding` | Cell、BuildingKind、Crop；道路的原 Crop 输入也保留在参数域，不解释为道路种植 |
+| `PlaceBuilding` | Cell、BuildingKind、Crop；可选新增 Orientation 为原请求朝向，省略的历史日志不推断方向；道路的原 Crop 输入也保留在参数域，不解释为道路种植 |
 | `RemoveBuilding` | Cell；保留输入子格，实际整座锚点由领域结果说明 |
 | `SetRawReserve` | Crop、RequestedQuantity（原请求原料保留份数，负数仍原样记录） |
 | `CreateCultivationPlan` | RequestedPlan；创建前无有效 PlanId |
@@ -138,6 +138,7 @@ runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入
 | `RejectionReason` | 字符串或 null | 正常拒绝的真实中文原因；成功为 null；它不是稳定状态键，也不是异常堆栈 |
 | `Commodity`、`Crop` | 商品/作物标识 | 本事件操作的商品或所选作物，取值见上文；道路没有 Crop |
 | `BuildingKind` | `Farm/Processor/Road` | 农田、加工场地、道路 |
+| `Orientation` | 可选枚举字符串 `Q0/Q1/Q2/Q3` | 设施世界素材朝向；建造命令参数为原请求，成功建造结果为登记值，拒绝建造结果为原请求（非法值保留原十进制字符串），拆除为提交前实例朝向，未解析实例时 null；Placement RuleChecked 为原请求。道路只允许 Q0，不表示人物方向或屏幕旋转角；历史记录缺失不推断方向 |
 | `Cell`、`Anchor` | 格坐标对象 | 输入子格与解析后的整座锚点；解析失败时 Anchor 为 null |
 | `PreviousCrop` | 作物标识 | 改种前选种；不是自动认定已播下的作物 |
 | `ChargedCents` | 非负 int64，分 | 此次建造实际扣费；失败或拆除为 0，不表示目录预览价格 |
@@ -324,7 +325,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | 字段 | 类型/单位 | 含义 |
 | --- | --- | --- |
 | `RuleKind` | `Placement/Planting/Trade` | 所执行的规则检查类别 |
-| `CheckResults` | 字符串→布尔字典 | 稳定检查项是否通过；Placement 为 Building/Crop/Bounds/Occupancy/Funds，Planting 为 Season/Time，Trade 为 Commodity/Quantity/Funds/Stock/Capacity/Reserve；未执行项省略，不写 false 冒充检查失败 |
+| `CheckResults` | 字符串→布尔字典 | 稳定检查项是否通过；Placement 为 Building/Crop/Bounds/Occupancy/Funds，并可选新增 Orientation（在 Crop 后、Bounds 前），道路不执行 Crop；非法朝向后省略 Bounds/Occupancy/Funds。Planting 为 Season/Time，Trade 为 Commodity/Quantity/Funds/Stock/Capacity/Reserve；未执行项省略，不写 false 冒充检查失败 |
 | `ProductionKind` | `Farm/Processor` | 状态来自农田还是加工场地 |
 | `StateBefore`、`StateAfter` | 状态字符串 | Farm 使用 CropStage 的 `None/Seeded/Growing`；Processor 使用详情状态 `WaitingForRaw/Processing/WaitingForReserve/ReadyToProcess`，分别为待原料/加工中/因底线等待/具备领取条件 |
 | `HasWaterBefore`、`HasWaterAfter` | 布尔 | 农田本轮供水状态；加工场地省略 |
@@ -358,7 +359,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `GameEnded` | 两类/INF | 本局尾段和捕获结束后；EndReason、IsPaused；不因原地流程结束而发出 |
 | `CommandReceived` | 两类/INF | 语义请求收到后、业务验证和修改前；CommandId、CommandName、CommandOrigin、CommandArguments；原参数形状见玩家指令契约 |
 | `CommandFinished` | 两类/INF | 真实完成、拒绝或异常后；同一 CommandId、CommandName、CommandOrigin、CommandStatus；拒绝加 RejectionReason，异常另关联 BusinessException 并保持传播；不重复输出资金库存收支 |
-| `BuildingPlaced`、`BuildingRemoved` | 两类/INF | 实际命令完成；Outcome、RejectionReason、Cell、Anchor、BuildingKind、ChargedCents、资金前后；生产建筑加 Crop，失败无法解析的建筑信息可 null；有枚举时加 FailureCode |
+| `BuildingPlaced`、`BuildingRemoved` | 两类/INF | 实际命令完成；Outcome、RejectionReason、Cell、Anchor、BuildingKind、ChargedCents、资金前后；可选新增 Orientation 取值按字段表，生产建筑加 Crop，失败无法解析的建筑信息可 null；有枚举时加 FailureCode |
 | `FarmManualControlChanged` | 两类/INF | 两种接管命令完成；Outcome、RejectionReason、Cell、Anchor、Crop（请求）、TakeoverMode、PreviousPlanId、PlanDetached、CurrentCyclePreserved、PreviousSelectedCrop、EffectiveSelectedCrop、NextCycleCrop；无法取得的状态为 null；替代旧 CropChanged，不重复发出 |
 | `CultivationPlanCreated`、`CultivationPlanUpdated` | 两类/INF | 正式保存完成；Outcome、RejectionReason、RequestedPlan、PlanBefore、PlanAfter；已有 ID 时加 PlanId，拒绝不把请求当 After |
 | `CultivationPlanDeleted` | 两类/INF | 删除及解除全部引用后；Outcome、RejectionReason、已有时的 PlanId、PlanBefore、PlanAfter、DetachedFarmCount；保留当前轮的规则由真实结果解释 |

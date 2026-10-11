@@ -12,6 +12,7 @@ public enum LandFailure
     OutOfBounds,
     Occupied,
     InsufficientFunds,
+    InvalidOrientation,
 }
 
 public readonly record struct PlacementCheck(LandFailure Failure, int CostCents)
@@ -28,13 +29,14 @@ public readonly record struct PlacementResult(LandFailure Failure, int ChargedCe
 internal static class PlacementRules
 {
     internal static PlacementCheck Check(Vector2I cell, BuildingKind building, CropKind crop,
-        LandOccupancy occupancy, int balanceCents, int costCents)
+        LandOccupancy occupancy, int balanceCents, int costCents,
+        BuildingOrientation orientation = BuildingOrientation.Q0)
     {
         if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
             return new PlacementCheck(LandFailure.InvalidBuilding, 0);
         if (building != BuildingKind.Road && !CropCatalog.IsDefined(crop))
             return new PlacementCheck(LandFailure.InvalidCrop, 0);
-        LandFailure geometryFailure = occupancy.CheckFootprint(cell, building);
+        LandFailure geometryFailure = occupancy.CheckFootprint(cell, building, orientation);
         if (geometryFailure != LandFailure.None)
             return new PlacementCheck(geometryFailure, 0);
         if (balanceCents < costCents)
@@ -46,6 +48,7 @@ internal static class PlacementRules
     {
         LandFailure.InvalidBuilding => "无效建筑",
         LandFailure.InvalidCrop => "无效作物",
+        LandFailure.InvalidOrientation => "无效建筑朝向",
         LandFailure.OutOfBounds => "地图外地块",
         LandFailure.Occupied => "该土地已有建筑",
         LandFailure.InsufficientFunds => "金币不足，无法建造建筑",

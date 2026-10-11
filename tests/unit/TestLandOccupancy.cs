@@ -10,7 +10,53 @@ public partial class TestLandOccupancy : Node
     public override void _Ready() => GetTree().Quit(RunChecks() ? 0 : 1);
 
     public static bool RunChecks() => CheckFootprints() && CheckInstances() && CheckEveryRemovalCell() &&
-        CheckBoundaries() && CheckConflictAtomicity() && CheckPlacementRules();
+        CheckBoundaries() && CheckConflictAtomicity() && CheckPlacementRules() && CheckOrientations();
+
+    private static bool CheckOrientations()
+    {
+        LandOccupancy land = NewLand();
+        Vector2I anchor = new(7, 11);
+        foreach (BuildingKind kind in new[] { BuildingKind.Farm, BuildingKind.Processor })
+            foreach (BuildingOrientation orientation in Enum.GetValues<BuildingOrientation>())
+            {
+                if (land.CheckFootprint(anchor, kind, orientation) != LandFailure.None)
+                    return Fail("合法设施朝向被拒绝");
+                land.Place(IndexOf(anchor), kind, orientation);
+                BuildingSpaceSnapshot space = land.GetSpace(IndexOf(anchor))!;
+                IReadOnlyList<BuildingSpaceSnapshot> before = land.Instances;
+                if (space.Orientation != orientation || space.WorkCell != anchor + Vector2I.One ||
+                    space.Footprint.Offsets.Count != 9)
+                    return Fail("朝向登记改变当前九格占地或工作中心");
+                foreach (Vector2I offset in space.Footprint.Offsets)
+                    if (!ReferenceEquals(space, land.GetSpace(IndexOf(anchor + offset))) ||
+                        land.GetSpace(IndexOf(anchor + offset))!.Orientation != orientation)
+                        return Fail("设施子格朝向不一致");
+                land.Remove(IndexOf(anchor + new Vector2I(2, 2)));
+                land.Place(IndexOf(anchor), kind);
+                if (space.Orientation != orientation || before[0].Orientation != orientation ||
+                    ReferenceEquals(space, land.GetSpace(IndexOf(anchor))) ||
+                    land.GetSpace(IndexOf(anchor))!.Orientation != BuildingOrientation.Q0)
+                    return Fail("拆除重建沿用方向或修改旧快照");
+                land.Clear();
+            }
+        foreach (BuildingKind kind in new[] { BuildingKind.Farm, BuildingKind.Processor, BuildingKind.Road })
+            foreach (BuildingOrientation invalid in new[] { (BuildingOrientation)(-1), (BuildingOrientation)4 })
+            {
+                IReadOnlyList<BuildingSpaceSnapshot> before = land.Instances;
+                if (land.CheckFootprint(anchor, kind, invalid) != LandFailure.InvalidOrientation ||
+                    !Throws<ArgumentOutOfRangeException>(() => land.Place(IndexOf(anchor), kind, invalid)) ||
+                    !ReferenceEquals(before, land.Instances) || land.GetSpace(IndexOf(anchor)) != null)
+                    return Fail("非法朝向执行未在登记前拒绝");
+            }
+        foreach (BuildingOrientation orientation in new[] { BuildingOrientation.Q1, BuildingOrientation.Q2, BuildingOrientation.Q3 })
+            if (land.CheckFootprint(anchor, BuildingKind.Road, orientation) != LandFailure.InvalidOrientation ||
+                !Throws<ArgumentOutOfRangeException>(() => land.Place(IndexOf(anchor), BuildingKind.Road, orientation)))
+                return Fail("道路接受了非 q0 朝向");
+        land.Place(IndexOf(anchor), BuildingKind.Road);
+        if (land.GetSpace(IndexOf(anchor))!.Orientation != BuildingOrientation.Q0)
+            return Fail("默认道路朝向不是 q0");
+        return true;
+    }
 
     private static bool CheckFootprints()
     {

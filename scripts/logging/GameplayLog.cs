@@ -33,10 +33,12 @@ public sealed class GameplayLog
      * <param name="building">原建筑类型，非法值保持原值。</param>
      * <param name="crop">原作物输入，道路也在原参数中保留。</param>
      * <param name="origin">真实 Player 或 Scenario 来源；其他值在记录前抛出异常。</param>
+     * <param name="orientation">原请求朝向，非法值保持原值；默认 q0。</param>
      * <returns>真实业务完成后终结的观察；关闭采集时为 null。</returns>
      */
     public BuildingLogOperation? BeginPlace(Vector2I cell, BuildingKind building, CropKind crop,
-        CommandOrigin origin = CommandOrigin.Player) => BeginBuilding(cell, building, crop, false, origin);
+        CommandOrigin origin = CommandOrigin.Player, BuildingOrientation orientation = BuildingOrientation.Q0) =>
+        BeginBuilding(cell, building, crop, false, origin, orientation);
 
     /**
      * <summary>观察原拆除子格，保存当前解析的整座设施和资金。</summary>
@@ -45,10 +47,10 @@ public sealed class GameplayLog
      * <returns>真实业务完成后终结的观察；关闭采集时为 null。</returns>
      */
     public BuildingLogOperation? BeginRemove(Vector2I cell, CommandOrigin origin = CommandOrigin.Player) =>
-        BeginBuilding(cell, null, null, true, origin);
+        BeginBuilding(cell, null, null, true, origin, null);
 
     private BuildingLogOperation? BeginBuilding(Vector2I cell, BuildingKind? building, CropKind? crop,
-        bool remove, CommandOrigin origin)
+        bool remove, CommandOrigin origin, BuildingOrientation? orientation)
     {
         ValidateOrigin(origin);
         if (!_context.CanObserve) return null;
@@ -61,12 +63,14 @@ public sealed class GameplayLog
             {
                 arguments["BuildingKind"] = building.ToString();
                 arguments["Crop"] = crop.ToString();
+                arguments["Orientation"] = orientation.ToString();
             }
             command.Received(arguments);
             BuildingSpaceSnapshot? space = remove ? _game.GetBuildingSpace(cell) : null;
             before = new(_game.MoneyCents, _game.AvailableMoneyCents, _game.FrozenMoneyCents,
                 space?.AnchorCell, remove ? space?.Building : building,
-                remove ? space != null && space.Building != BuildingKind.Road ? _game.GetPlot(cell).CropKind : null : crop);
+                remove ? space != null && space.Building != BuildingKind.Road ? _game.GetPlot(cell).CropKind : null : crop,
+                remove ? space?.Orientation : orientation);
         });
         return new(this, command, cell, before);
     }
@@ -86,6 +90,8 @@ public sealed class GameplayLog
                 : prior.Anchor;
             fields["Anchor"] = anchor.HasValue ? Cell(anchor.Value) : null;
             fields["BuildingKind"] = prior.Building?.ToString();
+            fields["Orientation"] = placement?.Success == true
+                ? _game.GetBuildingSpace(cell)?.Orientation.ToString() : prior.Orientation?.ToString();
             if (prior.Building != BuildingKind.Road) fields["Crop"] = prior.Crop?.ToString();
             fields["ChargedCents"] = (long)(placement?.ChargedCents ?? 0);
             if (placement.HasValue) fields["FailureCode"] = "LandFailure." + placement.Value.Failure;
@@ -152,4 +158,4 @@ public sealed class GameplayLog
 }
 
 internal readonly record struct BuildingObservation(int Money, int AvailableMoney, int FrozenMoney,
-    Vector2I? Anchor, BuildingKind? Building, CropKind? Crop);
+    Vector2I? Anchor, BuildingKind? Building, CropKind? Crop, BuildingOrientation? Orientation);

@@ -17,6 +17,7 @@ public static class TestBuildingLogging
         try
         {
             CheckPlacementAndRemoval();
+            CheckOrientationObservation();
             CheckFrozenFunds();
             CheckPausedProcessorAndReserve();
             CheckOriginsAndIsolation();
@@ -27,6 +28,33 @@ public static class TestBuildingLogging
     }
 
     private static string[] Events(StringWriter text, string name) => Lines(text.ToString()).Where(line => HasEvent(line, name)).ToArray();
+
+    private static void CheckOrientationObservation()
+    {
+        using var text = new StringWriter();
+        using var log = RuntimeLog.Capture(text);
+        using var game = new FarmGame(17, log);
+        Vector2I cell = new(10, 10);
+        int before = text.ToString().Length;
+        Require(game.CheckPlacement(cell, BuildingKind.Farm, CropKind.Wheat, (BuildingOrientation)99).Failure ==
+            LandFailure.InvalidOrientation && text.ToString().Length == before, "非法朝向预检生成了日志");
+        Require(game.TryPlace(cell, BuildingKind.Farm, CropKind.Wheat, orientation: (BuildingOrientation)99).Failure ==
+            LandFailure.InvalidOrientation, "非法朝向命令未拒绝");
+        string rejected = Events(text, "BuildingPlaced").Last();
+        Require(Events(text, "CommandReceived").Last().Contains("Orientation: \"99\"") &&
+            rejected.Contains("Orientation: \"99\"") && rejected.Contains("FailureCode: \"LandFailure.InvalidOrientation\"") &&
+            rejected.Contains("Anchor: null") && rejected.Contains("ChargedCents: 0") &&
+            rejected.Contains("MoneyBeforeCents: 5000") && rejected.Contains("MoneyAfterCents: 5000"),
+            "非法朝向原输入丢失，或拒绝记录伪造实例、扣费");
+        Require(game.TryPlace(cell, BuildingKind.Farm, CropKind.Wheat, orientation: BuildingOrientation.Q3).Success,
+            "q3 设施建造失败");
+        Require(Events(text, "CommandReceived").Last().Contains("Orientation: \"Q3\"") &&
+            Events(text, "BuildingPlaced").Last().Contains("Orientation: \"Q3\""), "成功建造未记录真实朝向");
+        Require(game.RemoveBuilding(cell + Vector2I.One) == null &&
+            Events(text, "BuildingRemoved").Last().Contains("Orientation: \"Q3\""), "拆除未记录已删除实例朝向");
+        Require(game.BuildFarm(cell) == null && Events(text, "BuildingPlaced").Last().Contains("Orientation: \"Q0\""),
+            "旧建造调用未记录默认 q0");
+    }
 
     private static void CheckPlacementAndRemoval()
     {

@@ -47,7 +47,7 @@ internal sealed class EnvironmentDecorations
         { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 29, 30, 31 };
     private readonly Dictionary<int, Decoration> _remaining = new();
     private readonly Node2D _depthLayer;
-    private readonly Texture2D?[] _textures = new Texture2D?[Definitions.Length];
+    private readonly Texture2D?[,] _textures = new Texture2D?[Definitions.Length, 4];
 
     internal EnvironmentDecorations(Node2D depthLayer)
     {
@@ -99,8 +99,8 @@ internal sealed class EnvironmentDecorations
             }
             if (decoration.Sprite != null) continue;
             Definition definition = Definitions[decoration.Type];
-            Texture2D texture = _textures[decoration.Type] ??= GD.Load<Texture2D>(
-                $"res://assets/gameplay/decor/{definition.Name}_q0.png");
+            Texture2D texture = _textures[decoration.Type, decoration.Orientation] ??= GD.Load<Texture2D>(
+                $"res://assets/gameplay/decor/{definition.Name}_q{decoration.Orientation}.png");
             decoration.Sprite = new Sprite2D
             {
                 Position = decoration.Position,
@@ -117,7 +117,8 @@ internal sealed class EnvironmentDecorations
         Vector2 position = MapCoordinates.CellToLocalCenter(cell);
         Definition definition = Definitions[type];
         _remaining[cell.Y * MapCoordinates.MapSize + cell.X] =
-            new Decoration(type, position, new Rect2(position - definition.Pivot, definition.Canvas));
+            new Decoration(type, (int)((Hash(cell.X, cell.Y) >> 24) & 3), position,
+                new Rect2(position - definition.Pivot, definition.Canvas));
     }
 
     private static uint Hash(int col, int row)
@@ -131,12 +132,14 @@ internal sealed class EnvironmentDecorations
     private sealed class Decoration
     {
         internal readonly int Type;
+        internal readonly int Orientation;
         internal readonly Vector2 Position;
         internal readonly Rect2 Bounds;
         internal Sprite2D? Sprite;
-        internal Decoration(int type, Vector2 position, Rect2 bounds)
+        internal Decoration(int type, int orientation, Vector2 position, Rect2 bounds)
         {
             Type = type;
+            Orientation = orientation;
             Position = position;
             Bounds = bounds;
         }

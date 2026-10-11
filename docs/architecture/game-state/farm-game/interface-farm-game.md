@@ -12,14 +12,14 @@
 | --- | --- | --- |
 | 定义 | Crops、GetCrop、GetBuildingCostCents(building) | 作物定义委托 `CropCatalog`；七种作物的规则来自[作物表](../../../gameplay/production/crop-growth.md)。静态建造费查询为唯一类型价格入口：农田/加工场地 1000 分，道路 100 分；`None` 或未知类型抛 `ArgumentOutOfRangeException` |
 | 状态查询 | GetPlot、TryGetPlot、GetStock、GetRawStock、GetRawReserve、GetProductStock、GetRawPriceCents、GetProductPriceCents | 任意占用子格解析到锚点，返回同一整座设施的只读生产快照、统一或分类公共库存、原料保留底线和两类当前报价；农田地块快照含 `HasWater`，`TryGetPlot` 对地图外返回 `OutOfBounds` |
-| 空间查询 | GetBuildingSpace(cell)、GetBuildingSpaces() | 任意子格返回同一只读空间，空地或地图外返回空；全空间列表为锚点索引升序的独立只读缓存，包含锚点、类型、固定 footprint 与工作中心 |
+| 空间查询 | GetBuildingSpace(cell)、GetBuildingSpaces() | 任意子格返回同一只读空间，空地或地图外返回空；全空间列表为锚点索引升序的独立只读缓存，包含锚点、类型、登记朝向 `Orientation`、固定 footprint 与工作中心；朝向建成后不可修改 |
 | 行情查询 | GetQuote(CommodityId)、GetMarketSnapshot() | 委托 `MarketQuotes` 返回十四商品当前价、上次报价及实际涨跌；完整快照还含本次与下次实际报价日期和已公布消息。查询不推进时间或抽随机 |
 | 可用与冻结资源 | AvailableMoneyCents、FrozenMoneyCents、GetAvailableStock、GetFrozenStock | 钱包及库存总量仍包含冻结部分，可用查询扣除一次挂单冻结；建造、加工与即时交易只能使用可用部分，查询不释放冻结 |
 | 委托管理 | CreateTradeOrder、UpdateTradeOrder、CancelTradeOrder、SetTradeOrderEnabled、GetTradeOrders | 完整创建或同 ID 编辑，失败单据和资源零修改；取消释放冻结，仅持续策略可启停；独立只读快照按建单顺序保留活动及终态，包含原现金基准、保留线、冻结归属、等待原因和最近成交的实际商品、方向、费用与余额，编辑不会用新配置改写旧成交，规则见[委托玩法](../../../gameplay/trading/orders.md) |
 | 工人查询 | GetWorkers() | 按编号 1、2、3 返回独立只读 `WorkerSnapshot` 集合，包含分数格位置、可空目标格与空闲/移动/播种/浇水状态；查询不分配任务或推进时间 |
 | 详情查询 | GetFarmDetails、GetProcessorDetails | 分别返回现有农田的等待工人、已湿润待播种、待水、生长中、不适季或剩余时间不足状态，或加工场地的无原料等待、保留底线限制、待领取原料或加工中状态，同时附带对应周期、当日售价和公共库存；两类详情只服务农田/加工场地，类型不匹配属于调用错误 |
 | 原料保留设置 | SetRawReserve(crop, quantity) | 逐种设置非负整数底线，默认 0，允许高于现存库存；返回 `RawReserveFailure.None`、`InvalidCrop` 或 `InvalidQuantity`，失败零修改。设置不触发领取；下次经营领取阶段或新建场地的现有即时领取路径检查新值 |
-| 放置 | CheckPlacement、TryPlace | 共用[放置规则](../../land/placement-rules/interface-placement-rules.md)；生产建筑完整 3×3、道路 1×1 的几何与余额预检只读，执行时重新检查并返回实际扣费或稳定失败原因；道路使用 `BuildingKind.Road`，作物参数不参与道路语义。非法建筑描述先正常返回 `InvalidBuilding`，不会调用价格查询抛异常 |
+| 放置 | CheckPlacement、TryPlace | 共用[放置规则](../../land/placement-rules/interface-placement-rules.md)；生产建筑完整 3×3、道路 1×1 的几何与余额预检只读，执行时重新检查并返回实际扣费或稳定失败原因。`CheckPlacement` 的第4参数为可选 `orientation=Q0`；`TryPlace` 保留第4参数 `origin=Player`，第5参数为可选 `orientation=Q0`，玩家朝向可用命名参数传入。生产设施允许 q0～q3，道路只允许 q0且作物参数不参与道路语义；非法朝向正常返回 `InvalidOrientation`，失败资源和空间零修改。非法建筑描述先正常返回 `InvalidBuilding`，不会调用价格查询抛异常 |
 | 旧命令与编辑 | BuildFarm、BuildProcessor、SetFarmCrop、PrepareFarmCrop、RemoveBuilding | 旧建造命令转发 `TryPlace`；成功返回 null，失败返回给玩家的原因；立即改种强制丢弃当前轮并保水，预备下一轮保留当前轮，两者都只解除本田耕作表；任一占用子格操作同一整座设施；拆除释放全部 footprint、计划引用且不退款；对地图外都返回“地图外地块” |
 | 年度耕作表 | CheckCultivationEntries、CheckCultivationPlan、CreateCultivationPlan、UpdateCultivationPlan、DeleteCultivationPlan、ApplyCultivationPlan、GetCultivationPlans、GetFarmCultivation | 条目检查允许未命名草稿编辑；完整提交检查及创建/更新仍要求名称和有效模式，复用同一年度排程判断。快照含每表生命周期下一条编号 `NextEntryId`，保存空表不回退；更新拒绝新条复用历史编号，移动原条保留年度凭据。批量重验全列表且子格去重，失败全部不修改。应用/编辑保留当前轮；计划收获先关闭播种并缓存目标，日历推进后才重验启用，不能借旧季工人相位提前执行。工人完成后、换季清理前先登记实际计划播种，季末播后即清除也计为该条已执行。快照分开计划日期和真实生产，规则与缓存约定见[计划 Interface](../../cultivation/interface-cultivation-plan-book.md) |
 | 选种风险 | GetPlantingCheck(cell,crop) | 只读查询 `PlantingFailure`；`InsufficientTime` 是可播种风险提示，`WrongSeason` 才禁止实际播种。手动目标仍可选任一合法作物，不通过查询执行或清理 |
@@ -34,6 +34,8 @@
 `GetCultivationPlan(id)` 返回指定表的独立只读快照，不存在时为 null；它与 `GetCultivationPlans()` 共用计划模块的正式数据。`CreateCultivationPlan/UpdateCultivationPlan/DeleteCultivationPlan/ApplyCultivationPlan/SetFarmCrop/PrepareFarmCrop` 在真实执行前后交由 CultivationLog 观察。批量应用保留原先的表存在、空列表、逐子格有效性和整批提交顺序；只有完整解析完成才提供实际去重目标，提前拒绝不为日志补跑后续校验，实际已检查空列表时提供已知零目标。日志采样不限制合法业务集合。`SetPaused(paused, origin)` 重复设置也形成一对命令记录，但仅实际改变暂停状态时产生 PauseChanged，未完成经营秒仍由驱动保留。
 
 加工详情复用 `ProcessingSystem.GetStatus` 的只读状态：进行中优先；空闲时由库存模块给出没有原料、受底线限制或可领取的原因。设置降低底线后，下一领取阶段之前可返回 `ReadyToProcess`，查询不会开始加工或扣库存。
+
+新建朝向由 `LandOccupancy` 唯一登记，`FarmGame` 不另持一份方向状态，也不提供建成后旋转命令。开局、旧建造调用和满图夹具默认 q0；暂停不阻止建造。旋转没有额外费用，当前 3×3 四向不改变占地、工作中心、工人任务或生产计算。`TestFarmGame` 对各 q 比较完整播种、浇水、收获和加工过程的经营结果、库存、资金与工人快照，并检查朝向预检/执行的拒绝一致性。
 
 经营开局固定创建三名工人，分别位于 `(190,190)`、`(193,190)`、`(196,190)`；出生位置从三座农田锚点经 `BuildingFootprint.WorkCell` 派生，不参与开局随机抽取。`FarmGame` 在原工人相位只调用 `WorkerScheduler.AdvanceOneSecond`，以 `GetWorkers` 包装其快照，不读取轮转游标、认领关系或选择策略。任务选择、移动与完整动作计时、失效重验由[工人调度 Module](../../workers/worker-scheduler/interface-worker-scheduler.md)负责；地图读取经营位置做表现，动画完成不会触发农田操作。
 

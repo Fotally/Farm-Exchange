@@ -38,6 +38,19 @@ public partial class TestPlacementPreview : Node
             int initialCoins = game.MoneyCents;
             int initialBuildings = game.GetBuildingSpaces().Count;
             Vector2I anchor = new(183, 183); // 非三格对齐，横纵跨8×8块边界。
+            Image? previewBackground = DisplayServer.GetName() != "headless" ? parent.GetViewport().GetTexture().GetImage() : null;
+            foreach (BuildingOrientation orientation in new[] { BuildingOrientation.Q0, BuildingOrientation.Q1,
+                BuildingOrientation.Q2, BuildingOrientation.Q3, BuildingOrientation.Q0 })
+            {
+                map.UpdatePlacementPreview(BuildingKind.Processor, CropKind.Potato, anchor, orientation);
+                await Frames(parent);
+                if (map.PlacementPreviewAnchor != anchor || map.ChunkRedrawCount != initialRedraws ||
+                    game.MoneyCents != initialCoins || game.GetBuildingSpaces().Count != initialBuildings)
+                    return Fail("候选四向切换改变锚点、地面块或经营资源");
+                if (previewBackground != null &&
+                    !MatchesPreview(parent.GetViewport().GetTexture().GetImage(), previewBackground, map, anchor, orientation))
+                    return false;
+            }
             foreach (BuildingKind building in new[] { BuildingKind.Farm, BuildingKind.Processor, BuildingKind.Road })
             {
                 map.UpdatePlacementPreview(building, CropKind.Wheat, anchor);
@@ -163,6 +176,30 @@ public partial class TestPlacementPreview : Node
             (MapCoordinates.GridPositionToLocal((Vector2)cell) + new Vector2(9f, 3f));
         screen = map.GetViewport().GetStretchTransform() * screen;
         return image.GetPixel(Mathf.RoundToInt(screen.X), Mathf.RoundToInt(screen.Y));
+    }
+
+    private static bool MatchesPreview(Image image, Image background, WorldMap map, Vector2I anchor, BuildingOrientation orientation)
+    {
+        Image source = GD.Load<Texture2D>($"res://assets/gameplay/buildings/potato_workshop_q{(int)orientation}.png").GetImage();
+        Vector2 center = MapCoordinates.CellToLocalCenter(anchor + Vector2I.One);
+        int samples = 0;
+        for (int y = 5; y < 120; y += 3)
+            for (int x = 5; x < source.GetWidth() - 5; x += 3)
+            {
+                Color color = source.GetPixel(x, y);
+                if (color.A < .99f) continue;
+                Vector2 pixel = map.GetViewport().GetStretchTransform() *
+                    (map.GetGlobalTransformWithCanvas() * (center + new Vector2(x + .5f - 128, y + .5f - 176)));
+                if (pixel.X < 0 || pixel.Y < 0 || pixel.X >= image.GetWidth() || pixel.Y >= image.GetHeight()) continue;
+                Color actual = image.GetPixel((int)pixel.X, (int)pixel.Y);
+                // 上部屋顶避开地面冲突覆盖，按候选65%透明与实际底图核对。
+                Color expected = background.GetPixel((int)pixel.X, (int)pixel.Y).Lerp(color, .65f);
+                if (System.Math.Abs(actual.R - expected.R) > .04f ||
+                    System.Math.Abs(actual.G - expected.G) > .04f || System.Math.Abs(actual.B - expected.B) > .04f)
+                    return Fail($"候选Q{(int)orientation}没有显示对应屋顶颜色或pivot错位");
+                samples++;
+            }
+        return samples >= 10 || Fail("候选四向屋顶图形取样不足");
     }
 
     private static bool IsGreen(Color color) => color.G > color.R + 0.07f && color.G > color.B + 0.07f;
