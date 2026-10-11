@@ -57,7 +57,7 @@ Release 编译与 Windows 正式导出后，分别对实际 DLL 执行探针，�
 ./tools/Test-LoggingRelease.ps1 -AssemblyPath build/windows/data_FarmExchange_windows_x86_64/FarmExchange.dll -OutputDirectory build/issue130-validation/export-release-probe
 ```
 
-该工具只在 `build/` 生成独立控制台探针，引用指定发布程序集及随包依赖；报告保留实际载入 DLL 的 SHA-256，并核对与输入文件相同。正式 Windows 导出程序启动和同版本 schema 随包验收仍按[Windows 构建](windows-build.md)执行。本文描述可执行方法，不表示当前工作树已经通过上述门禁。
+该工具只在 `build/` 生成独立控制台探针，引用指定发布程序集及随包依赖；报告保留实际载入 DLL 的 SHA-256，并核对与输入文件相同。控制台使用 `System.IO` 读取仓库正式天气 JSON，经 `WeatherRules.Parse` 验证后显式传入经营入口，报告记录配置路径与 SHA-256；缺失或无效配置直接失败。正式 Windows 导出程序启动和同版本 schema 随包验收仍按[Windows 构建](windows-build.md)执行。本文描述可执行方法，不表示当前工作树已经通过上述门禁。
 
 ## 地区天气与随机产量验收
 
