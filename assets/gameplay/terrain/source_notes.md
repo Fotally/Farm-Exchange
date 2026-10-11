@@ -10,3 +10,5 @@ PNG 字节保持原样，仅复制并按项目用途重命名；不裁透明边�
 `default/static/terrain/terrain_81_mesh.png` → `assets/gameplay/terrain/terrain_81_mesh.png`。
 
 64×32菱形基础格，图集九列，padding=2，stride=68×36。四角编码 `top+right*3+bottom*9+left*27`，grass=2，因此现有全可经营地图只用code=80。变体取0或1（稳定格坐标散布），图集索引为 `code+81*variant`。未启用水面、岸线或另一套水域经营规则。
+
+#143新增五材质基础道路放在`roads/`，使用独立道路包的四邻mask（不是地形四角编码）。五atlas、320区域映射、哈希、导入与授权见[道路来源说明](roads/source_notes.md)。原草地图集保持原样。

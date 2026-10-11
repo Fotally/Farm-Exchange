@@ -1,6 +1,6 @@
 # LandOccupancy 对外接口
 
-对应类型：`FarmExchange.Land.LandOccupancy`，代码位于 `scripts/land/LandOccupancy.cs`。每局由 `FarmGame` 持有一份固定 384×384 基础格的主要占用表；模块在程序集内可见。土地唯一拥有建筑锚点、固定占地和子格到实例的映射，不持有作物或加工进度。
+对应类型：`FarmExchange.Land.LandOccupancy`，代码位于 `scripts/land/LandOccupancy.cs`。每局由 `FarmGame` 持有一份固定 384×384 基础格的主要占用表；模块在程序集内可见。土地唯一拥有建筑锚点、固定占地、子格到实例的映射及逐格道路材质，不持有作物或加工进度。
 
 | 成员 | 约定 |
 | --- | --- |
@@ -10,7 +10,7 @@
 | `GetSpace(index)` | 占用子格返回所属整座设施的同一不可变 `BuildingSpaceSnapshot`；空地返回 `null`。 |
 | `Instances` | 不可变空间实例列表，按锚点索引升序，一座设施仅出现一次。占地未变时重复读取必须返回同一对象引用；成功建拆使下一次读取发布新快照，失败操作保留引用，旧快照与其中空间对象保持原内容，普通经营 tick 不重新排序或分配此列表。`Clear` 后空快照可复用。 |
 | `CheckFootprint(anchorCell, building, orientation=Q0)` | 只读检查：先拒绝非法类型、非法朝向，再确认全部固定占地偏移在地图内，最后检查全部子格为空。生产设施允许 q0～q3，道路仅允许 q0；非法朝向返回 `InvalidOrientation`。不预留格子。 |
-| `Place(anchorIndex, building, orientation=Q0)` | 任意合法基础格可作锚点，无三格对齐要求；完整重验后登记一个朝向固定的空间实例及全部子格。非法类型、朝向或越界抛出 `ArgumentOutOfRangeException`，冲突抛出 `InvalidOperationException`；失败零修改。 |
+| `Place(anchorIndex, building, orientation=Q0, roadMaterial=Dirt)` | 任意合法基础格可作锚点，无三格对齐要求；完整重验后登记一个朝向固定的空间实例及全部子格。道路同时登记固定材质；非道路不保存材质。非法类型、朝向、道路材质或越界抛出 `ArgumentOutOfRangeException`，冲突抛出 `InvalidOperationException`；失败零修改。 |
 | `Remove(anyIndex)` | 从任意占用子格释放所属整座设施的全部占地及空间实例；空地调用抛出 `InvalidOperationException`。 |
 | `Clear()` | 仅供满地图测试夹具重建占用表；有实例时完整清除并发布空快照，已空时直接保留既有快照引用，包括最后一次拆除后已经查询过的空快照。 |
 
@@ -27,3 +27,11 @@
 `tests/unit/TestLandOccupancy.cs` 通过上述接口验证任意锚点、九子格同实例、四向子格朝向一致、固定工作中心、非法朝向零登记、道路只允许 q0、四角道路、贴边生产设施、部分越界和末端冲突零修改、任意子格整体拆除、道路互斥、重建恢复 q0 与清理、实例排序及旧快照不可变性。
 
 当前道路不影响工人速度、碰撞或可达性，`WorkerScheduler` 不读取道路以改变计时。未来确认道路属性时，可在工人内部移动计时的接入位置读取这份土地信息；保持一秒推进与只读工人快照 Interface，不另复制一份道路占用，也不通过 UI 或动画计算经营速度。
+
+## 道路材质与批量提交
+
+`RoadMaterial` 提供 `Dirt/Gravel/Cobble/Brick/Slab`，分别为土路、碎石、卵石、红砖、石板。`BuildingSpaceSnapshot.RoadMaterial` 为只读可空枚举：道路必须有合法材质，农田与加工场地为 null。旧单格建造默认 `Dirt`；建成后没有换材质命令，必须先拆后建。同格重建使用新空间快照，旧对象与旧列表仍保留原材质。
+
+道路始终按 1×1 逐格实例登记，不保存操作段编号、起终点、铺设顺序或历史。材质不改变固定占地、费用、工人速度、通行或生产。四邻格连接和稳定纹理变体由地图表现读取正式布局计算，不写回本模块。
+
+整批新建与范围拆除通过 [FarmGame](../../game-state/farm-game/interface-farm-game.md#整批道路命令) 协调：先确认整个请求合法，再逐格登记或移除；正常失败保留稳定空间快照引用。范围内农田、加工场地与空格不属于待拆道路。`TestLandOccupancy.CheckRoadMaterials` 核对五材质逐格登记、默认材质、非法材质零修改、非道路 null 与拆建后的旧快照不变。

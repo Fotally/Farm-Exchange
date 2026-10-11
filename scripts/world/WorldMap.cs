@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
@@ -17,7 +18,6 @@ public partial class WorldMap : Node2D
     private const int ChunksPerSide = MapSize / ChunkSize;
     private const float SeamOverlap = 0.75f;
 
-    private static readonly Color RoadColor = new(0.52f, 0.52f, 0.52f);
     private static readonly Vector2 FarmPivot = new(112, 128);
     private static readonly Vector2 BuildingPivot = new(128, 176);
     private static readonly string[] CropNames =
@@ -25,7 +25,9 @@ public partial class WorldMap : Node2D
     private static readonly Color SelectedColor = new(0.95f, 0.76f, 0.31f);
     private static readonly Color EdgeColor = new(0.91f, 0.86f, 0.66f);
 
-    private readonly bool[] _roads = new bool[MapSize * MapSize];
+    private readonly RoadAppearance _roads = new();
+    private readonly Texture2D[,,] _roadTextures = new Texture2D[5, 16, 4];
+    private RoadPreviewOverlay _roadPreviewOverlay = null!;
     private readonly Dictionary<int, FacilityVisual> _facilities = new();
     private readonly Texture2D[,] _buildings = new Texture2D[7, 4];
     private readonly Texture2D[,,] _crops = new Texture2D[7, 3, 4];
@@ -91,6 +93,8 @@ public partial class WorldMap : Node2D
         AddChild(_overlay);
         _placementOverlay = new PlacementOverlay(this) { ZIndex = 11 };
         AddChild(_placementOverlay);
+        _roadPreviewOverlay = new RoadPreviewOverlay(this) { ZIndex = 11 };
+        AddChild(_roadPreviewOverlay);
         _weather = new WeatherPresentation { Name = "Weather", ZIndex = 9 };
         AddChild(_weather);
         SyncFromGame();
@@ -116,7 +120,6 @@ public partial class WorldMap : Node2D
         HashSet<int>? remaining = null;
         if (spaceChanged)
         {
-            Array.Clear(_roads);
             remaining = new HashSet<int>(_facilities.Keys);
             _environment.Synchronize(spaces);
         }
@@ -125,7 +128,6 @@ public partial class WorldMap : Node2D
             int index = space.AnchorCell.Y * MapSize + space.AnchorCell.X;
             if (space.Building == BuildingKind.Road)
             {
-                if (spaceChanged) _roads[index] = true;
                 continue;
             }
             PlotSnapshot plot = _game.GetPlot(space.AnchorCell);
@@ -173,12 +175,7 @@ public partial class WorldMap : Node2D
         UpdateFacilityVisibility();
         if (spaceChanged)
         {
-            for (int row = 0; row < MapSize; row++)
-                for (int col = 0; col < MapSize; col++)
-                    _chunks[(row / ChunkSize) * ChunksPerSide + col / ChunkSize]
-                        .SetRoad(col % ChunkSize, row % ChunkSize, _roads[row * MapSize + col]);
-            foreach (MapChunk chunk in _chunks)
-                chunk.RedrawIfVisible();
+            RefreshRoadCells(_roads.Synchronize(spaces));
             _lastSpaces = spaces;
         }
         _overlay.QueueRedraw();
@@ -187,6 +184,23 @@ public partial class WorldMap : Node2D
     private void LoadTextures()
     {
         _grass = GD.Load<Texture2D>("res://assets/gameplay/terrain/terrain_81_mesh.png");
+        string[] materials = { "dirt", "gravel", "cobble", "brick", "slab" };
+        var roadAtlases = new Texture2D[materials.Length];
+        for (int index = 0; index < materials.Length; index++)
+            roadAtlases[index] = GD.Load<Texture2D>($"res://assets/gameplay/terrain/roads/road_{materials[index]}_atlas.png");
+        using JsonDocument regions = JsonDocument.Parse(FileAccess.GetFileAsString(
+            "res://assets/gameplay/terrain/roads/atlas_regions.json"));
+        foreach (JsonElement entry in regions.RootElement.EnumerateArray())
+        {
+            int material = Array.IndexOf(materials, entry.GetProperty("material").GetString());
+            JsonElement region = entry.GetProperty("region");
+            _roadTextures[material, entry.GetProperty("mask").GetInt32(), entry.GetProperty("variant").GetInt32()] =
+                new AtlasTexture
+                {
+                    Atlas = roadAtlases[material],
+                    Region = new Rect2(region[0].GetSingle(), region[1].GetSingle(), region[2].GetSingle(), region[3].GetSingle()),
+                };
+        }
         for (int orientation = 0; orientation < 4; orientation++)
         {
             _drySoil[orientation] = GD.Load<Texture2D>($"res://assets/gameplay/soil/field_dry_q{orientation}.png");
@@ -365,6 +379,48 @@ public partial class WorldMap : Node2D
         _placementOverlay.QueueRedraw();
     }
 
+    /**
+     * <summary>只读预览道路新建或拆除范围及受影响旧路的完成后连接。</summary>
+     * <param name="cells">完整候选路径；允许包含占用格与地图范围外的格。</param>
+     * <param name="material">合法道路材质；拆除时保留每格实际材质。</param>
+     * <param name="removing">是否仅预览范围内实际道路的拆除。</param>
+     * <remarks>冲突格不覆盖旧路，临时连接只刷新受影响地面块；不修改经营与环境。</remarks>
+     */
+    public void UpdateRoadPreview(IReadOnlyList<Vector2I> cells, RoadMaterial material, bool removing = false)
+    {
+        IReadOnlyList<RoadAppearance.RoadPreviewCell> previous = _roads.PreviewCells;
+        RefreshRoadCells(_roads.UpdatePreview(cells, material, removing, _game));
+        bool changed = previous.Count != _roads.PreviewCells.Count;
+        for (int index = 0; !changed && index < previous.Count; index++)
+            changed = previous[index] != _roads.PreviewCells[index];
+        if (changed) _roadPreviewOverlay.QueueRedraw();
+    }
+
+    /**
+     * <summary>隐藏道路操作提示并恢复真实道路连接外观。</summary>
+     * <remarks>仅清理世界临时表现；道路工具的起点与轨迹由场景入口维护。</remarks>
+     */
+    public void ClearRoadPreview()
+    {
+        if (_roads.PreviewCells.Count == 0) return;
+        RefreshRoadCells(_roads.ClearPreview());
+        _roadPreviewOverlay.QueueRedraw();
+    }
+
+    internal RoadAppearance.RoadTile? GetDisplayedRoadAppearance(Vector2I cell) => _roads.GetTile(cell);
+
+    private void RefreshRoadCells(HashSet<Vector2I> cells)
+    {
+        var chunks = new HashSet<MapChunk>();
+        foreach (Vector2I cell in cells)
+        {
+            MapChunk chunk = _chunks[(cell.Y / ChunkSize) * ChunksPerSide + cell.X / ChunkSize];
+            chunk.SetRoad(cell.X % ChunkSize, cell.Y % ChunkSize, _roads.GetTile(cell));
+            chunks.Add(chunk);
+        }
+        foreach (MapChunk chunk in chunks) chunk.RedrawIfVisible();
+    }
+
     public void ClearSelection()
     {
         _selectedCell = new Vector2I(-1, -1);
@@ -460,8 +516,11 @@ public partial class WorldMap : Node2D
                 DrawTexture(_map._drySoil[(int)preview.Orientation], center - FarmPivot, tint);
             else if (preview.Building == BuildingKind.Processor)
                 DrawTexture(_map._buildings[(int)preview.Crop, (int)preview.Orientation], center - BuildingPivot, tint);
-            else
-                DrawLine(center - new Vector2(9f, 0f), center + new Vector2(9f, 0f), new Color(RoadColor, 0.65f), 4f);
+            else if (!preview.Cells[0].Blocked)
+            {
+                int variant = RoadAppearance.GetVariant(preview.AnchorCell);
+                DrawTexture(_map._roadTextures[0, 0, variant], center - new Vector2(32, 16), tint);
+            }
             for (int index = 0; index < footprint.Offsets.Count; index++)
             {
                 Vector2I cell = preview.Cells[index].Cell;
@@ -485,12 +544,31 @@ public partial class WorldMap : Node2D
         }
     }
 
+    private sealed partial class RoadPreviewOverlay : Node2D
+    {
+        private readonly WorldMap _map;
+
+        internal RoadPreviewOverlay(WorldMap map) => _map = map;
+
+        public override void _Draw()
+        {
+            foreach (RoadAppearance.RoadPreviewCell cell in _map._roads.PreviewCells)
+            {
+                Vector2[] corners = MapCoordinates.GridRectangleOutline(cell.Cell, 1, 1);
+                Color color = cell.Blocked ? new Color(1f, .22f, .20f, .36f) : new Color(.35f, .93f, .57f, .12f);
+                DrawColoredPolygon(corners, color);
+                DrawPolyline(new[] { corners[0], corners[1], corners[2], corners[3], corners[0] },
+                    cell.Blocked ? new Color(1f, .39f, .32f, .9f) : new Color(.65f, 1f, .74f, .8f), 1f);
+            }
+        }
+    }
+
     private sealed partial class MapChunk : Node2D
     {
         private readonly WorldMap _map;
         private readonly int _firstCol;
         private readonly int _firstRow;
-        private readonly bool[] _roads = new bool[ChunkSize * ChunkSize];
+        private readonly RoadAppearance.RoadTile?[] _roads = new RoadAppearance.RoadTile?[ChunkSize * ChunkSize];
         private readonly ArrayMesh _mesh = new();
         private bool _dirty = true;
 
@@ -507,7 +585,7 @@ public partial class WorldMap : Node2D
                 .Grow(SeamOverlap);
         }
 
-        public void SetRoad(int col, int row, bool road)
+        public void SetRoad(int col, int row, RoadAppearance.RoadTile? road)
         {
             int index = row * ChunkSize + col;
             if (_roads[index] == road)
@@ -555,8 +633,14 @@ public partial class WorldMap : Node2D
             DrawMesh(_mesh, _map._grass);
             for (int row = 0; row < ChunkSize; row++)
                 for (int col = 0; col < ChunkSize; col++)
-                    if (_roads[row * ChunkSize + col])
-                        DrawColoredPolygon(Outline(new Vector2I(_firstCol + col, _firstRow + row)), RoadColor);
+                    if (_roads[row * ChunkSize + col] is RoadAppearance.RoadTile road)
+                    {
+                        Vector2 center = MapCoordinates.CellToLocalCenter(new Vector2I(_firstCol + col, _firstRow + row));
+                        Color tint = road.Removed ? new Color(1f, .45f, .4f, .55f) :
+                            new Color(1f, 1f, 1f, road.Added ? .65f : 1f);
+                        DrawTexture(_map._roadTextures[(int)road.Material, road.Mask, road.Variant],
+                            center - new Vector2(32, 16), tint);
+                    }
         }
     }
 

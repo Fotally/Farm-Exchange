@@ -13,6 +13,9 @@ public enum LandFailure
     Occupied,
     InsufficientFunds,
     InvalidOrientation,
+    InvalidRoadMaterial,
+    InvalidRoadRange,
+    NoRoads,
 }
 
 public readonly record struct PlacementCheck(LandFailure Failure, int CostCents)
@@ -49,6 +52,9 @@ internal static class PlacementRules
         LandFailure.InvalidBuilding => "无效建筑",
         LandFailure.InvalidCrop => "无效作物",
         LandFailure.InvalidOrientation => "无效建筑朝向",
+        LandFailure.InvalidRoadMaterial => "无效道路材质",
+        LandFailure.InvalidRoadRange => "道路范围不能为空或包含重复地块",
+        LandFailure.NoRoads => "没有可拆除的道路",
         LandFailure.OutOfBounds => "地图外地块",
         LandFailure.Occupied => "该土地已有建筑",
         LandFailure.InsufficientFunds => "金币不足，无法建造建筑",

@@ -4,6 +4,7 @@ using System.Linq;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
+using FarmExchange.Land;
 using FarmExchange.Time;
 using FarmExchange.UI;
 using FarmExchange.World;
@@ -36,18 +37,23 @@ public partial class TestUiFacilities : Node
         BuildCatalogWindow catalog = Find<BuildCatalogWindow>(main, "BuildWindow");
         Button farm = Find<Button>(catalog, "FarmCard");
         Button road = Find<Button>(catalog, "RoadCard");
+        Button[] roads = Enum.GetValues<RoadMaterial>().Select(material =>
+            Find<Button>(catalog, material == RoadMaterial.Dirt ? "RoadCard" : $"RoadCard{material}")).ToArray();
+        Button removal = Find<Button>(catalog, "RoadRemovalCard");
         if (!farm.Visible || !road.Visible || FarmGame.Crops.Any(c =>
             !Find<Button>(catalog, $"ProcessorCard{c.Kind}").Visible))
-            return Fail("默认全部分类没有呈现九项建筑");
+            return Fail("默认全部分类没有呈现农田与七加工设施");
+        if (roads.Any(card => !card.Visible || !card.Text.Contains("1.00 金币/格")) || !removal.Visible)
+            return Fail("默认全部分类没有呈现五材质同价道路与拆路工具");
         LineEdit search = Find<LineEdit>(catalog, "BuildSearch");
         search.Text = "农田";
         catalog.RefreshCards();
-        if (!farm.Visible || road.Visible || FarmGame.Crops.Any(c =>
+        if (!farm.Visible || roads.Any(card => card.Visible) || removal.Visible || FarmGame.Crops.Any(c =>
             Find<Button>(catalog, $"ProcessorCard{c.Kind}").Visible))
             return Fail("全类名称搜索未筛出唯一农田");
         search.Text = "道路";
         catalog.RefreshCards();
-        if (farm.Visible || !road.Visible)
+        if (farm.Visible || roads.Any(card => !card.Visible) || !removal.Visible)
             return Fail("全类搜索没有匹配道路");
         search.Text = "腌制坊";
         catalog.RefreshCards();

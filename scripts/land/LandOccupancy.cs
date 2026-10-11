@@ -47,7 +47,8 @@ internal sealed class LandOccupancy
         return LandFailure.None;
     }
 
-    internal void Place(int index, BuildingKind building, BuildingOrientation orientation = BuildingOrientation.Q0)
+    internal void Place(int index, BuildingKind building, BuildingOrientation orientation = BuildingOrientation.Q0,
+        RoadMaterial roadMaterial = RoadMaterial.Dirt)
     {
         Vector2I anchorCell = new(index % FarmGame.MapSize, index / FarmGame.MapSize);
         LandFailure failure = CheckFootprint(anchorCell, building, orientation);
@@ -59,7 +60,11 @@ internal sealed class LandOccupancy
             throw new ArgumentOutOfRangeException(nameof(index));
         if (failure == LandFailure.Occupied)
             throw new InvalidOperationException("土地已有建筑");
-        var space = new BuildingSpaceSnapshot(index, building, anchorCell, orientation);
+        if (building == BuildingKind.Road && roadMaterial is not (RoadMaterial.Dirt or RoadMaterial.Gravel or
+            RoadMaterial.Cobble or RoadMaterial.Brick or RoadMaterial.Slab))
+            throw new ArgumentOutOfRangeException(nameof(roadMaterial));
+        var space = new BuildingSpaceSnapshot(index, building, anchorCell, orientation,
+            building == BuildingKind.Road ? roadMaterial : null);
         int insertion = _instances.BinarySearch(space, AnchorOrder);
         _instances.Insert(~insertion, space);
         foreach (Vector2I offset in space.Footprint.Offsets)

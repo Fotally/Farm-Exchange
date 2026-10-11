@@ -10,7 +10,7 @@
 
 道路详情使用共享纸面木框与深棕正文，先显示「道路 · 1×1 基础格」及当前用途，再说明建造目录内的连续铺路入口；末尾说明拆除释放占地且不退费，`RemoveRoadButton` 使用低强调按钮。只调整视觉和信息顺序，经营接口、事件与拆除结果保持。
 
-原型比例复刻后，`RefreshPlacement(BuildingSpaceSnapshot)` 更新 [FacilityPreview](../facility-preview/interface-facility-preview.md) 中的灰色路面、`1 × 1` 占地与真实锚点；「乡间道路」标题与「已铺设」徽标同行。当前用途与建造工具图标后的连续铺路说明使用次级文本，末尾移除保持低强调。按主稿 1080 高度归一，基准标题 27、状态和正文 14、弱说明 12、行间距 11；缩略高度 107，低强调移除高度 35、文字 13。图形按整体 UI 倍率变化，文字按独立字体倍率变化，窗口扩大不改变默认控件尺寸。模块仍只发出原有 `RemoveRequested` 意图。
+`RefreshPlacement(BuildingSpaceSnapshot)` 读取正式道路快照的 `RoadMaterial` 更新标题，并更新 [FacilityPreview](../facility-preview/interface-facility-preview.md) 中的 `1 × 1` 占地与真实锚点；材质名称与「已铺设」徽标同行。工具说明为“选择道路材质、短按起点与终点成段铺设”，逐格详情拆除继续保持。基准标题 27、状态和正文 14、弱说明 12、间距 11；缩略高度 107，低强调移除高度 35、文字 13。倍率由统一模块维护，面板仍只发出原有 `RemoveRequested` 意图。
 
 标题与 `RoadCurrentStatus` 短徽标关闭自动折行，保持单行；工具图标后的 `RoadNextStep` 获得横向剩余宽度，按两行正式说明显示，不按单字竖排。验收除了外层范围，也检查短状态行数和说明的实际可读宽度。
 

@@ -19,6 +19,10 @@ public sealed class GameplayLog
         "收到拆除指令", "拆除指令结束", "拆除抛出异常", "拆除指令异常结束");
     private static readonly CommandDescription ReserveCommand = new("SetRawReserve", Source,
         "收到原料底线指令", "原料底线指令结束", "原料底线设置抛出异常", "原料底线指令异常结束");
+    private static readonly CommandDescription PlaceRoadsCommand = new("PlaceRoads", Source,
+        "收到成段铺路指令", "成段铺路指令结束", "成段铺路抛出异常", "成段铺路指令异常结束");
+    private static readonly CommandDescription RemoveRoadsCommand = new("RemoveRoads", Source,
+        "收到范围拆路指令", "范围拆路指令结束", "范围拆路抛出异常", "范围拆路指令异常结束");
     private static readonly LogEventDescriptor Placed = new(40, "BuildingPlaced", Source);
     private static readonly LogEventDescriptor Removed = new(41, "BuildingRemoved", Source);
     private static readonly LogEventDescriptor ReserveChanged = new(42, "RawReserveChanged", Source);
@@ -70,7 +74,8 @@ public sealed class GameplayLog
             before = new(_game.MoneyCents, _game.AvailableMoneyCents, _game.FrozenMoneyCents,
                 space?.AnchorCell, remove ? space?.Building : building,
                 remove ? space != null && space.Building != BuildingKind.Road ? _game.GetPlot(cell).CropKind : null : crop,
-                remove ? space?.Orientation : orientation);
+                remove ? space?.Orientation : orientation,
+                remove ? space?.RoadMaterial : building == BuildingKind.Road ? RoadMaterial.Dirt : null);
         });
         return new(this, command, cell, before);
     }
@@ -93,6 +98,7 @@ public sealed class GameplayLog
             fields["Orientation"] = placement?.Success == true
                 ? _game.GetBuildingSpace(cell)?.Orientation.ToString() : prior.Orientation?.ToString();
             if (prior.Building != BuildingKind.Road) fields["Crop"] = prior.Crop?.ToString();
+            else fields["RoadMaterial"] = prior.RoadMaterial.ToString();
             fields["ChargedCents"] = (long)(placement?.ChargedCents ?? 0);
             if (placement.HasValue) fields["FailureCode"] = "LandFailure." + placement.Value.Failure;
             fields["MoneyBeforeCents"] = prior.Money;
@@ -105,6 +111,91 @@ public sealed class GameplayLog
         return new(before.HasValue ? placement.HasValue ? Placed : Removed : null,
             (placement.HasValue ? "建造" : "拆除") + (success ? "成功" : "被拒绝"), success, rejectionReason);
     });
+
+    /**
+     * <summary>观察整批道路原请求与提交前资金，不执行范围检查。</summary>
+     * <param name="cells">原请求基础格列表，仅采样前 32 项。</param>
+     * <param name="material">原道路材质，非法值也保留。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <returns>关闭采集时为 null；真实完成后终结观察。</returns>
+     */
+    public RoadLogOperation? BeginPlaceRoads(IReadOnlyList<Vector2I> cells, RoadMaterial material,
+        CommandOrigin origin = CommandOrigin.Player) => BeginRoads(cells, material, origin);
+
+    /**
+     * <summary>观察拆路原范围与提交前资金，不推断实际待拆道路。</summary>
+     * <param name="cells">原请求基础格列表，仅采样前 32 项。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <returns>关闭采集时为 null；实际移除目标由业务结果提供。</returns>
+     */
+    public RoadLogOperation? BeginRemoveRoads(IReadOnlyList<Vector2I> cells,
+        CommandOrigin origin = CommandOrigin.Player) => BeginRoads(cells, null, origin);
+
+    private RoadLogOperation? BeginRoads(IReadOnlyList<Vector2I> cells, RoadMaterial? material, CommandOrigin origin)
+    {
+        ValidateOrigin(origin);
+        if (!_context.CanObserve) return null;
+        var command = _context.NewCommand(material.HasValue ? PlaceRoadsCommand : RemoveRoadsCommand, origin);
+        RoadObservation? before = null;
+        _context.Observe(() =>
+        {
+            var sample = new List<Dictionary<string, object?>>();
+            for (int i = 0; i < Math.Min(cells.Count, 32); i++) sample.Add(Cell(cells[i]));
+            var arguments = new Dictionary<string, object?> { ["Cells"] = sample, ["RequestedCellCount"] = cells.Count };
+            if (material.HasValue) arguments["RoadMaterial"] = material.ToString();
+            var metadata = new Dictionary<string, object?>();
+            AddRoadTruncation(metadata, "CommandArguments.Cells", cells.Count);
+            command.Received(arguments, metadata);
+            before = new(_game.MoneyCents, _game.AvailableMoneyCents, _game.FrozenMoneyCents, cells.Count, material);
+        });
+        return new(this, command, before);
+    }
+
+    internal void RoadsCompleted(CommandObservation command, RoadObservation? before, LandFailure failure,
+        int actualCount, long chargedCents, IReadOnlyList<BuildingSpaceSnapshot>? removed) => command.Complete(fields =>
+    {
+        bool success = failure == LandFailure.None;
+        string? reason = success ? null : PlacementRules.ErrorMessage(failure);
+        if (before.HasValue)
+        {
+            RoadObservation prior = before.Value;
+            fields["Outcome"] = success ? "Success" : "Rejected";
+            fields["RejectionReason"] = reason;
+            fields["FailureCode"] = "LandFailure." + failure;
+            fields["BuildingKind"] = "Road";
+            fields["RequestedCellCount"] = prior.RequestedCount;
+            fields["RoadCount"] = actualCount;
+            fields["ChargedCents"] = chargedCents;
+            if (prior.Material.HasValue) fields["RoadMaterial"] = prior.Material.ToString();
+            if (removed != null)
+            {
+                var sample = new List<Dictionary<string, object?>>();
+                for (int i = 0; i < Math.Min(removed.Count, 32); i++)
+                    sample.Add(new() { ["Cell"] = Cell(removed[i].AnchorCell), ["RoadMaterial"] = removed[i].RoadMaterial.ToString() });
+                fields["RemovedRoads"] = sample;
+                AddRoadTruncation(fields, "RemovedRoads", removed.Count);
+            }
+            fields["MoneyBeforeCents"] = prior.Money;
+            fields["MoneyAfterCents"] = _game.MoneyCents;
+            fields["AvailableMoneyBeforeCents"] = prior.AvailableMoney;
+            fields["AvailableMoneyAfterCents"] = _game.AvailableMoneyCents;
+            fields["FrozenMoneyBeforeCents"] = prior.FrozenMoney;
+            fields["FrozenMoneyAfterCents"] = _game.FrozenMoneyCents;
+        }
+        return new(before.HasValue ? before.Value.Material.HasValue ? Placed : Removed : null,
+            success ? "成批道路操作成功" : "成批道路操作被拒绝", success, reason);
+    });
+
+    private static void AddRoadTruncation(Dictionary<string, object?> fields, string path, int count)
+    {
+        if (count <= 32) return;
+        fields["Truncated"] = true;
+        fields["TruncatedFields"] = new List<string> { path };
+        fields["TruncatedOriginalCounts"] = new Dictionary<string, object?>
+        {
+            [path] = new Dictionary<string, object?> { ["ItemCount"] = (long)count },
+        };
+    }
 
     /**
      * <summary>观察原料底线原请求和修改前的真实底线。</summary>
@@ -158,4 +249,7 @@ public sealed class GameplayLog
 }
 
 internal readonly record struct BuildingObservation(int Money, int AvailableMoney, int FrozenMoney,
-    Vector2I? Anchor, BuildingKind? Building, CropKind? Crop, BuildingOrientation? Orientation);
+    Vector2I? Anchor, BuildingKind? Building, CropKind? Crop, BuildingOrientation? Orientation, RoadMaterial? RoadMaterial);
+
+internal readonly record struct RoadObservation(int Money, int AvailableMoney, int FrozenMoney,
+    int RequestedCount, RoadMaterial? Material);

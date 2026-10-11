@@ -16,6 +16,7 @@ public partial class TestRoadMap : Node
 
     public static async Task<bool> RunChecksAsync(Node parent)
     {
+        if (!TestRoadAppearance.CheckAllMasks()) return false;
         var game = new FarmGame(12345);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         var scope = new Node2D();
@@ -44,6 +45,8 @@ public partial class TestRoadMap : Node
             if (map.ChunkRedrawCount < initialRedraws + 2)
                 return Fail("跨8×8边界铺路未同步两个可见地图块");
 
+            if (!await TestRoadAppearance.CheckPreview(parent, game, map, firstRoad, secondRoad)) return false;
+
             int roadRedraws = map.ChunkRedrawCount;
             Vector2I selected = new(-1, -1);
             map.SelectionChanged += cell => selected = cell;
@@ -57,11 +60,17 @@ public partial class TestRoadMap : Node
             if (graphical)
             {
                 Image before = parent.GetViewport().GetTexture().GetImage();
-                if (!IsGray(PixelAt(before, map, firstRoad)) || !IsGray(PixelAt(before, map, secondRoad)))
-                    return Fail("道路中心没有实际绘制为灰色路面，或被当作加工场地绘制");
                 if (!HasGoldenOutline(before, map, firstRoad, 1, 1))
                     return Fail("道路选中后没有实际绘制金色选框");
                 SaveScreenshot(before, "road-map-before.png");
+                // 金框正确覆盖连接端部；原图验证使用清框后的真实渲染，不跳过端部样点。
+                map.ClearSelection();
+                await LayoutFrames(parent);
+                Image roadTexture = parent.GetViewport().GetTexture().GetImage();
+                if (!TestRoadAppearance.MatchesRoad(roadTexture, map, firstRoad) ||
+                    !TestRoadAppearance.MatchesRoad(roadTexture, map, secondRoad))
+                    return Fail("道路未实际按四邻mask、材质与稳定变体绘制原图");
+                SaveScreenshot(roadTexture, "road-map-texture-before.png");
             }
 
             if (game.RemoveBuilding(firstRoad) != null)
@@ -76,7 +85,7 @@ public partial class TestRoadMap : Node
             {
                 Image after = parent.GetViewport().GetTexture().GetImage();
                 Color cleared = PixelAt(after, map, firstRoad);
-                if (cleared.G <= cleared.R + 0.05f || !IsGray(PixelAt(after, map, secondRoad)))
+                if (cleared.G <= cleared.R + 0.05f || !TestRoadAppearance.MatchesRoad(after, map, secondRoad))
                     return Fail("拆除后没有恢复绿色空地，或相邻道路外观被清除");
                 SaveScreenshot(after, "road-map-after.png");
             }
@@ -117,7 +126,7 @@ public partial class TestRoadMap : Node
         {
             Image image = parent.GetViewport().GetTexture().GetImage();
             Color cleared = PixelAt(image, map, oldRoad);
-            if (cleared.G <= cleared.R + .05f || !IsGray(PixelAt(image, map, newRoad)))
+            if (cleared.G <= cleared.R + .05f || !TestRoadAppearance.MatchesRoad(image, map, newRoad))
                 return Fail("同数量道路替换沿用了旧路面缓存");
         }
         return true;
@@ -259,10 +268,6 @@ public partial class TestRoadMap : Node
             }
         return true;
     }
-
-    private static bool IsGray(Color color) =>
-        Mathf.Abs(color.R - color.G) < 0.03f && Mathf.Abs(color.G - color.B) < 0.03f &&
-        color.R > 0.3f && color.R < 0.8f;
 
     private static void SaveScreenshot(Image image, string name)
     {

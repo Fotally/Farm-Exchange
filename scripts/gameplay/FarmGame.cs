@@ -468,6 +468,124 @@ public sealed class FarmGame : IDisposable
         return new PlacementResult(LandFailure.None, check.CostCents);
     }
 
+    /**
+     * <summary>只读检查整批新道路的材质、全部范围、占用与可用金币。</summary>
+     * <param name="cells">不重复的非空候选基础格；不跳过已有道路。</param>
+     * <param name="material">本批道路共同材质。</param>
+     * <returns>稳定拒绝原因和宽整数总费用；不预留土地或资金。</returns>
+     */
+    public RoadPlacementCheck CheckRoadPlacement(IReadOnlyList<Vector2I> cells, RoadMaterial material)
+    {
+        ArgumentNullException.ThrowIfNull(cells);
+        long cost = (long)cells.Count * GetBuildingCostCents(BuildingKind.Road);
+        if (material is not (RoadMaterial.Dirt or RoadMaterial.Gravel or RoadMaterial.Cobble or
+            RoadMaterial.Brick or RoadMaterial.Slab))
+            return new(LandFailure.InvalidRoadMaterial, cells.Count, cost);
+        if (cells.Count == 0)
+            return new(LandFailure.InvalidRoadRange, 0, cost);
+        var unique = new HashSet<Vector2I>();
+        foreach (Vector2I cell in cells)
+        {
+            if (!MapCoordinates.ContainsCell(cell))
+                return new(LandFailure.OutOfBounds, cells.Count, cost);
+            if (!unique.Add(cell))
+                return new(LandFailure.InvalidRoadRange, cells.Count, cost);
+        }
+        foreach (Vector2I cell in cells)
+            if (_occupancy.Get(IndexOf(cell)) != BuildingKind.None)
+                return new(LandFailure.Occupied, cells.Count, cost);
+        return new(_wallet.AvailableCents < cost ? LandFailure.InsufficientFunds : LandFailure.None,
+            cells.Count, cost);
+    }
+
+    /**
+     * <summary>执行时重验并一次完成整批道路建造与扣费。</summary>
+     * <param name="cells">不重复的非空候选基础格。</param>
+     * <param name="material">本批道路共同材质。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <returns>成功的实际格数与扣费，或零修改拒绝。</returns>
+     * <remarks>仅登记逐格道路，不记录路段归属；暂停允许操作，冻结金币不可使用。</remarks>
+     */
+    public RoadPlacementResult TryPlaceRoads(IReadOnlyList<Vector2I> cells, RoadMaterial material,
+        CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        ArgumentNullException.ThrowIfNull(cells);
+        var observation = _log?.Gameplay.BeginPlaceRoads(cells, material, origin);
+        RoadPlacementResult result;
+        try
+        {
+            RoadPlacementCheck check = CheckRoadPlacement(cells, material);
+            if (!check.Allowed)
+                result = new(check.Failure, 0, 0);
+            else
+            {
+                if (!_wallet.TrySpend((int)check.CostCents))
+                    throw new InvalidOperationException("道路检查与扣费状态不一致");
+                foreach (Vector2I cell in cells)
+                    _occupancy.Place(IndexOf(cell), BuildingKind.Road, roadMaterial: material);
+                result = new(LandFailure.None, cells.Count, check.CostCents);
+            }
+        }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result);
+        return result;
+    }
+
+    /**
+     * <summary>完整检查范围后仅拆除其中道路，不退款、不移除其他设施。</summary>
+     * <param name="cells">基础格范围；允许空格、生产设施及重复格，越界整批拒绝。</param>
+     * <param name="origin">真实 Player 或 Scenario 来源。</param>
+     * <returns>实际移除道路格数；没有道路或范围越界时零修改拒绝。</returns>
+     */
+    public RoadRemovalResult TryRemoveRoads(IReadOnlyList<Vector2I> cells,
+        CommandOrigin origin = CommandOrigin.Player)
+    {
+        ValidateCommandOrigin(origin);
+        ArgumentNullException.ThrowIfNull(cells);
+        var observation = _log?.Gameplay.BeginRemoveRoads(cells, origin);
+        RoadRemovalResult result;
+        var roads = new List<BuildingSpaceSnapshot>();
+        try
+        {
+            bool outOfBounds = false;
+            foreach (Vector2I cell in cells)
+                if (!MapCoordinates.ContainsCell(cell))
+                {
+                    outOfBounds = true;
+                    break;
+                }
+            if (outOfBounds)
+                result = new(LandFailure.OutOfBounds, 0);
+            else
+            {
+                var unique = new HashSet<Vector2I>();
+                foreach (Vector2I cell in cells)
+                    if (unique.Add(cell) && _occupancy.GetSpace(IndexOf(cell)) is { Building: BuildingKind.Road } road)
+                        roads.Add(road);
+                if (roads.Count == 0)
+                    result = new(LandFailure.NoRoads, 0);
+                else
+                {
+                    foreach (BuildingSpaceSnapshot road in roads)
+                        _occupancy.Remove(road.AnchorIndex);
+                    result = new(LandFailure.None, roads.Count);
+                }
+            }
+        }
+        catch (Exception error)
+        {
+            observation?.Faulted(error);
+            throw;
+        }
+        observation?.Complete(result, roads);
+        return result;
+    }
+
     public string? BuildFarm(Vector2I cell, CommandOrigin origin = CommandOrigin.Player) =>
         PlacementError(TryPlace(cell, BuildingKind.Farm, CropKind.Wheat, origin));
 

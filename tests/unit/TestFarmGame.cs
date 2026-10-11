@@ -1,10 +1,12 @@
 using System.Linq;
+using System.Collections.Generic;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
 using FarmExchange.Land;
 using FarmExchange.Market;
 using FarmExchange.Time;
+using FarmExchange.Trading;
 using FarmExchange.Workers;
 using FarmExchange.Weather;
 
@@ -26,7 +28,145 @@ public partial class TestFarmGame : Node
         CheckPlacementRules() && CheckRawReservePhases() && CheckRawReserveConstruction() &&
         CheckRoadPlacement() && CheckRoadDoesNotClaimInventory() && CheckRoadIndependentProduction() &&
         CheckMultiCellFacilities() && CheckBuildingOrientations() && CheckOrientationFailures() &&
-        CheckStableSnapshotForwarding();
+        CheckStableSnapshotForwarding() && CheckBatchRoadPlacement() && CheckBatchRoadFailures() &&
+        CheckBatchRoadFrozenMoney() && CheckBatchRoadRemoval();
+
+    private static bool CheckBatchRoadPlacement()
+    {
+        using var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+        game.SetPaused(true);
+        var initial = game.GetBuildingSpaces();
+        var workers = game.GetWorkers();
+        int money = game.MoneyCents;
+        int start = 0;
+        foreach (RoadMaterial material in System.Enum.GetValues<RoadMaterial>())
+        {
+            Vector2I[] cells = { new(start, 0), new(start + 1, 0), new(start + 1, 1), new(start + 1, 2) };
+            var before = game.GetBuildingSpaces();
+            if (game.CheckRoadPlacement(cells, material) != new RoadPlacementCheck(LandFailure.None, 4, 400) ||
+                !ReferenceEquals(before, game.GetBuildingSpaces()) ||
+                game.TryPlaceRoads(cells, material) != new RoadPlacementResult(LandFailure.None, 4, 400))
+                return Fail("道路批量预检改变正式状态或建造扣费不完整");
+            foreach (Vector2I cell in cells)
+            {
+                BuildingSpaceSnapshot? space = game.GetBuildingSpace(cell);
+                if (space?.Building != BuildingKind.Road || space.RoadMaterial != material ||
+                    space.Orientation != BuildingOrientation.Q0 || space.Footprint.Offsets.Count != 1 ||
+                    game.GetPlot(cell) != new PlotSnapshot(BuildingKind.Road, default, CropStage.None, 0))
+                    return Fail("批量道路没有逐格登记正确材质或误建生产状态");
+            }
+            if (ReferenceEquals(before, game.GetBuildingSpaces()))
+                return Fail("道路成功批量登记未发布新占地快照");
+            start += 3;
+        }
+        if (game.MoneyCents != money - 2000 || initial.Count != 5 || game.Calendar.ElapsedSeconds != 0 ||
+            !game.IsPaused || !game.GetWorkers().SequenceEqual(workers) || !game.HasConsistentState())
+            return Fail("暂停批量道路改变时间、工人或正式状态一致性");
+        return true;
+    }
+
+    private static bool CheckBatchRoadFailures()
+    {
+        using var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+        Vector2I[] legal = { new(0, 0), new(1, 0), new(2, 0) };
+        if (!game.CheckRoadPlacement(legal, RoadMaterial.Brick).Allowed ||
+            !game.TryPlace(new(2, 0), BuildingKind.Road, CropKind.Wheat).Success)
+            return Fail("批量重验夹具构造失败");
+        var before = game.GetBuildingSpaces();
+        int money = game.MoneyCents;
+        var attempts = new[]
+        {
+            (legal, RoadMaterial.Brick, LandFailure.Occupied),
+            (new[] { new Vector2I(0, 0), new Vector2I(189, 189) }, RoadMaterial.Brick, LandFailure.Occupied),
+            (new[] { new Vector2I(0, 0), new Vector2I(190, 193) }, RoadMaterial.Brick, LandFailure.Occupied),
+            (new[] { new Vector2I(0, 0), new Vector2I(-1, 0) }, RoadMaterial.Brick, LandFailure.OutOfBounds),
+            (new[] { new Vector2I(0, 0), new Vector2I(FarmGame.MapSize, 0) }, RoadMaterial.Brick, LandFailure.OutOfBounds),
+            (new[] { new Vector2I(0, 0), new Vector2I(0, 0) }, RoadMaterial.Brick, LandFailure.InvalidRoadRange),
+            (System.Array.Empty<Vector2I>(), RoadMaterial.Brick, LandFailure.InvalidRoadRange),
+            (new[] { new Vector2I(0, 0) }, (RoadMaterial)99, LandFailure.InvalidRoadMaterial),
+            (Enumerable.Range(0, 50).Select(x => new Vector2I(x, 10)).ToArray(), RoadMaterial.Brick, LandFailure.InsufficientFunds),
+        };
+        foreach (var (cells, material, failure) in attempts)
+        {
+            RoadPlacementCheck check = game.CheckRoadPlacement(cells, material);
+            RoadPlacementResult result = game.TryPlaceRoads(cells, material);
+            if (check.Failure != failure || check.CostCents != (long)cells.Length * 100 || result.Failure != failure ||
+                result.CellCount != 0 || result.ChargedCents != 0 || result.ErrorMessage == null ||
+                game.MoneyCents != money || !ReferenceEquals(before, game.GetBuildingSpaces()) ||
+                game.GetPlot(Vector2I.Zero).Building != BuildingKind.None ||
+                game.GetBuildingSpace(new(2, 0))!.RoadMaterial != RoadMaterial.Dirt || !game.HasConsistentState())
+                return Fail("道路整批失败留下部分占地、扣费、换材质或预检执行原因不一致");
+        }
+        foreach (System.Action action in new System.Action[]
+        {
+            () => game.TryPlaceRoads(legal, RoadMaterial.Dirt, (CommandOrigin)99),
+            () => game.TryRemoveRoads(legal, (CommandOrigin)99),
+        })
+        {
+            try { action(); return Fail("批量道路接受非法命令来源"); }
+            catch (System.ArgumentOutOfRangeException) { }
+        }
+        return game.MoneyCents == money && ReferenceEquals(before, game.GetBuildingSpaces());
+    }
+
+    private static bool CheckBatchRoadFrozenMoney()
+    {
+        using var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+        var request = new TradeOrderRequest(new(CropKind.Radish, CommodityKind.Raw), TradeOrderSide.Buy,
+            TradeOrderFrequency.Once, TradeOrderQuantityMode.Fixed, 0, TradeOrderBudgetMode.FixedBudget,
+            4500, 1, CashReserveMode.Amount, 0, new IReadOnlyList<TradeOrderCondition>[]
+            {
+                new[] { new TradeOrderCondition(TradeConditionFactor.Price, TradeConditionComparison.Less, 1) },
+            });
+        if (!game.CreateTradeOrder(request).Success || game.AvailableMoneyCents != 500)
+            return Fail("道路冻结资金夹具失败");
+        Vector2I[] six = Enumerable.Range(0, 6).Select(x => new Vector2I(x, 0)).ToArray();
+        var before = game.GetBuildingSpaces();
+        if (game.TryPlaceRoads(six, RoadMaterial.Slab).Failure != LandFailure.InsufficientFunds ||
+            game.MoneyCents != 5000 || game.FrozenMoneyCents != 4500 || !ReferenceEquals(before, game.GetBuildingSpaces()) ||
+            game.TryPlaceRoads(six.Take(5).ToArray(), RoadMaterial.Slab) != new RoadPlacementResult(LandFailure.None, 5, 500) ||
+            game.MoneyCents != 4500 || game.FrozenMoneyCents != 4500 || game.AvailableMoneyCents != 0)
+            return Fail("整段道路动用了冻结金币或没有允许准确耗尽可用余额");
+        return true;
+    }
+
+    private static bool CheckBatchRoadRemoval()
+    {
+        using var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+        game.AdvanceTicks(10);
+        game.SetPaused(true);
+        Vector2I first = new(188, 189);
+        Vector2I last = new(198, 189);
+        if (!game.TryPlaceRoads(new[] { first }, RoadMaterial.Gravel).Success ||
+            !game.TryPlaceRoads(new[] { last }, RoadMaterial.Cobble).Success)
+            return Fail("混合材质道路拆除夹具失败");
+        var before = game.GetBuildingSpaces();
+        var production = before.Where(space => space.Building != BuildingKind.Road).Select(space => game.GetPlot(space.AnchorCell)).ToArray();
+        var workers = game.GetWorkers();
+        var raw = FarmGame.Crops.Select(crop => game.GetRawStock(crop.Kind)).ToArray();
+        var products = FarmGame.Crops.Select(crop => game.GetProductStock(crop.Kind)).ToArray();
+        int money = game.MoneyCents;
+        if (game.TryRemoveRoads(new[] { first, new Vector2I(-1, 0) }).Failure != LandFailure.OutOfBounds ||
+            !ReferenceEquals(before, game.GetBuildingSpaces()))
+            return Fail("道路拆除越界失败移除了有效范围道路");
+        Vector2I[] range = Enumerable.Range(187, 13).Select(x => new Vector2I(x, 189)).Append(first).ToArray();
+        if (game.TryRemoveRoads(range) != new RoadRemovalResult(LandFailure.None, 2) ||
+            game.MoneyCents != money || game.GetPlot(first).Building != BuildingKind.None ||
+            game.GetPlot(last).Building != BuildingKind.None || game.Calendar.ElapsedSeconds != 10 || !game.IsPaused ||
+            !game.GetWorkers().SequenceEqual(workers) ||
+            !production.SequenceEqual(game.GetBuildingSpaces().Select(space => game.GetPlot(space.AnchorCell))) ||
+            !raw.SequenceEqual(FarmGame.Crops.Select(crop => game.GetRawStock(crop.Kind))) ||
+            !products.SequenceEqual(FarmGame.Crops.Select(crop => game.GetProductStock(crop.Kind))) ||
+            before.Single(space => space.AnchorCell == first).RoadMaterial != RoadMaterial.Gravel || !game.HasConsistentState())
+            return Fail("范围拆路误删生产设施、重复计数、退款或改变生产和旧快照");
+        var removed = game.GetBuildingSpaces();
+        if (game.TryRemoveRoads(range).ErrorMessage != "没有可拆除的道路" ||
+            game.TryRemoveRoads(System.Array.Empty<Vector2I>()).Failure != LandFailure.NoRoads ||
+            !ReferenceEquals(removed, game.GetBuildingSpaces()) ||
+            !game.TryPlaceRoads(new[] { first }, RoadMaterial.Brick).Success || game.RemoveBuilding(first) != null)
+            return Fail("没有道路拒绝或正式逐格拆除回归");
+        return true;
+    }
 
     private static bool CheckStableSnapshotForwarding()
     {

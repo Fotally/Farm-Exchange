@@ -15,6 +15,12 @@
 
 当前采用四张建筑活动层与九张带透明边的单株图：[建筑动效来源](../../assets/gameplay/buildings/motion/source_notes.md)、[植株动效来源](../../assets/gameplay/crops/motion/source_notes.md)。蒸汽、收获及数量为程序绘制，来源与实际参数见 [FX 说明](../../assets/gameplay/fx/source_notes.md)，不再叠加人物已有的工具/水滴。已提取32类 q0 装饰，实际目录、pivot、自然散布与受控陈设见 [装饰来源](../../assets/gameplay/decor/source_notes.md)。原包、示例工程及未采用动作均不作为运行入口。
 
+## 基础道路五材质
+
+[#143](https://github.com/Fotally/Farm-Exchange/issues/143)采用本地只读`assets/FarmExchange-Roads-Complete.zip`（ID=`farm_exchange_roads_complete`，SHA-256=`17fd66b4546e9afdd05aa5d17f532df79f8db35df47916c73a9d682ac4ee69f6`）内五张544×288道路atlas，共五材质×16 mask×4变体对应320张原单图；PNG字节保持原样，320个区域直接从根manifest提取。实际路径映射、各图集哈希、64×32画布/pivot、导入设置及使用状态见[道路来源说明](../../assets/gameplay/terrain/roads/source_notes.md)。
+
+包内`SOURCES_AND_LICENSES.md`记录基础路面为此前已确认的确定性绘制资源、源于历史`FarmExchange-Bright-Roads-v2.zip`，本包重新组织为完整交付而没有新外部道路下载或像素重绘。公开纳入依据仍为维护者2026-10-07对已提供素材的明确授权；不声明全部包内资源为CC0，也不扩展字体、人物或整景预览中第三方许可。原文中文已有乱码，保留只读原包并如实记录。硬分界、自然过渡、入口、中心细节、预览工程及字体未引入运行资源。真实导入、场景与导出验证由本单验收记录提供。
+
 ## 历史本地待评估：Farm Exchange 美术总包 v1
 
 - **文件**：用户提供的 `assets/FarmExchange-Art-Agent-Bundle-v1.zip`，当前未跟踪，内部版本为 `1.0.2`；本次只分析，不接入或公开上传。

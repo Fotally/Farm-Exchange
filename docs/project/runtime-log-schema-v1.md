@@ -106,6 +106,8 @@ AI 分析时先读本文件，再确认日志版本、会话和事件名。`Mess
 | `SetTradeOrderEnabled` | OrderId、Enabled（布尔原输入） |
 | `PlaceBuilding` | Cell、BuildingKind、Crop；可选新增 Orientation 为原请求朝向，省略的历史日志不推断方向；道路的原 Crop 输入也保留在参数域，不解释为道路种植 |
 | `RemoveBuilding` | Cell；保留输入子格，实际整座锚点由领域结果说明 |
+| `PlaceRoads` | Cells（原始逐格数组，最多前 32 项）、RequestedCellCount（完整原数量）、RoadMaterial（原输入枚举或非法十进制值） |
+| `RemoveRoads` | Cells（原始范围数组，最多前 32 项，重复也保留）、RequestedCellCount（完整原数量）；不预先过滤空格或生产设施 |
 | `SetRawReserve` | Crop、RequestedQuantity（原请求原料保留份数，负数仍原样记录） |
 | `CreateCultivationPlan` | RequestedPlan；创建前无有效 PlanId |
 | `UpdateCultivationPlan` | PlanId、RequestedPlan |
@@ -142,6 +144,10 @@ runtime 事件对为 CommandReceived 与 CommandFinished。Received 在语义入
 | `Cell`、`Anchor` | 格坐标对象 | 输入子格与解析后的整座锚点；解析失败时 Anchor 为 null |
 | `PreviousCrop` | 作物标识 | 改种前选种；不是自动认定已播下的作物 |
 | `ChargedCents` | 非负 int64，分 | 此次建造实际扣费；失败或拆除为 0，不表示目录预览价格 |
+| `RoadMaterial` | `Dirt/Gravel/Cobble/Brick/Slab` | 道路材质；批量铺路参数/领域结果保留原请求，单格成功建造/拆除或 RemovedRoads 明细取登记值；非法原请求保留十进制字符串 |
+| `RequestedCellCount` | 非负 int32 | 道路完整请求数组项数，含原重复格，不由采样数组长度推断 |
+| `RoadCount` | 非负 int32 | 本次批量道路真实新建或移除格数；拒绝为零，不把范围内空格或生产设施计入 |
+| `RemovedRoads` | 道路对象数组 | 范围拆路的真实原道路快照，每项为 Cell/RoadMaterial，最多前 32 项；只记录实际已移除道路，完整数量见 RoadCount，超限沿用 ItemCount 截断元数据 |
 | `PreviousReserveQuantity`、`ReserveQuantity` | 非负 int32，份 | 修改前/后的原料加工保留底线，不是冻结库存或订单目标 |
 | `Side` | `Buy/Sell` | 买入/卖出；不是金币变化的正负号 |
 | `RequestMode` | `Fixed/AllCommodity/AllProducts` | 请求固定份数/某商品可用量全部/全部加工品；不是订单的 QuantityMode |
@@ -359,7 +365,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `GameEnded` | 两类/INF | 本局尾段和捕获结束后；EndReason、IsPaused；不因原地流程结束而发出 |
 | `CommandReceived` | 两类/INF | 语义请求收到后、业务验证和修改前；CommandId、CommandName、CommandOrigin、CommandArguments；原参数形状见玩家指令契约 |
 | `CommandFinished` | 两类/INF | 真实完成、拒绝或异常后；同一 CommandId、CommandName、CommandOrigin、CommandStatus；拒绝加 RejectionReason，异常另关联 BusinessException 并保持传播；不重复输出资金库存收支 |
-| `BuildingPlaced`、`BuildingRemoved` | 两类/INF | 实际命令完成；Outcome、RejectionReason、Cell、Anchor、BuildingKind、ChargedCents、资金前后；可选新增 Orientation 取值按字段表，生产建筑加 Crop，失败无法解析的建筑信息可 null；有枚举时加 FailureCode |
+| `BuildingPlaced`、`BuildingRemoved` | 两类/INF | 实际命令完成；Outcome、RejectionReason、BuildingKind、ChargedCents、资金前后；单座命令加 Cell、Anchor，可选 Orientation，生产建筑加 Crop，道路加 RoadMaterial。整批 PlaceRoads/RemoveRoads 加 RequestedCellCount、RoadCount，铺路加 RoadMaterial，拆路加 RemovedRoads；不虚构单一 Cell/Anchor。失败无法解析的建筑信息可 null；有枚举时加 FailureCode |
 | `FarmManualControlChanged` | 两类/INF | 两种接管命令完成；Outcome、RejectionReason、Cell、Anchor、Crop（请求）、TakeoverMode、PreviousPlanId、PlanDetached、CurrentCyclePreserved、PreviousSelectedCrop、EffectiveSelectedCrop、NextCycleCrop；无法取得的状态为 null；替代旧 CropChanged，不重复发出 |
 | `CultivationPlanCreated`、`CultivationPlanUpdated` | 两类/INF | 正式保存完成；Outcome、RejectionReason、RequestedPlan、PlanBefore、PlanAfter；已有 ID 时加 PlanId，拒绝不把请求当 After |
 | `CultivationPlanDeleted` | 两类/INF | 删除及解除全部引用后；Outcome、RejectionReason、已有时的 PlanId、PlanBefore、PlanAfter、DetachedFarmCount；保留当前轮的规则由真实结果解释 |

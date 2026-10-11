@@ -4,9 +4,13 @@
 
 ## 自动化测试与覆盖率
 
-建筑放置预览由 `tests/integration/test_placement_preview.tscn` 检查独立覆盖层、真实占用、局部冲突、越界、跨块、取消和镜头定位；`tests/unit/TestWorldMap.cs` 以 2×4 偏移数据验证同一几何的覆盖、阻塞与外围。`tests/e2e/test_build_placement.tscn` 使用主场景验证农田、七种加工场地和道路的逐次建造、统一取消、冻结资金与费用提示、暂停及原生鼠标跨界面输入。三组接入 `TestSuite`；独立有窗口运行摆放场景保存 `build/issue87-validation/valid.png`、`conflict.png`、`camera.png`、`edge.png`，地图预览场景另保存 `coverage/placement-*.png`。图像产物仅在有图形后端时生成。
+道路 #143 的领域检查接入 `TestFarmGame`、`TestLandOccupancy` 与 `TestBuildingLogging`，验证五材质不可变快照、整段重验、冻结资金、失败零修改、范围只拆道路和批量日志一次终结。`TestRoadMap` 调用 `TestRoadAppearance`（独立入口 `tests/integration/test_road_appearance.tscn`），验证全部16种连接 mask、稳定变体、混材质及跨8×8缓存块的正式／新建／拆除外观，以及移动、隐藏和取消后的恢复；有窗口运行同时检查实际纹理像素并保存截图。`tests/e2e/test_road_placement.tscn` 使用真实主场景与原生输入验证两次短按、两种L形轨迹、投影直线拆除、失败保段、两级取消、拖动与界面防穿透及暂停。上述检查均由 `TestSuite` 调用，原生产设施建造与旋转测试继续保留。
 
-满地图性能场景保留原夹具；追加 `-- --placement-preview` 用户参数时启用随当前镜头移动的候选预览负载，写入 `coverage/performance-placement.json` 和同前缀的前后截图。先运行普通场景进行同条件比较，再运行预览负载；两者均须满足平均至少 60 FPS、P95 帧间隔不超过 16.67 ms。预览不得增加地图块重建。
+道路图形验收在 Debug 编译与导入后串行执行：先用 `tests/performance/test_full_world_fps.tscn` 保存同条件修改前后满地图报告和截图，再运行 `tests/performance/test_road_fps.tscn`，以1920×1080的真实主界面、五材质道路及移动新建／拆除预览测量帧率。平均至少60 FPS、P95帧间隔不超过16.67 ms；截图、报告和命令输出保存在 `build/issue143-validation/`，具体结果以当轮证据为准，不将未运行结果写成通过。
+
+建筑放置预览由 `tests/integration/test_placement_preview.tscn` 检查独立覆盖层、真实占用、局部冲突、越界、跨块、取消和镜头定位；`tests/unit/TestWorldMap.cs` 以 2×4 偏移数据验证同一几何的覆盖、阻塞与外围。`tests/e2e/test_build_placement.tscn` 使用主场景验证农田、七种加工场地的逐次建造，以及道路工具接入、取消、冻结资金与费用提示、暂停及原生鼠标跨界面输入。三组接入 `TestSuite`；独立有窗口运行摆放场景保存 `build/issue87-validation/valid.png`、`conflict.png`、`camera.png`、`edge.png`，地图预览场景另保存 `coverage/placement-*.png`。图像产物仅在有图形后端时生成。
+
+满地图性能场景保留原夹具；追加 `-- --placement-preview` 用户参数时启用随当前镜头移动的候选预览负载，写入 `coverage/performance-placement.json` 和同前缀的前后截图。先运行普通场景进行同条件比较，再运行预览负载；两者均须满足平均至少 60 FPS、P95 帧间隔不超过 16.67 ms。该农田候选覆盖层不得增加地图块重建；道路连接预览只允许局部刷新候选及四邻涉及的地图块，相同外观不重复重绘。
 
 测试按[测试分类调研](../research/test-taxonomy.md)分开存放：`tests/unit/` 检查独立的经营状态、土地、生产、资源、行情、日历与坐标；`tests/integration/` 检查镜头、选择、角色与地图绘制，`tests/e2e/` 检查主场景流程，`tests/performance/` 测负载和图形 FPS。`tests/test_suite.tscn` 汇总 headless 检查，任一失败返回非零。满地图在 384×384 基础格中平铺 8,192 农田与 8,192 加工场地，每座占 3×3：共 16,384 生产实例、147,456 占用格，七作物均覆盖。50 个经营步进检查角落实例只推进正常一秒，并打印总/平均耗时；耗时无固定阈值。实体数与占用格分开报告，不把子格当产能。Windows 导出程序启动另作构建冒烟测试。
 
