@@ -126,15 +126,22 @@ public sealed class FarmGame : IDisposable
 
     private void InitializeCenter(Random random)
     {
-        CropKind primary = (CropKind)random.Next(Crops.Count);
+        GrowingSeasons currentSeason = (GrowingSeasons)(1 << (int)_calendar.Snapshot.Season);
+        var candidates = new List<CropKind>();
+        foreach (CropDefinition crop in Crops)
+            if ((crop.GrowingSeasons & currentSeason) != 0)
+                candidates.Add(crop.Kind);
+
+        int primaryIndex = random.Next(candidates.Count);
+        CropKind primary = candidates[primaryIndex];
         bool split = random.Next(2) == 1;
         CropKind secondary = primary;
         if (split)
         {
-            int secondaryIndex = random.Next(Crops.Count - 1);
-            if (secondaryIndex >= (int)primary)
+            int secondaryIndex = random.Next(candidates.Count - 1);
+            if (secondaryIndex >= primaryIndex)
                 secondaryIndex++;
-            secondary = (CropKind)secondaryIndex;
+            secondary = candidates[secondaryIndex];
         }
 
         for (int i = 0; i < InitialFarmCells.Length; i++)
