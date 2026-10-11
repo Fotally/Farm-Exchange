@@ -292,6 +292,8 @@ public partial class Main : Node2D
             _roadSegment.UpdateEndpoint(cell);
             if (_roadSegment.StartCell != null)
                 _worldMap.UpdateRoadPreview(_roadSegment.GetCells(_removingRoads), placement.RoadMaterial, _removingRoads);
+            else if (!_removingRoads)
+                _worldMap.UpdateRoadPreview(new[] { cell }, placement.RoadMaterial);
             else
                 _worldMap.ClearRoadPreview();
             RefreshFooter();
@@ -762,7 +764,7 @@ public partial class Main : Node2D
             _roadSegment.Reset();
             ClearPlacementPreview();
             SetMessage("已取消当前道路段，请重新选择起点");
-            RefreshFooter();
+            RefreshPlacementPreview();
         }
         else CancelPlacement();
     }
@@ -1080,6 +1082,7 @@ public partial class Main : Node2D
         {
             var cells = _roadSegment.GetCells(_removingRoads);
             bool started = _roadSegment.StartCell != null;
+            if (!started && !_removingRoads && _placementCell is Vector2I candidateCell) cells = new[] { candidateCell };
             _buildHint.Text = (_removingRoads ? "拆除道路 · 直线范围" : RoadMaterialName(placement.RoadMaterial) + " · 每格 1×1") +
                 (started ? "\n短按终点提交 · 拖动平移\n右键 / Esc 取消当前段" : "\n短按选择起点 · 拖动平移\n右键 / Esc 退出工具");
             long totalCost = 0;
@@ -1093,13 +1096,13 @@ public partial class Main : Node2D
             }
             else
             {
-                RoadPlacementCheck check = started ? GameState.CheckRoadPlacement(cells, placement.RoadMaterial) : default;
-                totalCost = started ? check.CostCents : costCents;
+                RoadPlacementCheck check = cells.Count > 0 ? GameState.CheckRoadPlacement(cells, placement.RoadMaterial) : default;
+                totalCost = cells.Count > 0 ? check.CostCents : costCents;
                 bool shortFunds = GameState.AvailableMoneyCents < totalCost;
                 _buildCost.Text = started ? $"{cells.Count} 格 · 总费用 {FormatCoins(totalCost)} 金币"
                     : $"每格 {FormatCoins(costCents)} 金币";
                 if (shortFunds) _buildCost.Text += $"\n可用 {FormatCoins(GameState.AvailableMoneyCents)}";
-                if (started && !check.Allowed && !shortFunds)
+                if (cells.Count > 0 && !check.Allowed && !shortFunds)
                     _buildHint.Text += $"\n无法建造：\n{check.ErrorMessage}";
                 else if (started && !_roadSegment.CanSubmit(false))
                     _buildHint.Text += "\n请先沿一条网格轴移动";

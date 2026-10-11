@@ -51,6 +51,10 @@
 
 道路预览把全路径（含冲突／越界）交给 `WorldMap.UpdateRoadPreview(cells, material, removing)`，由地图读取正式占用计算操作后拓扑；费用复用 `CheckRoadPlacement` 的宽整数总价，拆除数量只读统计实际道路。隐藏调用 `ClearRoadPreview`，保留未提交段；失败保留起点和顺序，成功或段取消清空本段但保留工具与材质，下一段重新选起点。直接退出清全部工具状态。UI不记录正式路段归属、铺设历史，不修改资金或土地，也不启用未确认辅助材质效果。
 
+道路新建尚无 `StartCell` 时，`SetPlacementCandidate` 将当前鼠标格作为单格数组直接交给同一个 `UpdateRoadPreview`；费用和占用反馈也对该一格调用 `CheckRoadPlacement`。该候选只属于表现，不能调用 `RoadSegmentGesture.Begin`，也不能设起点或提前锁轴。界面／拖动／离窗隐藏后清除表现；成功和段取消后重新按当前真实鼠标位置刷新单格，第一短按仍只锁定手势起点。拆除无起点分支继续清预览，不改变两次短按或投影规则。`TestRoadPlacement.CheckStartPreview` 通过真实主场景与既有显示查询验证五材质、前一格消失、旧路连接、占用、资金、隐藏／恢复、成功／取消与轨迹隔离，并比较正式空间快照引用、金币与库存；聚焦日志和第一点击前的1080P有效／占用截图保存于 `build/issue143-start-preview/`。
+
+起点有效／占用截图均在任何准备性正式建造之前获取，占用来自开局农田实际子格，保持模型与UI同为50.00金币、0道路。随后旧路连接夹具经Main目录选择材质与真实两次短按准备，末尾经Main直线拆路工具清理，正常命令统一刷新金币与近况；清理后检查资源面板金额和道路计数与模型一致，避免后续目录截图继承直接修改经营夹具后的旧UI。
+
 `Main` 的当前 `Placement` 唯一持有候选 `BuildingOrientation`，每座候选从 `Q0` 开始。农田和加工摆放中的 R 与 `RotatePlacementButton` 共用内部旋转入口，按 `Q0→Q1→Q2→Q3→Q0` 更新候选并刷新预览，按钮显示当前 q。快捷键在 `_Input` 接收，但忽略重复按键、Ctrl/Alt/Meta 组合及 `LineEdit`/`TextEdit` 输入焦点，不截获文本编辑；道路与非摆放状态没有入口。近况面板使用主题次按钮把旋转和取消并排显示，整体/字体倍率仍由 `UiScaling` 管理。
 
 预览和预检分别向 `WorldMap.UpdatePlacementPreview` 与 `FarmGame.CheckPlacement` 传同一个候选方向，实际建造向 `TryPlace(..., orientation: ...)` 提交该方向，UI不修改实例纹理或正式朝向。成功后当前类型保持、下一座方向重置 `Q0`；失败仍为当前候选，方向保留；取消丢弃候选，重新选类型从 `Q0` 开始。暂停不限制操作，旋转本身不推进经营或修改资源。实例正式朝向由土地模块保存，建成后详情不提供旋转命令；当前3×3占地与工作中心保持一致。
