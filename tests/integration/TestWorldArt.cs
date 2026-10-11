@@ -6,6 +6,7 @@ using FarmExchange.Characters;
 using FarmExchange.Gameplay;
 using FarmExchange.World;
 using FarmExchange.Time;
+using FarmExchange.Weather;
 
 public partial class TestWorldArt : Node
 {
@@ -26,7 +27,7 @@ public partial class TestWorldArt : Node
         bool graphical = DisplayServer.GetName() != "headless";
         for (int crop = 0; crop < CropNames.Length; crop++)
         {
-            var game = new FarmGame(12345);
+            var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
             foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
             if (crop == (int)CropKind.Sugarcane) game.AdvanceTicks(4320); // 夏初，真实适季播种。
             if (!game.TryPlace(Farm, BuildingKind.Farm, (CropKind)crop).Success ||
@@ -67,7 +68,7 @@ public partial class TestWorldArt : Node
                 if (graphical && !MatchesTexture(Capture(parent), map, Farm + Vector2I.One,
                     "crops/field_seeded_q0.png", new Vector2(112, 128)))
                     return Fail("播种层未对应真实待水状态");
-                game.AdvanceTick(isRaining: true);
+                WeatherTestInput.AdvanceTick(game, true);
                 for (int stage = 0; stage < 3; stage++)
                 {
                     while (game.GetPlot(Farm).Crop == CropStage.Growing &&

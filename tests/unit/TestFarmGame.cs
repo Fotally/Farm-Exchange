@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
@@ -5,6 +6,7 @@ using FarmExchange.Land;
 using FarmExchange.Market;
 using FarmExchange.Time;
 using FarmExchange.Workers;
+using FarmExchange.Weather;
 
 public partial class TestFarmGame : Node
 {
@@ -23,14 +25,55 @@ public partial class TestFarmGame : Node
         CheckInvalidCrops() && CheckStateOwnership() &&
         CheckPlacementRules() && CheckRawReservePhases() && CheckRawReserveConstruction() &&
         CheckRoadPlacement() && CheckRoadDoesNotClaimInventory() && CheckRoadIndependentProduction() &&
-        CheckMultiCellFacilities() && CheckBuildingOrientations() && CheckOrientationFailures();
+        CheckMultiCellFacilities() && CheckBuildingOrientations() && CheckOrientationFailures() &&
+        CheckStableSnapshotForwarding();
+
+    private static bool CheckStableSnapshotForwarding()
+    {
+        using var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+        var initialSpaces = game.GetBuildingSpaces();
+        BuildingSpaceSnapshot[] savedSpaces = initialSpaces.ToArray();
+        var initialWeather = game.ActiveWeatherRegions;
+        Vector2I farm = new(189, 189);
+        Rect2I rain = new(189, 189, 1, 1);
+        if (!ReferenceEquals(initialSpaces, game.GetBuildingSpaces()) ||
+            game.TryPlace(farm, BuildingKind.Farm, CropKind.Wheat).Success ||
+            game.RemoveBuilding(Vector2I.Zero) == null ||
+            !ReferenceEquals(initialSpaces, game.GetBuildingSpaces()) ||
+            !game.TrySetWeatherRegion(rain, WeatherKind.Rain, out _) ||
+            ReferenceEquals(initialWeather, game.ActiveWeatherRegions) || initialWeather.Count != 0)
+            return Fail("占地／天气转发未保留稳定引用，或失败建拆改变了占地快照");
+        var rainyWeather = game.ActiveWeatherRegions;
+        game.AdvanceTick();
+        if (!game.GetPlot(farm).HasWater ||
+            !ReferenceEquals(initialSpaces, game.GetBuildingSpaces()) ||
+            !ReferenceEquals(rainyWeather, game.ActiveWeatherRegions) ||
+            game.TrySetWeatherRegion(rain, WeatherKind.Cloudy, out _) ||
+            game.TryClearWeatherRegion(new(189, 189, 2, 2), out _) ||
+            !ReferenceEquals(rainyWeather, game.ActiveWeatherRegions) ||
+            !game.TryClearWeatherRegion(rain, out _) ||
+            ReferenceEquals(rainyWeather, game.ActiveWeatherRegions) || rainyWeather.Count != 1 ||
+            rainyWeather[0].Kind != WeatherKind.Rain)
+            return Fail("动态生产错误失效占地快照，或天气失败／清除改变旧快照");
+        if (game.RemoveBuilding(farm + Vector2I.One) != null ||
+            ReferenceEquals(initialSpaces, game.GetBuildingSpaces()) ||
+            !initialSpaces.SequenceEqual(savedSpaces) ||
+            !game.TryPlace(farm, BuildingKind.Processor, CropKind.Wheat).Success)
+            return Fail("成功建拆没有发布新空间快照或改写了已发布快照");
+        var rebuilt = game.GetBuildingSpaces();
+        if (rebuilt.Count != initialSpaces.Count || ReferenceEquals(rebuilt, initialSpaces) ||
+            initialSpaces.Single(space => space.AnchorCell == farm).Building != BuildingKind.Farm ||
+            rebuilt.Single(space => space.AnchorCell == farm).Building != BuildingKind.Processor)
+            return Fail("同数量同锚点重建未以新引用发布真实空间变化");
+        return true;
+    }
 
     private static bool CheckBuildingOrientations()
     {
         foreach (BuildingOrientation orientation in System.Enum.GetValues<BuildingOrientation>())
         {
-            using var baseline = new FarmGame(12345);
-            using var game = new FarmGame(12345);
+            using var baseline = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+            using var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             foreach (BuildingSpaceSnapshot space in game.GetBuildingSpaces())
                 if (space.Orientation != BuildingOrientation.Q0)
                     return Fail("开局设施不是默认 q0 朝向");
@@ -60,7 +103,7 @@ public partial class TestFarmGame : Node
             game.SetPaused(false);
             for (int tick = 0; tick < 260; tick++)
             {
-                if (baseline.AdvanceTick(tick == 0) != game.AdvanceTick(tick == 0) ||
+                if (WeatherTestInput.AdvanceTick(baseline, tick == 0) != WeatherTestInput.AdvanceTick(game, tick == 0) ||
                     baseline.GetPlot(farm) != game.GetPlot(farm) ||
                     baseline.GetPlot(processor) != game.GetPlot(processor) ||
                     baseline.GetRawStock(CropKind.Radish) != game.GetRawStock(CropKind.Radish) ||
@@ -81,7 +124,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckOrientationFailures()
     {
-        using var game = new FarmGame(12345);
+        using var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var before = game.GetBuildingSpaces();
         Vector2I anchor = new(0, 0);
         foreach (BuildingKind kind in new[] { BuildingKind.Farm, BuildingKind.Processor, BuildingKind.Road })
@@ -116,7 +159,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckMultiCellFacilities()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         Vector2I anchor = new(5, 8); // 任意基础格锚点，不要求三格对齐。
         if (game.TryPlace(anchor, BuildingKind.Farm, CropKind.Radish).ChargedCents != 1000 ||
@@ -152,20 +195,20 @@ public partial class TestFarmGame : Node
             game.MoneyCents != 3900 || !game.HasConsistentState())
             return Fail("完整末端子格冲突或部分越界没有在扣费前拒绝");
 
-        game = new FarmGame(12345);
+        game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         Vector2I farm = new(189, 189);
         Vector2I processor = new(192, 192);
         game.TryPlace(farm, BuildingKind.Farm, CropKind.Radish);
         game.TryPlace(processor, BuildingKind.Processor, CropKind.Radish);
-        game.AdvanceTick(isRaining: true);
+        WeatherTestInput.AdvanceTick(game, true);
         if (game.GetPlot(farm).RemainingSeconds != 206 || !game.GetPlot(farm).HasWater)
             return Fail("多格降雨或播种没有使用一个实例的完整时长");
         for (int second = 0; second < 205; second++)
             if (game.AdvanceTick().Harvested != 0)
                 return Fail("九个子格导致农田进度被重复推进");
         TickResult harvest = game.AdvanceTick();
-        if (harvest.Harvested != 6 || game.GetRawStock(CropKind.Radish) != 5 ||
+        if (harvest.Harvested < 36 || game.GetRawStock(CropKind.Radish) != harvest.Harvested - 1 ||
             game.GetPlot(processor).RemainingSeconds != 26)
             return Fail("多格农田收成或加工领取被按子格倍增");
         foreach (Vector2I offset in BuildingFootprint.Get(BuildingKind.Processor).Offsets)
@@ -176,7 +219,7 @@ public partial class TestFarmGame : Node
             if (game.AdvanceTick().Produced != 0)
                 return Fail("九个子格导致加工批次被重复推进");
         if (game.AdvanceTick().Produced != 1 || game.GetProductStock(CropKind.Radish) != 1 ||
-            game.GetRawStock(CropKind.Radish) != 4 || !game.HasConsistentState())
+            game.GetRawStock(CropKind.Radish) != harvest.Harvested - 2 || !game.HasConsistentState())
             return Fail("一座加工场地没有每批次仅产出、领取一份");
         return true;
     }
@@ -191,8 +234,8 @@ public partial class TestFarmGame : Node
         // 种子 0、2、4 在旧的七作物抽样中会选中春季禁生的甘蔗。
         for (int seed = 0; seed < 64; seed++)
         {
-            var game = new FarmGame(seed);
-            var repeat = new FarmGame(seed);
+            var game = new FarmGame(seed, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+            var repeat = new FarmGame(seed, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             if (game.MoneyCents != 5000 || game.Calendar.Season != Season.Spring ||
                 game.GetBuildingSpaces().Count != 5 || !game.HasConsistentState())
                 return Fail("开局季节、金币或五座设施状态错误");
@@ -262,7 +305,7 @@ public partial class TestFarmGame : Node
         foreach ((uint seconds, Season season) in starts)
             for (int seed = 0; seed < 16; seed++)
             {
-                var game = new FarmGame(seed, seconds);
+                var game = new FarmGame(seed, seconds, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
                 if (game.Calendar.Season != season)
                     return Fail("非春季开局日期错误");
                 GrowingSeasons currentSeason = (GrowingSeasons)(1 << (int)season);
@@ -289,7 +332,7 @@ public partial class TestFarmGame : Node
         foreach (CropDefinition crop in FarmGame.Crops)
         {
             uint startSecond = crop.Kind == CropKind.Sugarcane ? 4320u : 0u;
-            var game = new FarmGame(12345, startSecond);
+            var game = new FarmGame(12345, startSecond, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             Vector2I farm = new(189, 189);
             Vector2I processor = new(300, 300);
             RemoveInitialBuildings(game);
@@ -320,12 +363,12 @@ public partial class TestFarmGame : Node
             if (game.GetRawStock(crop.Kind) != 0)
                 return Fail($"{crop.CropName}过早成熟");
             TickResult harvest = game.AdvanceTick();
-            if (harvest.Harvested != crop.HarvestQuantity ||
-                game.GetRawStock(crop.Kind) != crop.HarvestQuantity - 1 ||
+            if (harvest.Harvested < crop.HarvestQuantity * 6 || harvest.Harvested > crop.HarvestQuantity * 9 ||
+                game.GetRawStock(crop.Kind) != harvest.Harvested - 1 ||
                 game.GetPlot(processor).RemainingSeconds != processingSeconds)
                 return Fail($"{crop.CropName}未按时收获并投入对应场地");
             SaleResult rawSale = game.SellRaw(crop.Kind);
-            if (rawSale.Quantity != crop.HarvestQuantity - 1)
+            if (rawSale.Quantity != harvest.Harvested - 1)
                 return Fail($"{crop.CropName}原料库存或加工中的原料出售错误");
             for (int i = 0; i < processingSeconds - 1; i++)
                 game.AdvanceTick();
@@ -346,7 +389,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckBuildingCost()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         for (int col = 0; col < 5; col++)
         {
@@ -369,7 +412,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckMatchingAndSwitching()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         Vector2I farm = new(189, 189);
         Vector2I processor = new(3, 0);
@@ -388,14 +431,15 @@ public partial class TestFarmGame : Node
         game.AdvanceTick();
         for (int i = 0; i < 1029; i++)
             game.AdvanceTick();
-        if (game.GetRawStock(CropKind.Wheat) != 0 || game.GetRawStock(CropKind.Corn) != 4 ||
+        int cornHarvest = game.GetRawStock(CropKind.Corn);
+        if (game.GetRawStock(CropKind.Wheat) != 0 || cornHarvest < 24 || cornHarvest > 36 ||
             game.GetProductStock(CropKind.Rice) != 0 || game.GetPlot(processor).RemainingSeconds != 0)
             return Fail("加工场地消耗了不匹配原料，或切换前作物仍产出");
         if (game.SellAll().Quantity != 0)
             return Fail("原料被直接出售");
         game.RemoveBuilding(processor);
         game.BuildProcessor(processor, CropKind.Corn);
-        if (game.GetRawStock(CropKind.Corn) != 3 ||
+        if (game.GetRawStock(CropKind.Corn) != cornHarvest - 1 ||
             game.GetPlot(processor).RemainingSeconds != 155)
             return Fail("新建匹配场地没有自动处理库存原料");
         return true;
@@ -403,7 +447,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckRemoval()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         Vector2I farm = new(189, 189);
         Vector2I processor = new(3, 0);
@@ -427,7 +471,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckWorkerParticipation()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         Vector2I[] farms = { new(189, 189), new(192, 189), new(195, 189) };
         CropKind[] crops = { CropKind.Wheat, CropKind.Sunflower, CropKind.Radish };
@@ -461,7 +505,7 @@ public partial class TestFarmGame : Node
             if (game.GetPlot(farms[i]).RemainingSeconds != growthSeconds[i] - 1)
                 return Fail("三块农田没有从各自实际供水后的下一秒生长");
 
-        var remote = new FarmGame(12345);
+        var remote = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(remote);
         Vector2I target = new(189, 192);
         remote.BuildFarm(target);
@@ -489,30 +533,33 @@ public partial class TestFarmGame : Node
 
     private static bool CheckContinuousProduction()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         game.RemoveBuilding(new Vector2I(189, 192));
         game.RemoveBuilding(new Vector2I(192, 192));
         Vector2I[] farms = { new(189, 189), new(192, 189), new(195, 189) };
         foreach (Vector2I farm in farms)
             game.SetFarmCrop(farm, CropKind.Radish);
         int rounds = 0;
+        int totalHarvested = 0;
         for (int second = 0; second < 624 && rounds < 3; second++)
         {
             TickResult tick = game.AdvanceTick();
             if (tick.Harvested == 0)
                 continue;
-            if (tick.Harvested != 18)
+            if (game.GetPresentationResults().Count(r => r.Kind == ProductionResultKind.Harvest) != 3 ||
+                tick.Harvested != game.GetPresentationResults().Where(r => r.Kind == ProductionResultKind.Harvest).Sum(r => r.Quantity))
                 return Fail("三个中心工人持续生产时有田块长期遗漏或重复收获");
+            totalHarvested += tick.Harvested;
             rounds++;
         }
-        if (rounds != 3 || game.GetRawStock(CropKind.Radish) != 54 || game.MoneyCents != 5000)
+        if (rounds != 3 || game.GetRawStock(CropKind.Radish) != totalHarvested || game.MoneyCents != 5000)
             return Fail("三块中心田没有自动完成三轮，或收成与金币发生变化");
         return true;
     }
 
     private static bool CheckRainSupply()
     {
-        var retained = new FarmGame(12345);
+        var retained = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(retained);
         Vector2I first = new(189, 189);
         Vector2I second = new(201, 189);
@@ -520,11 +567,11 @@ public partial class TestFarmGame : Node
         retained.BuildFarm(second);
         retained.SetFarmCrop(second, CropKind.Radish);
         retained.SetPaused(true);
-        retained.AdvanceTick(isRaining: true);
+        WeatherTestInput.AdvanceTick(retained, true);
         if (retained.GetPlot(second).HasWater || retained.Calendar.ElapsedSeconds != 0)
             return Fail("暂停期间降雨改变了农田或日历");
         retained.SetPaused(false);
-        retained.AdvanceTick(isRaining: true);
+        WeatherTestInput.AdvanceTick(retained, true);
         if (retained.GetPlot(second).Crop != CropStage.None ||
             !retained.GetPlot(second).HasWater ||
             retained.GetFarmDetails(second).Status != FarmStatus.WaitingForWorkerWithWater)
@@ -538,7 +585,7 @@ public partial class TestFarmGame : Node
             retained.GetPlot(second).RemainingSeconds != 206)
             return Fail("雨停后播种没有使用留存水分开始生长");
 
-        var seeded = new FarmGame(12345);
+        var seeded = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(seeded);
         Vector2I farm = new(189, 189);
         seeded.BuildFarm(farm);
@@ -546,7 +593,7 @@ public partial class TestFarmGame : Node
         seeded.AdvanceTick();
         if (seeded.GetPlot(farm).Crop != CropStage.Seeded || seeded.GetPlot(farm).HasWater)
             return Fail("无雨时农田未进入待水阶段");
-        TickResult rainOnSeed = seeded.AdvanceTick(isRaining: true);
+        TickResult rainOnSeed = WeatherTestInput.AdvanceTick(seeded, true);
         if (rainOnSeed.WorkerActed || seeded.GetPlot(farm).Crop != CropStage.Growing ||
             seeded.GetPlot(farm).RemainingSeconds != 205 ||
             !seeded.GetPlot(farm).HasWater)
@@ -561,23 +608,23 @@ public partial class TestFarmGame : Node
         if (seeded.GetPlot(farm).HasWater)
             return Fail("拆除重建的农田保留了旧水分");
 
-        var continuous = new FarmGame(12345);
+        var continuous = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(continuous);
         continuous.BuildFarm(farm);
         continuous.SetFarmCrop(farm, CropKind.Radish);
         continuous.AdvanceTick();
         continuous.AdvanceTick();
-        TickResult repeatedRain = continuous.AdvanceTick(isRaining: true);
+        TickResult repeatedRain = WeatherTestInput.AdvanceTick(continuous, true);
         if (repeatedRain.WorkerActed || continuous.GetPlot(farm).RemainingSeconds != 205)
             return Fail("人工浇水后遇雨重置了生长进度");
         TickResult harvest = default;
         for (int step = 0; step < 205; step++)
-            harvest = continuous.AdvanceTick(isRaining: true);
-        if (harvest.Harvested != 6 || continuous.GetRawStock(CropKind.Radish) != 6 ||
+            harvest = WeatherTestInput.AdvanceTick(continuous, true);
+        if (harvest.Harvested < 32 || continuous.GetRawStock(CropKind.Radish) != harvest.Harvested ||
             continuous.GetPlot(farm).Crop != CropStage.Seeded ||
             continuous.GetPlot(farm).HasWater)
             return Fail("持续降雨中收获没有清除本轮水分");
-        TickResult nextRain = continuous.AdvanceTick(isRaining: true);
+        TickResult nextRain = WeatherTestInput.AdvanceTick(continuous, true);
         if (nextRain.WorkerActed || continuous.GetPlot(farm).Crop != CropStage.Growing ||
             !continuous.GetPlot(farm).HasWater ||
             continuous.GetPlot(farm).RemainingSeconds != 205)
@@ -587,7 +634,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckSeasonalSowing()
     {
-        var summer = new FarmGame(12345, 4320);
+        var summer = new FarmGame(12345, 4320, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(summer);
         Vector2I farm = new(189, 189);
         summer.BuildFarm(farm);
@@ -605,14 +652,14 @@ public partial class TestFarmGame : Node
             !summer.AdvanceTick().WorkerActed || summer.GetPlot(farm).Crop != CropStage.Seeded)
             return Fail("改为当季适宜作物后没有恢复自动播种");
 
-        var boundary = new FarmGame(12345, 4320 - 207);
+        var boundary = new FarmGame(12345, 4320 - 207, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(boundary);
         boundary.BuildFarm(farm);
         boundary.SetFarmCrop(farm, CropKind.Radish);
         if (boundary.GetFarmDetails(farm).Status != FarmStatus.InsufficientTime ||
             boundary.AdvanceTick().WorkerActed != true ||
             boundary.GetPlot(farm).Crop != CropStage.Seeded ||
-            boundary.AdvanceTick(isRaining: true).WorkerActed != false ||
+            WeatherTestInput.AdvanceTick(boundary, true).WorkerActed != false ||
             boundary.GetPlot(farm).Crop != CropStage.Growing)
             return Fail("季末预计时间不足没有作为风险提示允许播种，或降雨重复触发浇水");
         return true;
@@ -621,7 +668,7 @@ public partial class TestFarmGame : Node
     private static bool CheckSeasonFailure()
     {
         // 春季 3 月 22 日起步，真实生产留下历史原料与成品。
-        var game = new FarmGame(12345, 4000);
+        var game = new FarmGame(12345, 4000, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         Vector2I historyFarm = new(189, 189);
         Vector2I processor = new(300, 300);
@@ -629,7 +676,8 @@ public partial class TestFarmGame : Node
         game.SetFarmCrop(historyFarm, CropKind.Radish);
         for (int step = 0; step < 208; step++)
             game.AdvanceTick();
-        if (game.GetRawStock(CropKind.Radish) != 6)
+        int historyQuantity = game.GetRawStock(CropKind.Radish);
+        if (historyQuantity < 36)
             return Fail("越季连接回归没有建立真实历史收成");
         game.BuildProcessor(processor, CropKind.Radish);
         for (int step = 0; step < 26; step++)
@@ -640,7 +688,7 @@ public partial class TestFarmGame : Node
         int rawStock = game.GetRawStock(CropKind.Radish);
         int productStock = game.GetProductStock(CropKind.Radish);
         int money = game.MoneyCents;
-        if (rawStock != 4 || productStock != 1)
+        if (rawStock != historyQuantity - 2 || productStock != 1)
             return Fail("越季连接回归没有保留两类历史库存");
 
         // 复用现有负载夹具建立临界点进行中的作物，不人为延迟工人供水。
@@ -671,11 +719,11 @@ public partial class TestFarmGame : Node
     {
         Vector2I farm = new(189, 189);
         // 春末最后两秒播种玉米，春夏连续适宜，跨季后仍按原进度生长。
-        var continuous = new FarmGame(12345, 4318);
+        var continuous = new FarmGame(12345, 4318, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(continuous);
         continuous.BuildFarm(farm);
         continuous.SetFarmCrop(farm, CropKind.Corn);
-        continuous.AdvanceTick(isRaining: true);
+        WeatherTestInput.AdvanceTick(continuous, true);
         continuous.AdvanceTick();
         if (continuous.GetPlot(farm) !=
             new PlotSnapshot(BuildingKind.Farm, CropKind.Corn, CropStage.Growing, 1028, true,
@@ -683,15 +731,15 @@ public partial class TestFarmGame : Node
             return Fail("相邻适宜季节误清了生长中的玉米");
 
         // 春末剩 208 秒播种干田萝卜，下一秒浇水，恰好在夏季起点成熟。
-        var exact = new FarmGame(12345, 4112);
+        var exact = new FarmGame(12345, 4112, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(exact);
         exact.BuildFarm(farm);
         exact.SetFarmCrop(farm, CropKind.Radish);
         for (int step = 0; step < 207; step++)
             exact.AdvanceTick();
         TickResult harvest = exact.AdvanceTick();
-        if (!harvest.DayAdvanced || harvest.Harvested != 6 ||
-            exact.GetRawStock(CropKind.Radish) != 6 ||
+        if (!harvest.DayAdvanced || harvest.Harvested < 36 ||
+            exact.GetRawStock(CropKind.Radish) != harvest.Harvested ||
             exact.GetPlot(farm) != new PlotSnapshot(BuildingKind.Farm, CropKind.Radish, CropStage.None, 0) ||
             exact.GetFarmDetails(farm).Status != FarmStatus.WrongSeason)
             return Fail("恰在换季时成熟的萝卜被清理或没有先收获入库");
@@ -703,7 +751,7 @@ public partial class TestFarmGame : Node
         foreach (CropDefinition crop in FarmGame.Crops)
         {
             var game = new FarmGame(12345,
-                crop.Kind == CropKind.Sugarcane ? 4320u : 0u);
+                crop.Kind == CropKind.Sugarcane ? 4320u : 0u, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             RemoveInitialBuildings(game);
             Vector2I farm = new(189, 189);
             game.BuildFarm(farm);
@@ -714,7 +762,7 @@ public partial class TestFarmGame : Node
             int stock = game.GetRawStock(crop.Kind);
             int money = game.MoneyCents;
             int price = game.GetRawPriceCents(crop.Kind);
-            if (stock != crop.HarvestQuantity || game.GetProductStock(crop.Kind) != 0)
+            if (stock < crop.HarvestQuantity * 6 || stock > crop.HarvestQuantity * 9 || game.GetProductStock(crop.Kind) != 0)
                 return Fail($"{crop.CropName}原料未进入可出售库存");
             SaleResult sale = game.SellRaw(crop.Kind);
             if (sale.Quantity != stock || sale.RevenueCents != stock * price ||
@@ -723,7 +771,7 @@ public partial class TestFarmGame : Node
                 return Fail($"{crop.CropName}原料出售数量、当日收入或重复出售错误");
         }
 
-        var mixed = new FarmGame(12345);
+        var mixed = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(mixed);
         Vector2I wheatFarm = new(189, 189);
         Vector2I cornFarm = new(192, 189);
@@ -743,7 +791,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckInvalidCrops()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         CropKind invalid = (CropKind)999;
         Vector2I processor = new(12, 15);
         if (game.BuildProcessor(processor, invalid) == null ||
@@ -759,7 +807,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckStateOwnership()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         if (!game.HasConsistentState())
             return Fail("开局占用与生产状态不一致");
         RemoveInitialBuildings(game);
@@ -796,7 +844,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckPlacementRules()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         Vector2I target = new(0, 0);
         PlacementCheck preview = game.CheckPlacement(target, BuildingKind.Farm, CropKind.Wheat);
         if (!preview.Allowed || preview.CostCents != FarmGame.BuildingCostCents)
@@ -854,7 +902,7 @@ public partial class TestFarmGame : Node
 
     private static bool CheckRawReservePhases()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         foreach (CropDefinition crop in FarmGame.Crops)
             if (game.GetRawReserve(crop.Kind) != 0)
@@ -867,46 +915,47 @@ public partial class TestFarmGame : Node
         Vector2I farm = new(189, 189);
         Vector2I first = new(381, 0);
         Vector2I second = new(0, 3);
-        game.SetRawReserve(CropKind.Radish, 6);
+        game.SetRawReserve(CropKind.Radish, int.MaxValue);
         game.BuildFarm(farm);
         game.SetFarmCrop(farm, CropKind.Radish);
         game.BuildProcessor(second, CropKind.Radish);
         game.BuildProcessor(first, CropKind.Radish);
-        game.AdvanceTick(isRaining: true);
+        WeatherTestInput.AdvanceTick(game, true);
         for (int i = 0; i < 206; i++) game.AdvanceTick();
         game.RemoveBuilding(farm);
-        if (game.GetRawStock(CropKind.Radish) != 6 ||
+        int harvestQuantity = game.GetRawStock(CropKind.Radish);
+        if (harvestQuantity < 36 || harvestQuantity > 54 ||
             game.GetProcessorDetails(first).Status != ProcessorStatus.WaitingForReserve ||
             game.GetProcessorDetails(second).Status != ProcessorStatus.WaitingForReserve)
             return Fail("原料保留底线阻塞了农田收获，或空闲场地错误领取");
 
-        game.SetRawReserve(CropKind.Radish, 5);
-        game.SetRawReserve(CropKind.Radish, 5);
-        if (game.GetRawStock(CropKind.Radish) != 6 ||
+        game.SetRawReserve(CropKind.Radish, harvestQuantity - 1);
+        game.SetRawReserve(CropKind.Radish, harvestQuantity - 1);
+        if (game.GetRawStock(CropKind.Radish) != harvestQuantity ||
             game.GetPlot(first).RemainingSeconds != 0 ||
             game.GetProcessorDetails(first).Status != ProcessorStatus.ReadyToProcess)
             return Fail("底线修改或查询立即启动了领取");
         game.AdvanceTick();
-        if (game.GetRawStock(CropKind.Radish) != 5 ||
+        if (game.GetRawStock(CropKind.Radish) != harvestQuantity - 1 ||
             game.GetPlot(first).RemainingSeconds != 26 || game.GetPlot(second).RemainingSeconds != 0)
             return Fail("下一经营领取阶段未按格序竞争，或取走了保留部分");
 
         game.SetRawReserve(CropKind.Radish, 99);
-        if (game.GetRawStock(CropKind.Radish) != 5 || game.GetPlot(first).RemainingSeconds != 26 ||
+        if (game.GetRawStock(CropKind.Radish) != harvestQuantity - 1 || game.GetPlot(first).RemainingSeconds != 26 ||
             game.GetProcessorDetails(first).Status != ProcessorStatus.Processing)
             return Fail("提高底线退回投入物或重置了批次");
         SaleResult rawSale = game.SellRaw(CropKind.Radish);
-        if (rawSale.Quantity != 5 || game.GetRawStock(CropKind.Radish) != 0 ||
+        if (rawSale.Quantity != harvestQuantity - 1 || game.GetRawStock(CropKind.Radish) != 0 ||
             game.GetRawReserve(CropKind.Radish) != 99 ||
             game.GetProcessorDetails(second).Status != ProcessorStatus.WaitingForRaw)
             return Fail("出售未包含保留公共原料，或错误出售了投入物");
         for (int i = 0; i < 26; i++) game.AdvanceTick();
         if (game.GetProductStock(CropKind.Radish) != 1 ||
             game.GetPlot(first).RemainingSeconds != 0 ||
-            rawSale.Quantity + game.GetProductStock(CropKind.Radish) != 6)
+            rawSale.Quantity + game.GetProductStock(CropKind.Radish) != harvestQuantity)
             return Fail("收获、领取、出售与加工完成数量不守恒");
         SaleResult products = game.SellAll();
-        if (products.Quantity != 1 || rawSale.Quantity + products.Quantity != 6 ||
+        if (products.Quantity != 1 || rawSale.Quantity + products.Quantity != harvestQuantity ||
             game.GetProductStock(CropKind.Radish) != 0)
             return Fail("成品出售后数量不守恒");
         return true;
@@ -914,38 +963,39 @@ public partial class TestFarmGame : Node
 
     private static bool CheckRawReserveConstruction()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         Vector2I farm = new(189, 189);
         Vector2I existing = new(0, 0);
         Vector2I later = new(0, 3);
         Vector2I earlier = new(3, 0);
-        game.SetRawReserve(CropKind.Radish, 6);
+        game.SetRawReserve(CropKind.Radish, int.MaxValue);
         game.BuildFarm(farm);
         game.SetFarmCrop(farm, CropKind.Radish);
         game.BuildProcessor(existing, CropKind.Radish);
-        game.AdvanceTick(isRaining: true);
+        WeatherTestInput.AdvanceTick(game, true);
         for (int i = 0; i < 206; i++) game.AdvanceTick();
         game.RemoveBuilding(farm);
-        game.SetRawReserve(CropKind.Radish, 5);
+        int harvestQuantity = game.GetRawStock(CropKind.Radish);
+        game.SetRawReserve(CropKind.Radish, harvestQuantity - 1);
         if (game.BuildProcessor(later, CropKind.Radish) != null ||
             game.GetPlot(existing).RemainingSeconds != 26 || game.GetPlot(later).RemainingSeconds != 0 ||
-            game.GetRawStock(CropKind.Radish) != 5)
+            game.GetRawStock(CropKind.Radish) != harvestQuantity - 1)
             return Fail("新建未立即执行全场格序领取，或取走底线库存");
 
         game.RemoveBuilding(existing); // 已投入的一份随拆除丢弃，不返回公共库存。
-        game.SetRawReserve(CropKind.Radish, 4);
+        game.SetRawReserve(CropKind.Radish, harvestQuantity - 2);
         if (game.BuildProcessor(earlier, CropKind.Radish) != null ||
             game.GetPlot(earlier).RemainingSeconds != 26 || game.GetPlot(later).RemainingSeconds != 0 ||
-            game.GetRawStock(CropKind.Radish) != 4 || game.GetProductStock(CropKind.Radish) != 0 ||
-            game.GetRawStock(CropKind.Radish) + 1 + 1 != 6 || !game.HasConsistentState())
+            game.GetRawStock(CropKind.Radish) != harvestQuantity - 2 || game.GetProductStock(CropKind.Radish) != 0 ||
+            game.GetRawStock(CropKind.Radish) + 1 + 1 != harvestQuantity || !game.HasConsistentState())
             return Fail("新场地未按格序立即领取，或拆除损耗/投入/公共数量不守恒");
         return true;
     }
 
     private static bool CheckRoadPlacement()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         Vector2I road = new(0, 0);
         PlacementCheck preview = game.CheckPlacement(road, BuildingKind.Road, default);
         if (!preview.Allowed || preview.CostCents != 100 || game.MoneyCents != 5000 ||
@@ -999,7 +1049,7 @@ public partial class TestFarmGame : Node
             game.MoneyCents != 1800 || !game.HasConsistentState())
             return Fail("道路释放后改建农田继承了旧状态，或扣费与生产占用不一致");
 
-        var poor = new FarmGame(12345);
+        var poor = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(poor);
         for (int col = 0; col < 49; col++)
             if (poor.TryPlace(new Vector2I(col, 0), BuildingKind.Road, default).ChargedCents != 100)
@@ -1010,7 +1060,7 @@ public partial class TestFarmGame : Node
             poor.TryPlace(last, BuildingKind.Road, default) != new PlacementResult(LandFailure.InsufficientFunds, 0) ||
             poor.MoneyCents != 0 || poor.GetPlot(last).Building != BuildingKind.None || !poor.HasConsistentState())
             return Fail("道路预检后余额变化未重验，或不足100分仍铺路");
-        TickResult rain = poor.AdvanceTick(isRaining: true);
+        TickResult rain = WeatherTestInput.AdvanceTick(poor, true);
         if (rain.Harvested != 0 || rain.Produced != 0 || rain.WorkerActed ||
             poor.GetPlot(new Vector2I(0, 0)) != expectedRoad || poor.MoneyCents != 0)
             return Fail("道路参与了播种、供水或生产");
@@ -1019,37 +1069,38 @@ public partial class TestFarmGame : Node
 
     private static bool CheckRoadDoesNotClaimInventory()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         RemoveInitialBuildings(game);
         Vector2I farm = new(189, 189);
         Vector2I processor = new(30, 30);
         game.BuildFarm(farm);
         game.SetFarmCrop(farm, CropKind.Radish);
-        game.SetRawReserve(CropKind.Radish, 6);
+        game.SetRawReserve(CropKind.Radish, int.MaxValue);
         game.BuildProcessor(processor, CropKind.Radish);
         for (int step = 0; step < 208; step++)
             game.AdvanceTick();
         game.RemoveBuilding(farm);
-        game.SetRawReserve(CropKind.Radish, 5);
+        int harvestQuantity = game.GetRawStock(CropKind.Radish);
+        game.SetRawReserve(CropKind.Radish, harvestQuantity - 1);
         int money = game.MoneyCents;
-        if (game.GetRawStock(CropKind.Radish) != 6 ||
+        if (game.GetRawStock(CropKind.Radish) != harvestQuantity ||
             game.GetProcessorDetails(processor).Status != ProcessorStatus.ReadyToProcess ||
             game.TryPlace(new Vector2I(0, 0), BuildingKind.Road, default).ChargedCents != 100 ||
-            game.MoneyCents != money - 100 || game.GetRawStock(CropKind.Radish) != 6 ||
+            game.MoneyCents != money - 100 || game.GetRawStock(CropKind.Radish) != harvestQuantity ||
             game.GetPlot(processor).RemainingSeconds != 0 ||
             game.GetProcessorDetails(processor).Status != ProcessorStatus.ReadyToProcess)
             return Fail("铺路错误触发了空闲加工场地领取历史库存");
         game.AdvanceTick();
-        if (game.GetRawStock(CropKind.Radish) != 5 || game.GetPlot(processor).RemainingSeconds != 26)
+        if (game.GetRawStock(CropKind.Radish) != harvestQuantity - 1 || game.GetPlot(processor).RemainingSeconds != 26)
             return Fail("铺路后的正常经营领取阶段发生回归");
         return true;
     }
 
     private static bool CheckRoadIndependentProduction()
     {
-        var bare = new FarmGame(12345);
-        var connected = new FarmGame(12345);
-        var broken = new FarmGame(12345);
+        var bare = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var connected = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var broken = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         Vector2I farm = new(201, 189);
         foreach (FarmGame game in new[] { bare, connected, broken })
         {
@@ -1062,9 +1113,12 @@ public partial class TestFarmGame : Node
                 if (!game.TryPlace(new Vector2I(col, 190), BuildingKind.Road, default).Success)
                     return Fail("有路/断路验收布局铺设失败");
         broken.RemoveBuilding(new Vector2I(196, 190));
+        int harvestedRounds = 0;
+        int totalQuantity = 0;
         for (int second = 0; second < 650; second++)
         {
             TickResult baseline = bare.AdvanceTick();
+            if (baseline.Harvested > 0) { harvestedRounds++; totalQuantity += baseline.Harvested; }
             if (connected.AdvanceTick() != baseline || broken.AdvanceTick() != baseline ||
                 connected.GetPlot(farm) != bare.GetPlot(farm) || broken.GetPlot(farm) != bare.GetPlot(farm))
                 return Fail("道路连通改变了移动到田、播种供水或生长节奏");
@@ -1078,7 +1132,7 @@ public partial class TestFarmGame : Node
                 bare.GetRawStock(CropKind.Radish) != broken.GetRawStock(CropKind.Radish))
                 return Fail("有路、无路和断路的累计产出不同");
         }
-        if (bare.GetRawStock(CropKind.Radish) != 18 ||
+        if (harvestedRounds != 3 || bare.GetRawStock(CropKind.Radish) != totalQuantity ||
             connected.GetPlot(new Vector2I(196, 190)).Building != BuildingKind.Road ||
             broken.GetPlot(new Vector2I(196, 190)).Building != BuildingKind.None ||
             !bare.HasConsistentState() || !connected.HasConsistentState() || !broken.HasConsistentState())

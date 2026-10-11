@@ -67,7 +67,7 @@ public partial class TestScenarioLogging : Node
 
     private static FarmGame Current(RuntimeLog log, uint seconds = 0)
     {
-        var game = new FarmGame(12345, seconds, log);
+        var game = new FarmGame(12345, seconds, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         Require(game.BuildProcessor(Vector2I.Zero, CropKind.Radish) == null, "现场场地准备失败");
         return game;
@@ -77,7 +77,7 @@ public partial class TestScenarioLogging : Node
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var main = new FarmGame(12345, log);
+        using var main = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         ScenarioConfiguration config = Load(directory);
         string hash = config.Sha256;
         File.WriteAllText(config.SourcePath, "之后的外部修改，不是本次配置");
@@ -233,11 +233,11 @@ public partial class TestScenarioLogging : Node
         using var log = RuntimeLog.Capture(text);
         foreach (RuntimeLog? observer in new RuntimeLog?[] { log, null })
         {
-            try { using var invalid = new FarmGame(17, observer, (GamePurpose)99); throw new Exception("非法用途未拒绝"); }
+            try { using var invalid = new FarmGame(17, observer, (GamePurpose)99, weatherMode: FarmExchange.Weather.WeatherMode.Explicit); throw new Exception("非法用途未拒绝"); }
             catch (ArgumentOutOfRangeException) { }
         }
         Require(Events(text, "GameInitialized").Length == 0, "非法用途创建了日志局");
-        using var game = new FarmGame(17, log);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var run = game.Log!.Scenario.Begin("adapter-run", "Current", 1, "hash")!;
         run.Finish("Aborted", null);
         run.Finish("Passed", "不得覆盖");
@@ -253,7 +253,7 @@ public partial class TestScenarioLogging : Node
         Directory.CreateDirectory(output);
         using (var log = RuntimeLog.OpenFile(output, true, new LogEnvironment()))
         {
-            using var main = new FarmGame(12345, log);
+            using var main = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             var passed = Start(output, Load(directory), log);
             using (passed.Game)
             {

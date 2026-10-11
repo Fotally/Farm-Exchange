@@ -1,5 +1,6 @@
 using System;
 using Godot;
+using FarmExchange.Weather;
 using FarmExchange.Cultivation;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
@@ -22,7 +23,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckDraftSchedule()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         var request = Request() with { Name = " " };
         PlotSnapshot plot = game.GetPlot(new Vector2I(189, 189));
         CultivationValidation check = game.CheckCultivationEntries(request.Entries);
@@ -59,7 +60,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckEntryIdentityLifetime()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
@@ -71,9 +72,11 @@ public partial class TestCultivationPlanBook : Node
         if (initial.NextEntryId != 2)
             return Fail("共享表未提供下一可用条编号");
         game.ApplyCultivationPlan(id, new[] { farm });
-        while (game.GetRawStock(CropKind.Radish) == 0 && game.Calendar.ElapsedSeconds < 300)
-            game.AdvanceTick(isRaining: true);
-        if (game.GetRawStock(CropKind.Radish) != 6)
+        int rounds = 0;
+        int quantity = 0;
+        while (rounds == 0 && game.Calendar.ElapsedSeconds < 300)
+            AdvanceAndCount(game, ref rounds, ref quantity, true);
+        if (rounds != 1 || quantity <= 0 || game.GetRawStock(CropKind.Radish) != quantity)
             return Fail("条编号回归未真实完成旧条");
         var moved = request with { Entries = new[] { new CultivationEntry(1, CropKind.Radish, 10) } };
         if (!game.UpdateCultivationPlan(id, moved).Success ||
@@ -97,8 +100,8 @@ public partial class TestCultivationPlanBook : Node
             game.GetFarmCultivation(farm).PreparedTimeUnits != 10 * GameTimeUnits.PerDay)
             return Fail("删除后新条没有在本年定位");
         while ((long)game.Calendar.ElapsedSeconds * GameTimeUnits.PerSecond < 16 * GameTimeUnits.PerDay)
-            game.AdvanceTick(isRaining: true);
-        if (game.GetRawStock(CropKind.Radish) != 12)
+            AdvanceAndCount(game, ref rounds, ref quantity, true);
+        if (rounds != 2 || game.GetRawStock(CropKind.Radish) != quantity)
             return Fail("新条本年没有实际播种收获一轮，或旧条被重新执行");
         if (!game.UpdateCultivationPlan(id, request with { Entries = Array.Empty<CultivationEntry>() }).Success ||
             game.GetCultivationPlans()[0].NextEntryId != 3)
@@ -151,7 +154,7 @@ public partial class TestCultivationPlanBook : Node
                     (check.Error == null || !check.Error.Contains(crop.CropName) || !check.Error.Contains("不适宜季节"))))
                     return Fail("作物条起点未按作物适季定义校验或未说明禁止原因");
             }
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         Vector2I farm = new(189, 189);
         int id = game.CreateCultivationPlan(Request()).Id;
         game.ApplyCultivationPlan(id, new[] { farm });
@@ -252,7 +255,7 @@ public partial class TestCultivationPlanBook : Node
         if (book.GetFarm(0).PreparedTimeUnits != 334 * 360 || farming.Get(0).SowingEnabled)
             return Fail("冬春同一轮未定位到本年冬季下一次安排");
         for (int tick = 0; tick < 206; tick++)
-            farming.AdvanceGrowth(0, out _);
+            farming.AdvanceGrowth(0, out _, WeatherKind.Sunny);
         book.Harvested(0, 1449);
         if (farming.Get(0).SowingEnabled || !book.GetFarm(0).IsResting)
             return Fail("同一作物条收获后重复播种");
@@ -270,7 +273,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckManualAndFacade()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         Vector2I farm = new(189, 189);
         Vector2I other = new(192, 189);
         game.SetFarmCrop(farm, CropKind.Radish);
@@ -316,20 +319,21 @@ public partial class TestCultivationPlanBook : Node
     private static bool CheckSeasonRescue()
     {
         // 春末供水后恰剩约5%的生长周期，换季补救沿用经营收获入库且只收一次。
-        var game = new FarmGame(12345, 4123);
+        var game = new FarmGame(12345, 4123, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
         game.BuildFarm(farm);
         game.SetFarmCrop(farm, CropKind.Radish);
         int harvests = 0;
+        int rounds = 0;
         while (game.Calendar.ElapsedSeconds < 4320)
-            harvests += game.AdvanceTick().Harvested;
-        if (harvests != 6 || game.GetRawStock(CropKind.Radish) != 6 ||
+            AdvanceAndCount(game, ref rounds, ref harvests);
+        if (rounds != 1 || harvests <= 0 || game.GetRawStock(CropKind.Radish) != harvests ||
             game.GetPlot(farm).Crop != CropStage.None)
             return Fail("换季促熟未走原收获入库流程");
         for (int tick = 0; tick < 10; tick++)
-            if (game.AdvanceTick().Harvested != 0 || game.GetRawStock(CropKind.Radish) != 6)
+            if (game.AdvanceTick().Harvested != 0 || game.GetRawStock(CropKind.Radish) != harvests)
                 return Fail("换季补救重复入库");
         return true;
     }
@@ -344,7 +348,7 @@ public partial class TestCultivationPlanBook : Node
                 if (target == CropKind.Wheat && mode == CultivationMode.Immediate)
                     continue;
                 // 旧轮干田萝卜恰在春夏边界成熟；目标为春末风险条或夏季适宜条。
-                var game = new FarmGame(12345, 4112);
+                var game = new FarmGame(12345, 4112, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
                 foreach (var space in game.GetBuildingSpaces())
                     game.RemoveBuilding(space.AnchorCell);
                 Vector2I farm = new(189, 189);
@@ -363,14 +367,14 @@ public partial class TestCultivationPlanBook : Node
                     game.GetFarmCultivation(farm).PreparedTimeUnits != targetDay * 360)
                     return Fail("春末当前轮未缓存夏季生效目标");
                 int totalHarvested = 0;
+                int rounds = 0;
                 while (game.Calendar.ElapsedSeconds < 4319)
-                    totalHarvested += game.AdvanceTick().Harvested;
-                TickResult boundary = game.AdvanceTick();
-                totalHarvested += boundary.Harvested;
-                if (game.Calendar.Season != Season.Summer || !boundary.DayAdvanced || boundary.Harvested != 6 ||
+                    AdvanceAndCount(game, ref rounds, ref totalHarvested);
+                TickResult boundary = AdvanceAndCount(game, ref rounds, ref totalHarvested);
+                if (game.Calendar.Season != Season.Summer || !boundary.DayAdvanced || boundary.Harvested <= 0 ||
                     boundary.WorkerActed || game.GetPlot(farm).Crop != CropStage.None ||
-                    game.GetPlot(farm).CropKind != target || totalHarvested != 6 ||
-                    game.GetRawStock(CropKind.Radish) != 6 || game.GetRawStock(target) != 0)
+                    game.GetPlot(farm).CropKind != target || rounds != 1 || totalHarvested != boundary.Harvested ||
+                    game.GetRawStock(CropKind.Radish) != totalHarvested || game.GetRawStock(target) != 0)
                     return Fail("新计划条借旧季工人相位提前播种，或原收成重复入库");
                 TickResult next = game.AdvanceTick();
                 if (target == CropKind.Wheat)
@@ -382,7 +386,7 @@ public partial class TestCultivationPlanBook : Node
                 else if (!next.WorkerActed || game.GetPlot(farm).Crop != CropStage.Seeded)
                     return Fail("夏季适宜目标未在日期生效后的原工人相位播种");
                 game.AdvanceTick();
-                if (game.GetRawStock(CropKind.Radish) != 6 || game.GetRawStock(target) != 0 ||
+                if (game.GetRawStock(CropKind.Radish) != totalHarvested || game.GetRawStock(target) != 0 ||
                     (target == CropKind.Corn && game.GetPlot(farm).Crop != CropStage.Growing))
                     return Fail("日期生效目标改变原供水耗时或重复发放旧轮库存");
             }
@@ -395,7 +399,7 @@ public partial class TestCultivationPlanBook : Node
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
         {
             // 第69天的小麦条延伸至第85天；第84天换季促熟时仍在原条内。
-            var game = new FarmGame(12345, 3550);
+            var game = new FarmGame(12345, 3550, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             foreach (var space in game.GetBuildingSpaces())
                 game.RemoveBuilding(space.AnchorCell);
             Vector2I farm = new(189, 189);
@@ -409,12 +413,13 @@ public partial class TestCultivationPlanBook : Node
                     return Fail("条内促熟回归在季节边界前意外收获");
             TickResult boundary = game.AdvanceTick();
             FarmCultivationSnapshot arrangement = game.GetFarmCultivation(farm);
-            if (boundary.Harvested != 2 || boundary.WorkerActed || game.GetRawStock(CropKind.Wheat) != 2 ||
+            int harvestRounds = CountHarvests(game);
+            if (boundary.Harvested <= 0 || harvestRounds != 1 || boundary.WorkerActed || game.GetRawStock(CropKind.Wheat) != boundary.Harvested ||
                 game.GetPlot(farm).Crop != CropStage.None || !arrangement.IsResting ||
                 arrangement.PreparedTimeUnits != (336 + 69) * 360)
                 return Fail("条内换季收获后同条被重新启用，或未缓存下一年度目标");
             for (int tick = 0; tick < 10; tick++)
-                if (game.AdvanceTick().Harvested != 0 || game.GetRawStock(CropKind.Wheat) != 2 ||
+                if (game.AdvanceTick().Harvested != 0 || game.GetRawStock(CropKind.Wheat) != boundary.Harvested ||
                     !game.GetFarmCultivation(farm).IsResting)
                     return Fail("条内收获后的休耕或未来缓存未保持");
         }
@@ -423,7 +428,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckExecutedEntriesAfterEdit()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
@@ -432,9 +437,11 @@ public partial class TestCultivationPlanBook : Node
             new[] { new CultivationEntry(1, CropKind.Radish, 0), new CultivationEntry(2, CropKind.Radish, 4) });
         int id = game.CreateCultivationPlan(request).Id;
         game.ApplyCultivationPlan(id, new[] { farm });
-        while (game.GetRawStock(CropKind.Radish) < 12 && game.Calendar.ElapsedSeconds < 500)
-            game.AdvanceTick();
-        if (game.GetRawStock(CropKind.Radish) != 12 || game.GetPlot(farm).Crop != CropStage.None)
+        int rounds = 0;
+        int quantity = 0;
+        while (rounds < 2 && game.Calendar.ElapsedSeconds < 500)
+            AdvanceAndCount(game, ref rounds, ref quantity);
+        if (rounds != 2 || game.GetRawStock(CropKind.Radish) != quantity || game.GetPlot(farm).Crop != CropStage.None)
             return Fail("编辑执行凭据回归没有真实完成两条各一轮");
         var edited = request with { Entries = new[] { new CultivationEntry(1, CropKind.Radish, 10), new CultivationEntry(2, CropKind.Radish, 4) } };
         if (!game.UpdateCultivationPlan(id, edited).Success || game.ApplyCultivationPlan(id, new[] { farm }) != null)
@@ -444,16 +451,16 @@ public partial class TestCultivationPlanBook : Node
         {
             TickResult tick = game.AdvanceTick();
             if (tick.WorkerActed || tick.Harvested != 0 || game.GetPlot(farm).Crop != CropStage.None ||
-                game.GetRawStock(CropKind.Radish) != 12)
+                game.GetRawStock(CropKind.Radish) != quantity)
                 return Fail("较早已执行条拖至本年未来日期后重复播种");
         }
         TickResult yearStart = game.AdvanceTick();
         if (!yearStart.WorkerActed || game.GetPlot(farm).Crop != CropStage.Seeded)
             return Fail("保留执行凭据阻止下一年度正常重复");
-        while (game.GetRawStock(CropKind.Radish) < 18 && game.Calendar.ElapsedSeconds < nextYearSecondEntry + 210)
-            game.AdvanceTick();
+        while (rounds < 3 && game.Calendar.ElapsedSeconds < nextYearSecondEntry + 210)
+            AdvanceAndCount(game, ref rounds, ref quantity);
         uint nextYearMovedEntry = (uint)GameTimeUnits.RemainingSeconds((336 + 10) * GameTimeUnits.PerDay);
-        if (game.GetRawStock(CropKind.Radish) != 18 ||
+        if (rounds != 3 || game.GetRawStock(CropKind.Radish) != quantity ||
             game.GetFarmCultivation(farm).PreparedTimeUnits != (336 + 10) * GameTimeUnits.PerDay)
             return Fail("下一年度未预备移动过的早期条");
         while (game.Calendar.ElapsedSeconds < nextYearMovedEntry)
@@ -465,7 +472,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckPreservedRoundDoesNotConsumeEntry()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
@@ -476,9 +483,11 @@ public partial class TestCultivationPlanBook : Node
         int id = game.CreateCultivationPlan(new("保留外来当前轮", CultivationMode.PrepareNext,
             new[] { new CultivationEntry(1, CropKind.Wheat, 0) })).Id;
         game.ApplyCultivationPlan(id, new[] { farm });
+        int rounds = 0;
+        int quantity = 0;
         for (int tick = 0; tick < 206; tick++)
-            game.AdvanceTick();
-        if (game.GetRawStock(CropKind.Radish) != 6 || game.GetPlot(farm).CropKind != CropKind.Wheat ||
+            AdvanceAndCount(game, ref rounds, ref quantity);
+        if (rounds != 1 || quantity <= 0 || game.GetRawStock(CropKind.Radish) != quantity || game.GetPlot(farm).CropKind != CropKind.Wheat ||
             game.GetPlot(farm).Crop != CropStage.None || !game.AdvanceTick().WorkerActed ||
             game.GetPlot(farm).Crop != CropStage.Seeded)
             return Fail("初次应用保留的手动当前轮被虚认为已播计划条");
@@ -489,7 +498,7 @@ public partial class TestCultivationPlanBook : Node
     {
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
         {
-            var game = new FarmGame(12345, 4319);
+            var game = new FarmGame(12345, 4319, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             foreach (var space in game.GetBuildingSpaces())
                 game.RemoveBuilding(space.AnchorCell);
             Vector2I farm = new(189, 189);
@@ -530,7 +539,7 @@ public partial class TestCultivationPlanBook : Node
         Vector2I farm = new(189, 189);
         foreach (uint start in new[] { 11006u, 6686u, 12000u })
         {
-            var game = new FarmGame(12345, start);
+            var game = new FarmGame(12345, start, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             foreach (var space in game.GetBuildingSpaces())
                 game.RemoveBuilding(space.AnchorCell);
             game.BuildFarm(farm);
@@ -557,8 +566,9 @@ public partial class TestCultivationPlanBook : Node
                 return Fail($"甘蔗 {start} 秒开局的预计结束未区分适季跨季与禁生结局");
             uint boundary = crossesAllowedSeason ? 8640u : 12960u;
             int harvested = 0;
+            int rounds = 0;
             while (game.Calendar.ElapsedSeconds < boundary)
-                harvested += game.AdvanceTick().Harvested;
+                AdvanceAndCount(game, ref rounds, ref harvested);
             if (crossesAllowedSeason)
             {
                 if (harvested != 0 || game.GetPlot(farm).Crop != CropStage.Growing ||
@@ -567,8 +577,9 @@ public partial class TestCultivationPlanBook : Node
             }
             else
             {
-                int expectedHarvest = start == 11006 ? 12 : 0;
-                if (harvested != expectedHarvest || game.GetRawStock(CropKind.Sugarcane) != expectedHarvest ||
+                int expectedRounds = start == 11006 ? 1 : 0;
+                if (rounds != expectedRounds || (expectedRounds == 0 ? harvested != 0 : harvested <= 0) ||
+                    game.GetRawStock(CropKind.Sugarcane) != harvested ||
                     game.GetPlot(farm).CropKind != CropKind.Radish || game.GetPlot(farm).Crop != CropStage.None ||
                     !game.AdvanceTick().WorkerActed || game.GetPlot(farm).Crop != CropStage.Seeded)
                     return Fail("禁生促熟或清理后未按实际结束位置启用仍有效萝卜条，或失败被当成收成");
@@ -582,7 +593,7 @@ public partial class TestCultivationPlanBook : Node
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
             foreach (int rounds in new[] { 1, 3 })
             {
-                var game = new FarmGame(12345);
+                var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
                 foreach (var space in game.GetBuildingSpaces())
                     game.RemoveBuilding(space.AnchorCell);
                 Vector2I farm = new(189, 189);
@@ -593,17 +604,19 @@ public partial class TestCultivationPlanBook : Node
                 int id = game.CreateCultivationPlan(new("休耕缓冲逐轮", mode, entries)).Id;
                 game.ApplyCultivationPlan(id, new[] { farm });
                 while ((long)game.Calendar.ElapsedSeconds * GameTimeUnits.PerSecond < 4 * GameTimeUnits.PerDay)
-                    game.AdvanceTick(isRaining: true);
+                    WeatherTestInput.AdvanceTick(game, true);
                 if (game.GetRawStock(CropKind.Radish) != 0 || game.GetPlot(farm).Crop != CropStage.Growing)
                     return Fail("条尾或同种连续起点丢弃了尚未成熟的第一轮");
+                int completedRounds = 0;
+                int quantity = 0;
                 while ((long)game.Calendar.ElapsedSeconds * GameTimeUnits.PerSecond < (rounds * 4 + 2) * GameTimeUnits.PerDay)
-                    game.AdvanceTick(isRaining: true);
-                if (game.GetRawStock(CropKind.Radish) != rounds * 6 || game.GetPlot(farm).Crop != CropStage.None ||
+                    AdvanceAndCount(game, ref completedRounds, ref quantity, true);
+                if (completedRounds != rounds || quantity <= 0 || game.GetRawStock(CropKind.Radish) != quantity || game.GetPlot(farm).Crop != CropStage.None ||
                     !game.GetFarmCultivation(farm).IsResting ||
                     game.GetFarmCultivation(farm).PreparedTimeUnits != 336 * GameTimeUnits.PerDay)
                     return Fail($"{mode} 的 {rounds} 条同种未各完成一轮，或空白缓冲再次播种");
                 for (int tick = 0; tick < 60; tick++)
-                    if (game.AdvanceTick(isRaining: true).Harvested != 0 || game.GetRawStock(CropKind.Radish) != rounds * 6 ||
+                    if (WeatherTestInput.AdvanceTick(game, true).Harvested != 0 || game.GetRawStock(CropKind.Radish) != quantity ||
                         game.GetPlot(farm).Crop != CropStage.None)
                         return Fail("空白休耕在成熟后复种或重复收获");
             }
@@ -614,7 +627,7 @@ public partial class TestCultivationPlanBook : Node
     {
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
         {
-            var game = new FarmGame(12345, 155);
+            var game = new FarmGame(12345, 155, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
             foreach (var space in game.GetBuildingSpaces())
                 game.RemoveBuilding(space.AnchorCell);
             Vector2I farm = new(189, 189);
@@ -624,17 +637,43 @@ public partial class TestCultivationPlanBook : Node
                     new CultivationEntry(2, CropKind.Wheat, 6) })).Id;
             game.ApplyCultivationPlan(id, new[] { farm });
             while ((long)game.Calendar.ElapsedSeconds * GameTimeUnits.PerSecond < 6 * GameTimeUnits.PerDay)
-                game.AdvanceTick(isRaining: true);
+                WeatherTestInput.AdvanceTick(game, true);
             if (game.GetPlot(farm).CropKind != (mode == CultivationMode.Immediate ? CropKind.Wheat : CropKind.Radish) ||
                 game.GetRawStock(CropKind.Radish) != 0)
                 return Fail("缓冲改变了下一异种起点的立即中断或预备保留语义");
+            int rounds = 0;
+            int quantity = 0;
             while ((long)game.Calendar.ElapsedSeconds * GameTimeUnits.PerSecond < 8 * GameTimeUnits.PerDay)
-                game.AdvanceTick(isRaining: true);
-            if (game.GetRawStock(CropKind.Radish) != (mode == CultivationMode.Immediate ? 0 : 6) ||
+                AdvanceAndCount(game, ref rounds, ref quantity, true);
+            if (rounds != (mode == CultivationMode.Immediate ? 0 : 1) ||
+                game.GetRawStock(CropKind.Radish) != quantity ||
                 game.GetPlot(farm).CropKind != CropKind.Wheat || game.GetPlot(farm).Crop != CropStage.Growing)
                 return Fail("缓冲后的异种实际切换或当前轮收成不符合执行模式");
         }
         return true;
+    }
+
+    private static TickResult AdvanceAndCount(FarmGame game, ref int rounds, ref int quantity, bool isRaining = false)
+    {
+        TickResult tick = WeatherTestInput.AdvanceTick(game, isRaining);
+        rounds += CountHarvests(game);
+        int actualQuantity = 0;
+        foreach (ProductionResult result in game.GetPresentationResults())
+            if (result.Kind == ProductionResultKind.Harvest)
+                actualQuantity += result.Quantity;
+        if (actualQuantity != tick.Harvested)
+            throw new InvalidOperationException("真实生产结果与经营秒收获数量不一致。");
+        quantity += actualQuantity;
+        return tick;
+    }
+
+    private static int CountHarvests(FarmGame game)
+    {
+        int count = 0;
+        foreach (ProductionResult result in game.GetPresentationResults())
+            if (result.Kind == ProductionResultKind.Harvest)
+                count++;
+        return count;
     }
 
     private static bool Fail(string message)

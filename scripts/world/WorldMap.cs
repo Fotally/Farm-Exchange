@@ -37,11 +37,13 @@ public partial class WorldMap : Node2D
     private Node2D _depthLayer = null!;
     private Rect2 _viewBounds;
     private EnvironmentDecorations _environment = null!;
+    private WeatherPresentation _weather = null!;
     private readonly List<FacilityVisual> _visibleFacilities = new();
     private SimulationDriver? _driver;
     private uint _resultSecond;
     private readonly MapChunk[] _chunks = new MapChunk[ChunksPerSide * ChunksPerSide];
     private FarmGame _game = null!;
+    private IReadOnlyList<BuildingSpaceSnapshot>? _lastSpaces;
     private SelectionOverlay _overlay = null!;
     private PlacementOverlay _placementOverlay = null!;
     private PlacementVisual? _placement;
@@ -89,6 +91,8 @@ public partial class WorldMap : Node2D
         AddChild(_overlay);
         _placementOverlay = new PlacementOverlay(this) { ZIndex = 11 };
         AddChild(_placementOverlay);
+        _weather = new WeatherPresentation { Name = "Weather", ZIndex = 9 };
+        AddChild(_weather);
         SyncFromGame();
         UpdateVisibleChunks();
     }
@@ -107,23 +111,28 @@ public partial class WorldMap : Node2D
 
     public void SyncFromGame()
     {
-        Array.Clear(_roads);
-        var remaining = new HashSet<int>(_facilities.Keys);
         var spaces = _game.GetBuildingSpaces();
-        _environment.Synchronize(spaces);
+        bool spaceChanged = !ReferenceEquals(spaces, _lastSpaces);
+        HashSet<int>? remaining = null;
+        if (spaceChanged)
+        {
+            Array.Clear(_roads);
+            remaining = new HashSet<int>(_facilities.Keys);
+            _environment.Synchronize(spaces);
+        }
         foreach (BuildingSpaceSnapshot space in spaces)
         {
             int index = space.AnchorCell.Y * MapSize + space.AnchorCell.X;
             if (space.Building == BuildingKind.Road)
             {
-                _roads[index] = true;
+                if (spaceChanged) _roads[index] = true;
                 continue;
             }
             PlotSnapshot plot = _game.GetPlot(space.AnchorCell);
             var appearance = new FacilityAppearance(plot.Building, plot.CropKind, plot.Crop,
                 plot.HasWater, plot.Crop == CropStage.Growing ? Math.Min(2, (int)(plot.GrowthProgress * 3)) : 0,
                 space.Orientation);
-            remaining.Remove(index);
+            remaining?.Remove(index);
             if (!_facilities.TryGetValue(index, out FacilityVisual? visual))
             {
                 Vector2 position = MapCoordinates.CellToLocalCenter(space.WorkCell);
@@ -134,7 +143,7 @@ public partial class WorldMap : Node2D
             }
             visual.Snapshot = plot;
             visual.Processing = plot.Building == BuildingKind.Processor &&
-                _game.GetProcessorDetails(space.AnchorCell).Status == ProcessorStatus.Processing;
+                plot.RemainingSeconds > 0;
             if (visual.Appearance != appearance)
             {
                 visual.Appearance = appearance;
@@ -150,22 +159,29 @@ public partial class WorldMap : Node2D
                     };
             }
         }
-        foreach (int index in remaining)
+        if (remaining != null)
         {
-            FacilityVisual removed = _facilities[index];
-            removed.Soil.Free();
-            removed.Surface.Free();
-            removed.Motion?.Free();
-            _facilities.Remove(index);
+            foreach (int index in remaining)
+            {
+                FacilityVisual removed = _facilities[index];
+                removed.Soil.Free();
+                removed.Surface.Free();
+                removed.Motion?.Free();
+                _facilities.Remove(index);
+            }
         }
         UpdateFacilityVisibility();
-        for (int row = 0; row < MapSize; row++)
-            for (int col = 0; col < MapSize; col++)
-                _chunks[(row / ChunkSize) * ChunksPerSide + col / ChunkSize]
-                    .SetRoad(col % ChunkSize, row % ChunkSize, _roads[row * MapSize + col]);
+        if (spaceChanged)
+        {
+            for (int row = 0; row < MapSize; row++)
+                for (int col = 0; col < MapSize; col++)
+                    _chunks[(row / ChunkSize) * ChunksPerSide + col / ChunkSize]
+                        .SetRoad(col % ChunkSize, row % ChunkSize, _roads[row * MapSize + col]);
+            foreach (MapChunk chunk in _chunks)
+                chunk.RedrawIfVisible();
+            _lastSpaces = spaces;
+        }
         _overlay.QueueRedraw();
-        foreach (MapChunk chunk in _chunks)
-            chunk.RedrawIfVisible();
     }
 
     private void LoadTextures()
@@ -194,6 +210,7 @@ public partial class WorldMap : Node2D
         if (canvasTransform != _lastCanvasTransform || viewportSize != _lastViewportSize)
             UpdateVisibleChunks();
         AdvanceMotions(delta);
+        _weather.Update(_game.ActiveWeatherRegions, _viewBounds, delta, _game.IsPaused, _driver?.Rate ?? 1);
     }
 
     private void AdvanceMotions(double delta)

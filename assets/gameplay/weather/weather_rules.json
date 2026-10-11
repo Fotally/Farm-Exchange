@@ -1,0 +1,13 @@
+{
+  "CycleYears": 10,
+  "DaysPerYear": 336,
+  "MinimumIntervalDays": 1,
+  "MaximumIntervalDays": 3,
+  "MinimumDurationDays": 2,
+  "MaximumDurationDays": 4,
+  "MinimumRegionSizeCells": 96,
+  "MaximumRegionSizeCells": 192,
+  "MaximumActiveRegions": 3,
+  "CloudyWeight": 4,
+  "RainWeight": 3
+}

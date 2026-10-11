@@ -294,7 +294,7 @@ public partial class TestTradeOrders : Node
 
     private static bool CheckGameplayPhases()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         foreach (var space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         game.SetPaused(true);

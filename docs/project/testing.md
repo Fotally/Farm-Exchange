@@ -54,3 +54,15 @@ Release 编译与 Windows 正式导出后，分别对实际 DLL 执行探针，�
 ```
 
 该工具只在 `build/` 生成独立控制台探针，引用指定发布程序集及随包依赖；报告保留实际载入 DLL 的 SHA-256，并核对与输入文件相同。正式 Windows 导出程序启动和同版本 schema 随包验收仍按[Windows 构建](windows-build.md)执行。本文描述可执行方法，不表示当前工作树已经通过上述门禁。
+
+## 地区天气与随机产量验收
+
+#34 的真实天气规则见[地区天气](../gameplay/world/weather.md)，预排及显式设置约定见[天气 Interface](../architecture/weather/interface-weather-system.md)。天气专用单元测试与地图表现集成测试接入根 `TestSuite`。配置解析与真实排程共用正式路径，追加同进程合法配置变体隔离及局组装验证；土地与天气生产者的稳定快照引用、变更失效和旧快照不变性均由行为测试保护。农田推进显式传入查询结果，包括晴天。天气配置变体按JSON字段设置、移除或重命名，紧凑与缩进输入均走正式解析及实际执行路径，保持各变体隔离。现有场景继续覆盖自然预排的完整存续区间和循环接缝、区域失败零修改、跨界九格优先级、同种子单秒／批量一致、整轮天气加权及最后不足一个经营秒的精确时间累计。计划、底线、日志和生产结果的旧固定产量断言改为真实收获及资源守恒，基准定义检查仍保留七个原数值。
+
+图形验收在完成 Debug 编译与导入后串行运行既有满地图 FPS 场景，以及天气专用场景；天气场景使用显式测试输入和真实主界面，不提供玩家天气控制。各倍率使用独立进程，基准1920×1080：
+
+```powershell
+& 'E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.exe' --path . tests/performance/test_weather_fps.tscn -- --weather-rate 1
+```
+
+分别将倍率参数设为 `0.5`、`1`、`2`、`16`，检查雨点在真实雨区、可见部分裁切、暂停冻结、高倍率密度及详情“当前天气／基准产量”。场景按倍率分别保存到 `coverage/weather-0-5x/`、`weather-1-0x/`、`weather-2-0x/`、`weather-16-0x/`，每个目录包含 `before-sunny.png`、`after-cloud-rain.png`、`end-cloud-rain.png` 与 `performance.json`；截图过程不计入帧采样。平均至少60 FPS、P95帧间隔不超过16.67 ms，实际结果与失败证据均保留；本页描述执行要求，不把尚未运行的数字写成通过。总体及每个一级模块的80%行覆盖率门槛同样覆盖新增 `scripts/weather/`。

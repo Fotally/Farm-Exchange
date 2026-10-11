@@ -6,7 +6,7 @@
 
 `ClearDisallowedCrops(season)` 在原清理遍历中返回 `CropClearResult`，逐作物查询真实清理轮数；空田、仍适季作物和已通过促熟收获的轮次不计入。结果仅描述本次状态提交，不修改清理顺序、不读取库存、不持有日志计数。FarmGame 将结果交给[生产窗口](../../logging/interface-logging.md)，清理轮数不能解释成库存损失份数。
 
-对应类型：`FarmExchange.Farming.FarmingSystem`，代码位于 `scripts/farming/FarmingSystem.cs`。它唯一维护每块农田的所选作物、水分、播种或生长阶段、剩余精确时间单位和本实例工作凭据版本；状态数组只有锚点有值，九个子格不复制状态。空地与加工格不创建农田状态。
+对应类型：`FarmExchange.Farming.FarmingSystem`，代码位于 `scripts/farming/FarmingSystem.cs`。它唯一维护每块农田的所选作物、水分、播种或生长阶段、剩余精确时间单位、本轮浮点随机基础量、已历天气精确积分和本实例工作凭据版本；状态数组只有锚点有值，九个子格不复制状态。空地与加工格不创建农田状态。
 
 | 成员 | 约定 |
 | --- | --- |
@@ -18,8 +18,8 @@
 | `Get(index)` | 返回独立只读 `FarmSnapshot`，含作物、阶段、向上取整的 `RemainingSeconds`、`HasWater`、精确 `RemainingTimeUnits` 和 `SowingEnabled`。生长进度仍唯一归属本模块。 |
 | `GetExpectedRoundEndTimeUnits(index, now)` | 只读预测本轮结束的累计比例单位：生长中按精确剩余量向上对齐实际经营 tick，再与首个禁生季起点取早；空田或待水返回空。`now` 为本步推进后的累计单位。适季跨季不截短；禁生边界可能促熟或清理，本结果不承诺收成、不修改农田、不猜测供水。计划直接读取本结果，不复制生长或季节结局规则。 |
 | `SupplyWater(index)` | 雨水与工人浇水共用的一次供水操作；空田留水、已播种作物开始生长，生长中重复调用不重置进度。 |
-| `AdvanceGrowth(index, out harvestedCrop)` | 每经营秒推进生长中的农田；成熟时清除本轮阶段和水分，并报告需入库的作物。收获数量由作物定义决定。 |
-| `TryMatureBeforeDisallowedSeason(index, season, out harvestedCrop)` | 仅由经营换季相位调用，当前生长中作物在传入季节禁生且精确剩余时间严格小于完整周期的 10% 时，共用正常收获终结并报告作物，入库仍由 `FarmGame` 处理。其他阶段、适季跨季及等于或超过阈值返回 `false` 且零修改；同轮不能重复报告收成。 |
+| `AdvanceGrowth(index, out harvest, weather)` | 每经营秒推进生长中的农田；天气参数必传，包括查询确认的晴天。成熟时清除本轮阶段和水分，累计实际消耗的生长单位与整田天气，报告已结算的 `CropHarvestResult(Crop, Quantity)`；调用方按实际数量入库，不从基准量重算。 |
+| `TryMatureBeforeDisallowedSeason(index, season, out harvest)` | 仅由经营换季相位调用，当前生长中作物在传入季节禁生且精确剩余时间严格小于完整周期的 10% 时，共用正常收获终结并报告实际作物及数量，促熟只统计已经历部分，入库仍由 `FarmGame` 处理。其他阶段、适季跨季及等于或超过阈值返回 `false` 且零修改；同轮不能重复报告收成。 |
 | `GetWorkNeed(index, calendar)` | 返回可空只读 `FarmWorkRequest`：空田、启用播种且当前适季时需 `Sow`，干燥已播种田需 `Water`；无田、生长中、休耕空田或不适季返回空。预计时间不足仅提示风险，仍可播种。只查询、不认领或修改农田；需求不包含工人优先级、游标或路线成本。 |
 | `TryCompleteWork(request, calendar)` | 使用执行时日历重新查询需求，并逐项匹配目标锚点、本实例版本与指定动作；不匹配返回 `false` 且零修改。有效 `Sow` 使农田进入已播种，已有水则直接生长；有效 `Water` 调用同一 `SupplyWater` 后生长。不会把过期浇水转为播种。 |
 | `TryWork(index, calendar)` | 兼容已有农田模块调用：查询当前需求后立即转发 `TryCompleteWork`，不保留第二套规则。真实经营工人通过需求、移动耗时及指定动作执行，不用本方法跳过移动或工作秒。 |
@@ -28,12 +28,19 @@
 
 `FarmWorkRequest` 为本模块文件内的只读记录，包含锚点索引 `CellIndex`、`Revision` 与 `FarmWorkKind`（`Sow`/`Water`）。局部版本在新建、拆除、改种重启、播种启停发生变化、收获进入新轮、越季清理以及夹具清空时失效，避免同锚点同品种重建或新轮误接旧任务；兼容 `SetCrop` 的同品种无变化及重复设置同一启停值不改版本。播种后的紧接浇水仍属于同一版本。雨水不靠改版本取消任务，而是改变真实需求：已开始生长就不再需要人工浇水。该凭据不是全局实体标识，也不承诺调度优先级。
 
-`WorkerScheduler` 只查询工作需求并调用指定工作操作，不取得可变农田状态。`FarmGame` 在步进开始时向全部现有农田实例各一次传递显式降雨，再按固定相位把正常成熟结果交给 `Inventory`；换季时先报告并沿原路径入库补救成熟，随后清理禁生未成熟作物，并由计划更新后续安排。调用方不逐字段清除农田，也不记录历史失败状态；已收获空田不会被越季清理。移除农田删除其水分状态。精确阈值与共同终结路径见[换季成熟实现](implementation-season-maturity.md)，播种检查见[PlantingRules 接口](../planting-rules/interface-planting-rules.md)，工人移动与三人认领见[WorkerScheduler 接口](../../workers/worker-scheduler/interface-worker-scheduler.md)。旧对象、旧轮、雨水满足及季末执行重验的专项测试位于 `tests/unit/TestWorkerScheduler.cs`。
+`WorkerScheduler` 只查询工作需求并调用指定工作操作，不取得可变农田状态。`FarmGame` 在步进开始时查询各农田九格天气，只向整田判定为降雨的实例供水，再按固定相位把正常成熟结果交给 `Inventory`；换季时先报告并沿原路径入库补救成熟，随后清理禁生未成熟作物，并由计划更新后续安排。调用方不逐字段清除农田，也不记录历史失败状态；已收获空田不会被越季清理。移除农田删除其水分状态。精确阈值与共同终结路径见[换季成熟实现](implementation-season-maturity.md)，播种检查见[PlantingRules 接口](../planting-rules/interface-planting-rules.md)，工人移动与三人认领见[WorkerScheduler 接口](../../workers/worker-scheduler/interface-worker-scheduler.md)。旧对象、旧轮、雨水满足及季末执行重验的专项测试位于 `tests/unit/TestWorkerScheduler.cs`。
 
 模块不解析占用子格或决定设施形状；`FarmGame` 在土地接口解析锚点后调用，`WorkerScheduler` 从 `Indices` 取得真实锚点。少量容量测试数组直接验证生产状态，完整空间几何由土地测试负责。
 
-批量内部接口 `GetNextEventSeconds(index)` 返回正常成熟的剩余完整秒数，未生长返回 `uint.MaxValue`；`AdvanceQuietSeconds(index, seconds)` 只累计严格位于成熟之前的区间，一次扣除 `7×seconds` 精确单位，不收获或更改凭据。换季仍是经营入口独立事件，促熟与清理沿用原操作。单秒与批量都在正常到期的事件秒调用原 `AdvanceGrowth`，不会对跨轮总时长统一取整。调用顺序见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。
+批量内部接口 `GetNextEventSeconds(index)` 返回正常成熟的剩余完整秒数，未生长返回 `uint.MaxValue`；`AdvanceQuietSeconds(index, seconds, weather)` 只累计严格位于成熟之前的区间，一次扣除 `7×seconds` 精确单位并累计同一天气积分，不收获或更改凭据；调用方必须显式传入权威查询结果并保证区间内天气不变化。换季仍是经营入口独立事件，促熟与清理沿用原操作。单秒与批量都在正常到期的事件秒调用原 `AdvanceGrowth`，不会对跨轮总时长统一取整。调用顺序见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。
+
+晴天是天气模块确认的默认状态，不是农田推进时遗漏参数的替代值。正式调用在当前经营相位查询真实整田天气，再显式传入生长累计；直接农田模块测试可以明确传入 `Sunny` 来表达受控晴天。天气开始／结束由经营推进的事件边界处理，持续雨中的收获清水与下一秒再供水仍按原操作，不增加农田订阅或第二份天气状态，取舍见[天气执行设计](../../weather/implementation-weather-schedule.md#事件边界与查询职责)。
 
 ## 已完成工作凭据的表现校验
 
 `IsWorkRevisionCurrent(completedWork)` 只读验证本模块曾确认成功的 `FarmWorkRequest` 仍属于原农田及原轮次。它检查农田仍在和版本一致，不调用 `GetWorkNeed`，因此已成功播种不必仍是待播种任务。改种（含同种重启）、拆建、收获新轮、播种启停或禁生换季使旧凭据失效。FarmGame 仅将原凭据保留在非持久结果内部并委托本方法校验，不读取裸版本号、不成为版本拥有者。公开表现只看到成功结果及完整有效性判断。
+
+
+`FarmingSystem(cellCount, seed=0)` 使用独立随机源；FarmGame传入局种子，不消费开局设施或行情随机序列。实际 `StartGrowth` 锁定一次6～9倍浮点基础量，并清零本轮已历单位与天气百分比积分。正常末秒使用 `min(7, remaining)`，全程整数积分后在终结处除以实际已历单位，避免批次拆分造成逐秒浮点偏差。`CropYieldRules` 只维护已确认的七作物系数与一次取整公式，不拥有天气区域或生长状态。基准和系数的现行数值见[作物规则](../../../gameplay/production/crop-growth.md)。
+
+`SetGrowingForBenchmark` 通过同一开始生长操作锁定随机基础量、清空天气积分，夹具不能只设置阶段而遗漏真实轮状态。新增 `TestWeatherYield` 覆盖七作物系数、均匀浮点基础量、精确末秒、促熟均值与清理零产出，及等待／查询／重复供水不重抽。模块不对 UI 暴露基础量或预测产量。

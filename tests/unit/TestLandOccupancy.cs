@@ -85,6 +85,10 @@ public partial class TestLandOccupancy : Node
     {
         LandOccupancy land = NewLand();
         IReadOnlyList<BuildingSpaceSnapshot> empty = land.Instances;
+        land.Clear();
+        land.Clear();
+        if (!ReferenceEquals(empty, land.Instances))
+            return Fail("初始空土地重复清理改变了无变化快照引用");
         Vector2I farmAnchor = new(5, 7);
         Vector2I processorAnchor = new(21, 11);
         land.Place(IndexOf(processorAnchor), BuildingKind.Processor);
@@ -93,9 +97,13 @@ public partial class TestLandOccupancy : Node
         IReadOnlyList<BuildingSpaceSnapshot> spaces = land.Instances;
         if (empty.Count != 0 || spaces.Count != 3 || spaces[0].Building != BuildingKind.Road ||
             spaces[1].AnchorIndex != IndexOf(farmAnchor) || spaces[2].AnchorIndex != IndexOf(processorAnchor) ||
+            ReferenceEquals(empty, spaces) ||
             !ReferenceEquals(spaces, land.Instances) ||
             !Throws<NotSupportedException>(() => ((IList<BuildingSpaceSnapshot>)spaces).Clear()))
             return Fail("实例快照不是稳定锚点顺序的不可变缓存");
+        if (!Throws<InvalidOperationException>(() => land.Remove(1)) ||
+            !ReferenceEquals(spaces, land.Instances))
+            return Fail("失败拆除使稳定空间快照引用失效");
 
         foreach (BuildingSpaceSnapshot space in spaces)
         {
@@ -122,7 +130,8 @@ public partial class TestLandOccupancy : Node
             land.Get(IndexOf(processorAnchor)) != BuildingKind.Processor || land.Get(0) != BuildingKind.Road)
             return Fail("整体拆除改变了旧快照或相邻实例");
         land.Place(IndexOf(farmAnchor), BuildingKind.Farm);
-        if (land.Instances.Count != 3 || ReferenceEquals(spaces[1], land.GetSpace(IndexOf(farmAnchor))))
+        if (land.Instances.Count != 3 || ReferenceEquals(remaining, land.Instances) ||
+            remaining.Count != 2 || ReferenceEquals(spaces[1], land.GetSpace(IndexOf(farmAnchor))))
             return Fail("重建没有创建独立空间实例");
         land.Remove(0);
         land.Remove(IndexOf(processorAnchor + Vector2I.One));
@@ -130,6 +139,13 @@ public partial class TestLandOccupancy : Node
         if (land.Instances.Count != 0 || land.Get(IndexOf(farmAnchor)) != BuildingKind.None ||
             !Throws<InvalidOperationException>(() => land.Remove(IndexOf(farmAnchor))))
             return Fail("道路拆除或夹具清理未完整释放土地");
+        land.Place(0, BuildingKind.Road);
+        land.Remove(0);
+        IReadOnlyList<BuildingSpaceSnapshot> removedEmpty = land.Instances;
+        land.Clear();
+        land.Clear();
+        if (removedEmpty.Count != 0 || !ReferenceEquals(removedEmpty, land.Instances))
+            return Fail("最后实例拆除后重复清理改变了无变化快照引用");
         return true;
     }
 

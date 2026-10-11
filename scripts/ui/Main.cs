@@ -8,6 +8,7 @@ using FarmExchange.Market;
 using FarmExchange.Time;
 using FarmExchange.Trading;
 using FarmExchange.World;
+using FarmExchange.Weather;
 using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
@@ -26,6 +27,7 @@ public partial class Main : Node2D
     // 图形夹具必须在父节点 _EnterTree 中设置，在任何 Game/Driver 读取之前生效。
     internal static System.Func<RuntimeLog>? LoggingFactory { get; set; }
     internal static int? InitialSeed { get; set; }
+    internal static WeatherMode InitialWeatherMode { get; set; } = WeatherMode.Natural;
     private DeveloperToolsWindow _developerWindow = null!;
 #endif
     private WorldMap _worldMap = null!;
@@ -114,7 +116,7 @@ public partial class Main : Node2D
         try
         {
 #if DEBUG
-            _currentGame = new FarmGame(InitialSeed, logging: _logging);
+            _currentGame = new FarmGame(InitialSeed, logging: _logging, weatherMode: InitialWeatherMode);
 #else
             _currentGame = new FarmGame(logging: _logging);
 #endif

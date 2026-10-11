@@ -7,6 +7,7 @@ using FarmExchange.Gameplay;
 using FarmExchange.UI;
 using FarmExchange.World;
 using FarmExchange.Time;
+using FarmExchange.Weather;
 
 public partial class TestCultivationWindow : Node
 {
@@ -67,11 +68,17 @@ public partial class TestCultivationWindow : Node
 
     private static Main OpenMain(Node parent)
     {
-        Main main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
-        parent.AddChild(main);
-        Click(main, "PauseButton");
-        Click(main, "CultivationButton");
-        return main;
+        WeatherMode previous = Main.InitialWeatherMode;
+        Main.InitialWeatherMode = WeatherMode.Explicit;
+        try
+        {
+            Main main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            parent.AddChild(main);
+            Click(main, "PauseButton");
+            Click(main, "CultivationButton");
+            return main;
+        }
+        finally { Main.InitialWeatherMode = previous; }
     }
 
     private static bool CheckEditing(Main main)
@@ -139,7 +146,7 @@ public partial class TestCultivationWindow : Node
         var farms = game.GetBuildingSpaces().Where(s => s.Building == BuildingKind.Farm).ToArray();
         foreach (var farm in farms) game.SetFarmCrop(farm.AnchorCell, CropKind.Wheat);
         game.SetPaused(false);
-        for (int tick = 0; tick < 20; tick++) game.AdvanceTick(isRaining: true);
+        for (int tick = 0; tick < 20; tick++) WeatherTestInput.AdvanceTick(game, true);
         game.ApplyCultivationPlan(game.GetCultivationPlans()[0].Id, farms.Select(f => f.AnchorCell).ToArray());
         game.SetPaused(true);
         main.GetNode<FarmExchange.World.WorldMap>("WorldMap").EmitSignal(
@@ -333,9 +340,17 @@ public partial class TestCultivationWindow : Node
         Find<CheckBox>(window, $"CultivationFarm{cell.X}_{cell.Y}").ButtonPressed = true;
         Click(window, "ApplyCultivationPlanButton");
         game.SetPaused(false);
-        while (game.Calendar.ElapsedDays < 6) game.AdvanceTick(isRaining: true);
+        int initialStock = game.GetRawStock(CropKind.Radish);
+        int harvested = 0;
+        while (game.Calendar.ElapsedDays < 6)
+        {
+            WeatherTestInput.AdvanceTick(game, true);
+            harvested += game.GetPresentationResults().Where(result => result.Kind == ProductionResultKind.Harvest &&
+                result.CropKind == CropKind.Radish).Sum(result => result.Quantity);
+        }
         game.SetPaused(true);
-        bool passed = game.GetRawStock(CropKind.Radish) >= 6 || Fail("编号回归夹具未完成首轮萝卜");
+        bool passed = harvested > 0 && game.GetRawStock(CropKind.Radish) == initialStock + harvested ||
+            Fail("编号回归夹具未完成首轮真实萝卜收获入库");
         Click(window, "RemoveCultivationEntryButton");
         Click(window, "SaveCultivationPlanButton");
         window.Refresh(game);

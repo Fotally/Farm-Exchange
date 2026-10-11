@@ -8,11 +8,15 @@
 | `Get(index)` | 返回任一基础格的主要占用类别：空地、农田、加工场地或道路；只读且不影响工人任务。 |
 | `ResolveAnchorIndex(index)` | 占用子格返回所属整座设施的锚点索引，空地返回 `-1`。 |
 | `GetSpace(index)` | 占用子格返回所属整座设施的同一不可变 `BuildingSpaceSnapshot`；空地返回 `null`。 |
-| `Instances` | 只读空间实例列表，按锚点索引升序，一座设施仅出现一次。无占用修改时重复读取同一缓存；修改后的首次读取复制列表，旧快照保持原内容，普通经营 tick 不重新排序或分配此列表。 |
+| `Instances` | 不可变空间实例列表，按锚点索引升序，一座设施仅出现一次。占地未变时重复读取必须返回同一对象引用；成功建拆使下一次读取发布新快照，失败操作保留引用，旧快照与其中空间对象保持原内容，普通经营 tick 不重新排序或分配此列表。`Clear` 后空快照可复用。 |
 | `CheckFootprint(anchorCell, building, orientation=Q0)` | 只读检查：先拒绝非法类型、非法朝向，再确认全部固定占地偏移在地图内，最后检查全部子格为空。生产设施允许 q0～q3，道路仅允许 q0；非法朝向返回 `InvalidOrientation`。不预留格子。 |
 | `Place(anchorIndex, building, orientation=Q0)` | 任意合法基础格可作锚点，无三格对齐要求；完整重验后登记一个朝向固定的空间实例及全部子格。非法类型、朝向或越界抛出 `ArgumentOutOfRangeException`，冲突抛出 `InvalidOperationException`；失败零修改。 |
 | `Remove(anyIndex)` | 从任意占用子格释放所属整座设施的全部占地及空间实例；空地调用抛出 `InvalidOperationException`。 |
-| `Clear()` | 仅供满地图测试夹具重建占用表。 |
+| `Clear()` | 仅供满地图测试夹具重建占用表；有实例时完整清除并发布空快照，已空时直接保留既有快照引用，包括最后一次拆除后已经查询过的空快照。 |
+
+稳定引用是生产者的 Interface 约定，`FarmGame.GetBuildingSpaces()` 原样转发，不另做列表复制。地图据此跳过无变化的空间同步；该同步创建／删除设施绘制节点、更新道路地面和清除新占地上的环境装饰，并不负责作物生长。生产进度、水分、天气或镜头变化不使土地快照失效，地图仍独立刷新动态外观和可见性，详见[地图缓存实现](../../world/world-map/implementation-chunk-cache.md)。
+
+修改快照实现时必须继续保证「状态不变复用对象、成功建拆后发布新对象、旧对象不被修改」。每次复制列表会使空间优化失效；原地改写列表而保持引用会使消费者漏掉建拆。同数量或同锚点设施替换仍是空间变更，不能用实例数量代替引用判断。本约定不要求比较多次建拆后的净变化，不为此增加全表比较开销。
 
 `BuildingSpaceSnapshot`（`scripts/land/BuildingSpaceSnapshot.cs`）公开 `AnchorIndex`、`Building`、`Orientation`、`AnchorCell`、`Footprint` 和 `WorkCell`。`BuildingOrientation`（`scripts/land/BuildingOrientation.cs`）的 `Q0/Q1/Q2/Q3` 对应世界素材序号，不表示人物方向或屏幕旋转角。朝向由 `LandOccupancy` 唯一持有，只在登记时赋值，建成后不可修改；任一子格和旧列表都读取同一不可变快照，不需要实例替换或额外身份凭据。锚点只是当前空间实例的位置标识；拆除后同锚点重建得到新快照，旧快照的朝向不变，省略方向的重建恢复 q0。生产模块继续维护自身 Revision 来拒绝旧任务，不添加永久实例 ID。
 

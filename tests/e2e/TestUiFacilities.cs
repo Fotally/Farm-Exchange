@@ -68,7 +68,7 @@ public partial class TestUiFacilities : Node
         WorldMap map = main.GetNode<WorldMap>("WorldMap");
         Vector2I farm = game.GetBuildingSpaces().First(s => s.Building == BuildingKind.Farm).AnchorCell;
         game.SetFarmCrop(farm, CropKind.Wheat);
-        for (int tick = 0; tick < 12; tick++) game.AdvanceTick(isRaining: true);
+        for (int tick = 0; tick < 12; tick++) game.AdvanceTick();
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
         PlotSnapshot growing = game.GetPlot(farm);
         Label actual = Find<Label>(main, "FarmActualProgress");
@@ -79,7 +79,8 @@ public partial class TestUiFacilities : Node
         Find<Button>(main, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
         Button wheat = Find<Button>(main, "CropCardWheat");
         if (!wheat.Text.Contains("适宜：春 / 秋 / 冬") ||
-            !wheat.Text.Contains("获水后 16 天") || !wheat.Text.Contains("每轮 2 份"))
+            !wheat.Text.Contains("获水后 16 天") || !wheat.Text.Contains("基准产量 2 份") ||
+            Find<Label>(main, "FarmCurrentWeather").Text != "当前天气：晴天")
             return Fail("作物卡缺少真实季节、时长或收获量");
         var cropWindow = Find<CropSelectionWindow>(main, "CropWindow");
         Find<Button>(cropWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);

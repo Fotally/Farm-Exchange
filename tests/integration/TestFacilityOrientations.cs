@@ -5,6 +5,7 @@ using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
 using FarmExchange.World;
+using FarmExchange.Weather;
 
 public static class TestFacilityOrientations
 {
@@ -20,7 +21,7 @@ public static class TestFacilityOrientations
         for (int direction = 1; direction < 4; direction++)
             for (int crop = 0; crop < CropNames.Length; crop++)
             {
-                var game = new FarmGame(12345);
+                var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
                 foreach (BuildingSpaceSnapshot space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
                 if (crop == (int)CropKind.Sugarcane) game.AdvanceTicks(4320);
                 var orientation = (BuildingOrientation)direction;
@@ -49,7 +50,7 @@ public static class TestFacilityOrientations
                     await Frames(parent);
                     if (!CheckLayer(parent, map, Farm + Vector2I.One, $"crops/field_seeded_q{direction}.png", FarmPivot, graphical))
                         return false;
-                    game.AdvanceTick(isRaining: true);
+                    WeatherTestInput.AdvanceTick(game, true);
                     for (int stage = 0; stage < 3; stage++)
                     {
                         while (game.GetPlot(Farm).Crop == CropStage.Growing && game.GetPlot(Farm).GrowthProgress < stage / 3d)
