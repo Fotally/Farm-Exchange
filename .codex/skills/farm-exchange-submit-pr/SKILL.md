@@ -12,7 +12,7 @@ description: 在 Farm Exchange 的 issue 范围内完成代码与文档验收后
 3. 依据 .github/PULL_REQUEST_TEMPLATE.md 整理 PR 正文：关联 issue，按实际改动勾选一个或多个附有含义说明的变更类型，写清问题、变化、接口与兼容性、文档与素材、实际验证结果及审查提示。正文用中文。
 4. 按主要变更类型和系统名写明提交信息；只暂存本 issue 的文件。提交后推送 dev 到其远端。
 5. 查找现有 dev → main PR：若已关联本 issue，则更新正文；若没有，则创建 PR。最终核对 PR 的 base、head、issue 链接和正文与提交一致。
-6. 将 PR 地址和验证结果告知用户，停在人工合并前。
+6. 将真实 PR 地址、当前 head SHA 和验证结果告知用户，然后使用 [farm-exchange-review-pr](../farm-exchange-review-pr/SKILL.md) 先询问是否需要提交后的独立审查；未同意时不委派审查员，停在人工合并前。用户已明确要求审查同一 PR 时，由该 skill 直接执行。
 
 项目已授权上述闭环中的提交、推送 dev 和创建 PR。正常流程无需逐项再问用户；运行环境的权限或 GitHub 鉴权失败时报告具体阻碍，skill 不改变权限策略，也不直接提交、推送或合并 main。
 
