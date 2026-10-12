@@ -84,6 +84,7 @@ public partial class TestFarmGame : Node
             (new[] { new Vector2I(0, 0), new Vector2I(0, 0) }, RoadMaterial.Brick, LandFailure.InvalidRoadRange),
             (System.Array.Empty<Vector2I>(), RoadMaterial.Brick, LandFailure.InvalidRoadRange),
             (new[] { new Vector2I(0, 0) }, (RoadMaterial)99, LandFailure.InvalidRoadMaterial),
+            (new[] { new Vector2I(0, 0) }, (RoadMaterial)(-1), LandFailure.InvalidRoadMaterial),
             (Enumerable.Range(0, 50).Select(x => new Vector2I(x, 10)).ToArray(), RoadMaterial.Brick, LandFailure.InsufficientFunds),
         };
         foreach (var (cells, material, failure) in attempts)

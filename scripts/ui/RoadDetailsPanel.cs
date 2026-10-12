@@ -52,7 +52,7 @@ public partial class RoadDetailsPanel : VBoxContainer
      */
     public void RefreshPlacement(BuildingSpaceSnapshot space)
     {
-        _title.Text = Main.RoadMaterialName(space.RoadMaterial!.Value);
+        _title.Text = RoadMaterialName(space.RoadMaterial!.Value);
         _preview.Refresh(space, default, CropStage.None);
     }
 }

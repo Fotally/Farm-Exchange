@@ -820,16 +820,6 @@ public partial class Main : Node2D
         RefreshPlacementPreview(position);
     }
 
-    internal static string RoadMaterialName(RoadMaterial material) => material switch
-    {
-        RoadMaterial.Dirt => "土路",
-        RoadMaterial.Gravel => "碎石道路",
-        RoadMaterial.Cobble => "卵石道路",
-        RoadMaterial.Brick => "红砖道路",
-        RoadMaterial.Slab => "石板道路",
-        _ => throw new System.ArgumentOutOfRangeException(nameof(material))
-    };
-
     private void RotatePlacement()
     {
         if (_placement is not Placement { Kind: BuildingKind.Farm or BuildingKind.Processor } placement)

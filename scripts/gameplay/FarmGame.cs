@@ -478,8 +478,7 @@ public sealed class FarmGame : IDisposable
     {
         ArgumentNullException.ThrowIfNull(cells);
         long cost = (long)cells.Count * GetBuildingCostCents(BuildingKind.Road);
-        if (material is not (RoadMaterial.Dirt or RoadMaterial.Gravel or RoadMaterial.Cobble or
-            RoadMaterial.Brick or RoadMaterial.Slab))
+        if (!PlacementRules.IsValidRoadMaterial(material))
             return new(LandFailure.InvalidRoadMaterial, cells.Count, cost);
         if (cells.Count == 0)
             return new(LandFailure.InvalidRoadRange, 0, cost);

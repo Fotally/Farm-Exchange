@@ -136,7 +136,7 @@ public partial class BuildCatalogWindow : DraggableWindow
         int count = _farmCard.Visible ? 1 : 0;
         foreach (var road in _roadCards)
         {
-            string name = Main.RoadMaterialName(road.Key);
+            string name = RoadMaterialName(road.Key);
             road.Value.Visible = (_category == BuildingKind.None || _category == BuildingKind.Road) &&
                 (name + "道路").Contains(_search.Text, StringComparison.OrdinalIgnoreCase);
             road.Value.Text = $"{name} · 1×1\n短按起点与终点铺设\n建造费 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Road))} 金币/格";

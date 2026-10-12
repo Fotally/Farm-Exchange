@@ -16,6 +16,8 @@ WorldMap内部RoadAppearance读取实际空间快照，仅保留道路格与材�
 
 Main传入完整道路候选或拆除投影路径，RoadAppearance只读查询实际占地。新建将地图内无设施占用的格加入有效候选；已有路、农田、加工和越界均只留下红格提示，不作为新路覆盖。因此旧路仍使用原材质，邻接有效新路时只变化mask。所有有效候选相互连接，暂时缺口不会隐含绕障碍。
 
+新建与拆除预览都先使用 [PlacementRules](../../land/placement-rules/interface-placement-rules.md) 的内部纯判断 `IsValidRoadMaterial`，合法来源为材质枚举的真实定义，不维护固定数量或第二套列表。负值及未定义正值在预览状态修改前抛出 `ArgumentOutOfRangeException`，参数名仍为 `material`；拆除模式也保持原有检查。土地仍唯一拥有正式材质，外观只维护投影。
+
 拆除仅将范围内实际道路列入待拆集合，空格和其他设施不标红。保留道路按“实际道路减待拆集合”计算连接；待拆道路显示原正式mask/材质的红色半透明图，红格提示说明操作范围。两种预览不登记占用、不改金币/库存/生产、不触碰EnvironmentDecorations。
 
 每次候选更新同时撤销原范围并投影新范围，只刷新其并集的四邻；MapChunk最后状态相等则不重绘。取消、隐藏、拖动镜头/界面遮挡期间调用ClearRoadPreview，恢复真实mask；工具的当前段仍由Main持有。提交后SyncFromGame按真实快照差异刷新，清理当前预览后得到与有效候选相同mask/材质/variant。跨缓存块连接通过全地图道路投影查询，失效格再分发到各块。

@@ -50,6 +50,21 @@ public partial class TestRoadAppearance : Node
         Vector2I secondNew = second + Vector2I.Up;
         Vector2I[] candidates = { firstNew, secondNew, first, new(-1, 186) };
         var before = map.GetDisplayedRoadAppearance(first)!.Value;
+        foreach (RoadMaterial invalid in new[] { (RoadMaterial)(-1), (RoadMaterial)99 })
+            foreach (bool removing in new[] { false, true })
+            {
+                try
+                {
+                    map.UpdateRoadPreview(candidates, invalid, removing);
+                    return Fail("道路新建或拆除预览接受无效材质");
+                }
+                catch (ArgumentOutOfRangeException error)
+                {
+                    if (error.ParamName != "material" || map.GetDisplayedRoadAppearance(first) != before ||
+                        game.MoneyCents != coins || !ReferenceEquals(spaces, game.GetBuildingSpaces()))
+                        return Fail("无效道路预览改变异常参数名、外观或经营状态");
+                }
+            }
         map.UpdateRoadPreview(candidates, RoadMaterial.Brick);
         await Frames(parent);
         if (map.GetDisplayedRoadAppearance(first) is not { Mask: 3, Material: RoadMaterial.Dirt, Added: false } ||

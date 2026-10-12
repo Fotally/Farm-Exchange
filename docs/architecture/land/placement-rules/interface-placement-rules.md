@@ -25,3 +25,5 @@ PlacementDiagnostics 只由实际 TryPlace 命令重验后调用，接收原请�
 `RoadPlacementCheck(Failure,CellCount,CostCents)` 提供 `Allowed/ErrorMessage`，`CostCents` 使用 long 分，正常拒绝仍保留候选格数乘道路统一单价格的费用供界面展示。`RoadPlacementResult(Failure,CellCount,ChargedCents)` 提供 `Success/ErrorMessage`，成功返回实际格数与 long 扣费；失败实际格数与扣费均为零。`RoadRemovalResult(Failure,RemovedCount)` 提供 `Success/ErrorMessage`，仅统计实际移除的去重道路格，失败为零；拆除不退款。
 
 新建候选不复用或跳过已有道路，不替换材质；所有生产设施子格同样阻挡。完整范围与重复候选先于占用检查，占用先于可用资金检查。道路只接受五种合法材质；执行不信任先前预检。规则与调用顺序见 [FarmGame 整批道路命令](../../game-state/farm-game/interface-farm-game.md#整批道路命令)。
+
+内部纯判断 `IsValidRoadMaterial(RoadMaterial)` 以 `RoadMaterial` 枚举的实际定义为合法来源，负值和未定义正值返回假；不再维护第二套列表或数量上限。FarmGame 的批量道路检查、LandOccupancy 登记及 RoadAppearance 预览共用此判断，各自保留错误语义：经营正常返回 `InvalidRoadMaterial`；土地仅在道路登记时检查，抛出参数名为 `roadMaterial` 的 `ArgumentOutOfRangeException`；外观新建与拆除预览均检查，抛出参数名为 `material` 的相同异常。该判断不拥有占地、资金或预览状态，也不提供资源注册或扩展机制。

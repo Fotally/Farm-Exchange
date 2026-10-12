@@ -15,3 +15,5 @@
 标题与 `RoadCurrentStatus` 短徽标关闭自动折行，保持单行；工具图标后的 `RoadNextStep` 获得横向剩余宽度，按两行正式说明显示，不按单字竖排。验收除了外层范围，也检查短状态行数和说明的实际可读宽度。
 
 标题节点为 `RoadTitle`，纳入实际单行排版检查。说明直接由横向容器安排图标及扩展标签，不依赖非容器按钮安排子节点。
+
+标题中文名称直接读取 [UiElements](../ui-elements/interface-ui-elements.md) 的 `RoadMaterialName`，与目录和 Main 共用同一展示转换，不依赖 Main 提供文字。`TestUiFacilities` 从真实道路快照更新详情，核对五材质标题与目录名称；未定义材质的名称转换仍抛出参数名为 `material` 的 `ArgumentOutOfRangeException`。

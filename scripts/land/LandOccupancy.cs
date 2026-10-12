@@ -60,8 +60,7 @@ internal sealed class LandOccupancy
             throw new ArgumentOutOfRangeException(nameof(index));
         if (failure == LandFailure.Occupied)
             throw new InvalidOperationException("土地已有建筑");
-        if (building == BuildingKind.Road && roadMaterial is not (RoadMaterial.Dirt or RoadMaterial.Gravel or
-            RoadMaterial.Cobble or RoadMaterial.Brick or RoadMaterial.Slab))
+        if (building == BuildingKind.Road && !PlacementRules.IsValidRoadMaterial(roadMaterial))
             throw new ArgumentOutOfRangeException(nameof(roadMaterial));
         var space = new BuildingSpaceSnapshot(index, building, anchorCell, orientation,
             building == BuildingKind.Road ? roadMaterial : null);

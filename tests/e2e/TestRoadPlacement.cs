@@ -67,14 +67,13 @@ public partial class TestRoadPlacement : Node
                 !products.SequenceEqual(FarmGame.Crops.Select(crop => main.Game.GetProductStock(crop.Kind))))
                 return Fail("未点击的道路起点预览修改金币或正式占用");
         }
-        const string evidence = "res://build/issue143-start-preview";
-        await Capture(parent, "start-preview-valid.png", evidence);
+        await Capture(parent, main, "start-preview-valid.png");
         // 截图占用来自真实开局设施；此时尚无任何准备性建造，UI与模型同为50金币、0道路。
         await MoveIntoWindow(parent, main, Screen(map, new Vector2I(189, 190)));
         if (!Find<Label>(main, "BuildHint").Text.Contains("已有建筑") ||
             !Find<Label>(main, "BuildCost").Text.Contains("1.00 金币"))
             return Fail("未点击的开局农田占用预览缺少真实占用或费用提示");
-        await Capture(parent, "start-preview-occupied.png", evidence);
+        await Capture(parent, main, "start-preview-occupied.png");
         Vector2I next = cell + Vector2I.Right;
         await MoveIntoWindow(parent, main, Screen(map, next));
         if (map.GetDisplayedRoadAppearance(cell) != null ||
@@ -236,7 +235,7 @@ public partial class TestRoadPlacement : Node
         uint seconds = main.Game.Calendar.ElapsedSeconds;
         Find<Button>(main, "BuildButton").EmitSignal(Button.SignalName.Pressed);
         Find<Button>(main, "RoadTab").EmitSignal(Button.SignalName.Pressed);
-        await Capture(parent, "road-material-catalog.png");
+        await Capture(parent, main, "road-material-catalog.png");
         foreach (RoadMaterial material in Enum.GetValues<RoadMaterial>())
         {
             Start(main, material);
@@ -270,13 +269,19 @@ public partial class TestRoadPlacement : Node
             await Frames(parent);
             if (main.Game.MoneyCents != money) return Fail("移动预览提前扣费");
             if (!await CheckActivityLayout(parent, main)) return false;
-            if (xFirst) await Capture(parent, "road-l-preview.png");
+            if (xFirst) await Capture(parent, main, "road-l-preview.png");
             Click(camera, Screen(map, end));
             if (main.Game.MoneyCents != money - cells.Count * 100 ||
                 cells.Any(cell => main.Game.GetBuildingSpace(cell)?.RoadMaterial != RoadMaterial.Brick))
                 return Fail("真实L形提交与明确轨迹或整段费用不一致");
-            main.Game.TryRemoveRoads(cells);
-            map.SyncFromGame();
+            StartRemoval(main);
+            Click(camera, Screen(map, start));
+            Click(camera, Screen(map, corner));
+            Click(camera, Screen(map, corner));
+            Click(camera, Screen(map, end));
+            if (cells.Any(cell => main.Game.GetPlot(cell).Building != BuildingKind.None) ||
+                main.Game.MoneyCents != money - cells.Count * 100)
+                return Fail("L形夹具未通过两段正式直线拆路清理或错误退款");
         }
         // 尚未明确轴时只给可调整的提示；随后明确移动可继续同一段。
         Start(main, RoadMaterial.Slab);
@@ -316,12 +321,16 @@ public partial class TestRoadPlacement : Node
         Click(camera, Screen(map, free));
         if (main.Game.GetPlot(free).Building != BuildingKind.Road) return Fail("资金失败丢失当前段");
         // 跨空格及生产设施的直线拆除只修改该线道路，不退款。
-        Find<Button>(main, "BuildButton").EmitSignal(Button.SignalName.Pressed);
-        Find<Button>(main, "RoadTab").EmitSignal(Button.SignalName.Pressed);
-        Find<Button>(main, "RoadRemovalCard").EmitSignal(Button.SignalName.Pressed);
         Vector2I removalStart = new(187, 189), road = new(198, 189);
-        main.Game.TryPlaceRoads(new[] { removalStart, road }, RoadMaterial.Gravel);
-        map.SyncFromGame();
+        Start(main, RoadMaterial.Gravel);
+        Click(camera, Screen(map, removalStart));
+        Click(camera, Screen(map, removalStart));
+        Click(camera, Screen(map, road));
+        Click(camera, Screen(map, road));
+        if (main.Game.GetBuildingSpace(removalStart)?.RoadMaterial != RoadMaterial.Gravel ||
+            main.Game.GetBuildingSpace(road)?.RoadMaterial != RoadMaterial.Gravel)
+            return Fail("投影拆除夹具未通过正式两次短按准备两格道路");
+        StartRemoval(main);
         retainedMoney = main.Game.MoneyCents;
         Click(camera, Screen(map, removalStart));
         Vector2I removalPointer = new(199, 190);
@@ -329,7 +338,7 @@ public partial class TestRoadPlacement : Node
         if (!Find<Label>(main, "BuildCost").Text.Contains("待拆道路 2 格")) return Fail("待拆格数没有忽略空地与农田");
         Send(main, new InputEventMouseMotion { Position = Screen(map, removalPointer) });
         if (!await CheckActivityLayout(parent, main)) return false;
-        await Capture(parent, "road-removal-preview.png");
+        await Capture(parent, main, "road-removal-preview.png");
         Click(camera, Screen(map, removalPointer));
         if (main.Game.GetPlot(removalStart).Building != BuildingKind.None || main.Game.GetPlot(road).Building != BuildingKind.None ||
             main.Game.GetPlot(new Vector2I(189, 189)).Building != BuildingKind.Farm || main.Game.MoneyCents != retainedMoney)
@@ -393,6 +402,13 @@ public partial class TestRoadPlacement : Node
         Find<Button>(main, "BuildButton").EmitSignal(Button.SignalName.Pressed);
         Find<Button>(main, "RoadTab").EmitSignal(Button.SignalName.Pressed);
         Find<Button>(main, material == RoadMaterial.Dirt ? "RoadCard" : $"RoadCard{material}").EmitSignal(Button.SignalName.Pressed);
+    }
+
+    private static void StartRemoval(Main main)
+    {
+        Find<Button>(main, "BuildButton").EmitSignal(Button.SignalName.Pressed);
+        Find<Button>(main, "RoadTab").EmitSignal(Button.SignalName.Pressed);
+        Find<Button>(main, "RoadRemovalCard").EmitSignal(Button.SignalName.Pressed);
     }
 
     private static void Click(CameraController camera, Vector2 position)
@@ -459,12 +475,37 @@ public partial class TestRoadPlacement : Node
         return control.GetChildren().OfType<Control>().Any(child => IsBlockedByUi(child, position));
     }
 
-    private static async Task Capture(Node parent, string name, string target = "res://build/issue143-validation/evidence")
+    private static void AssertVisibleResources(Main main, string evidence)
     {
+        var spaces = main.Game.GetBuildingSpaces();
+        int roads = spaces.Count(space => space.Building == BuildingKind.Road);
+        string visibleRoads = Find<Label>(main, "ActivityLabel").Text.Split('\n')[0];
+        string expectedCoins = UiElements.FormatCoins(main.Game.AvailableMoneyCents);
+        var labels = Find<Control>(main, "ResourcesPanel").FindChildren("*", "Label", true, false).OfType<Label>();
+        string expectedTooltip = $"总余额 {UiElements.FormatCoins(main.Game.MoneyCents)} · 冻结 {UiElements.FormatCoins(main.Game.FrozenMoneyCents)}";
+        Label activity = Find<Label>(main, "ActivityLabel");
+        Label farms = Find<Label>(main, "FarmCountLabel");
+        Label processors = Find<Label>(main, "ProcessorCountLabel");
+        if (!activity.IsVisibleInTree() || !farms.IsVisibleInTree() || !processors.IsVisibleInTree() ||
+            visibleRoads != $"道路 {roads} 格" ||
+            !labels.Any(label => label.IsVisibleInTree() && label.Text == expectedCoins && label.TooltipText == expectedTooltip) ||
+            farms.Text != $"{spaces.Count(space => space.Building == BuildingKind.Farm)} 块农田" ||
+            processors.Text != $"{spaces.Count(space => space.Building == BuildingKind.Processor)} 处加工场地")
+            throw new InvalidOperationException($"截图{evidence}可见金币/道路与模型不一致：模型{expectedCoins}金币/{roads}道路，可见{visibleRoads}");
+    }
+
+    private static async Task Capture(Node parent, Main main, string name)
+    {
+        if (DisplayServer.GetName() != "headless")
+        {
+            await Frames(parent);
+            await parent.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        }
+        AssertVisibleResources(main, name);
+        GD.Print($"截图资源一致：{name}，{UiElements.FormatCoins(main.Game.AvailableMoneyCents)}金币，" +
+            $"{main.Game.GetBuildingSpaces().Count(space => space.Building == BuildingKind.Road)}道路");
         if (DisplayServer.GetName() == "headless") return;
-        await Frames(parent);
-        await parent.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
-        string directory = ProjectSettings.GlobalizePath(target);
+        string directory = ProjectSettings.GlobalizePath("res://build/issue143-review-fixes/evidence");
         DirAccess.MakeDirRecursiveAbsolute(directory);
         parent.GetViewport().GetTexture().GetImage().SavePng(directory + "/" + name);
     }

@@ -32,10 +32,20 @@ public partial class TestLandOccupancy : Node
             land.Clear();
         }
         IReadOnlyList<BuildingSpaceSnapshot> empty = land.Instances;
-        if (!Throws<ArgumentOutOfRangeException>(() => land.Place(IndexOf(cell), BuildingKind.Road,
-                roadMaterial: (RoadMaterial)99)) || !ReferenceEquals(empty, land.Instances))
-            return Fail("无效道路材质没有零登记拒绝");
-        land.Place(IndexOf(cell), BuildingKind.Farm);
+        foreach (RoadMaterial invalid in new[] { (RoadMaterial)(-1), (RoadMaterial)99 })
+        {
+            try
+            {
+                land.Place(IndexOf(cell), BuildingKind.Road, roadMaterial: invalid);
+                return Fail("无效道路材质被登记");
+            }
+            catch (ArgumentOutOfRangeException error)
+            {
+                if (error.ParamName != "roadMaterial" || !ReferenceEquals(empty, land.Instances))
+                    return Fail("无效道路材质改变异常参数名或占地快照");
+            }
+        }
+        land.Place(IndexOf(cell), BuildingKind.Farm, roadMaterial: (RoadMaterial)99);
         if (land.GetSpace(IndexOf(cell))!.RoadMaterial != null)
             return Fail("非道路空间持有道路材质");
         return true;

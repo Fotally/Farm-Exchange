@@ -4,7 +4,7 @@
 
 ## 自动化测试与覆盖率
 
-道路 #143 的领域检查接入 `TestFarmGame`、`TestLandOccupancy` 与 `TestBuildingLogging`，验证五材质不可变快照、整段重验、冻结资金、失败零修改、范围只拆道路和批量日志一次终结。`TestRoadMap` 调用 `TestRoadAppearance`（独立入口 `tests/integration/test_road_appearance.tscn`），验证全部16种连接 mask、稳定变体、混材质及跨8×8缓存块的正式／新建／拆除外观，以及移动、隐藏和取消后的恢复；有窗口运行同时检查实际纹理像素并保存截图。`tests/e2e/test_road_placement.tscn` 使用真实主场景与原生输入验证五材质未点击的单格起点预览、移动与隐藏恢复、只读状态及相邻旧路连接，再验证两次短按、两种L形轨迹、投影直线拆除、失败保段、两级取消、拖动与界面防穿透及暂停。上述检查均由 `TestSuite` 调用，原生产设施建造与旋转测试继续保留。
+道路 #143 的领域检查接入 `TestFarmGame`、`TestLandOccupancy` 与 `TestBuildingLogging`，验证五材质不可变快照、整段重验、冻结资金、失败零修改、范围只拆道路和批量日志一次终结。`TestRoadMap` 调用 `TestRoadAppearance`（独立入口 `tests/integration/test_road_appearance.tscn`），验证全部16种连接 mask、稳定变体、混材质及跨8×8缓存块的正式／新建／拆除外观，以及移动、隐藏和取消后的恢复；有窗口运行同时检查实际纹理像素并保存截图。`tests/e2e/test_road_placement.tscn` 使用真实主场景与原生输入验证五材质未点击的单格起点预览、移动与隐藏恢复、只读状态及相邻旧路连接，再验证两次短按、两种L形轨迹、投影直线拆除、失败保段、两级取消、拖动与界面防穿透及暂停。上述检查均由 `TestSuite` 调用，原生产设施建造与旋转测试继续保留。道路图形夹具的正式准备与清理通过 Main 原有建拆操作，在截图前比较可见金币、冻结／可用金额、道路和设施计数与真实模型，暂停下也必须一致；仅同步地图不构成 UI 同步验收。
 
 道路图形验收在 Debug 编译与导入后串行执行：先用 `tests/performance/test_full_world_fps.tscn` 保存同条件修改前后满地图报告和截图，再运行 `tests/performance/test_road_fps.tscn`，以1920×1080的真实主界面、五材质道路及移动新建／拆除预览测量帧率。平均至少60 FPS、P95帧间隔不超过16.67 ms；截图、报告和命令输出保存在 `build/issue143-validation/`，具体结果以当轮证据为准，不将未运行结果写成通过。
 

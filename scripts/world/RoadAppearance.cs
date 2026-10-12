@@ -39,7 +39,7 @@ internal sealed class RoadAppearance
     internal HashSet<Vector2I> UpdatePreview(IReadOnlyList<Vector2I> cells, RoadMaterial material,
         bool removing, FarmGame game)
     {
-        if ((uint)material >= 5) throw new ArgumentOutOfRangeException(nameof(material));
+        if (!PlacementRules.IsValidRoadMaterial(material)) throw new ArgumentOutOfRangeException(nameof(material));
         var added = new HashSet<Vector2I>();
         var removed = new HashSet<Vector2I>();
         var preview = new List<RoadPreviewCell>();

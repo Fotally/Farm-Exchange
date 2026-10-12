@@ -10,6 +10,8 @@
 
 农田和加工卡片标明 `3×3`，道路卡片标明 `1×1`；费用仍读取唯一查询。这里的占地文字仅帮助玩家选择，完整几何由土地放置规则在实际执行时重验。
 
+道路卡片与搜索共用 [UiElements](../ui-elements/interface-ui-elements.md) 的 `RoadMaterialName` 中文名称，不为共享文字依赖 Main。五材质的名称和同价展示由现有 `TestUiFacilities` 同时核对目录与道路详情。
+
 `tests/e2e/TestUiFacilities.cs` 验证默认生产设施、五道路材质同价与拆路卡片、全类搜索和固定控件身份；`TestRoadPlacement` 验证真实选择事件与道路工具交互。共享布局测试检查窗口边界、费用与操作说明可见，以及末排卡片滚动可达。
 
 原型比例复刻将卡片排列为农田、七类加工场地、道路，复用 [FacilityPreview](../facility-preview/interface-facility-preview.md) 的 UI SVG 插画：图形基准宽 145，文字 12，卡片基准 `220×200`。这些插画不进入地图素材，也不包含原型的示例经营值。列表最多三列；字体或整体倍率调整后，按当前可用宽度与真实按钮最小宽度减少列数，保持信息可读与纵向滚动可达，不扩大地图或人物。

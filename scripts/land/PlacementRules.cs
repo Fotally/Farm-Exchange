@@ -31,6 +31,13 @@ public readonly record struct PlacementResult(LandFailure Failure, int ChargedCe
 
 internal static class PlacementRules
 {
+    /**
+     * <summary>按道路材质枚举的实际定义判断材质是否合法。</summary>
+     * <param name="material">待检查的道路材质。</param>
+     * <returns>已定义材质为真，负值或未定义值为假。</returns>
+     */
+    internal static bool IsValidRoadMaterial(RoadMaterial material) => System.Enum.IsDefined(material);
+
     internal static PlacementCheck Check(Vector2I cell, BuildingKind building, CropKind crop,
         LandOccupancy occupancy, int balanceCents, int costCents,
         BuildingOrientation orientation = BuildingOrientation.Q0)
