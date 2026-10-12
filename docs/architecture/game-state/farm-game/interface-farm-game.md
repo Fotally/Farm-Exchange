@@ -82,3 +82,17 @@
 `TrySetWeatherRegion(cells,kind,out error)` 和 `TryClearWeatherRegion(cells,out error)` 委托天气 Module 完整验证矩形、越界、互斥与模式，失败零修改；自然模式拒绝显式设置。成功只改变天气，供水仍等下一经营秒。设置多云或降雨，清除既有完整矩形恢复默认晴。当前最多3片的规则由天气 Module 维护。设置界面不向玩家提供。
 
 天气快照在完整秒后与 `Calendar.ElapsedSeconds` 同步；刚生效或结束的天气作用于下一秒，不回溯刚结算的生长。同一 `CropHarvestResult.Quantity` 用于正常／促熟入库、TickResult 汇总、ProductionResult 和日志，经营不重算收成。模块职责见[天气 Interface](../../weather/interface-weather-system.md)，作物基准和天气系数见[作物规则](../../../gameplay/production/crop-growth.md)。
+
+## 整批道路命令
+
+`CheckRoadPlacement(IReadOnlyList<Vector2I> cells,RoadMaterial material)` 只读检查五种材质、非空且无重复的候选、全范围、占用与可用金币，返回 `RoadPlacementCheck`。总费用为候选格数乘 `GetBuildingCostCents(Road)`，以 long 分计算；拒绝也保留请求总费用。查询不预留土地或资金，不记录命令日志。
+
+`TryPlaceRoads(cells,material,origin=Player)` 执行时重新调用同一完整检查，全部通过后扣取总费并由 `LandOccupancy` 登记逐格道路。钱包可用金额检查通过后总费才能转为 int 进行一次扣款。范围越界、候选重复、已有道路或任何生产设施子格、资金不足或非法材质均整批拒绝，结果实际格数与扣费为零，库存、土地快照、生产与金币零修改；不得覆盖、跳过或重用占用格。成功返回实际格数、实际扣费，新空间快照只保存每格材质。转角只出现一次；轨迹及 L 形候选由 UI 生成，不成为经营状态。
+
+`TryRemoveRoads(cells,origin=Player)` 先检查整个范围是否在地图内，越界整批拒绝；随后去重并收集其中的道路，只移除这些逐格实例。范围允许跨空格、农田、加工场地及不同材质道路，不要求连续，不动生产设施与其他经营状态，不退款。没有实际道路（包括空范围）返回 `NoRoads` 与“没有可拆除的道路”，成功返回 `RemovedCount`。直线投影与当前段起终点由 UI 维护；旧 `RemoveBuilding(cell)` 仍可拆除单格道路。
+
+所有命令保留来源校验与暂停可操作约定，未定义来源在记录/修改前抛参数异常。旧 `TryPlace(...,Road,...)` 默认土路；五种材质均只改变表现。`BuildingSpaceSnapshot.RoadMaterial` 由土地唯一登记，非道路为 null，不新增经营材质副本、路段归属或铺设历史。道路建拆不触发加工领取，也不改变工人速度或通行。
+
+启用日志时整批提交共用 `GameplayLog` 与 `CommandObservation`，一次 `PlaceRoads/RemoveRoads` 对应一次收到、真实领域结果和一次终结；没有逐格伪造玩家命令或多次扣费事件。拒绝记录零实际格数/零扣费，范围拆除的材料明细由同次真实目标快照提供，日志不重做校验。原请求与移除明细最多采样前 32 项且记录原数量及截断，完整结果数量仍不截断，字段见 [日志 schema](../../../project/runtime-log-schema-v1.md)。
+
+`TestFarmGame.CheckBatchRoadPlacement/Failures/FrozenMoney/Removal` 覆盖五种材质、暂停、L 形去重候选、执行重验、设施冲突、越界、重复/空范围、非法材质与来源、可用金币准确耗尽、冻结金额不可使用、跨设施混材质拆路、非连续道路、重复范围去重、失败稳定引用、旧快照不变及逐格拆除继续可用。

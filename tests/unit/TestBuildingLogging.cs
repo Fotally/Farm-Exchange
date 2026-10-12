@@ -22,12 +22,98 @@ public static class TestBuildingLogging
             CheckPausedProcessorAndReserve();
             CheckOriginsAndIsolation();
             CheckObservationLifecycle();
+            CheckBatchRoadObservation();
+            CheckBatchRoadObservationLifecycle();
             return true;
         }
         catch (Exception error) { GD.PrintErr("建造与原料底线日志测试失败：" + error); return false; }
     }
 
     private static string[] Events(StringWriter text, string name) => Lines(text.ToString()).Where(line => HasEvent(line, name)).ToArray();
+
+    private static void CheckBatchRoadObservation()
+    {
+        using var text = new StringWriter();
+        using var log = RuntimeLog.Capture(text);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        Vector2I[] cells = Enumerable.Range(0, 33).Select(x => new Vector2I(x, 0)).ToArray();
+        int length = text.ToString().Length;
+        Require(game.CheckRoadPlacement(cells, RoadMaterial.Brick).Allowed && text.ToString().Length == length,
+            "整段道路预览生成命令日志");
+        Require(game.TryPlaceRoads(cells, RoadMaterial.Brick, CommandOrigin.Scenario).Success,
+            "成批道路日志夹具失败");
+        string received = Events(text, "CommandReceived").Last();
+        string placed = Events(text, "BuildingPlaced").Single();
+        Require(received.Contains("CommandName: \"PlaceRoads\"") && received.Contains("RoadMaterial: \"Brick\"") &&
+            received.Contains("RequestedCellCount: 33") && received.Contains("Truncated: true") &&
+            received.Contains("CommandArguments.Cells") && placed.Contains("CommandOrigin: \"Scenario\"") &&
+            placed.Contains("RoadCount: 33") && placed.Contains("ChargedCents: 3300") &&
+            placed.Contains("MoneyBeforeCents: 5000") && placed.Contains("MoneyAfterCents: 1700") &&
+            placed.Contains("RoadMaterial: \"Brick\"") && !placed.Contains("Anchor:") && !placed.Contains("Crop:"),
+            "批量铺路没有保留有界原请求、完整实际数量、材质或一次资金收支");
+        Require(game.TryPlaceRoads(cells, RoadMaterial.Slab).Failure == LandFailure.Occupied,
+            "旧路重复批量铺设未拒绝");
+        string rejected = Events(text, "BuildingPlaced").Last();
+        Require(rejected.Contains("Outcome: \"Rejected\"") && rejected.Contains("FailureCode: \"LandFailure.Occupied\"") &&
+            rejected.Contains("RoadCount: 0") && rejected.Contains("ChargedCents: 0") &&
+            rejected.Contains("MoneyBeforeCents: 1700") && rejected.Contains("MoneyAfterCents: 1700"),
+            "批量铺路拒绝伪造道路成功或费用");
+        Require(game.TryRemoveRoads(cells.Append(new(189, 189)).ToArray()).RemovedCount == 33,
+            "跨设施范围拆路失败");
+        string removed = Events(text, "BuildingRemoved").Single();
+        Require(removed.Contains("CommandName: \"RemoveRoads\"") && removed.Contains("RequestedCellCount: 34") &&
+            removed.Contains("RoadCount: 33") && removed.Contains("RemovedRoads:") && removed.Contains("RoadMaterial: \"Brick\"") &&
+            removed.Contains("Truncated: true") && removed.Contains("ChargedCents: 0") &&
+            removed.Contains("MoneyBeforeCents: 1700") && removed.Contains("MoneyAfterCents: 1700"),
+            "批量拆路没有记真实移除材质、数量与零退款");
+        Require(game.TryRemoveRoads(cells).Failure == LandFailure.NoRoads,
+            "空范围道路未拒绝");
+        Require(Events(text, "BuildingRemoved").Last().Contains("RoadCount: 0") &&
+            Events(text, "CommandFinished").Last().Contains("CommandStatus: \"Rejected\"") &&
+            Events(text, "CommandFinished").All(line => !line.Contains("ChargedCents:")),
+            "批量道路结束重复记账或拒绝没有一次真实终结");
+        AssertSequence(Lines(text.ToString()));
+    }
+
+    private static void CheckBatchRoadObservationLifecycle()
+    {
+        using var text = new StringWriter();
+        using var log = RuntimeLog.Capture(text);
+        using var game = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var context = log.BindGame(game, 17)!;
+        Vector2I[] cells = { new(0, 0) };
+        RoadLogOperation place = context.Gameplay.BeginPlaceRoads(cells, RoadMaterial.Gravel)!;
+        RoadPlacementResult result = game.TryPlaceRoads(cells, RoadMaterial.Gravel);
+        place.Complete(result);
+        place.Complete(result);
+        place.Faulted(new InvalidOperationException("不能重复终结"));
+        BuildingSpaceSnapshot[] roads = { game.GetBuildingSpace(cells[0])! };
+        RoadLogOperation remove = context.Gameplay.BeginRemoveRoads(cells)!;
+        remove.Complete(game.TryRemoveRoads(cells), roads);
+        remove.Complete(new(LandFailure.None, 1), roads);
+        RoadLogOperation fault = context.Gameplay.BeginPlaceRoads(cells, RoadMaterial.Slab)!;
+        fault.Faulted(new InvalidOperationException("原道路异常"));
+        fault.Faulted(new InvalidOperationException("不能重复异常"));
+        RoadLogOperation removeFault = context.Gameplay.BeginRemoveRoads(cells)!;
+        removeFault.Faulted(new InvalidOperationException("原拆路异常"));
+        Require(Events(text, "CommandReceived").Length == 4 && Events(text, "CommandFinished").Length == 4 &&
+            Events(text, "BuildingPlaced").Length == 1 && Events(text, "BuildingRemoved").Length == 1 &&
+            Events(text, "BusinessException").Length == 2, "道路观察重复终结或异常丢失");
+        foreach (Action action in new Action[]
+        {
+            () => context.Gameplay.BeginPlaceRoads(cells, RoadMaterial.Dirt, (CommandOrigin)99),
+            () => context.Gameplay.BeginRemoveRoads(cells, (CommandOrigin)99),
+            () => game.TryPlaceRoads(cells, RoadMaterial.Dirt, (CommandOrigin)99),
+            () => game.TryRemoveRoads(cells, (CommandOrigin)99),
+        })
+        {
+            try { action(); Require(false, "道路观察接受非法来源"); }
+            catch (ArgumentOutOfRangeException) { }
+        }
+        context.Dispose();
+        Require(context.Gameplay.BeginPlaceRoads(cells, RoadMaterial.Dirt) == null &&
+            context.Gameplay.BeginRemoveRoads(cells) == null, "局结束仍建立道路观察");
+    }
 
     private static void CheckOrientationObservation()
     {
@@ -121,6 +207,13 @@ public static class TestBuildingLogging
         Require(refused.Contains("FailureCode: \"LandFailure.InsufficientFunds\"") &&
             refused.Contains("AvailableMoneyBeforeCents: 500") && refused.Contains("AvailableMoneyAfterCents: 500") &&
             refused.Contains("FrozenMoneyBeforeCents: 4500") && refused.Contains("FrozenMoneyAfterCents: 4500"), "冻结资金拒绝没有真实资源边界");
+        Vector2I[] roads = Enumerable.Range(0, 6).Select(x => new Vector2I(x, 0)).ToArray();
+        Require(game.TryPlaceRoads(roads, RoadMaterial.Cobble).Failure == LandFailure.InsufficientFunds,
+            "批量道路动用冻结金币");
+        string roadRefusal = Events(text, "BuildingPlaced").Last();
+        Require(roadRefusal.Contains("RoadCount: 0") && roadRefusal.Contains("AvailableMoneyBeforeCents: 500") &&
+            roadRefusal.Contains("FrozenMoneyAfterCents: 4500") && roadRefusal.Contains("ChargedCents: 0"),
+            "批量道路冻结资金拒绝未记录真实资源与零扣费");
         Require(game.CancelTradeOrder(order.Id).Success, "释放资金失败");
         for (int i = 0; i < 5; i++) Require(game.BuildFarm(new(i * 3, 0)) == null, "耗尽余额夹具失败");
         Require(game.BuildFarm(new(20, 0)) != null && game.MoneyCents == 0, "余额耗尽未拒绝建造");
@@ -188,6 +281,9 @@ public static class TestBuildingLogging
             Require(game.MoneyCents == 5000 && text.ToString().Length == before, "非法来源改动资源或输出命令");
             Require(game.BuildFarm(new(0, 0)) == null && game.RemoveBuilding(new(1, 1)) == null &&
                 game.SetRawReserve(CropKind.Wheat, 5) == RawReserveFailure.None, "等价流程失败");
+            Vector2I[] roads = { new(0, 0), new(1, 0) };
+            Require(game.TryPlaceRoads(roads, RoadMaterial.Slab).Success &&
+                game.TryRemoveRoads(roads).RemovedCount == 2, "道路采集开关或输出故障改变执行");
         }
         foreach (var game in new[] { disabled, broken, plain })
             Require(game.MoneyCents == traced.MoneyCents && game.GetRawReserve(CropKind.Wheat) == 5 &&

@@ -9,6 +9,7 @@ namespace FarmExchange.UI;
 public partial class RoadDetailsPanel : VBoxContainer
 {
     private readonly FacilityPreview _preview;
+    private readonly Label _title;
     public event Action? RemoveRequested;
 
     public RoadDetailsPanel()
@@ -18,7 +19,7 @@ public partial class RoadDetailsPanel : VBoxContainer
         _preview = new FacilityPreview { Name = "RoadFacilityPreview" };
         AddChild(_preview);
         var heading = new HBoxContainer();
-        var title = MakeLabel("乡间道路", 27, Ink);
+        var title = _title = MakeLabel("乡间道路", 27, Ink);
         title.Name = "RoadTitle";
         title.AutowrapMode = TextServer.AutowrapMode.Off;
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -32,7 +33,7 @@ public partial class RoadDetailsPanel : VBoxContainer
         AddChild(MakeLabel("用途：当前仅用于布局和外观", 14, Muted));
         var next = new HBoxContainer();
         next.AddChild(UiIcons.Create(UiIcon.Build, 25, Muted));
-        var nextStep = MakeLabel("建造目录 → 选择道路\n连续点击空格铺设。", 14, Muted);
+        var nextStep = MakeLabel("建造目录 → 选择道路材质\n短按起点与终点成段铺设。", 14, Muted);
         nextStep.Name = "RoadNextStep";
         nextStep.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         next.AddChild(nextStep);
@@ -49,6 +50,9 @@ public partial class RoadDetailsPanel : VBoxContainer
      * <summary>显示已选道路的实际占地与锚点。</summary>
      * <param name="space">已选中道路的只读空间快照。</param>
      */
-    public void RefreshPlacement(BuildingSpaceSnapshot space) =>
+    public void RefreshPlacement(BuildingSpaceSnapshot space)
+    {
+        _title.Text = RoadMaterialName(space.RoadMaterial!.Value);
         _preview.Refresh(space, default, CropStage.None);
+    }
 }

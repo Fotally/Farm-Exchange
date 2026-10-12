@@ -7,13 +7,18 @@ using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
 using FarmExchange.Logging;
 using FarmExchange.Time;
+using FarmExchange.Weather;
 
 string output = Path.GetFullPath(args[0]);
+string weatherRulesPath = Path.GetFullPath(args[1]);
+byte[] weatherRulesBytes = File.ReadAllBytes(weatherRulesPath);
+using var weatherRulesReader = new StreamReader(new MemoryStream(weatherRulesBytes));
+WeatherRules weatherRules = WeatherRules.Parse(weatherRulesReader.ReadToEnd());
 Directory.CreateDirectory(output);
 using var text = new StringWriter();
-using (var captured = RuntimeLog.Capture(text)) { VerifyGate(captured); VerifyExceptions(captured); }
+using (var captured = RuntimeLog.Capture(text)) { VerifyGate(captured, weatherRules); VerifyExceptions(captured, weatherRules); }
 using (var file = RuntimeLog.OpenFile(Path.Combine(output, "logs"), true, new(BuildKind: "ReleaseProbe")))
-{ VerifyGate(file); VerifyExceptions(file); }
+{ VerifyGate(file, weatherRules); VerifyExceptions(file, weatherRules); }
 File.WriteAllText(Path.Combine(output, "capture.log"), text.ToString());
 if (Directory.Exists(Path.Combine(output, "logs", "debug"))) throw new Exception("真实 Release 允许创建 debug 目标");
 string[] lines = Directory.GetFiles(Path.Combine(output, "logs"), "*.log", SearchOption.AllDirectories)
@@ -29,15 +34,17 @@ File.WriteAllText(Path.Combine(output, "report.json"), JsonSerializer.Serialize(
     Assembly = assembly,
     Sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assembly))),
     Mvid = typeof(RuntimeLog).Module.ModuleVersionId,
+    WeatherRulesPath = weatherRulesPath,
+    WeatherRulesSha256 = Convert.ToHexString(SHA256.HashData(weatherRulesBytes)),
     Passed = true,
     Checks = new[] { "实际程序集 Capture 和 OpenFile(true) 强制 Runtime", "开始前不读取有毒范围集合", "生产/加工明细门禁先于状态读取", "真实交易及批量推进正常", "无 debug 文件",
         "真实批量容量/检查点及驱动容量/预算异常保留类型消息堆栈和阶段", "命令传播只记录一次且后续独立操作重新记录", "异常对象原样传播及独立命令终结保留" }
 }, new JsonSerializerOptions { WriteIndented = true }));
 Console.WriteLine("实际 Release 日志门禁通过：" + assembly);
 
-static void VerifyGate(RuntimeLog logging)
+static void VerifyGate(RuntimeLog logging, WeatherRules weatherRules)
 {
-    using var game = new FarmGame(130, logging);
+    using var game = new FarmGame(130, logging, weatherRules: weatherRules);
     if (game.Log!.Diagnostics.Start(new(new PoisonList(), IncludeGameEvents: true)))
         throw new Exception("Release 允许开始专项诊断");
     // 用真正 Release 类型调用快照入口，null 依赖只要被读取即失败；不是 Debug runtime 模式替身。
@@ -52,9 +59,9 @@ static void VerifyGate(RuntimeLog logging)
     if (!result.Success || game.AdvanceTicks(120).AdvancedTicks != 120) throw new Exception("Release 经营执行失败");
 }
 
-static void VerifyExceptions(RuntimeLog logging)
+static void VerifyExceptions(RuntimeLog logging, WeatherRules weatherRules)
 {
-    using var game = new FarmGame(130, logging);
+    using var game = new FarmGame(130, logging, weatherRules: weatherRules);
     var driver = new SimulationDriver(game.Log!.Time);
     game.AdvanceTick();
     Exception capacity = CaptureError(() => game.AdvanceTicks(uint.MaxValue));

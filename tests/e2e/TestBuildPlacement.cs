@@ -29,7 +29,7 @@ public partial class TestBuildPlacement : Node
             await Frames(parent);
             if (!CheckPausedFeedback(parent)) return false;
             if (!await CheckRotation(parent)) return false;
-            foreach (BuildingKind kind in new[] { BuildingKind.Farm, BuildingKind.Processor, BuildingKind.Road })
+            foreach (BuildingKind kind in new[] { BuildingKind.Farm, BuildingKind.Processor })
             {
                 IEnumerable<CropKind> crops = kind == BuildingKind.Processor
                     ? Enum.GetValues<CropKind>() : new[] { CropKind.Wheat };

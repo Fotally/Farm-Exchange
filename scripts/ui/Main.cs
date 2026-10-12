@@ -63,9 +63,11 @@ public partial class Main : Node2D
     private Placement? _placement;
     private Vector2I? _placementCell;
     private LandFailure _placementFailure;
+    private readonly RoadSegmentGesture _roadSegment = new();
+    private bool _removingRoads;
 
     private readonly record struct Placement(BuildingKind Kind, CropKind Crop,
-        BuildingOrientation Orientation = BuildingOrientation.Q0)
+        BuildingOrientation Orientation = BuildingOrientation.Q0, RoadMaterial RoadMaterial = RoadMaterial.Dirt)
     {
         public string Name => Kind == BuildingKind.Farm ? "农田" :
             Kind == BuildingKind.Road ? "道路" : FarmGame.GetCrop(Crop).BuildingName;
@@ -144,6 +146,8 @@ public partial class Main : Node2D
         _workerPresentation.SetGame(GameState, _worldMap, _driver);
         _workerPresentation.ProcessPriority = 2;
         _worldMap.SelectionChanged += OnSelectionChanged;
+        _camera.MapShortClicked += OnMapShortClicked;
+        _camera.MapPointerMoved += OnMapPointerMoved;
         _uiRoot = GetNode<Control>("CanvasLayer/UiRoot");
         _uiRoot.Theme = SharedTheme;
         BuildInterface();
@@ -154,6 +158,11 @@ public partial class Main : Node2D
 
     public override void _ExitTree()
     {
+        if (_camera != null)
+        {
+            _camera.MapShortClicked -= OnMapShortClicked;
+            _camera.MapPointerMoved -= OnMapPointerMoved;
+        }
         if (_driver != null) _driver.RateChanged -= RefreshSimulationRate;
 #if DEBUG
         if (GodotObject.IsInstanceValid(_developerWindow)) _developerWindow.ShutdownScenario();
@@ -218,7 +227,7 @@ public partial class Main : Node2D
         if (inputEvent is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } ||
             inputEvent is InputEventKey { Pressed: true, Keycode: Key.Escape })
         {
-            CancelPlacement();
+            CancelCurrentSegmentOrPlacement();
             GetViewport().SetInputAsHandled();
         }
         else if (inputEvent is InputEventKey
@@ -243,6 +252,7 @@ public partial class Main : Node2D
         _placementCell = null;
         _placementFailure = LandFailure.None;
         _worldMap.ClearPlacementPreview();
+        _worldMap.ClearRoadPreview();
     }
 
     private void RefreshPlacementPreview(Vector2? screenPosition = null)
@@ -277,6 +287,18 @@ public partial class Main : Node2D
     private void SetPlacementCandidate(Vector2I cell, Placement placement)
     {
         _placementCell = cell;
+        if (placement.Kind == BuildingKind.Road)
+        {
+            _roadSegment.UpdateEndpoint(cell);
+            if (_roadSegment.StartCell != null)
+                _worldMap.UpdateRoadPreview(_roadSegment.GetCells(_removingRoads), placement.RoadMaterial, _removingRoads);
+            else if (!_removingRoads)
+                _worldMap.UpdateRoadPreview(new[] { cell }, placement.RoadMaterial);
+            else
+                _worldMap.ClearRoadPreview();
+            RefreshFooter();
+            return;
+        }
         _worldMap.UpdatePlacementPreview(placement.Kind, placement.Crop, cell, placement.Orientation);
         _placementFailure = GameState.CheckPlacement(_placementCell.Value, placement.Kind, placement.Crop,
             placement.Orientation).Failure;
@@ -287,7 +309,7 @@ public partial class Main : Node2D
     {
         if (inputEvent is not InputEventKey { Pressed: true, Keycode: Key.Escape })
             return;
-        if (_placement != null) CancelPlacement();
+        if (_placement != null) CancelCurrentSegmentOrPlacement();
 #if DEBUG
         else if (_developerWindow.Visible) _developerWindow.Hide();
 #endif
@@ -335,6 +357,15 @@ public partial class Main : Node2D
 
         _buildWindow = new BuildCatalogWindow();
         _buildWindow.SelectionRequested += (kind, crop) => StartPlacement(new Placement(kind, crop));
+        _buildWindow.RoadRequested += material => StartPlacement(new Placement(BuildingKind.Road, default,
+            RoadMaterial: material));
+        _buildWindow.RoadRemovalRequested += () =>
+        {
+            StartPlacement(new Placement(BuildingKind.Road, default));
+            _removingRoads = true;
+            SetMessage("道路拆除：短按选起点，移动预览直线，再短按拆除；右键或 Esc 分级取消");
+            RefreshPlacementPreview();
+        };
         AddWindow(_buildWindow);
 
         _cropWindow = new CropSelectionWindow();
@@ -393,9 +424,9 @@ public partial class Main : Node2D
         AddWindow(_developerWindow);
         var developerButton = MakeQuietButton("开发测试", 115, 36);
         developerButton.Name = "DeveloperToolsButton";
-        developerButton.Position = new Vector2(47, 520);
+        developerButton.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
         developerButton.Pressed += _developerWindow.ShowRaised;
-        _uiRoot.AddChild(developerButton);
+        _uiRoot.GetNode<VBoxContainer>("ActivityLayout").AddChild(developerButton);
 #endif
     }
 
@@ -571,14 +602,21 @@ public partial class Main : Node2D
 
     private void BuildMessage()
     {
+        var layout = new VBoxContainer
+        {
+            Name = "ActivityLayout",
+            Position = new Vector2(47, 143),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
+        layout.AddThemeConstantOverride("separation", 8);
+        _uiRoot.AddChild(layout);
         var panel = new PanelContainer
         {
             Name = "MessagePanel",
-            Position = new Vector2(47, 143),
-            Size = new Vector2(299, 389),
+            CustomMinimumSize = new Vector2(299, 389),
         };
         panel.AddThemeStyleboxOverride("panel", Frame(new Color("f1e3c0"), 5));
-        _uiRoot.AddChild(panel);
+        layout.AddChild(panel);
         var body = new VBoxContainer();
         body.AddThemeConstantOverride("separation", 19);
         WrapMargin(AddFrameLining(panel), 22, 20).AddChild(body);
@@ -643,6 +681,11 @@ public partial class Main : Node2D
 
     private void OnSelectionChanged(Vector2I cell)
     {
+        if (_placement is Placement { Kind: BuildingKind.Road })
+        {
+            _worldMap.ClearSelection();
+            return;
+        }
         if (_placement is Placement placement)
         {
             SetPlacementCandidate(cell, placement);
@@ -689,6 +732,8 @@ public partial class Main : Node2D
 
     private void StartPlacement(Placement placement)
     {
+        _roadSegment.Reset();
+        _removingRoads = false;
         _placement = placement;
         ClearPlacementPreview();
         _selectedCell = null;
@@ -696,16 +741,83 @@ public partial class Main : Node2D
         _detailWindow.Hide();
         _buildWindow.Hide();
         _cropWindow.Hide();
-        SetMessage($"移动鼠标预览{placement.Name}，左键短按建造，拖动平移；右键或 Esc 取消");
+        SetMessage(placement.Kind == BuildingKind.Road
+            ? $"{RoadMaterialName(placement.RoadMaterial)}：短按选起点，移动预览，再短按建造；右键或 Esc 分级取消"
+            : $"移动鼠标预览{placement.Name}，左键短按建造，拖动平移；右键或 Esc 取消");
         RefreshPlacementPreview();
     }
 
     private void CancelPlacement()
     {
         _placement = null;
+        _roadSegment.Reset();
+        _removingRoads = false;
         ClearPlacementPreview();
         SetMessage("已取消摆放");
         RefreshFooter();
+    }
+
+    private void CancelCurrentSegmentOrPlacement()
+    {
+        if (_placement is Placement { Kind: BuildingKind.Road } && _roadSegment.StartCell != null)
+        {
+            _roadSegment.Reset();
+            ClearPlacementPreview();
+            SetMessage("已取消当前道路段，请重新选择起点");
+            RefreshPlacementPreview();
+        }
+        else CancelPlacement();
+    }
+
+    private void OnMapPointerMoved(Vector2 position)
+    {
+        if (_placement is not Placement { Kind: BuildingKind.Road } ||
+            !_camera.IsMouseInsideWindow || IsPointerOverUi(_uiRoot, position)) return;
+        _roadSegment.TrackPointer(_worldMap.ScreenToCell(position), _removingRoads);
+        RefreshPlacementPreview(position);
+    }
+
+    private void OnMapShortClicked(Vector2 position)
+    {
+        if (_placement is not Placement { Kind: BuildingKind.Road } placement ||
+            !_camera.IsMouseInsideWindow || IsPointerOverUi(_uiRoot, position)) return;
+        Vector2I cell = _worldMap.ScreenToCell(position);
+        if (_roadSegment.StartCell == null)
+        {
+            _roadSegment.Begin(cell);
+            SetMessage("已选择起点，移动鼠标预览道路段，再短按提交");
+            RefreshPlacementPreview(position);
+            return;
+        }
+        _roadSegment.UpdateEndpoint(cell);
+        if (!_roadSegment.CanSubmit(_removingRoads))
+        {
+            SetMessage("请先沿一条网格轴移动，确定转弯顺序");
+            RefreshPlacementPreview(position);
+            return;
+        }
+        var cells = _roadSegment.GetCells(_removingRoads);
+        bool success;
+        if (_removingRoads)
+        {
+            RoadRemovalResult result = GameState.TryRemoveRoads(cells);
+            success = result.Success;
+            SetMessage(success ? $"已拆除 {result.RemovedCount} 格道路，不退款" : result.ErrorMessage);
+        }
+        else
+        {
+            RoadPlacementResult result = GameState.TryPlaceRoads(cells, placement.RoadMaterial);
+            success = result.Success;
+            SetMessage(success ? $"{RoadMaterialName(placement.RoadMaterial)}已建造 {result.CellCount} 格，花费 {FormatCoins(result.ChargedCents)} 金币"
+                : result.ErrorMessage);
+        }
+        if (success)
+        {
+            _roadSegment.Reset();
+            ClearPlacementPreview();
+            RefreshAfterGameChange(worldChanged: true);
+        }
+        RefreshPlacementPreview(position);
     }
 
     private void RotatePlacement()
@@ -956,6 +1068,41 @@ public partial class Main : Node2D
         }
         int costCents = FarmGame.GetBuildingCostCents(placement.Kind);
         _buildHint.Show();
+        if (placement.Kind == BuildingKind.Road)
+        {
+            var cells = _roadSegment.GetCells(_removingRoads);
+            bool started = _roadSegment.StartCell != null;
+            if (!started && !_removingRoads && _placementCell is Vector2I candidateCell) cells = new[] { candidateCell };
+            _buildHint.Text = (_removingRoads ? "拆除道路 · 直线范围" : RoadMaterialName(placement.RoadMaterial) + " · 每格 1×1") +
+                (started ? "\n短按终点提交 · 拖动平移\n右键 / Esc 取消当前段" : "\n短按选择起点 · 拖动平移\n右键 / Esc 退出工具");
+            long totalCost = 0;
+            if (_removingRoads)
+            {
+                int count = 0;
+                foreach (Vector2I cell in cells)
+                    if (cell.X >= 0 && cell.Y >= 0 && cell.X < FarmGame.MapSize && cell.Y < FarmGame.MapSize &&
+                        GameState.GetPlot(cell).Building == BuildingKind.Road) count++;
+                _buildCost.Text = $"待拆道路 {count} 格 · 不退款";
+            }
+            else
+            {
+                RoadPlacementCheck check = cells.Count > 0 ? GameState.CheckRoadPlacement(cells, placement.RoadMaterial) : default;
+                totalCost = cells.Count > 0 ? check.CostCents : costCents;
+                bool shortFunds = GameState.AvailableMoneyCents < totalCost;
+                _buildCost.Text = started ? $"{cells.Count} 格 · 总费用 {FormatCoins(totalCost)} 金币"
+                    : $"每格 {FormatCoins(costCents)} 金币";
+                if (shortFunds) _buildCost.Text += $"\n可用 {FormatCoins(GameState.AvailableMoneyCents)}";
+                if (cells.Count > 0 && !check.Allowed && !shortFunds)
+                    _buildHint.Text += $"\n无法建造：\n{check.ErrorMessage}";
+                else if (started && !_roadSegment.CanSubmit(false))
+                    _buildHint.Text += "\n请先沿一条网格轴移动";
+            }
+            _buildCost.AddThemeColorOverride("font_color", GameState.AvailableMoneyCents < totalCost ? new Color("a34131") : Ink);
+            _buildCost.Show();
+            _rotatePlacementButton.Hide();
+            _cancelPlacementButton.Show();
+            return;
+        }
         bool insufficient = GameState.AvailableMoneyCents < costCents;
         _buildHint.Text = $"{placement.Name} · 占地 {BuildingFootprint.Get(placement.Kind).Offsets.Count} 格\n" +
             "左键建造 · 拖动平移\n右键 / Esc 取消" +

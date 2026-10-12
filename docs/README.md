@@ -13,13 +13,14 @@
 - [即时买卖与出售](gameplay/trading/sales.md)：同价买卖、公共库存、完整结算与失败原因。
 - [委托与自动交易](gameplay/trading/orders.md)：多因素条件、两种一次买单、资源冻结、原现金基准保留和 1% 成交费用。
 - [开局与建造](gameplay/land/opening-and-building.md)：预置建筑、建造收费与扩张。
-- [道路铺设与移除](gameplay/land/roads.md)：灰色道路、逐格连续铺设、独占与拆除，以及当前不影响生产和移动的规则。
+- [道路铺设与移除](gameplay/land/roads.md)：五材质、两次点击直线／L 形铺设、投影直线拆除、整段提交及连接预览；道路不影响生产和移动。
 - [地图与操作](gameplay/world/map-and-camera.md)：坐标、选择、镜头与画面含义；窗口和全屏扩大时增加地图视野，保持农田大小。
 - [经营速率与暂停](gameplay/world/simulation-rate.md)：发布0.5×/1×/2×、暂停保留未完成tick进度与工人动画；开发倍率最高16×及现场流程中断语义。
 
 ## 代码架构
 
 - [当前系统组织与状态归属](architecture/implementation-system-organization.md)：已落地模块关系和修改入口。
+- [共享 UI 工具](architecture/ui/ui-elements/interface-ui-elements.md)：统一主题、控件构造、金额格式与道路材质中文名称。
 - [天气接口](architecture/weather/interface-weather-system.md)及[预排与循环实现](architecture/weather/implementation-weather-schedule.md)：具名不可变配置、每局组装、自然／显式模式、当前状态、事件距离与快照引用契约，以及配置字段扩展和预排规模调整的维护要求。
 - [FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)、[推进顺序](architecture/game-state/farm-game/implementation-tick-order.md)及[等价批量实现](architecture/game-state/farm-game/implementation-batched-simulation.md)：单tick和批量共用相位，平静区间直接累计，真实事件提供稳定检查点。
 - [CropCatalog 接口](architecture/farming/crop-catalog/interface-crop-catalog.md)、[Inventory 接口](architecture/inventory/inventory/interface-inventory.md)与[Wallet 接口](architecture/economy/wallet/interface-wallet.md)：作物定义、分类库存和余额的唯一拥有者。
@@ -42,6 +43,7 @@
 - [开发窗口接口](architecture/ui/developer-tools-window/interface-developer-tools-window.md)：文件选择、显式重选恢复与草稿冲突保护、启动/中止、当前局与独立数据局接入、真实进度及报告保存结果。
 - [MapCoordinates 接口](architecture/world/map-coordinates/interface-map-coordinates.md)：格坐标与地图本地坐标的统一换算。
 - [WorldMap 接口](architecture/world/world-map/interface-world-map.md)及[分块缓存实现](architecture/world/world-map/implementation-chunk-cache.md)：清亮 v2 草地、干湿土、七作物三档、七设施四向、候选同向图和人物共同深度排序。
+- [道路连接实现](architecture/world/world-map/implementation-road-appearance.md)：五材质图集、四邻 mask 与稳定变体、跨块局部刷新，以及新建／拆除预览对旧路外观的临时投影。
 - [天气表现实现](architecture/world/world-map/implementation-weather-presentation.md)：真实可见区域云影、斜雨及短落地效果，暂停与倍率表现；不执行经营结算。
 - [局部动效实现](architecture/world/world-map/implementation-bright-motion.md)与[环境装饰实现](architecture/world/world-map/implementation-environment-decoration.md)：建筑内部层级、逐株根点、真实产出反馈、32类纯环境的随机四向与建造清除。
 - [WorkerPresentation 接口](architecture/world/worker-presentation/interface-worker-presentation.md)：三人工人快照、真实成功作业、清亮 v2 动作、脚根排序、暂停与倍率插值；[FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)统一定义最近经营秒结果。

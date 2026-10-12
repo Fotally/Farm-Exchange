@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Godot;
 using FarmExchange.Gameplay;
+using FarmExchange.Land;
 using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
@@ -11,7 +12,8 @@ public partial class BuildCatalogWindow : DraggableWindow
     private readonly GridContainer _cards;
     private readonly LineEdit _search;
     private readonly Button _farmCard;
-    private readonly Button _roadCard;
+    private readonly Dictionary<RoadMaterial, Button> _roadCards = new();
+    private readonly Button _roadRemovalCard;
     private readonly Dictionary<CropKind, Button> _processorCards = new();
     private readonly Label _noMatches;
     private readonly Label _hint;
@@ -19,6 +21,8 @@ public partial class BuildCatalogWindow : DraggableWindow
     private BuildingKind _category = BuildingKind.None;
 
     public event Action<BuildingKind, CropKind>? SelectionRequested;
+    public event Action<RoadMaterial>? RoadRequested;
+    public event Action? RoadRemovalRequested;
 
     public BuildCatalogWindow() : base("BuildWindow", "建造目录", new Vector2(255, 108),
         new Vector2(790, 620))
@@ -62,10 +66,18 @@ public partial class BuildCatalogWindow : DraggableWindow
             _processorCards.Add(kind, card);
             _cards.AddChild(card);
         }
-        _roadCard = MakeFacilityCard(BuildingKind.Road, default);
-        _roadCard.Name = "RoadCard";
-        _roadCard.Pressed += () => SelectionRequested?.Invoke(BuildingKind.Road, default);
-        _cards.AddChild(_roadCard);
+        foreach (RoadMaterial material in Enum.GetValues<RoadMaterial>())
+        {
+            Button roadCard = MakeFacilityCard(BuildingKind.Road, default);
+            roadCard.Name = material == RoadMaterial.Dirt ? "RoadCard" : $"RoadCard{material}";
+            roadCard.Pressed += () => RoadRequested?.Invoke(material);
+            _roadCards.Add(material, roadCard);
+            _cards.AddChild(roadCard);
+        }
+        _roadRemovalCard = MakeFacilityCard(BuildingKind.Road, default);
+        _roadRemovalCard.Name = "RoadRemovalCard";
+        _roadRemovalCard.Pressed += () => RoadRemovalRequested?.Invoke();
+        _cards.AddChild(_roadRemovalCard);
         _noMatches = MakeLabel("没有匹配的设施，试试其他名称", 14, Ink);
         _cards.AddChild(_noMatches);
         _hint = MakeLabel("", 10, Muted);
@@ -115,16 +127,25 @@ public partial class BuildCatalogWindow : DraggableWindow
     {
         _hint.Text = $"农田与加工场地 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Farm))} / 座 · " +
             $"道路 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Road))} / 格\n" +
-            "选择后点击空位连续建造；右键、Esc 或取消退出。";
+            "设施点击建造；道路短按起点、移动、短按终点；拆路选择直线范围。";
         foreach (var tab in _tabs)
             tab.Value.AddThemeStyleboxOverride("normal", Style(tab.Key == _category ? new Color("dad5a5") : Paper, 0));
         _farmCard.Visible = (_category == BuildingKind.None || _category == BuildingKind.Farm) &&
             "农田".Contains(_search.Text, StringComparison.OrdinalIgnoreCase);
-        _roadCard.Visible = (_category == BuildingKind.None || _category == BuildingKind.Road) &&
-            "道路".Contains(_search.Text, StringComparison.OrdinalIgnoreCase);
         _farmCard.Text = $"农田 · 3×3\n工人自动播种、浇水\n建造费 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Farm))} 金币";
-        _roadCard.Text = $"道路 · 1×1\n用于布局与外观\n建造费 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Road))} 金币/格";
-        int count = (_farmCard.Visible ? 1 : 0) + (_roadCard.Visible ? 1 : 0);
+        int count = _farmCard.Visible ? 1 : 0;
+        foreach (var road in _roadCards)
+        {
+            string name = RoadMaterialName(road.Key);
+            road.Value.Visible = (_category == BuildingKind.None || _category == BuildingKind.Road) &&
+                (name + "道路").Contains(_search.Text, StringComparison.OrdinalIgnoreCase);
+            road.Value.Text = $"{name} · 1×1\n短按起点与终点铺设\n建造费 {FormatCoins(FarmGame.GetBuildingCostCents(BuildingKind.Road))} 金币/格";
+            if (road.Value.Visible) count++;
+        }
+        _roadRemovalCard.Visible = (_category == BuildingKind.None || _category == BuildingKind.Road) &&
+            "拆除道路".Contains(_search.Text, StringComparison.OrdinalIgnoreCase);
+        _roadRemovalCard.Text = "拆除道路 · 直线范围\n短按起点与终点拆路\n只拆道路 · 不退款";
+        if (_roadRemovalCard.Visible) count++;
         foreach (CropDefinition crop in FarmGame.Crops)
         {
             Button card = _processorCards[crop.Kind];

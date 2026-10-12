@@ -1,5 +1,6 @@
 using System.Globalization;
 using Godot;
+using FarmExchange.Land;
 
 namespace FarmExchange.UI;
 
@@ -16,6 +17,21 @@ internal static class UiElements
     private static Theme? _sharedTheme;
 
     internal static Theme SharedTheme => _sharedTheme ??= BuildTheme();
+
+    /**
+     * <summary>提供主界面、建造目录和道路详情共用的道路材质中文名称。</summary>
+     * <param name="material">已定义的道路材质；未定义值抛出 ArgumentOutOfRangeException。</param>
+     * <returns>道路材质的中文展示名称。</returns>
+     */
+    internal static string RoadMaterialName(RoadMaterial material) => material switch
+    {
+        RoadMaterial.Dirt => "土路",
+        RoadMaterial.Gravel => "碎石道路",
+        RoadMaterial.Cobble => "卵石道路",
+        RoadMaterial.Brick => "红砖道路",
+        RoadMaterial.Slab => "石板道路",
+        _ => throw new System.ArgumentOutOfRangeException(nameof(material))
+    };
 
     internal static PanelContainer MakeInfoCard(string text, out Label label)
     {

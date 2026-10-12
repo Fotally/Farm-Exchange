@@ -10,7 +10,46 @@ public partial class TestLandOccupancy : Node
     public override void _Ready() => GetTree().Quit(RunChecks() ? 0 : 1);
 
     public static bool RunChecks() => CheckFootprints() && CheckInstances() && CheckEveryRemovalCell() &&
-        CheckBoundaries() && CheckConflictAtomicity() && CheckPlacementRules() && CheckOrientations();
+        CheckBoundaries() && CheckConflictAtomicity() && CheckPlacementRules() && CheckOrientations() && CheckRoadMaterials();
+
+    private static bool CheckRoadMaterials()
+    {
+        LandOccupancy land = NewLand();
+        Vector2I cell = new(8, 12);
+        foreach (RoadMaterial material in Enum.GetValues<RoadMaterial>())
+        {
+            land.Place(IndexOf(cell), BuildingKind.Road, roadMaterial: material);
+            BuildingSpaceSnapshot road = land.GetSpace(IndexOf(cell))!;
+            IReadOnlyList<BuildingSpaceSnapshot> before = land.Instances;
+            if (road.RoadMaterial != material || road.Orientation != BuildingOrientation.Q0 ||
+                road.Footprint.Offsets.Count != 1 || !ReferenceEquals(before, land.Instances))
+                return Fail("土地没有稳定登记道路材质或改变单格占地");
+            land.Remove(IndexOf(cell));
+            land.Place(IndexOf(cell), BuildingKind.Road);
+            if (road.RoadMaterial != material || before[0].RoadMaterial != material ||
+                land.GetSpace(IndexOf(cell))!.RoadMaterial != RoadMaterial.Dirt)
+                return Fail("道路重建修改旧快照或没有恢复默认土路");
+            land.Clear();
+        }
+        IReadOnlyList<BuildingSpaceSnapshot> empty = land.Instances;
+        foreach (RoadMaterial invalid in new[] { (RoadMaterial)(-1), (RoadMaterial)99 })
+        {
+            try
+            {
+                land.Place(IndexOf(cell), BuildingKind.Road, roadMaterial: invalid);
+                return Fail("无效道路材质被登记");
+            }
+            catch (ArgumentOutOfRangeException error)
+            {
+                if (error.ParamName != "roadMaterial" || !ReferenceEquals(empty, land.Instances))
+                    return Fail("无效道路材质改变异常参数名或占地快照");
+            }
+        }
+        land.Place(IndexOf(cell), BuildingKind.Farm, roadMaterial: (RoadMaterial)99);
+        if (land.GetSpace(IndexOf(cell))!.RoadMaterial != null)
+            return Fail("非道路空间持有道路材质");
+        return true;
+    }
 
     private static bool CheckOrientations()
     {

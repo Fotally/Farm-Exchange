@@ -29,6 +29,18 @@ public partial class CameraController : Camera2D
      */
     public bool IsMouseInsideWindow { get; private set; } = true;
 
+    /**
+     * <summary>通知已通过界面与拖动检查的地图左键短按。</summary>
+     * <remarks>参数为逻辑视口像素，包含地图外位置；在原地图选格前通知。</remarks>
+     */
+    public event Action<Vector2>? MapShortClicked;
+
+    /**
+     * <summary>通知未按住鼠标且未拖动时的真实地图指针移动。</summary>
+     * <remarks>参数为逻辑视口像素；镜头、缩放、窗口更新与释放不会产生本通知。</remarks>
+     */
+    public event Action<Vector2>? MapPointerMoved;
+
     public override void _Ready()
     {
         _worldMap = GetNode<WorldMap>("../WorldMap");
@@ -111,7 +123,10 @@ public partial class CameraController : Camera2D
                 else
                 {
                     if (_leftPressed && !_leftDragging && mouse.Position.DistanceTo(_leftPressPosition) < ClickDistance)
+                    {
+                        MapShortClicked?.Invoke(mouse.Position);
                         _worldMap.SelectAtScreenPosition(mouse.Position);
+                    }
                     _leftPressed = false;
                     _leftDragging = false;
                 }
@@ -143,6 +158,8 @@ public partial class CameraController : Camera2D
                 ClampPosition();
                 GetViewport().SetInputAsHandled();
             }
+            else if (!_leftPressed)
+                MapPointerMoved?.Invoke(motion.Position);
         }
     }
 

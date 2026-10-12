@@ -13,3 +13,5 @@
 `MakeButton` 根据实际底色亮度设置深棕或奶油文字，并提供普通、悬停、按下、禁用和键盘焦点状态。`MakeSecondaryButton` 用纸色表示次要操作，`MakeQuietButton` 用纸面降低关闭、拆除等操作的视觉强调。各窗口仍保留自己的按钮节点名称和意图，不由主题决定经营操作。
 
 FormatCoins(long cents) 接受交易聚合金额并固定显示两位小数；现有 int 金额调用可直接传入。此格式接口不扩大 Wallet 或库存的 int 容量。
+
+`RoadMaterialName(RoadMaterial)` 提供土路、碎石道路、卵石道路、红砖道路、石板道路的共享中文展示名称，供 Main、建造目录和道路详情直接使用。未定义值（包括负值）抛出 `ArgumentOutOfRangeException`，参数名为 `material`。名称属于 UI 描述，不承担材质合法性或经营规则检查；目录与详情不再为名称依赖场景协调入口。

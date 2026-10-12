@@ -13,6 +13,9 @@ public enum LandFailure
     Occupied,
     InsufficientFunds,
     InvalidOrientation,
+    InvalidRoadMaterial,
+    InvalidRoadRange,
+    NoRoads,
 }
 
 public readonly record struct PlacementCheck(LandFailure Failure, int CostCents)
@@ -28,6 +31,13 @@ public readonly record struct PlacementResult(LandFailure Failure, int ChargedCe
 
 internal static class PlacementRules
 {
+    /**
+     * <summary>按道路材质枚举的实际定义判断材质是否合法。</summary>
+     * <param name="material">待检查的道路材质。</param>
+     * <returns>已定义材质为真，负值或未定义值为假。</returns>
+     */
+    internal static bool IsValidRoadMaterial(RoadMaterial material) => System.Enum.IsDefined(material);
+
     internal static PlacementCheck Check(Vector2I cell, BuildingKind building, CropKind crop,
         LandOccupancy occupancy, int balanceCents, int costCents,
         BuildingOrientation orientation = BuildingOrientation.Q0)
@@ -49,6 +59,9 @@ internal static class PlacementRules
         LandFailure.InvalidBuilding => "无效建筑",
         LandFailure.InvalidCrop => "无效作物",
         LandFailure.InvalidOrientation => "无效建筑朝向",
+        LandFailure.InvalidRoadMaterial => "无效道路材质",
+        LandFailure.InvalidRoadRange => "道路范围不能为空或包含重复地块",
+        LandFailure.NoRoads => "没有可拆除的道路",
         LandFailure.OutOfBounds => "地图外地块",
         LandFailure.Occupied => "该土地已有建筑",
         LandFailure.InsufficientFunds => "金币不足，无法建造建筑",

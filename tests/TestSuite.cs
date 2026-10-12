@@ -99,12 +99,14 @@ public partial class TestSuite : Node
         cultivationUiPassed = await TestCultivationWindow.RunLayoutChecks(this) && cultivationUiPassed;
         GD.Print("集成测试：工人经营快照与主地图表现");
         bool workerPresentationPassed = await TestWorkerPresentation.RunChecksAsync(this);
-        GD.Print("集成测试：道路灰色地图、分块缓存与选择");
+        GD.Print("集成测试：五材质道路连接、分块缓存与操作结果预览");
         bool roadMapPassed = await TestRoadMap.RunChecksAsync(this);
         GD.Print("集成测试：动态占地预览、局部冲突与独立覆盖层");
         bool placementPreviewPassed = await TestPlacementPreview.RunChecksAsync(this);
         GD.Print("端到端测试：连续摆放、统一取消、界面与镜头输入");
         bool buildPlacementPassed = await TestBuildPlacement.RunChecksAsync(this);
+        GD.Print("端到端测试：道路轨迹成段建造、直线范围拆除与输入生命周期");
+        bool roadPlacementPassed = await TestRoadPlacement.RunChecksAsync(this);
         GD.Print("端到端测试：像素田园主界面、主题与窗口边界");
         bool visualLayoutPassed = await TestUiVisualLayout.RunChecksAsync(this);
         GD.Print("端到端测试：整体与字体倍率、动态控件、原生拖放与分辨率像素稳定");
@@ -112,7 +114,7 @@ public partial class TestSuite : Node
         GD.Print("端到端测试：共享年度表列表可读性、整表删除与引用解除");
         bool cultivationManagementPassed = await TestCultivationManagement.RunChecksAsync(this);
         bool passed = loggingPassed && productionResultsPassed && driverPassed && batchPassed && scenarioPassed && scenarioSchemaPassed && scenarioLibraryPassed && rateButtonPassed && developerWindowPassed && developerEditorPassed && farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-            coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationDeletionPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && visualLayoutPassed && uiScalingPassed && cultivationManagementPassed;
+            coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationDeletionPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && roadPlacementPassed && visualLayoutPassed && uiScalingPassed && cultivationManagementPassed;
 
         if (passed)
             GD.Print("全部自动化测试通过");

@@ -525,18 +525,33 @@ public partial class TestCoreLoop : Node
             return Fail("道路选择没有进入连续铺设并显示统一费用");
         Vector2I first = new(183, 192);
         Vector2I second = new(180, 192);
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+        var camera = main.GetNode<CameraController>("Camera2D");
+        void ShortClick(Vector2I cell)
+        {
+            Vector2 position = map.GetGlobalTransformWithCanvas() * MapCoordinates.CellToLocalCenter(cell);
+            camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = position });
+            camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = position });
+        }
+        ShortClick(first);
+        if (main.Game.MoneyCents != 5000 || main.Game.GetPlot(first).Building != BuildingKind.None)
+            return Fail("道路第一次短按提前建造或扣费");
+        ShortClick(first);
         if (main.Game.GetPlot(first).Building != BuildingKind.Road || main.Game.MoneyCents != 4900 ||
             !cancel.Visible || detail.Visible || !message.Text.Contains("花费 1.00 金币"))
             return Fail("道路首格没有扣实际100分，或铺设后退出了连续模式");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, second);
+        ShortClick(second);
+        ShortClick(second);
         if (main.Game.GetPlot(second).Building != BuildingKind.Road || main.Game.MoneyCents != 4800 ||
             !cancel.Visible || !Find<Label>(ui, "BuildCost").Text.Contains("1.00 金币"))
             return Fail("道路第二格未连续铺设或实际扣费错误");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+        ShortClick(first);
+        ShortClick(first);
         if (main.Game.MoneyCents != 4800 || main.Game.GetPlot(first).Building != BuildingKind.Road ||
             !cancel.Visible || !message.Text.Contains("已有建筑"))
             return Fail("道路占用失败扣费、覆盖，或丢失连续铺设模式");
+        main._UnhandledInput(new InputEventKey { Pressed = true, Keycode = Key.Escape });
+        if (!cancel.Visible || main.Game.MoneyCents != 4800)
+            return Fail("有道路段时Esc未只取消当前段并保留工具");
         main._UnhandledInput(new InputEventKey { Pressed = true, Keycode = Key.Escape });
         if (cancel.Visible || footer.Text.Contains("铺路中"))
             return Fail("Esc没有退出连续道路模式");

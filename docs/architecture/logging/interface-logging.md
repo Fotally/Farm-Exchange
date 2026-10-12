@@ -114,6 +114,8 @@
 
 `GameLog.Market` 由经营协调在两处实际日历推进路径传给 MarketQuotes。MarketLog 只观察真实发布的公告和正式价格提交，保存本轮原计算因素，不因初始化历史回放补造新闻，不重新算价或取随机数。报价日、下一实际报价日及事件头当前日期保持各自含义，见[行情接口](../market/market-quotes/interface-market-quotes.md)。
 
+`GameLog.Gameplay.BeginPlaceRoads(cells,material,origin)` 与 `BeginRemoveRoads(cells,origin)` 返回 `RoadLogOperation`，整批操作共享已有的命令关联与 `BuildingPlaced/BuildingRemoved` 领域事件。原请求保留基础格数组（前 32 项）、完整请求数量和铺路材质；超限标注截断，不解析或重验正式范围。`Complete(RoadPlacementResult)` 只记录真实成功格数与一次扣费；`Complete(RoadRemovalResult,removed)` 消费业务实际移除的不可变道路快照，材质明细同样有界采样，完整移除格数不截断。失败实际格数/扣费为零，资金总量、可用与冻结前后均取真实资源。领域事件不伪造单一锚点或道路作物，通用 Finished 不重复记账；旧单格道路事件补充登记材质。非法来源、关闭或结束的局、重复终结、异常传播及投影/输出失败仍遵循原观察约定。`TestBuildingLogging` 覆盖整批成功/拒绝、移除真实材质、32 项截断、一次终结、原异常及非法来源。
+
 `RuntimeLog.InitializationFailed(error)` 供实际不能初始化的接收点记录 `FatalException`，调用方继续传播原异常。异常文本作为数据转义并有明确预算，不允许注入事件头。
 
 `game.Dispose()` 先封存本局订单等待尾段，再幂等结束局关联，`EndReason=Released`，不会修改经营资源。宿主直接关闭会话时，会话先结束所有仍绑定局（`Shutdown`），再提交 `SessionEnded` 并释放目标。`RuntimeLog.Dispose()` 同样幂等；正常 flush 不保证强杀或断电末条必达。调用示例：
