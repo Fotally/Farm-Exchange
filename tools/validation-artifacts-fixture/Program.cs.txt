@@ -1,0 +1,38 @@
+using System.Text.Json;
+
+var settings = JsonSerializer.Deserialize<FixtureSettings>(File.ReadAllText("fixture.json"))!;
+if (args.SequenceEqual(new[] { "--headless", "--quit-after", "5" }))
+{
+    Directory.CreateDirectory("logs/runtime");
+    Directory.CreateDirectory("logs/debug");
+    File.WriteAllText("logs/runtime/current.log", "fixture current runtime session");
+    File.WriteAllText("logs/debug/current.log", "fixture current debug session");
+    Console.WriteLine("fixture startup stdout");
+    Console.Error.WriteLine("fixture startup stderr");
+    if (settings.CorruptSchema) File.WriteAllText("logs/schema-v1.md", "wrong schema");
+    if (settings.DeletePck) File.Delete("FarmExchange.pck");
+    if (settings.BlockEvidencePath is not null) Directory.CreateDirectory(settings.BlockEvidencePath);
+    if (settings.Timeout) Thread.Sleep(120_000);
+    return settings.ExitCode;
+}
+if (args.SequenceEqual(new[] { "--path", ".", "tests/performance/test_full_world_fps.tscn" }))
+{
+    Directory.CreateDirectory("coverage");
+    if (settings.PerformanceFiles.Contains("performance.json"))
+        File.WriteAllText("coverage/performance.json", "{\"AverageFps\":60,\"P95FrameMs\":16.5}");
+    foreach (var name in settings.PerformanceFiles.Where(name => name.EndsWith(".png")))
+        File.WriteAllBytes(Path.Combine("coverage", name), new byte[] { 137, 80, 78, 71 });
+    return settings.ExitCode;
+}
+Console.Error.WriteLine("unexpected fixture arguments: " + string.Join(" ", args));
+return 99;
+
+internal sealed class FixtureSettings
+{
+    public int ExitCode { get; init; }
+    public bool Timeout { get; init; }
+    public bool CorruptSchema { get; init; }
+    public bool DeletePck { get; init; }
+    public string? BlockEvidencePath { get; init; }
+    public string[] PerformanceFiles { get; init; } = Array.Empty<string>();
+}
