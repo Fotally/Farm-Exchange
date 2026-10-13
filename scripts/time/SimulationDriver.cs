@@ -28,6 +28,11 @@ public sealed class SimulationDriver
     public double Progress => _progress;
 
     /**
+     * <summary>最近一次 Advance 已完成的经营 tick 数；检查点异常后仍保留实际完成数。</summary>
+     */
+    public uint LastAdvanceTicks { get; private set; }
+
+    /**
      * <summary>通知实际倍率及发起来源；玩家重复选择同一倍率也发出主动操作通知。</summary>
      */
     public event Action<double, SimulationRateSource>? RateChanged;
@@ -90,6 +95,7 @@ public sealed class SimulationDriver
     public uint Advance(double delta, FarmGame game, Func<SimulationCheckpoint, bool>? checkpoint = null,
         Func<uint>? maxTicks = null)
     {
+        LastAdvanceTicks = 0;
         using var observation = _logging?.BeginAdvance();
         try
         {
@@ -108,7 +114,6 @@ public sealed class SimulationDriver
         if (!double.IsFinite(delta) || delta < 0) throw new ArgumentOutOfRangeException(nameof(delta));
         if (game.IsPaused) return 0;
         double remainingSeconds = delta;
-        uint advanced = 0;
         while (!game.IsPaused)
         {
             observation?.EnterPhase(SimulationLogPhase.DriverValidation);
@@ -129,19 +134,21 @@ public sealed class SimulationDriver
             }
             if (ticks == 0) break;
             observation?.EnterPhase(SimulationLogPhase.AdvanceValidation);
+            double requestSeconds = remainingSeconds, requestProgress = _progress;
+            uint previouslyAdvanced = LastAdvanceTicks;
             SimulationAdvanceResult result = game.AdvanceTicks(ticks, point =>
             {
+                // 经营已提交完整秒；先消费这部分现实时间，再交给可能抛异常的宿主。
+                observation?.EnterPhase(SimulationLogPhase.DriverProgress);
+                remainingSeconds = Math.Max(0, requestSeconds - (point.AdvancedTicks - requestProgress) / startRate);
+                _progress = 0;
+                LastAdvanceTicks = checked(previouslyAdvanced + point.AdvancedTicks);
                 bool keepGoing = checkpoint?.Invoke(point) ?? true;
                 return keepGoing && Rate == startRate && !game.IsPaused;
             });
             if (result.AdvancedTicks == 0) break;
-            observation?.EnterPhase(SimulationLogPhase.DriverProgress);
-            remainingSeconds = Math.Max(0, remainingSeconds -
-                (result.AdvancedTicks - _progress) / startRate);
-            _progress = 0;
-            advanced = checked(advanced + result.AdvancedTicks);
             // 检查点可能建单、换速或结束流程，下一段重新读取预算与倍率。
         }
-        return advanced;
+        return LastAdvanceTicks;
     }
 }

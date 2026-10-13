@@ -41,17 +41,18 @@
 - 玩家拖动后，以该窗口的身份分别记录最后停留位置；关闭再打开同一窗口时回到该位置，切换所选地块时选中详情也沿用上一次位置。
 - 窗口位置应保持在可见画面内；窗口尺寸或视窗变化时，要保证标题栏仍可抓取，底部建造按钮不被建造目录遮住。
 - 打开窗口或拖动标题栏时，该窗口来到其他窗口前方；重新选中地图地块时详情来到前方，库存和市场窗口关闭。
+- 建造目录打开期间，`RefreshDetail` 统一隐藏详情；暂停/恢复、经营及数值刷新遵守相同判断。目录关闭后原选择仍保留，下一次正常刷新恢复其详情及原位置；摆放、年度表和关闭详情沿原规则处理选择。
 - 位置只属于界面状态，不进入 `FarmGame` 的经营状态。**仅在本次运行内保留**：关闭再打开保持位置，重启游戏恢复默认位置；不写入存档。
 
 ## 与经营模块的接口
 
 `Main` 组装窗口、唯一保留摆放类型与候选生命周期、普通所选格、分发玩家命令，并在命令或 tick 后统一刷新。农田／加工短按调用 `FarmGame.TryPlace`，成功读取实际扣费、失败显示真实原因，均保留模式、不弹详情。重新打开目录或年度表调用 `CancelPlacement()` 直接退出；右键／Esc 先经 `CancelCurrentSegmentOrPlacement()` 处理道路二级取消，按钮直接退出。Esc 在 `_Input` 接收，避免被焦点控件拦截。
 
-道路 `Placement` 保存所选 `RoadMaterial`，`_removingRoads` 区分新建与拆除；内部 `RoadSegmentGesture` 仅维护当前起点、终点和轴，不持有正式道路。`CameraController.MapShortClicked` 第一短按设起点，第二短按调用 `TryPlaceRoads`／`TryRemoveRoads` 重验；原 `SelectionChanged` 在道路期间只清普通选择，避免双提交。仅 `MapPointerMoved` 的实际未按住地图移动可确定 L 顺序／拆路轴；帧刷新、原始 `_Input`、镜头释放、缩放和窗口更新只更新终点。未明确轴的双轴新建第二次点击给出明确提示并保留本段；直线和单格可提交。
+道路 `Placement` 保存所选 `RoadMaterial`，内部 `RoadSegmentGesture` 在创建工具时固定新建/拆除模式，并维护当前起点、终点、真实轨迹轴与未起段鼠标候选，不持有正式道路。`CameraController.MapShortClicked` 第一短按设起点，第二短按调用 `TryPlaceRoads`／`TryRemoveRoads` 重验；原 `SelectionChanged` 在道路期间只清普通选择，避免双提交。仅 `MapPointerMoved` 的实际未按住地图移动可确定 L 顺序／拆路轴；帧刷新、原始 `_Input`、镜头释放、缩放和窗口更新只更新终点。未明确轴的双轴新建第二次点击给出明确提示并保留本段；直线和单格可提交。
 
 道路预览把全路径（含冲突／越界）交给 `WorldMap.UpdateRoadPreview(cells, material, removing)`，由地图读取正式占用计算操作后拓扑；费用复用 `CheckRoadPlacement` 的宽整数总价，拆除数量只读统计实际道路。隐藏调用 `ClearRoadPreview`，保留未提交段；失败保留起点和顺序，成功或段取消清空本段但保留工具与材质，下一段重新选起点。直接退出清全部工具状态。UI不记录正式路段归属、铺设历史，不修改资金或土地，也不启用未确认辅助材质效果。
 
-道路新建尚无 `StartCell` 时，`SetPlacementCandidate` 将当前鼠标格作为单格数组直接交给同一个 `UpdateRoadPreview`；费用和占用反馈也对该一格调用 `CheckRoadPlacement`。该候选只属于表现，不能调用 `RoadSegmentGesture.Begin`，也不能设起点或提前锁轴。界面／拖动／离窗隐藏后清除表现；成功和段取消后重新按当前真实鼠标位置刷新单格，第一短按仍只锁定手势起点。拆除无起点分支继续清预览，不改变两次短按或投影规则。`TestRoadPlacement.CheckStartPreview` 通过真实主场景与既有显示查询验证五材质、前一格消失、旧路连接、占用、资金、隐藏／恢复、成功／取消与轨迹隔离，并比较正式空间快照引用、金币与库存；聚焦日志和第一点击前的1080P有效／占用截图保存于 `build/issue143-start-preview/`。
+`RoadSegmentGesture.GetCandidate()` 一次返回当前 `Started`、`CanSubmit` 和候选格集合，地图预览、费用提示和正式提交准备均读取这份共同规则。新建未起段时由该 Module 提供鼠标单格，拆除未起段时为空；已起段时提供原 L 形/投影直线及提交准备。`UpdateEndpoint` 只更新定位，`TrackPointer` 才可按真实移动锁轴，`ClearHover` 隐藏未起段候选且保留已起段轨迹，`Reset` 清当前段但保留工具模式。第一短按仍调用 `Begin`，候选查询不会设起点、提前锁轴或改资源。界面／拖动／离窗隐藏后清除表现；成功和段取消后重新按当前真实鼠标位置刷新单格，第一短按仍只锁定手势起点。拆除无起点分支继续清预览，不改变两次短按或投影规则。`TestRoadPlacement.CheckStartPreview` 通过真实主场景与既有显示查询验证五材质、前一格消失、旧路连接、占用、资金、隐藏／恢复、成功／取消与轨迹隔离，并比较正式空间快照引用、金币与库存；聚焦日志和第一点击前的1080P有效／占用截图保存于 `build/issue143-start-preview/`。
 
 起点有效／占用截图均在任何准备性正式建造之前获取，占用来自开局农田实际子格，保持模型与UI同为50.00金币、0道路。随后旧路连接夹具经Main目录选择材质与真实两次短按准备，末尾经Main直线拆路工具清理，正常命令统一刷新金币与近况；清理后检查资源面板金额和道路计数与模型一致，避免后续目录截图继承直接修改经营夹具后的旧UI。
 
@@ -59,7 +60,7 @@
 
 预览和预检分别向 `WorldMap.UpdatePlacementPreview` 与 `FarmGame.CheckPlacement` 传同一个候选方向，实际建造向 `TryPlace(..., orientation: ...)` 提交该方向，UI不修改实例纹理或正式朝向。成功后当前类型保持、下一座方向重置 `Q0`；失败仍为当前候选，方向保留；取消丢弃候选，重新选类型从 `Q0` 开始。暂停不限制操作，旋转本身不推进经营或修改资源。实例正式朝向由土地模块保存，建成后详情不提供旋转命令；当前3×3占地与工作中心保持一致。
 
-`Main._Process(delta)` 通过唯一 [SimulationDriver](../../time/simulation-driver/interface-simulation-driver.md) 推进完整经营。内部 `AdvanceSimulation(delta)` 也是场景测试使用的真实入口，不发出人工计时器信号。`SetProcess(false)` 停止主场景逐帧经营推进及预览、悬停费用刷新，`_Input` 等输入回调仍处理鼠标取消和摆放；`Game.SetPaused(true)` 只暂停经营，保留真实主场景帧。需要验证暂停中的界面自动刷新时，夹具应暂停经营并保持 `Main` 处理启用；`TestBuildPlacement.CheckFunds` 验证撤销冻结后悬停费用自动恢复，`CheckNativeInput` 验证拖动、镜头、缩放和离窗后的预览逐帧更新，并保留累计经营秒为0的断言。`SimulationRateButton` 位于日期卡，顺序为日期、`CalendarActionSeparator` 竖线、倍率、暂停；点击按1×→2×→0.5×→1×循环，开发高倍率显示实际值、点击回1×。按钮提交 `SimulationDriver.SetRate(..., Player)`，保留未完成tick；暂停时改速不恢复经营。倍率通知立即刷新显示与下一次点击提示，退出场景时解除订阅。暂停按钮立即同步工人真实位置；每帧经营后再显示最新人物，界面与地图统一刷新。
+`Main._Process(delta)` 通过唯一 [SimulationDriver](../../time/simulation-driver/interface-simulation-driver.md) 推进完整经营。内部 `AdvanceSimulation(delta, checkpoint=null)` 也是场景测试使用的真实入口，不发出人工计时器信号；可选检查点在正式场景观察后执行，让真实主场景回归控制检查点中断。驱动在宿主观察前提交完整秒，`InvalidOperationException` 路径读取 `LastAdvanceTicks`，有已完成秒时刷新日期、库存、资金、生产和地图，并返回真实完成数；推进前拒绝返回零且保留旧小数。反馈区分“推进中断”与“推进被拒绝”，原日志去重保持。`SetProcess(false)` 停止主场景逐帧经营推进及预览、悬停费用刷新，`_Input` 等输入回调仍处理鼠标取消和摆放；`Game.SetPaused(true)` 只暂停经营，保留真实主场景帧。需要验证暂停中的界面自动刷新时，夹具应暂停经营并保持 `Main` 处理启用；`TestBuildPlacement.CheckFunds` 验证撤销冻结后悬停费用自动恢复，`CheckNativeInput` 验证拖动、镜头、缩放和离窗后的预览逐帧更新，并保留累计经营秒为0的断言。`SimulationRateButton` 位于日期卡，顺序为日期、`CalendarActionSeparator` 竖线、倍率、暂停；点击按1×→2×→0.5×→1×循环，开发高倍率显示实际值、点击回1×。按钮提交 `SimulationDriver.SetRate(..., Player)`，保留未完成tick；暂停时改速不恢复经营。倍率通知立即刷新显示与下一次点击提示，退出场景时解除订阅。暂停按钮立即同步工人真实位置；每帧经营后再显示最新人物，界面与地图统一刷新。
 
 集中 `DEBUG` 组装区创建[DeveloperToolsWindow](../developer-tools-window/interface-developer-tools-window.md)和“开发测试”按钮；所有开发字段与调用均在同一编译条件内。当前流程只接入本驱动完整检查点和下一边界限额，独立对象由窗口用同一时间模块推进数据。公共经营不引用开发流程类型，发布保留公共速率入口。容量拒绝显示实际原因，不截断请求或改用其他倍率。
 
@@ -130,3 +131,5 @@
 Main._Process 开头唯一调用 RuntimeLog.ProcessFrame，主局与独立局共用一次进程帧采样，暂停仍轮询诊断现实预算。帧末传实际窗口、视口、玩家倍率、地图本地镜头中心及已绘制缓存累计给日志模块，稳定帧不输出 ViewChanged。摆放预览、农田详情和选种预检均保持纯查询，不因每帧刷新输出 RuleChecked。DEBUG 内部 LoggingFactory/InitialSeed 供 1080P 专项验收父节点在 _EnterTree 设置；必须早于首次 Game/Driver 初始化，结束清空，不进入发布接口。
 
 `InitializeGame` 在 DEBUG 下优先使用已设置的 `LoggingFactory`；未设置时进入公共平台选择块，编辑器与 Windows 使用文件日志，其他平台关闭输出。Release 直接执行同一平台选择块。工厂分支与公共块使用显式花括号，避免条件编译分隔 `else if` 时不同 SDK 格式器产生不同缩进；工厂异常仍原样传播，后续经营初始化失败的记录与释放顺序保持不变。
+
+`TestCoreLoop` 通过正式目录、暂停按钮和推进入口验证空地、农田、加工与道路详情在目录后持续隐藏、关闭后原选择及位置恢复；另通过完整检查点控制异常，检查真实完成数、资金/库存显示及随后半秒不会重复消费。`TestRoadPlacement.CheckGesture` 从集中后的候选查询验证首次单格、清除悬停、实际轨迹、定位不锁轴及拆路清段模式保持，原生输入 E2E 继续验证成功/失败/取消的工具生命周期。

@@ -38,7 +38,8 @@ public partial class TestPlacementPreview : Node
             int initialCoins = game.MoneyCents;
             int initialBuildings = game.GetBuildingSpaces().Count;
             Vector2I anchor = new(183, 183); // 非三格对齐，横纵跨8×8块边界。
-            Image? previewBackground = DisplayServer.GetName() != "headless" ? parent.GetViewport().GetTexture().GetImage() : null;
+            bool graphical = DisplayServer.GetName() != "headless";
+            Image? previewBackground = graphical ? parent.GetViewport().GetTexture().GetImage() : null;
             foreach (BuildingOrientation orientation in new[] { BuildingOrientation.Q0, BuildingOrientation.Q1,
                 BuildingOrientation.Q2, BuildingOrientation.Q3, BuildingOrientation.Q0 })
             {
@@ -59,10 +60,12 @@ public partial class TestPlacementPreview : Node
                     game.MoneyCents != initialCoins || game.GetBuildingSpaces().Count != initialBuildings ||
                     game.Calendar.ElapsedSeconds != 0)
                     return Fail("悬停预览改变经营资源、占地或重绘地图块");
+                if (graphical && !CheckOuterLines(parent.GetViewport().GetTexture().GetImage(), map, anchor,
+                        building == BuildingKind.Road ? 1 : 3, game))
+                    return false;
             }
             map.UpdatePlacementPreview(BuildingKind.Farm, CropKind.Wheat, anchor);
             await Frames(parent);
-            bool graphical = DisplayServer.GetName() != "headless";
             if (graphical)
             {
                 Image image = parent.GetViewport().GetTexture().GetImage();
@@ -93,6 +96,7 @@ public partial class TestPlacementPreview : Node
                     if (cell == conflict ? !IsRed(pixel) : !IsGreen(pixel))
                         return Fail("局部冲突没有仅标红实际冲突格");
                 }
+                if (!CheckOuterLines(image, map, anchor, 3, game)) return false;
                 Save(image, "placement-conflict.png");
             }
             map.ClearPlacementPreview();
@@ -120,6 +124,7 @@ public partial class TestPlacementPreview : Node
                     if (MapCoordinates.ContainsCell(cell) ? !IsGreen(pixel) : !IsRed(pixel))
                         return Fail("边缘预览未显示完整占地，或越界格配色错误");
                 }
+                if (!CheckOuterLines(image, map, edgeAnchor, 3, game)) return false;
                 Save(image, "placement-edge.png");
             }
             camera.GlobalPosition = map.GetCellWorldCenter(anchor);
@@ -204,6 +209,30 @@ public partial class TestPlacementPreview : Node
 
     private static bool IsGreen(Color color) => color.G > color.R + 0.07f && color.G > color.B + 0.07f;
     private static bool IsRed(Color color) => color.R > color.G + 0.12f && color.R > color.B + 0.12f;
+
+    private static bool CheckOuterLines(Image image, WorldMap map, Vector2I anchor, int size, FarmGame game)
+    {
+        Vector2[] outline = MapCoordinates.GridRectangleOutline(anchor, size, size);
+        for (int side = 0; side < outline.Length; side++)
+            for (int index = 0; index < size; index++)
+            {
+                Vector2I offset = side switch
+                {
+                    0 => new Vector2I(index, 0),
+                    1 => new Vector2I(size - 1, index),
+                    2 => new Vector2I(size - index - 1, size - 1),
+                    _ => new Vector2I(0, size - index - 1),
+                };
+                Vector2I cell = anchor + offset;
+                bool blocked = !MapCoordinates.ContainsCell(cell) || game.GetBuildingSpace(cell) != null;
+                Vector2 local = outline[side].Lerp(outline[(side + 1) % outline.Length], (index + .5f) / size);
+                Vector2 screen = map.GetViewport().GetStretchTransform() * (map.GetGlobalTransformWithCanvas() * local);
+                Color pixel = image.GetPixel(Mathf.RoundToInt(screen.X), Mathf.RoundToInt(screen.Y));
+                if (blocked ? !IsRed(pixel) : !IsGreen(pixel))
+                    return Fail($"候选格{cell}的外围线配色错误：边{side}，实际{pixel}");
+            }
+        return true;
+    }
 
     private static async Task Frames(Node parent)
     {

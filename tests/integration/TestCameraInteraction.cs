@@ -38,6 +38,9 @@ public partial class TestCameraInteraction : Node
         Vector2 originalCenter = camera.GlobalPosition;
         try
         {
+            window.Size = new Vector2I(1920, 1080);
+            await Frames(parent);
+            if (!await CheckEditingInputAsync(parent, main, camera)) return false;
             foreach (Vector2I size in new[] { new Vector2I(1280, 720), new Vector2I(1920, 1080), new Vector2I(2560, 1440), new Vector2I(3840, 2160), new Vector2I(1280, 720) })
             {
                 window.Size = size;
@@ -103,6 +106,354 @@ public partial class TestCameraInteraction : Node
             window.Size = originalSize;
             await Frames(parent);
         }
+    }
+
+    private static async Task<bool> CheckEditingInputAsync(Node parent, Main main, CameraController camera)
+    {
+        var open = (Button)main.FindChild("CultivationButton", true, false);
+        var name = (LineEdit)main.FindChild("CultivationPlanName", true, false);
+        var reserve = (LineEdit)main.FindChild("RawReserveWheatInput", true, false);
+        Vector2 originalCenter = camera.GlobalPosition;
+        if (!await CheckProcessingFramesAsync(parent, main, name, reserve, camera)) return false;
+        camera.SetProcess(false);
+        try
+        {
+            open.EmitSignal(Button.SignalName.Pressed);
+            name.GrabFocus();
+            await Frames(parent);
+            SendKey(Key.A, true, control: true);
+            SendKey(Key.A, false, control: true);
+            SendKey(Key.D, true, 'd');
+            await Frames(parent);
+            Vector2 before = camera.GlobalPosition;
+            camera._Process(0.1);
+            Vector2 movement = camera.GlobalPosition - before;
+            GD.Print($"镜头编辑输入：年度表名称={name.Text}，焦点={name.HasFocus()}，镜头位移={movement}");
+            await SaveEditingScreenshotAsync(parent, "cultivation-name.png");
+            if (!name.HasFocus() || name.Text != "d")
+                return Fail("真实年度表名称输入没有经 GUI 焦点与按键正常编辑");
+            bool passed = true;
+            if (!movement.IsEqualApprox(Vector2.Zero))
+                passed = Fail($"编辑年度表名称时镜头平移：实际 {movement}，预期 (0, 0)");
+            SendKey(Key.D, false);
+            passed = await CheckNameKeysAsync(parent, name, camera) && passed;
+            ((Button)main.FindChild("InventoryButton", true, false)).EmitSignal(Button.SignalName.Pressed);
+            reserve.GrabFocus();
+            await Frames(parent);
+            SendKey(Key.A, true, control: true);
+            SendKey(Key.A, false, control: true);
+            SendKey(Key.Key1, true, '1');
+            SendKey(Key.Key1, false);
+            SendKey(Key.Key2, true, '2');
+            SendKey(Key.Key2, false);
+            SendKey(Key.Key3, true, '3');
+            SendKey(Key.Key3, false);
+            SendKey(Key.Left, true);
+            await Frames(parent);
+            before = camera.GlobalPosition;
+            camera._Process(0.1);
+            movement = camera.GlobalPosition - before;
+            GD.Print($"镜头编辑输入：库存底线={reserve.Text}，光标={reserve.CaretColumn}，焦点={reserve.HasFocus()}，镜头位移={movement}");
+            await SaveEditingScreenshotAsync(parent, "inventory-number.png");
+            if (!reserve.HasFocus() || reserve.Text != "123" || reserve.CaretColumn != 2)
+                return Fail("真实库存底线数字输入没有经 GUI 焦点正常编辑或移动光标");
+            if (!movement.IsEqualApprox(Vector2.Zero))
+                passed = Fail($"编辑库存底线数字时镜头平移：实际 {movement}，预期 (0, 0)");
+            SendKey(Key.Left, false);
+            passed = await CheckFocusTransitionsAsync(parent, main, name, reserve, camera) && passed;
+            passed = await CheckOtherEditorsAsync(parent, main, camera) && passed;
+            if (passed) GD.Print("镜头编辑焦点检查：真实名称/数字输入、WASD/方向键/全选、窗口切换与持键、只读/按钮/TextEdit/SpinBox、鼠标释放及缩放通过");
+            return passed;
+        }
+        finally
+        {
+            SendKey(Key.A, false);
+            SendKey(Key.D, false);
+            SendKey(Key.Left, false);
+            SendKey(Key.Right, false);
+            SendKey(Key.W, false);
+            SendKey(Key.S, false);
+            name.ReleaseFocus();
+            reserve.ReleaseFocus();
+            ((Control)main.FindChild("CultivationWindow", true, false)).Hide();
+            ((Control)main.FindChild("InventoryWindow", true, false)).Hide();
+            camera.GlobalPosition = originalCenter;
+            camera.SetProcess(true);
+        }
+    }
+
+    private static async Task<bool> CheckProcessingFramesAsync(Node parent, Main main, LineEdit name,
+        LineEdit reserve, CameraController camera)
+    {
+        Vector2 originalCenter = camera.GlobalPosition;
+        bool originalProcessing = camera.IsProcessing();
+        camera.SetProcess(true);
+        try
+        {
+            ((Button)main.FindChild("CultivationButton", true, false)).EmitSignal(Button.SignalName.Pressed);
+            name.GrabFocus();
+            await Frames(parent);
+            SendKey(Key.A, true, control: true);
+            SendKey(Key.A, false, control: true);
+            Vector2 before = camera.GlobalPosition;
+            SendKey(Key.D, true, 'd');
+            await Frames(parent);
+            Vector2 movement = camera.GlobalPosition - before;
+            GD.Print($"镜头真实处理帧：年度表名称={name.Text}，焦点={name.HasFocus()}，自动处理={camera.IsProcessing()}，镜头位移={movement}");
+            if (!camera.IsProcessing() || !name.HasFocus() || name.Text != "d")
+                return Fail("真实处理帧的名称编辑没有保持相机自动处理及实际 GUI 焦点");
+            bool passed = true;
+            if (!movement.IsEqualApprox(Vector2.Zero))
+                passed = Fail($"真实处理帧编辑年度表名称时镜头移动：实际 {movement}，预期 (0, 0)");
+
+            name.ReleaseFocus();
+            before = camera.GlobalPosition;
+            await Frames(parent);
+            if (camera.GlobalPosition.X <= before.X)
+                passed = Fail("释放名称编辑焦点后，仍按住 D 的真实处理帧没有恢复平移");
+            SendKey(Key.D, false);
+            before = camera.GlobalPosition;
+            await Frames(parent);
+            if (!camera.GlobalPosition.IsEqualApprox(before))
+                passed = Fail("真实处理帧释放 D 后镜头仍在平移");
+
+            ((Button)main.FindChild("InventoryButton", true, false)).EmitSignal(Button.SignalName.Pressed);
+            reserve.GrabFocus();
+            await Frames(parent);
+            SendKey(Key.A, true, control: true);
+            SendKey(Key.A, false, control: true);
+            foreach ((Key key, char character) in new[] { (Key.Key1, '1'), (Key.Key2, '2'), (Key.Key3, '3') })
+            {
+                SendKey(key, true, character);
+                SendKey(key, false);
+            }
+            before = camera.GlobalPosition;
+            SendKey(Key.Left, true);
+            await Frames(parent);
+            movement = camera.GlobalPosition - before;
+            GD.Print($"镜头真实处理帧：库存底线={reserve.Text}，光标={reserve.CaretColumn}，焦点={reserve.HasFocus()}，自动处理={camera.IsProcessing()}，镜头位移={movement}");
+            if (!camera.IsProcessing() || !reserve.HasFocus() || reserve.Text != "123" || reserve.CaretColumn != 2)
+                return Fail("真实处理帧的数字编辑没有保持相机自动处理及正常文字光标");
+            if (!movement.IsEqualApprox(Vector2.Zero))
+                passed = Fail($"真实处理帧编辑库存底线时镜头移动：实际 {movement}，预期 (0, 0)");
+            ((Control)main.FindChild("InventoryWindow", true, false)).Hide();
+            before = camera.GlobalPosition;
+            await Frames(parent);
+            if (reserve.HasFocus() || camera.GlobalPosition.X >= before.X)
+                passed = Fail("隐藏数字编辑窗口后，仍按住方向键的真实处理帧没有恢复平移");
+            SendKey(Key.Left, false);
+            before = camera.GlobalPosition;
+            await Frames(parent);
+            if (!camera.GlobalPosition.IsEqualApprox(before))
+                passed = Fail("真实处理帧释放方向键后镜头仍有残留平移");
+            return passed;
+        }
+        finally
+        {
+            SendKey(Key.A, false);
+            SendKey(Key.D, false);
+            SendKey(Key.Left, false);
+            name.ReleaseFocus();
+            reserve.ReleaseFocus();
+            ((Control)main.FindChild("CultivationWindow", true, false)).Hide();
+            ((Control)main.FindChild("InventoryWindow", true, false)).Hide();
+            camera.GlobalPosition = originalCenter;
+            camera.SetProcess(originalProcessing);
+        }
+    }
+
+    private static async Task<bool> CheckOtherEditorsAsync(Node parent, Main main, CameraController camera)
+    {
+        var editors = new Control { Position = new Vector2(12, 140) };
+        var text = new TextEdit { Size = new Vector2(160, 72) };
+        var readOnly = new LineEdit { Position = new Vector2(0, 80), Size = new Vector2(160, 36), Editable = false, Text = "只读" };
+        var spin = new SpinBox { Position = new Vector2(0, 124), Size = new Vector2(160, 36), MaxValue = 999, Value = 123 };
+        editors.AddChild(text);
+        editors.AddChild(readOnly);
+        editors.AddChild(spin);
+        main.GetNode<Control>("CanvasLayer/UiRoot").AddChild(editors);
+        try
+        {
+            await Frames(parent);
+            text.GrabFocus();
+            if (!(await KeyMovementAsync(parent, camera, Key.D, 'd')).IsEqualApprox(Vector2.Zero) ||
+                !text.HasFocus() || text.Text != "d")
+                return Fail("可编辑 TextEdit 没有正常接收文字并阻止键盘平移");
+            text.Editable = false;
+            if (!(await KeyMovementAsync(parent, camera, Key.D, 'd')).IsEqualApprox(new Vector2(56, 0)) ||
+                !text.HasFocus() || text.Text != "d")
+                return Fail("只读 TextEdit 焦点阻止了地图平移或仍然修改文本");
+            readOnly.GrabFocus();
+            if (!(await KeyMovementAsync(parent, camera, Key.D, 'd')).IsEqualApprox(new Vector2(56, 0)) ||
+                !readOnly.HasFocus() || readOnly.Text != "只读")
+                return Fail("只读 LineEdit 焦点阻止了地图平移或仍然修改文本");
+
+            LineEdit spinInput = spin.GetLineEdit();
+            spinInput.GrabFocus();
+            await Frames(parent);
+            if (parent.GetViewport().GuiGetFocusOwner() != spinInput || !spinInput.Editable)
+                return Fail("SpinBox 没有将实际编辑焦点交给可编辑子 LineEdit");
+            await KeyMovementAsync(parent, camera, Key.End);
+            if (!(await KeyMovementAsync(parent, camera, Key.Left)).IsEqualApprox(Vector2.Zero) ||
+                spinInput.Text != "123" || spinInput.CaretColumn != 2)
+                return Fail("SpinBox 子编辑框的方向键没有只移动数字光标");
+            if (!(await KeyMovementAsync(parent, camera, Key.A, control: true)).IsEqualApprox(Vector2.Zero) ||
+                spinInput.GetSelectedText() != "123" ||
+                !(await KeyMovementAsync(parent, camera, Key.Key9, '9')).IsEqualApprox(Vector2.Zero) || spinInput.Text != "9")
+                return Fail("SpinBox 子编辑框全选或数字编辑时镜头移动");
+            text.Editable = true;
+            text.GrabFocus();
+            await Frames(parent);
+            return text.HasFocus() && CheckEditingMouseInput(camera);
+        }
+        finally
+        {
+            editors.Free();
+        }
+    }
+
+    private static bool CheckEditingMouseInput(CameraController camera)
+    {
+        Vector2 point = new(100, 100);
+        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = point });
+        camera._UnhandledInput(new InputEventMouseMotion { Position = point + new Vector2(16, 0), Relative = new Vector2(16, 0) });
+        if (!camera.IsDragging) return Fail("编辑焦点错误阻止了原鼠标拖动");
+        camera._Process(0);
+        Vector2 afterRelease = camera.GlobalPosition;
+        camera._UnhandledInput(new InputEventMouseMotion { Position = point + new Vector2(32, 0), Relative = new Vector2(16, 0) });
+        if (camera.IsDragging || !camera.GlobalPosition.IsEqualApprox(afterRelease))
+            return Fail("编辑焦点使左键物理释放校正被跳过");
+        camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Middle, Pressed = true });
+        camera._Process(0);
+        if (camera.IsDragging) return Fail("编辑焦点使中键物理释放校正被跳过");
+        Wheel(camera, MouseButton.WheelUp, 1);
+        if (!(camera.Zoom * camera.GetViewport().GetStretchTransform().Scale).IsEqualApprox(new Vector2(1.375f, 1.375f)))
+            return Fail("编辑焦点错误阻止了原滚轮缩放");
+        Wheel(camera, MouseButton.WheelDown, 1);
+        return true;
+    }
+
+    private static async Task SaveEditingScreenshotAsync(Node parent, string name)
+    {
+        if (DisplayServer.GetName() == "headless") return;
+        await parent.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+        string path = ProjectSettings.GlobalizePath("res://build/issue136-validation/" + name);
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+        parent.GetViewport().GetTexture().GetImage().SavePng(path);
+    }
+
+    private static async Task<bool> CheckNameKeysAsync(Node parent, LineEdit name, CameraController camera)
+    {
+        foreach ((Key key, char character) in new[] { (Key.W, 'w'), (Key.A, 'a'), (Key.S, 's') })
+        {
+            if (!(await KeyMovementAsync(parent, camera, key, character)).IsEqualApprox(Vector2.Zero))
+                return Fail("年度表名称输入 WASD 时镜头移动：" + key);
+        }
+        if (name.Text != "dwas") return Fail("WASD 没有正常输入年度表名称");
+        if (!(await KeyMovementAsync(parent, camera, Key.Left)).IsEqualApprox(Vector2.Zero) || name.CaretColumn != 3 ||
+            !(await KeyMovementAsync(parent, camera, Key.Right)).IsEqualApprox(Vector2.Zero) || name.CaretColumn != 4)
+            return Fail("年度表名称方向键没有只移动光标");
+        if (!(await KeyMovementAsync(parent, camera, Key.A, control: true)).IsEqualApprox(Vector2.Zero) ||
+            name.GetSelectedText() != "dwas")
+            return Fail("年度表名称 Ctrl+A 没有只选择文本");
+        if (!(await KeyMovementAsync(parent, camera, Key.W, 'w')).IsEqualApprox(Vector2.Zero) || name.Text != "w")
+            return Fail("年度表名称全选后输入没有正常替换文本");
+        return true;
+    }
+
+    private static async Task<bool> CheckFocusTransitionsAsync(Node parent, Main main, LineEdit name,
+        LineEdit reserve, CameraController camera)
+    {
+        var cultivation = (Control)main.FindChild("CultivationWindow", true, false);
+        var inventory = (Control)main.FindChild("InventoryWindow", true, false);
+        ((Button)inventory.FindChild("CloseButton", true, false)).EmitSignal(Button.SignalName.Pressed);
+        await Frames(parent);
+        if (reserve.HasFocus() || !(await KeyMovementAsync(parent, camera, Key.D)).IsEqualApprox(new Vector2(56, 0)))
+            return Fail("关闭数字编辑窗口后键盘平移没有按原速度恢复");
+        var button = (Button)main.FindChild("CultivationButton", true, false);
+        button.GrabFocus();
+        if (!button.HasFocus() || !(await KeyMovementAsync(parent, camera, Key.D)).IsEqualApprox(new Vector2(56, 0)))
+            return Fail("普通按钮焦点阻止了地图键盘平移");
+        button.ReleaseFocus();
+
+        Vector2 before = camera.GlobalPosition;
+        SendKey(Key.D, true);
+        await Frames(parent);
+        camera._Process(0.1);
+        if (!(camera.GlobalPosition - before).IsEqualApprox(new Vector2(56, 0)))
+            return Fail("无编辑焦点的持键平移速度不正确");
+        button.EmitSignal(Button.SignalName.Pressed);
+        name.GrabFocus();
+        await Frames(parent);
+        before = camera.GlobalPosition;
+        camera._Process(0.1);
+        if (!name.HasFocus() || !camera.GlobalPosition.IsEqualApprox(before))
+            return Fail("按住方向进入年度表编辑后没有立即停止平移");
+        ((Button)main.FindChild("InventoryButton", true, false)).EmitSignal(Button.SignalName.Pressed);
+        reserve.GrabFocus();
+        await Frames(parent);
+        camera._Process(0.1);
+        if (cultivation.Visible || !reserve.HasFocus() || !camera.GlobalPosition.IsEqualApprox(before))
+            return Fail("持键切换实际编辑窗口时镜头产生位移");
+        inventory.Hide();
+        await Frames(parent);
+        camera._Process(0.1);
+        if (reserve.HasFocus() || !(camera.GlobalPosition - before).IsEqualApprox(new Vector2(56, 0)))
+            return Fail("仍持键时隐藏编辑窗口没有恢复地图平移");
+        button.EmitSignal(Button.SignalName.Pressed);
+        name.GrabFocus();
+        await Frames(parent);
+        SendKey(Key.D, false);
+        await Frames(parent);
+        name.ReleaseFocus();
+        before = camera.GlobalPosition;
+        camera._Process(0.1);
+        if (!camera.GlobalPosition.IsEqualApprox(before))
+            return Fail("按键在编辑框中释放后镜头仍有残留平移");
+        cultivation.Hide();
+
+        SendKey(Key.D, true);
+        SendKey(Key.W, true);
+        await Frames(parent);
+        before = camera.GlobalPosition;
+        camera._Process(0.1);
+        SendKey(Key.D, false);
+        SendKey(Key.W, false);
+        Vector2 diagonal = camera.GlobalPosition - before;
+        // 6128 附近的镜头坐标经过等距格换算，保留小于 0.001 世界像素的浮点容差。
+        if (diagonal.DistanceTo(new Vector2(39.59798f, -39.59798f)) >= 0.001f)
+            return Fail($"退出编辑后对角平移没有保持原方向归一化：实际 {diagonal}");
+        return true;
+    }
+
+    private static async Task<Vector2> KeyMovementAsync(Node parent, CameraController camera, Key key,
+        uint unicode = 0, bool control = false)
+    {
+        SendKey(key, true, unicode, control);
+        try
+        {
+            await Frames(parent);
+            Vector2 before = camera.GlobalPosition;
+            camera._Process(0.1);
+            return camera.GlobalPosition - before;
+        }
+        finally
+        {
+            SendKey(key, false, control: control);
+        }
+    }
+
+    private static void SendKey(Key key, bool pressed, uint unicode = 0, bool control = false)
+    {
+        Input.ParseInputEvent(new InputEventKey
+        {
+            Keycode = key,
+            PhysicalKeycode = key,
+            Unicode = unicode,
+            Pressed = pressed,
+            CommandOrControlAutoremap = control,
+        });
+        Input.FlushBufferedEvents();
     }
 
     private static bool CheckView(Window window, WorldMap map, CameraController camera, Control ui, float zoom)

@@ -192,36 +192,51 @@ public partial class TestRoadPlacement : Node
     private static bool CheckGesture()
     {
         var gesture = new RoadSegmentGesture();
-        if (gesture.GetCells(false).Count != 0) return Fail("空段生成了候选");
+        if (gesture.GetCandidate().Cells.Count != 0) return Fail("空段生成了候选");
         Vector2I start = new(20, 20), end = new(23, 24);
+        gesture.TrackPointer(end);
+        RoadSegmentGesture.Candidate first = gesture.GetCandidate();
+        if (first.Started || first.CanSubmit || first.Cells.Count != 1 || first.Cells[0] != end || gesture.HasTurnOrder)
+            return Fail("新建首次候选没有集中提供单格或提前锁定轨迹");
+        gesture.ClearHover();
+        if (gesture.GetCandidate().Cells.Count != 0) return Fail("隐藏首次候选仍保留费用候选");
         gesture.Begin(start);
         gesture.TrackPointer(new Vector2I(23, 20));
         gesture.UpdateEndpoint(end);
-        Vector2I[] xPath = gesture.GetCells(false).ToArray();
+        Vector2I[] xPath = gesture.GetCandidate().Cells.ToArray();
         if (xPath.Length != 8 || xPath.Distinct().Count() != 8 || xPath[3] != new Vector2I(23, 20))
             return Fail("先x轴的L形没有保持轨迹或重复计转角");
         gesture.TrackPointer(new Vector2I(20, 24));
         gesture.UpdateEndpoint(end);
-        if (!gesture.GetCells(false).SequenceEqual(xPath)) return Fail("首次明确轴被后续移动改写");
+        if (!gesture.GetCandidate().Cells.SequenceEqual(xPath)) return Fail("首次明确轴被后续移动改写");
         gesture.Begin(start);
         gesture.TrackPointer(new Vector2I(20, 24));
         gesture.UpdateEndpoint(end);
-        if (gesture.GetCells(false)[4] != new Vector2I(20, 24) || gesture.GetCells(false).SequenceEqual(xPath))
+        if (gesture.GetCandidate().Cells[4] != new Vector2I(20, 24) || gesture.GetCandidate().Cells.SequenceEqual(xPath))
             return Fail("相同端点的先y轴轨迹仍套用先x顺序");
         gesture.Begin(start);
         gesture.UpdateEndpoint(new Vector2I(23, 24));
-        if (gesture.HasTurnOrder || gesture.CanSubmit(false)) return Fail("帧更新或镜头位移擅自确定了轨迹");
+        if (gesture.HasTurnOrder || gesture.GetCandidate().CanSubmit) return Fail("帧更新或镜头位移擅自确定了轨迹");
         gesture.TrackPointer(new Vector2I(23, 23));
-        if (gesture.HasTurnOrder || gesture.CanSubmit(false)) return Fail("等量对角移动擅自锁定轴");
-        gesture.TrackPointer(new Vector2I(22, 25), removing: true);
-        if (gesture.GetCells(true).Count != 6 || gesture.GetCells(true)[5] != new Vector2I(20, 25))
+        if (gesture.HasTurnOrder || gesture.GetCandidate().CanSubmit) return Fail("等量对角移动擅自锁定轴");
+        var removal = new RoadSegmentGesture(removing: true);
+        removal.UpdateEndpoint(start);
+        if (removal.GetCandidate().Started || removal.GetCandidate().CanSubmit || removal.GetCandidate().Cells.Count != 0)
+            return Fail("拆路工具无起点时扩展了首次单格行为");
+        removal.Begin(start);
+        removal.TrackPointer(new Vector2I(22, 25));
+        if (removal.GetCandidate().Cells.Count != 6 || removal.GetCandidate().Cells[5] != new Vector2I(20, 25))
             return Fail("拆除未沿主要移动轴投影为直线");
-        gesture.TrackPointer(new Vector2I(26, 22), removing: true);
-        if (gesture.GetCells(true).Count != 7 || gesture.GetCells(true)[6] != new Vector2I(26, 20))
+        removal.TrackPointer(new Vector2I(26, 22));
+        if (removal.GetCandidate().Cells.Count != 7 || removal.GetCandidate().Cells[6] != new Vector2I(26, 20))
             return Fail("拆除轴没有随真实主要移动方向更新");
+        removal.Reset();
+        removal.UpdateEndpoint(start);
+        if (!removal.IsRemoving || removal.GetCandidate().Started || removal.GetCandidate().Cells.Count != 0)
+            return Fail("拆路清段丢失工具模式或恢复了未实现的单格候选");
         gesture.Begin(start);
         gesture.UpdateEndpoint(new Vector2I(18, 20));
-        if (!gesture.CanSubmit(false) || gesture.GetCells(false).Count != 3)
+        if (!gesture.GetCandidate().CanSubmit || gesture.GetCandidate().Cells.Count != 3)
             return Fail("反向直线必须先锁轴或遗漏端点");
         gesture.Reset();
         return gesture.StartCell == null && !gesture.HasTurnOrder && gesture.EndCell == default ||
@@ -263,7 +278,7 @@ public partial class TestRoadPlacement : Node
             expected.Begin(start);
             expected.TrackPointer(corner);
             expected.UpdateEndpoint(end);
-            var cells = expected.GetCells(false);
+            var cells = expected.GetCandidate().Cells;
             int money = main.Game.MoneyCents;
             Send(main, new InputEventMouseMotion { Position = Screen(map, end) });
             await Frames(parent);

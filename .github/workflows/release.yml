@@ -28,6 +28,11 @@ jobs:
       RELEASE_VERSION: ${{ inputs.version }}
 
     steps:
+      - name: 检出本次发布提交的分发工具与 schema
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
       - name: 核对版本与同提交成功 CI
         id: source
         shell: pwsh
@@ -116,29 +121,21 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $assembly = 'build/windows/data_FarmExchange_windows_x86_64/FarmExchange.dll'
-          if (-not (Test-Path -LiteralPath build/windows/FarmExchange.exe -PathType Leaf) -or
-              -not (Test-Path -LiteralPath $assembly -PathType Leaf)) {
-            throw '下载产物缺少 FarmExchange.exe 或 C# 程序集'
-          }
-          $executable = (Resolve-Path -LiteralPath build/windows/FarmExchange.exe).Path
-          $process = Start-Process -FilePath $executable -ArgumentList @('--headless', '--quit-after', '5') -WindowStyle Hidden -PassThru
-          if (-not $process.WaitForExit(60000)) {
-            $process.Kill()
-            throw '下载产物启动验收超过 60 秒'
-          }
-          if ($process.ExitCode -ne 0) {
-            throw "下载产物启动失败，退出码：$($process.ExitCode)"
-          }
-
           $version = $env:RELEASE_VERSION
           $releaseDirectory = "build/releases/$version"
           New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
           $archive = Join-Path (Resolve-Path -LiteralPath $releaseDirectory).Path "FarmExchange-$version-windows-x86_64.zip"
-          [System.IO.Compression.ZipFile]::CreateFromDirectory(
-            (Resolve-Path -LiteralPath build/windows).Path,
-            $archive)
+          ./tools/Invoke-WindowsDistribution.ps1 -BuildDirectory build/windows -SchemaPath docs/project/runtime-log-schema-v1.md -EvidenceDirectory 'build/validation/windows-release-${{ github.run_id }}-${{ github.run_attempt }}' -ArchivePath $archive
           "archive=$archive" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: 上传 Windows 发布验收证据
+        if: ${{ !cancelled() && (steps.package.outcome == 'success' || steps.package.outcome == 'failure') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-release-validation-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/validation/windows-release-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: 检查 macOS 应用包并保留原始 ZIP
         id: macos-package

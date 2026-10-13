@@ -39,7 +39,7 @@ public partial class CultivationTimeline : Control
     /**
      * <summary>当前图中一个游戏日的画面宽度。</summary>
      */
-    public float PixelsPerDay => (Size.X - LabelWidth - 8 * Overall) / 84;
+    public float PixelsPerDay => (Size.X - LabelWidth - 8 * Overall) / GameCalendar.DaysPerSeason;
 
     /**
      * <summary>构造时间图，候选排程由拥有草稿的窗口检查。</summary>
@@ -53,7 +53,7 @@ public partial class CultivationTimeline : Control
         MouseFilter = MouseFilterEnum.Stop;
     }
 
-    public override Vector2 _GetMinimumSize() => new(540 * Overall, 4 * RowHeight + HeaderHeight);
+    public override Vector2 _GetMinimumSize() => new(540 * Overall, GameCalendar.SeasonsPerYear * RowHeight + HeaderHeight);
 
     /**
      * <summary>只显示草稿、风险和当前日期，不提交经营命令。</summary>
@@ -68,7 +68,7 @@ public partial class CultivationTimeline : Control
         _entries = entries;
         _risks = risks;
         _selectedId = selectedId;
-        _currentDay = (int)(elapsedDays % 336);
+        _currentDay = (int)(elapsedDays % GameCalendar.DaysPerYear);
         QueueRedraw();
     }
 
@@ -83,24 +83,24 @@ public partial class CultivationTimeline : Control
     {
         _segments.Clear();
         Font font = UiFont;
-        float width = PixelsPerDay * 84;
+        float width = PixelsPerDay * GameCalendar.DaysPerSeason;
         string[] seasons = { "春", "夏", "秋", "冬" };
-        for (int row = 0; row < 4; row++)
+        for (int row = 0; row < GameCalendar.SeasonsPerYear; row++)
         {
             float y = HeaderHeight + row * RowHeight;
             DrawString(font, new Vector2(4 * Overall, y + 24 * VerticalScale), seasons[row], fontSize: UiScaling.FontSize(this, 15), modulate: Ink);
             DrawStyleBox(Style(new Color("e7e8d4"), 0), new Rect2(LabelWidth, y, width, 32 * VerticalScale));
-            for (int week = 1; week < 12; week++)
+            for (int week = 1; week < GameCalendar.DaysPerSeason / 7; week++)
             {
                 float x = LabelWidth + PixelsPerDay * week * 7;
                 DrawLine(new Vector2(x, y + 32 * VerticalScale), new Vector2(x, y + 37 * VerticalScale), Muted, Overall);
             }
-            for (int month = 0; month <= 3; month++)
+            for (int month = 0; month <= GameCalendar.MonthsPerSeason; month++)
             {
-                float x = LabelWidth + width * month / 3f;
+                float x = LabelWidth + width * month / GameCalendar.MonthsPerSeason;
                 DrawLine(new Vector2(x, y), new Vector2(x, y + 32 * VerticalScale), Muted, Overall);
-                if (month < 3)
-                    DrawString(font, new Vector2(x + 3 * Overall, y - 4 * VerticalScale), $"{row * 3 + month + 1}月", fontSize: UiScaling.FontSize(this, 11), modulate: Ink);
+                if (month < GameCalendar.MonthsPerSeason)
+                    DrawString(font, new Vector2(x + 3 * Overall, y - 4 * VerticalScale), $"{row * GameCalendar.MonthsPerSeason + month + 1}月", fontSize: UiScaling.FontSize(this, 11), modulate: Ink);
             }
         }
         foreach (CultivationEntry entry in _entries)
@@ -109,12 +109,12 @@ public partial class CultivationTimeline : Control
             int remaining = entry.LengthDays;
             while (remaining > 0)
             {
-                int row = day / 84;
-                int localDay = day % 84;
-                int count = Math.Min(remaining, 84 - localDay);
+                int row = day / GameCalendar.DaysPerSeason;
+                int localDay = day % GameCalendar.DaysPerSeason;
+                int count = Math.Min(remaining, GameCalendar.DaysPerSeason - localDay);
                 float extra = _selectedId == entry.Id ? _landing * 8 * Overall : 0;
-                var rect = new Rect2(LabelWidth + width * localDay / 84f,
-                    HeaderHeight + 2 * VerticalScale + row * RowHeight - extra, width * count / 84f, 28 * VerticalScale);
+                var rect = new Rect2(LabelWidth + width * localDay / GameCalendar.DaysPerSeason,
+                    HeaderHeight + 2 * VerticalScale + row * RowHeight - extra, width * count / GameCalendar.DaysPerSeason, 28 * VerticalScale);
                 Color color = CropColor(entry.Crop);
                 bool risk = Contains(_risks, entry.Id);
                 StyleBoxFlat style = Style(color, 0);
@@ -140,11 +140,11 @@ public partial class CultivationTimeline : Control
                 }
                 _segments.Add((rect, entry));
                 remaining -= count;
-                day = (day + count) % 336;
+                day = (day + count) % GameCalendar.DaysPerYear;
             }
         }
-        int currentRow = _currentDay / 84;
-        float currentX = LabelWidth + width * (_currentDay % 84) / 84f;
+        int currentRow = _currentDay / GameCalendar.DaysPerSeason;
+        float currentX = LabelWidth + width * (_currentDay % GameCalendar.DaysPerSeason) / GameCalendar.DaysPerSeason;
         DrawLine(new Vector2(currentX, HeaderHeight + currentRow * RowHeight),
             new Vector2(currentX, HeaderHeight + 32 * VerticalScale + currentRow * RowHeight), Gold, 2 * Overall);
     }
@@ -156,8 +156,8 @@ public partial class CultivationTimeline : Control
             {
                 int end = entry.StartDay + entry.LengthDays;
                 return $"{FarmGame.GetCrop(entry.Crop).CropName} · 完整 {entry.LengthDays} 天\n" +
-                    $"开始：{FullDate(entry.StartDay)}\n结束：{(end >= 336 ? "次年 " : "")}{FullDate(end % 336)}" +
-                    (end > 336 ? "\n冬春跨年，同一轮" : entry.StartDay / 84 != (end - 1) / 84 ? "\n跨季，同一轮" : "");
+                    $"开始：{FullDate(entry.StartDay)}\n结束：{(end >= GameCalendar.DaysPerYear ? "次年 " : "")}{FullDate(end % GameCalendar.DaysPerYear)}" +
+                    (end > GameCalendar.DaysPerYear ? "\n冬春跨年，同一轮" : entry.StartDay / GameCalendar.DaysPerSeason != (end - 1) / GameCalendar.DaysPerSeason ? "\n跨季，同一轮" : "");
             }
         return "";
     }
@@ -166,7 +166,7 @@ public partial class CultivationTimeline : Control
     {
         int end = entry.StartDay + entry.LengthDays;
         return new[] { $"{FarmGame.GetCrop(entry.Crop).CropName} · {entry.LengthDays}天",
-            $"{ShortDate(entry.StartDay)}→{(end >= 336 ? "次年" : "")}{ShortDate(end % 336)}" };
+            $"{ShortDate(entry.StartDay)}→{(end >= GameCalendar.DaysPerYear ? "次年" : "")}{ShortDate(end % GameCalendar.DaysPerYear)}" };
     }
 
     private static string ShortDate(int day)
@@ -216,7 +216,7 @@ public partial class CultivationTimeline : Control
     public override bool _CanDropData(Vector2 atPosition, Variant data)
     {
         bool canDrop = atPosition.X >= LabelWidth && atPosition.X < Size.X - 8 * Overall &&
-            atPosition.Y >= HeaderHeight && atPosition.Y < HeaderHeight + 4 * RowHeight && IsCropDrag(data);
+            atPosition.Y >= HeaderHeight && atPosition.Y < HeaderHeight + GameCalendar.SeasonsPerYear * RowHeight && IsCropDrag(data);
         if (!canDrop) return false;
         var values = data.AsGodotDictionary();
         CropKind crop = (CropKind)values["crop"].AsInt32();
@@ -236,9 +236,9 @@ public partial class CultivationTimeline : Control
     private int DropDay(Vector2 atPosition, CropKind crop)
     {
         int row = (int)((atPosition.Y - HeaderHeight) / RowHeight);
-        int day = row * 84 + (int)Math.Floor((atPosition.X - LabelWidth) / PixelsPerDay -
+        int day = row * GameCalendar.DaysPerSeason + (int)Math.Floor((atPosition.X - LabelWidth) / PixelsPerDay -
             FarmGame.GetCrop(crop).GrowthDays / 2f);
-        return (day + 336) % 336;
+        return (day + GameCalendar.DaysPerYear) % GameCalendar.DaysPerYear;
     }
 
     internal static Godot.Collections.Dictionary DragData(CropKind crop, int id) =>

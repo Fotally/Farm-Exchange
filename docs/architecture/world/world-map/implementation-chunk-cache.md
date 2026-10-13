@@ -20,6 +20,14 @@
 
 资源映射、q0～q3路径、pivot、外观键和节点缓存均为WorldMap内部实现，不把纹理路径或字典暴露给场景协调入口。七建筑、两土层、播种和七作物三档均提取四向，共124张原字节PNG，另保留一个地形图集。加载时使用固定四向数组，土层、播种层与生长档都按同一个快照朝向索引；不动态扫描目录，不旋转整图。来源见各`assets/gameplay/{terrain,soil,crops,buildings}/source_notes.md`与[素材总览](../../../project/asset-sources.md)。
 
+## 占地外围几何
+
+外围计算继续集中在现有内部 `PlacementPreviewGeometry`，不增加转发模块。`GetCellOuterEdges(anchorCell, offset, offsets)` 按同一四邻顺序检查完整占地偏移集合，只返回没有相邻占地格的边，角点由 `MapCoordinates.GridRectangleOutline` 转换为地图本地坐标；它不读节点、颜色、线宽或缓存，也不将越界候选移位或裁切。实际固定形状仍唯一来自 `BuildingFootprint`，几何模块没有新增建筑配置。
+
+`SelectionOverlay` 通过 `FarmGame.GetBuildingSpace(selectedCell)` 解析任一子格的同一锚点／占地后，逐格调用此方法，以既有3像素金线绘制整座外围。空格选择继续绘制原有单格线框。`PlacementOverlay` 从当前候选同一占地定义逐格调用此方法，仍先画半透明设施图与逐格冲突覆盖，再以2像素绿／红线绘制对应格的外围边；内部逐格的1像素提示线保持。两个调用方各自建立一次偏移集合并保留自身重绘时机，相同候选的缓存判断不变。
+
+共享边计算只在独立交互覆盖层绘制，不调用 `SyncFromGame` 或地面块重绘。`TestWorldMap` 以3×3、1×1和既有2×4矩形夹具检查唯一外围线段及越界原位置，`TestRoadMap` 逐子格核对真实整座金框和未改变的内部边像素，`TestPlacementPreview` 核对三类型及冲突／越界候选的逐段外围颜色；后两者同时保护 `ChunkRedrawCount` 不增加的约定。
+
 ## 统一层级
 
 从后至前依次为：

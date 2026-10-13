@@ -82,9 +82,14 @@ public static class TestExceptionLogging
             "驱动前置异常推进经营或重复记录");
 
         var checkpoint = new InvalidOperationException("驱动下的检查点原异常");
-        received = Caught(() => driver.Advance(1, game, _ => ThrowAtCheckpoint(checkpoint)));
+        driver.Advance(0.5, game);
+        received = Caught(() => driver.Advance(0.5, game, _ => ThrowAtCheckpoint(checkpoint)));
         Require(ReferenceEquals(checkpoint, received), "驱动替换检查点异常");
+        Require(received.StackTrace!.Contains(nameof(ThrowAtCheckpoint)) && driver.Progress == 0 &&
+            driver.LastAdvanceTicks == 1, "检查点失败丢失原堆栈或完整秒凭据");
         AssertException(Events(text, "BusinessException").Last(), checkpoint, "Checkpoint", 1, false);
+        Require(driver.Advance(0.5, game) == 0 && game.Calendar.ElapsedSeconds == 1 && driver.Progress == 0.5,
+            "异常后继续推进重复消费旧半 tick");
         Require(Events(text, "BusinessException").Length == 5, "驱动重复记录已由批量观察的异常");
         game.Dispose();
         Require(Events(text, "PerformanceSummary").Single(line => line.Contains("GameAdvance"))

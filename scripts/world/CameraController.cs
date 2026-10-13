@@ -67,6 +67,8 @@ public partial class CameraController : Camera2D
         }
         if (_middleDragging && !Input.IsMouseButtonPressed(MouseButton.Middle))
             _middleDragging = false;
+        if (HasEditableKeyboardFocus())
+            return;
         Vector2 direction = Vector2.Zero;
         if (Input.IsKeyPressed(Key.A) || Input.IsKeyPressed(Key.Left))
             direction.X -= 1f;
@@ -82,6 +84,13 @@ public partial class CameraController : Camera2D
             ClampPosition();
         }
     }
+
+    private bool HasEditableKeyboardFocus() => GetViewport().GuiGetFocusOwner() switch
+    {
+        LineEdit lineEdit => lineEdit.Editable,
+        TextEdit textEdit => textEdit.Editable,
+        _ => false,
+    };
 
     public override void _Input(InputEvent inputEvent)
     {

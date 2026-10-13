@@ -4,6 +4,8 @@
 
 | 成员 | 调用约定 |
 | --- | --- |
+| `DaysPerMonth`、`MonthsPerSeason`、`SeasonsPerYear` | 固定历法事实分别为 28 日、3 月和 4 季；季节顺序对应 `Season`。供作物规则、年度排程和时间图共用，不提供历法配置。 |
+| `DaysPerSeason`、`DaysPerYear` | 从上述事实导出的 84 日/季和 336 日/年；调用方按所需单位乘 `GameTimeUnits.PerDay`，不另存第二份长度定义。 |
 | `GameCalendar(uint elapsedSeconds = 0)` | 从给定累计模拟秒数建立日历；默认第 1 年春 1 月 1 日第 0 秒。不读取现实时间。 |
 | `Snapshot` | 返回不可变的 `CalendarSnapshot`：累计模拟秒、已完整经过的游戏日数、年、月、日、周内第几日、季节及暂停状态。年/月/日和周内日均从 1 开始。 |
 | `static GetDate(uint elapsedDays)` | 将完整经过的游戏日数转换为不可变 `GameDate(ElapsedDays, Year, Month, Day, Season)`；纯换算，不读取或推进任何日历实例，不受暂停影响。日历快照与市场报价日期共用这一日期数学入口。 |
@@ -16,4 +18,4 @@
 
 `GameDate` 定义位于 `scripts/time/GameDate.cs`，市场读取它显示本次、下次及公告日期。日期换算在累计 `uint32` 日数范围内同样不会回绕；实际经营范围仍由累计 `uint32` 模拟秒限定。节日改期属于 [MarketQuotes](../../market/market-quotes/interface-market-quotes.md) 的报价排期规则，日历模块只提供日期与季节，不管理商品或事件。T09B 补充的独立测试检查两种日期读取的一致性、节日日期和日数上限。
 
-批量协调使用内部 `SecondsUntilNextSeason` 和 `SecondsUntilDay(elapsedDay)`：前者返回严格晚于当前时刻的季界距离，后者将未来日的起点按 `ceil(day×360/7)` 转成相对秒数。乘法与绝对时刻使用宽整数，先求差再转 `uint`，未来日首次整秒可能大于日历上限但距离不会回绕；实际批量请求仍由经营入口整段检查容量。`TryAdvanceSeconds` 继续唯一提交连续区间累计，生产或行情不直接写日历。参见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。
+批量协调使用内部 `SecondsUntilNextSeason` 和 `SecondsUntilDay(elapsedDay)`：前者从 `DaysPerSeason × PerDay / PerSecond` 导出季长秒数，返回严格晚于当前时刻的季界距离；后者将未来日的起点按 `ceil(day×360/7)` 转成相对秒数。乘法与绝对时刻使用宽整数，先求差再转 `uint`，未来日首次整秒可能大于日历上限但距离不会回绕；实际批量请求仍由经营入口整段检查容量。`TryAdvanceSeconds` 继续唯一提交连续区间累计，生产或行情不直接写日历。参见[批量实现](../../game-state/farm-game/implementation-batched-simulation.md)。`TestGameCalendar.CheckCalendarFacts` 验证固定长度、两年全部季界的前一秒及起点、分数日边界和 `uint32` 秒数末端的事件距离。

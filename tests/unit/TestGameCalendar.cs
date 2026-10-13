@@ -11,7 +11,31 @@ public partial class TestGameCalendar : Node
         GetTree().Quit(passed ? 0 : 1);
     }
 
-    public static bool RunChecks() => CheckDateBoundaries() && CheckDateProjection() && CheckAdvanceAndPause() && CheckLimit();
+    public static bool RunChecks() => CheckCalendarFacts() && CheckDateBoundaries() && CheckDateProjection() && CheckAdvanceAndPause() && CheckLimit();
+
+    private static bool CheckCalendarFacts()
+    {
+        int[] lengths = { GameCalendar.DaysPerMonth, GameCalendar.MonthsPerSeason,
+            GameCalendar.SeasonsPerYear, GameCalendar.DaysPerSeason, GameCalendar.DaysPerYear };
+        int[] expected = { 28, 3, 4, 84, 336 };
+        for (int index = 0; index < lengths.Length; index++)
+            if (lengths[index] != expected[index])
+                return Fail("共同历法长度改变了已确认的月、季或年度规则");
+        for (uint boundary = 4320; boundary <= 34560; boundary += 4320)
+        {
+            var before = new GameCalendar(boundary - 1);
+            var at = new GameCalendar(boundary);
+            if (before.SecondsUntilNextSeason != 1 || at.SecondsUntilNextSeason != 4320 ||
+                before.SecondsUntilDay(at.Snapshot.ElapsedDays) != 1)
+                return Fail("季节事件距离在年度环绕或边界整秒错误");
+        }
+        var start = new GameCalendar();
+        if (start.SecondsUntilDay(1) != 52 || start.SecondsUntilDay(7) != 360 ||
+            start.SecondsUntilDay(84) != 4320 ||
+            new GameCalendar(uint.MaxValue).SecondsUntilNextSeason != 4320 - uint.MaxValue % 4320)
+            return Fail("精确日边界或 uint32 末端的季节事件距离发生回绕");
+        return true;
+    }
 
     private static bool CheckDateProjection()
     {

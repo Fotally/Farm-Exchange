@@ -17,7 +17,7 @@ public partial class TestTradingService : Node
 
     public static bool RunChecks() => CheckCommodityTrades() && CheckFailures() &&
         CheckCapacities() && CheckAllProducts() && CheckCurrentQuote() && CheckGameplayPhases() &&
-        CheckOrderFeesAndReserves() && CheckOrderFailuresAndCapacities();
+        CheckOrderFeesAndReserves() && CheckOrderFeeBoundaries() && CheckOrderFailuresAndCapacities();
 
     private static bool CheckCommodityTrades()
     {
@@ -270,6 +270,35 @@ public partial class TestTradingService : Node
         if (hundred.TotalCents != 100 || hundred.FeeCents != 1 ||
             overHundred.TotalCents != 125 || overHundred.FeeCents != 2)
             return Fail("整百分金额或非整百分金额的委托手续费错误");
+        return true;
+    }
+
+    private static bool CheckOrderFeeBoundaries()
+    {
+        CommodityId raw = new(CropKind.Radish, CommodityKind.Raw);
+        foreach ((int quantity, int value, int fee) in new[]
+        {
+            (3, 75, 1), (4, 100, 1), (5, 125, 2), (8, 200, 2), (9, 225, 3),
+        })
+        {
+            var inventory = new GoodsInventory();
+            var wallet = new Wallet(1000);
+            var trading = new TradingService(inventory, wallet, new MarketQuotes(12345));
+            TradeResult buy = trading.BuyOrder(raw, quantity, 0);
+            if (!buy.Success || buy.Quantity != quantity || buy.TotalCents != value || buy.FeeCents != fee ||
+                inventory.Get(raw) != quantity || wallet.BalanceCents != 1000 - value - fee)
+                return Fail($"货值 {value} 分的委托买入手续费或实际含费支出错误");
+            TradeResult sell = trading.SellOrder(raw, quantity);
+            if (!sell.Success || sell.Quantity != quantity || sell.TotalCents != value || sell.FeeCents != fee ||
+                inventory.Get(raw) != 0 || wallet.BalanceCents != 1000 - 2 * fee)
+                return Fail($"货值 {value} 分的委托卖出手续费或实际净入账错误");
+            int before = wallet.BalanceCents;
+            TradeResult immediateBuy = trading.Buy(raw, quantity);
+            TradeResult immediateSell = trading.Sell(raw, quantity);
+            if (!immediateBuy.Success || !immediateSell.Success || immediateBuy.FeeCents != 0 ||
+                immediateSell.FeeCents != 0 || inventory.Get(raw) != 0 || wallet.BalanceCents != before)
+                return Fail("手续费取整边界改变了同价零费即时交易");
+        }
         return true;
     }
 

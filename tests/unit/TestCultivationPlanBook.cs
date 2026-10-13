@@ -1,18 +1,20 @@
 using System;
+using System.Linq;
 using Godot;
 using FarmExchange.Weather;
 using FarmExchange.Cultivation;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
 using FarmExchange.Time;
+using FarmExchange.Workers;
 
 public partial class TestCultivationPlanBook : Node
 {
     public override void _Ready() => GetTree().Quit(RunChecks() ? 0 : 1);
 
     public static bool RunChecks() => CheckDraftSchedule() && CheckEntryIdentityLifetime() &&
-        CheckValidation() && CheckStartSeasonValidation() && CheckSharedPlans() &&
-        CheckModesAndCache() && CheckOneRoundAndYearWrap() && CheckManualAndFacade() &&
+        CheckValidation() && CheckStartSeasonValidation() && CheckSeasonEndValidation() && CheckSharedPlans() &&
+        CheckModesAndCache() && CheckOneRoundAndYearWrap() && CheckManualAndFacade() && CheckPreservedWorkContinuity() &&
         CheckSeasonRescue() && CheckHarvestPlanDateActivation() && CheckRescueWithinPlanBar() &&
         CheckExecutedEntriesAfterEdit() && CheckPreservedRoundDoesNotConsumeEntry() &&
         CheckSowBeforeSeasonClearIsConsumed() && CheckSeasonEndCache() &&
@@ -20,6 +22,57 @@ public partial class TestCultivationPlanBook : Node
 
     private static CultivationPlanRequest Request(CultivationMode mode = CultivationMode.PrepareNext) =>
         new("春季轮作", mode, new[] { new CultivationEntry(1, CropKind.Radish, 0), new CultivationEntry(2, CropKind.Wheat, 5) });
+
+    private static bool CheckPreservedWorkContinuity()
+    {
+        foreach (CultivationMode? mode in new CultivationMode?[] { null, CultivationMode.Immediate, CultivationMode.PrepareNext })
+        {
+            var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+            Vector2I[] farms = { new(189, 189), new(192, 189), new(195, 189), new(198, 189) };
+            if (!game.TryPlace(farms[3], BuildingKind.Farm, CropKind.Radish).Success)
+                return Fail("保留当前轮回归未能建立第四田");
+            foreach (Vector2I farm in farms)
+                game.SetFarmCrop(farm, CropKind.Radish);
+            game.AdvanceTick();
+            PlotSnapshot current = game.GetPlot(farms[0]);
+            ProductionResult sow = game.GetPresentationResults().Single(result => result.AnchorCell == farms[0]);
+            var workers = game.GetWorkers();
+            bool RoundIsCurrent() => game.GetPlot(farms[0]) == current &&
+                game.GetWorkers().SequenceEqual(workers) && game.IsPresentationResultCurrent(sow) &&
+                game.IsPresentationTargetCurrent(sow) && game.Calendar.ElapsedSeconds == 1;
+
+            if (mode is CultivationMode plannedMode)
+            {
+                var request = new CultivationPlanRequest("保留待水本轮", plannedMode,
+                    new[] { new CultivationEntry(1, CropKind.Radish, 0) });
+                int id = game.CreateCultivationPlan(request).Id;
+                if (game.ApplyCultivationPlan(id, new[] { farms[0] }) != null || !RoundIsCurrent())
+                    return Fail($"{mode}首次应用计划失效了当前轮或已成功播种");
+                if (game.ApplyCultivationPlan(id, new[] { farms[0] }) != null || !RoundIsCurrent())
+                    return Fail($"{mode}同表重应用失效了当前轮或已成功播种");
+                var edited = request with { Entries = new[] { new CultivationEntry(1, CropKind.Corn, 5) } };
+                if (!game.UpdateCultivationPlan(id, edited).Success || !RoundIsCurrent() ||
+                    game.ApplyCultivationPlan(id, new[] { farms[0] }) != null || !RoundIsCurrent())
+                    return Fail($"{mode}编辑及重应用后续条中断了待水当前轮");
+            }
+            else if (game.PrepareFarmCrop(farms[0], CropKind.Corn) != null || !RoundIsCurrent() ||
+                game.GetFarmCultivation(farms[0]).PreparedCrop != CropKind.Corn ||
+                game.GetFarmCultivation(farms[0]).PlanId != null)
+                return Fail("手动预备下一轮失效了当前轮或已成功播种");
+
+            game.AdvanceTick();
+            var waters = game.GetPresentationResults();
+            var wateredWorkers = game.GetWorkers();
+            for (int worker = 0; worker < 3; worker++)
+                if (game.GetPlot(farms[worker]).Crop != CropStage.Growing || !game.GetPlot(farms[worker]).HasWater ||
+                    wateredWorkers[worker].GridPosition != workers[worker].GridPosition ||
+                    wateredWorkers[worker].Activity != WorkerActivity.Idle ||
+                    !waters.Any(result => result.Kind == ProductionResultKind.Water && result.WorkerNumber == worker + 1 &&
+                        result.AnchorCell == farms[worker] && game.IsPresentationResultCurrent(result)))
+                    return Fail($"{mode?.ToString() ?? "手动预备"}在保留当前轮后破坏了原工人供水续接");
+        }
+        return true;
+    }
 
     private static bool CheckDraftSchedule()
     {
@@ -138,6 +191,46 @@ public partial class TestCultivationPlanBook : Node
             CultivationPlanBook.Validate(safe).RiskEntryIds.Count != 0 ||
             !CultivationPlanBook.Validate(request with { Entries = Array.Empty<CultivationEntry>() }).Success)
             return Fail("同种连续、冬春冲突、禁生风险或全年度休耕错误");
+        return true;
+    }
+
+    private static bool CheckSeasonEndValidation()
+    {
+        (CropKind Crop, int EndDay)[] boundaries =
+        {
+            (CropKind.Wheat, 84), (CropKind.Wheat, 420),
+            (CropKind.Corn, 168), (CropKind.Rice, 168),
+            (CropKind.Potato, 84), (CropKind.Potato, 252),
+            (CropKind.Sunflower, 168), (CropKind.Sugarcane, 252),
+            (CropKind.Radish, 84), (CropKind.Radish, 420),
+        };
+        foreach ((CropKind crop, int endDay) in boundaries)
+        {
+            int lastSafeDay = (endDay - CropCatalog.Get(crop).GrowthDays) % 336;
+            foreach (int delay in new[] { 0, 1 })
+            {
+                var entries = new[] { new CultivationEntry(7, crop, lastSafeDay + delay) };
+                CultivationValidation draft = CultivationPlanBook.ValidateEntries(entries);
+                CultivationValidation saved = CultivationPlanBook.Validate(new("季末边界", CultivationMode.Immediate, entries));
+                if (!draft.Success || !saved.Success || draft.RiskEntryIds.Count != delay ||
+                    saved.RiskEntryIds.Count != delay || (delay == 1 &&
+                        (draft.RiskEntryIds[0] != 7 || saved.RiskEntryIds[0] != 7)))
+                    return Fail($"{crop} 整数日周期恰达禁生边界或晚一天的风险判定错误");
+            }
+            CultivationValidation wrongStart = CultivationPlanBook.ValidateEntries(
+                new[] { new CultivationEntry(7, crop, endDay % 336) });
+            if (wrongStart.Success || wrongStart.RiskEntryIds.Count != 0)
+                return Fail($"{crop} 从首个禁生季起点开始未拒绝或被错误归为风险");
+        }
+        foreach (CultivationEntry entry in new[] {
+            new CultivationEntry(1, CropKind.Corn, 83), new CultivationEntry(1, CropKind.Rice, 83),
+            new CultivationEntry(1, CropKind.Sunflower, 83), new CultivationEntry(1, CropKind.Sugarcane, 167),
+            new CultivationEntry(1, CropKind.Wheat, 335), new CultivationEntry(1, CropKind.Radish, 335) })
+        {
+            CultivationValidation check = CultivationPlanBook.ValidateEntries(new[] { entry });
+            if (!check.Success || check.RiskEntryIds.Count != 0)
+                return Fail($"{entry.Crop} 相邻适季跨季或冬春连续被错误截断");
+        }
         return true;
     }
 

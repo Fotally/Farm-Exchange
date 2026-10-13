@@ -1,0 +1,269 @@
+param(
+    [string]$EvidenceDirectory = 'build/issue137-138-validation'
+)
+
+$ErrorActionPreference = 'Stop'
+$repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+
+function Assert-Contract {
+    param([bool]$Condition, [string]$Message)
+    if (-not $Condition) { throw "验收产物契约失败：$Message" }
+}
+
+function Assert-Rejected {
+    param([scriptblock]$Action, [string]$ExpectedError)
+    $caught = $null
+    try { & $Action | Out-Null }
+    catch { $caught = $_.Exception.Message }
+    Assert-Contract ($null -ne $caught -and $caught.Contains($ExpectedError)) "应拒绝并包含 [$ExpectedError]，实际：$caught"
+    Write-Host "通过：拒绝 $ExpectedError"
+}
+
+function Get-WorkflowStep {
+    param([string]$Content, [string]$Name)
+    $match = [regex]::Match($Content, "(?ms)^      - name: $([regex]::Escape($Name))\r?`n(?<body>.*?)(?=^      - name: |\z)")
+    Assert-Contract $match.Success "工作流缺少步骤：$Name"
+    return $match.Groups['body'].Value
+}
+
+function Test-WorkflowCondition {
+    param([string]$Step, [bool]$Performance, [string]$Outcome, [bool]$Cancelled = $false, [string]$CollectionOutcome = 'success')
+    $match = [regex]::Match($Step, '(?m)^        if: (?<condition>.+)\r?$')
+    $condition = if ($match.Success) { $match.Groups['condition'].Value.Trim() } else { 'success()' }
+    $condition = $condition -replace '^\$\{\{\s*|\s*\}\}$', ''
+    # GitHub 对未显式使用状态函数的条件附加 success()。
+    if ($condition -notmatch '\b(success|failure|cancelled|always)\(' -and ($Cancelled -or $Outcome -eq 'failure')) {
+        return $false
+    }
+    $condition = $condition.Replace('inputs.performance', "`$$($Performance.ToString().ToLowerInvariant())")
+    $condition = $condition.Replace('steps.fps.outcome', "'$Outcome'").Replace('steps.save-fps.outcome', "'$CollectionOutcome'")
+    $condition = $condition.Replace('steps.distribution.outcome', "'$Outcome'").Replace('steps.package.outcome', "'$Outcome'")
+    $condition = $condition.Replace('cancelled()', "`$$($Cancelled.ToString().ToLowerInvariant())")
+    $condition = $condition.Replace('success()', "`$$(((-not $Cancelled) -and $Outcome -ne 'failure').ToString().ToLowerInvariant())")
+    $condition = $condition.Replace('failure()', "`$$(($Outcome -eq 'failure').ToString().ToLowerInvariant())").Replace('always()', '$true')
+    $condition = $condition -replace '(?<!\$)\btrue\b', '$true' -replace '(?<!\$)\bfalse\b', '$false'
+    $condition = $condition.Replace('&&', ' -and ').Replace('||', ' -or ').Replace('==', ' -eq ').Replace('!', ' -not ')
+    $remaining = $condition -replace "\`$(true|false)|'(success|failure|skipped|cancelled)'|-and|-or|-eq|-not|[\s()]", ''
+    Assert-Contract ($remaining -eq '') "未识别的工作流条件：$condition"
+    return [bool](& ([scriptblock]::Create($condition)))
+}
+
+$ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/ci.yml') -Raw
+$events = [regex]::Match($ci, '(?ms)^on:\r?\n(?<events>.*?)(?=^\S|\z)')
+$pullRequest = [regex]::Match($events.Groups['events'].Value, '(?ms)^  pull_request:\r?\n(?<config>.*?)(?=^  \S|\z)')
+Assert-Contract $pullRequest.Success '向 dev 的 PR 必须在合并前触发原生 Windows 门禁'
+$branchFilter = [regex]::Match($pullRequest.Groups['config'].Value, '(?ms)^    branches:[ \t]*(?:\[(?<inline>[^\]]+)\]|\r?\n(?<block>(?:^      - [^\r\n]*\r?\n?)+))')
+[string[]]$targets = if ($branchFilter.Groups['inline'].Success) {
+    @($branchFilter.Groups['inline'].Value.Split(',') | ForEach-Object { $_.Trim().Trim("'", '"') })
+} else {
+    @([regex]::Matches($branchFilter.Groups['block'].Value, '(?m)^      - ([^\r\n]+)') | ForEach-Object { $_.Groups[1].Value.Trim().Trim("'", '"') })
+}
+Assert-Contract ($targets.Count -eq 1 -and $targets[0] -ceq 'dev') 'PR 门禁仅对 dev 目标启用'
+$upload = Get-WorkflowStep $ci '上传满地图 FPS 报告'
+$collection = Get-WorkflowStep $ci '保存满地图 FPS 证据'
+foreach ($case in @(
+    @{ Name = '成功'; Performance = $true; Outcome = 'success'; Cancelled = $false; Expected = $true },
+    @{ Name = '阈值失败'; Performance = $true; Outcome = 'failure'; Cancelled = $false; Expected = $true },
+    @{ Name = '前置失败未测量'; Performance = $true; Outcome = 'skipped'; Cancelled = $false; Expected = $false },
+    @{ Name = '取消'; Performance = $true; Outcome = 'cancelled'; Cancelled = $true; Expected = $false },
+    @{ Name = '未选择测量'; Performance = $false; Outcome = 'skipped'; Cancelled = $false; Expected = $false }
+)) {
+    $actual = Test-WorkflowCondition $upload $case.Performance $case.Outcome $case.Cancelled
+    Assert-Contract ($actual -eq $case.Expected) "FPS $($case.Name)时上传条件应为 $($case.Expected)，实际 $actual"
+    $actual = Test-WorkflowCondition $collection $case.Performance $case.Outcome $case.Cancelled
+    Assert-Contract ($actual -eq $case.Expected) "FPS $($case.Name)时收集条件应为 $($case.Expected)，实际 $actual"
+}
+Assert-Contract (-not (Test-WorkflowCondition $upload $true 'success' $false 'failure')) '收集失败不能上传旧证据或伪装成功'
+Assert-Contract ($ci -notmatch 'continue-on-error:') '性能失败必须保持 job 失败'
+$headless = Get-WorkflowStep $ci '运行场景测试并检查行覆盖率'
+$measurement = Get-WorkflowStep $ci '运行满地图 FPS 测量'
+Assert-Contract ($headless -notmatch '-Performance') '普通测试步骤须与 FPS 测量分开'
+Assert-Contract ($measurement -match '(?m)^        id: fps\r?$' -and $measurement -match 'Run-PerformanceTests\.ps1') 'FPS outcome 必须对应独立的真实测量步骤'
+Assert-Contract (-not (Test-WorkflowCondition $measurement $false 'success')) '普通 push 和 PR 不得自动执行图形 FPS 测量'
+Assert-Contract ($upload -match 'retention-days: 14' -and $upload -match 'if-no-files-found: error' -and $upload -match 'github.run_id' -and $upload -match 'github.run_attempt') 'FPS 证据须包含运行身份并保留 14 天，上传缺失必须失败'
+$release = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/release.yml') -Raw
+foreach ($binding in @(
+    @{ Content = $ci; Startup = '启动导出程序验收'; Upload = '上传 Windows 启动验收证据' },
+    @{ Content = $release; Startup = '验收 Windows 游戏并生成版本压缩包'; Upload = '上传 Windows 发布验收证据' }
+)) {
+    $step = Get-WorkflowStep $binding.Content $binding.Startup
+    Assert-Contract ($step -match 'Invoke-WindowsDistribution\.ps1' -and $step -match '-SchemaPath docs/project/runtime-log-schema-v1\.md' -and $step -notmatch 'Start-Process') 'CI 与发布须经同一真实分发命令'
+    $step = Get-WorkflowStep $binding.Content $binding.Upload
+    Assert-Contract (Test-WorkflowCondition $step $false 'failure') 'Windows 启动失败时仍须上传已有证据'
+    Assert-Contract (-not (Test-WorkflowCondition $step $false 'skipped')) '未执行 Windows 验收不能上传旧证据'
+    Assert-Contract (-not (Test-WorkflowCondition $step $false 'cancelled' $true)) '取消后不承诺继续上传 Windows 证据'
+}
+$checkout = Get-WorkflowStep $release '检出本次发布提交的分发工具与 schema'
+Assert-Contract ($checkout -match 'ref: \$\{\{ github.sha \}\}') '发布 helper 与 schema 须从精确发布 SHA 检出'
+$macos = Get-WorkflowStep $release '检查 macOS 应用包并保留原始 ZIP'
+Assert-Contract ($macos -match 'Copy-Item -LiteralPath \$sourceArchive -Destination \$archive' -and $macos -notmatch 'CreateFromDirectory') 'macOS 发布须保留原 ZIP 字节'
+$static = Get-WorkflowStep $ci '修复规则链接并运行静态检查'
+Assert-Contract ($static -match '\./tools/Test-ValidationArtifacts\.ps1') '验收产物契约须进入真实 CI'
+
+$evidenceRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot $EvidenceDirectory))
+$runRoot = Join-Path $evidenceRoot ([guid]::NewGuid().ToString('N'))
+$probeRoot = Join-Path $runRoot 'probe'
+New-Item -ItemType Directory -Path $probeRoot -Force | Out-Null
+[IO.File]::WriteAllText((Join-Path $evidenceRoot '.gdignore'), '')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'validation-artifacts-fixture/Program.cs.txt') -Destination (Join-Path $probeRoot 'Program.cs')
+@'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>
+'@ | Set-Content -LiteralPath (Join-Path $probeRoot 'ValidationFixture.csproj') -Encoding utf8
+dotnet build (Join-Path $probeRoot 'ValidationFixture.csproj') --configuration Release --output (Join-Path $probeRoot 'app') --verbosity quiet
+Assert-Contract ($LASTEXITCODE -eq 0) '必须成功构建真实可执行夹具'
+$probeName = if ($IsWindows) { 'ValidationFixture.exe' } else { 'ValidationFixture' }
+$probe = Join-Path $probeRoot "app/$probeName"
+$schema = Join-Path $runRoot 'schema-source.md'
+[IO.File]::WriteAllBytes($schema, [byte[]](239, 187, 191, 35, 32, 83, 99, 104, 101, 109, 97, 13, 10))
+$distributionCommand = Join-Path $PSScriptRoot 'Invoke-WindowsDistribution.ps1'
+$performanceCommand = Join-Path $PSScriptRoot 'Run-PerformanceTests.ps1'
+$savePerformanceCommand = Join-Path $PSScriptRoot 'Save-PerformanceEvidence.ps1'
+
+function New-DistributionFixture {
+    param([string]$Name, [hashtable]$Settings = @{})
+    $directory = Join-Path $runRoot $Name
+    New-Item -ItemType Directory -Path $directory | Out-Null
+    Copy-Item -Path (Join-Path $probeRoot 'app/*') -Destination $directory
+    Copy-Item -LiteralPath $probe -Destination (Join-Path $directory 'FarmExchange.exe')
+    New-Item -ItemType Directory -Path (Join-Path $directory 'data_FarmExchange_windows_x86_64') | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $directory 'logs/runtime') | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $directory 'logs/debug') | Out-Null
+    Set-Content -LiteralPath (Join-Path $directory 'FarmExchange.pck') -Value 'fixture PCK'
+    Set-Content -LiteralPath (Join-Path $directory 'data_FarmExchange_windows_x86_64/FarmExchange.dll') -Value 'fixture managed assembly'
+    Set-Content -LiteralPath (Join-Path $directory 'engine-dependency.bin') -Value 'other runtime dependency'
+    Set-Content -LiteralPath (Join-Path $directory 'logs/runtime/sentinel.log') -Value 'historical runner runtime session'
+    Set-Content -LiteralPath (Join-Path $directory 'logs/debug/sentinel.log') -Value 'historical runner debug session'
+    $Settings | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $directory 'fixture.json') -Encoding utf8
+    return $directory
+}
+
+$build = New-DistributionFixture 'clean-build'
+$archive = Join-Path $runRoot 'clean.zip'
+& $distributionCommand -BuildDirectory $build -SchemaPath $schema -EvidenceDirectory (Join-Path $runRoot 'clean-evidence') -ArchivePath $archive
+$zip = [IO.Compression.ZipFile]::OpenRead($archive)
+try {
+    Assert-Contract (@($zip.Entries | Where-Object { $_.FullName -match '^logs/(runtime|debug)/' }).Count -eq 0) '最终 ZIP 不能包含哨兵或本次验收会话'
+    foreach ($name in @('FarmExchange.exe', 'FarmExchange.pck', 'data_FarmExchange_windows_x86_64/FarmExchange.dll', 'engine-dependency.bin', 'logs/schema-v1.md')) {
+        Assert-Contract ($null -ne $zip.GetEntry($name)) "最终 ZIP 必须保留 $name"
+    }
+    $stream = $zip.GetEntry('logs/schema-v1.md').Open()
+    try { $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)) }
+    finally { $stream.Dispose() }
+    Assert-Contract ($hash -ceq (Get-FileHash -LiteralPath $schema).Hash) '最终 ZIP 内 schema 必须与源字节相同'
+} finally { $zip.Dispose() }
+foreach ($kind in @('runtime', 'debug')) {
+    Assert-Contract (-not (Test-Path -LiteralPath (Join-Path $build "logs/$kind"))) "分发目录不能遗留 $kind 会话"
+    foreach ($name in @('sentinel.log', 'current.log')) {
+        Assert-Contract (Test-Path -LiteralPath (Join-Path $runRoot "clean-evidence/logs/$kind/$name")) "验收证据必须保留 $kind/$name"
+    }
+}
+Assert-Contract ((Get-Content -LiteralPath (Join-Path $runRoot 'clean-evidence/stdout.log') -Raw).Contains('fixture startup stdout')) 'stdout 须保存'
+Assert-Contract ((Get-Content -LiteralPath (Join-Path $runRoot 'clean-evidence/stderr.log') -Raw).Contains('fixture startup stderr')) 'stderr 须保存'
+
+# CI 上传目录与 Release 二次启动走同一命令，第二次新会话仍不能进入 ZIP。
+$secondEvidence = Join-Path $runRoot 'second-evidence'
+$secondArchive = Join-Path $runRoot 'second.zip'
+& $distributionCommand -BuildDirectory $build -SchemaPath $schema -EvidenceDirectory $secondEvidence -ArchivePath $secondArchive
+Assert-Contract (Test-Path -LiteralPath (Join-Path $secondEvidence 'logs/runtime/current.log')) '第二次启动须单独保存新会话'
+Assert-Contract (-not (Test-Path -LiteralPath (Join-Path $build 'logs/runtime'))) '第二次启动的分发目录也须干净'
+$firstStart = Join-Path $runRoot 'first-player-start'
+[IO.Compression.ZipFile]::ExtractToDirectory($secondArchive, $firstStart)
+$process = Start-Process -FilePath (Join-Path $firstStart 'FarmExchange.exe') -WorkingDirectory $firstStart -ArgumentList @('--headless', '--quit-after', '5') -Wait -PassThru
+Assert-Contract ($process.ExitCode -eq 0 -and (Test-Path -LiteralPath (Join-Path $firstStart 'logs/runtime/current.log'))) '干净解压后真实首次启动须生成本次会话'
+$process.Dispose()
+Assert-Contract (Test-Path -LiteralPath (Join-Path $firstStart 'engine-dependency.bin')) '其他运行依赖须原样保留'
+
+$failedBuild = New-DistributionFixture 'nonzero-build' @{ ExitCode = 17 }
+$failedEvidence = Join-Path $runRoot 'nonzero-evidence'
+$failedArchive = Join-Path $runRoot 'nonzero.zip'
+Assert-Rejected { & $distributionCommand -BuildDirectory $failedBuild -SchemaPath $schema -EvidenceDirectory $failedEvidence -ArchivePath $failedArchive } '退出码：17'
+Assert-Contract (-not (Test-Path -LiteralPath $failedArchive)) '启动失败不能留下最终 ZIP'
+Assert-Contract (Test-Path -LiteralPath (Join-Path $failedEvidence 'logs/runtime/current.log')) '失败启动的真实会话须保存'
+Assert-Contract ((Get-Content -LiteralPath (Join-Path $failedEvidence 'startup.json') -Raw | ConvertFrom-Json).ExitCode -eq 17) '收集成功不能盖掉原退出码'
+
+$blockedBuild = New-DistributionFixture 'blocked-evidence-build' @{ ExitCode = 23; BlockEvidencePath = (Join-Path $runRoot 'blocked-evidence/logs/runtime/sentinel.log') }
+$blockedEvidence = Join-Path $runRoot 'blocked-evidence'
+$caught = $null
+try { & $distributionCommand -BuildDirectory $blockedBuild -SchemaPath $schema -EvidenceDirectory $blockedEvidence }
+catch { $caught = $_.Exception.Message }
+Assert-Contract ($caught -and $caught.Contains('退出码：23') -and $caught.Contains('源数据保留')) '日志保存失败须同时保留原启动错误'
+Assert-Contract (Test-Path -LiteralPath (Join-Path $blockedBuild 'logs/runtime/sentinel.log')) '保存失败不得先删源哨兵日志'
+Assert-Contract (Test-Path -LiteralPath (Join-Path $blockedBuild 'logs/runtime/current.log')) '保存失败不得删除源本次日志'
+
+foreach ($case in @(
+    @{ Name = 'corrupt-schema'; Settings = @{ CorruptSchema = $true }; Error = 'schema 字节' },
+    @{ Name = 'deleted-pck'; Settings = @{ DeletePck = $true }; Error = 'FarmExchange.pck' }
+)) {
+    $invalidBuild = New-DistributionFixture $case.Name $case.Settings
+    $invalidArchive = Join-Path $runRoot "$($case.Name).zip"
+    Assert-Rejected { & $distributionCommand -BuildDirectory $invalidBuild -SchemaPath $schema -EvidenceDirectory (Join-Path $runRoot "$($case.Name)-evidence") -ArchivePath $invalidArchive } $case.Error
+    Assert-Contract (-not (Test-Path -LiteralPath $invalidArchive)) '内容检查失败不能生成最终 ZIP'
+}
+$missingBuild = New-DistributionFixture 'missing-exe'
+Remove-Item -LiteralPath (Join-Path $missingBuild 'FarmExchange.exe')
+Assert-Rejected { & $distributionCommand -BuildDirectory $missingBuild -SchemaPath $schema -EvidenceDirectory (Join-Path $runRoot 'missing-exe-evidence') } '构建缺少有效运行文件'
+Assert-Rejected { & $distributionCommand -BuildDirectory $build -SchemaPath $schema -EvidenceDirectory (Join-Path $build 'bad-evidence') } '不能相同或互相包含'
+Assert-Rejected { & $distributionCommand -BuildDirectory $build -SchemaPath $schema -EvidenceDirectory (Join-Path $runRoot 'bad-archive-evidence') -ArchivePath (Join-Path $build 'bad.zip') } '最终 ZIP 必须'
+Assert-Rejected { & $distributionCommand -BuildDirectory $build -SchemaPath (Join-Path $build 'logs/schema-v1.md') -EvidenceDirectory (Join-Path $runRoot 'bad-schema-evidence') } 'schema 源必须'
+
+foreach ($case in @(
+    @{ Name = 'success'; ExitCode = 0; Files = @('performance.json', 'performance.png', 'performance-end.png'); Error = $null },
+    @{ Name = 'threshold-failure'; ExitCode = 19; Files = @('performance.json', 'performance.png', 'performance-end.png'); Error = '退出码：19' },
+    @{ Name = 'partial-failure'; ExitCode = 29; Files = @('performance.png'); Error = '退出码：29' },
+    @{ Name = 'empty-failure'; ExitCode = 31; Files = @(); Error = '退出码：31' },
+    @{ Name = 'missing-report'; ExitCode = 0; Files = @('performance.png'); Error = '没有生成 coverage/performance.json' }
+)) {
+    $measurementRoot = Join-Path $runRoot "fps-$($case.Name)"
+    New-Item -ItemType Directory -Path (Join-Path $measurementRoot 'coverage') -Force | Out-Null
+    foreach ($name in @('performance.json', 'performance.png', 'performance-end.png')) {
+        Set-Content -LiteralPath (Join-Path $measurementRoot "coverage/$name") -Value 'old run must not survive'
+    }
+    @{ ExitCode = $case.ExitCode; PerformanceFiles = $case.Files } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $measurementRoot 'fixture.json') -Encoding utf8
+    Push-Location $measurementRoot
+    try {
+        $caught = $null
+        try { & $performanceCommand -GodotConsole $probe }
+        catch { $caught = $_.Exception.Message }
+        if ($case.Error) { Assert-Contract ($caught -and $caught.Contains($case.Error)) "FPS $($case.Name)须保留原测量错误：$caught" }
+        else { Assert-Contract ($null -eq $caught) "成功 FPS 不应失败：$caught" }
+        $outcome = if ($caught) { 'failure' } else { 'success' }
+        $destination = Join-Path $measurementRoot 'saved'
+        & $savePerformanceCommand -SourceDirectory coverage -DestinationDirectory saved -MeasurementOutcome $outcome
+        $manifest = Get-Content -LiteralPath (Join-Path $destination 'manifest.json') -Raw | ConvertFrom-Json
+        Assert-Contract ($manifest.MeasurementOutcome -eq $outcome) '保存证据不得把失败测量写成成功'
+        Assert-Contract ($manifest.Files.Count -eq 3) '清单须明确三项存在或缺失'
+        foreach ($entry in $manifest.Files) {
+            $expected = $case.Files -contains $entry.Name
+            Assert-Contract ($entry.Present -eq $expected) "FPS $($case.Name)清单必须记录实际 $($entry.Name)"
+            Assert-Contract ((Test-Path -LiteralPath (Join-Path $destination $entry.Name)) -eq $expected) '不存在的性能文件不得伪造或复用旧产物'
+            if ($expected) {
+                Assert-Contract ($entry.Sha256 -ceq (Get-FileHash -LiteralPath (Join-Path $measurementRoot "coverage/$($entry.Name)")).Hash) '证据复制必须保留真实字节'
+                Assert-Contract ($entry.Sha256 -ceq (Get-FileHash -LiteralPath (Join-Path $destination $entry.Name)).Hash) '保存的证据字节须与清单相同'
+            }
+        }
+    } finally { Pop-Location }
+}
+foreach ($outcome in @('skipped', 'cancelled')) {
+    $destination = Join-Path $runRoot "fps-$outcome"
+    Assert-Rejected { & $savePerformanceCommand -SourceDirectory (Join-Path $runRoot 'missing-coverage') -DestinationDirectory $destination -MeasurementOutcome $outcome } 'ValidateSet'
+    Assert-Contract (-not (Test-Path -LiteralPath $destination)) '未测量或取消不能生成性能证据'
+}
+
+$timeoutBuild = New-DistributionFixture 'timeout-build' @{ Timeout = $true }
+$timeoutEvidence = Join-Path $runRoot 'timeout-evidence'
+$timer = [Diagnostics.Stopwatch]::StartNew()
+Assert-Rejected { & $distributionCommand -BuildDirectory $timeoutBuild -SchemaPath $schema -EvidenceDirectory $timeoutEvidence -ArchivePath (Join-Path $runRoot 'timeout.zip') } '超过 60 秒'
+$timer.Stop()
+$timeoutFacts = Get-Content -LiteralPath (Join-Path $timeoutEvidence 'startup.json') -Raw | ConvertFrom-Json
+Assert-Contract ($timeoutFacts.TimedOut -and $timeoutFacts.ProcessExited -and $timer.Elapsed.TotalSeconds -ge 59 -and $timer.Elapsed.TotalSeconds -lt 90) '真实进程超时须在 60 秒结束并记录'
+Assert-Contract (Test-Path -LiteralPath (Join-Path $timeoutEvidence 'logs/runtime/current.log')) '终止超时进程后须保存实际日志'
+Assert-Contract (-not (Test-Path -LiteralPath (Join-Path $runRoot 'timeout.zip'))) '超时启动不能留下最终 ZIP'
+
+Write-Host "验收产物契约通过；证据：$runRoot"
