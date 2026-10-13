@@ -11,7 +11,7 @@
 | 推送到 `main`（包括人工合并 PR） | 是 | 是 | 否 | 是 | 覆盖率、干净完整 Windows x86_64 目录及独立启动证据，保留 14 天 |
 | 手动 `workflow_dispatch` 并勾选 `performance` | 是 | 是 | 是 | 仅在 `main` 执行 | 覆盖率、实际 FPS JSON/前后截图及清单；`main` 另含 Windows 产物，保留 14 天 |
 
-修复分支先创建目标为 `dev` 的 PR，等待人工合并。PR 的 Windows CI 在合并前运行规则/格式检查、原生 PowerShell 产物契约、完整 headless 场景测试和覆盖率门禁；按 `pull_request` 默认检出待合并结果。PR 不自动执行图形 FPS 测量，也不导出正式 Windows 包，Windows Release 导出仍仅在 `main` 运行。现有并发取消组继续按 `github.ref` 区分，后续更新同一 PR 会取消旧运行。
+目标为 `dev` 的 PR 门禁用于用户明确授权的分支整合。日常开发仍在 `dev`，正式交付通过 `dev` → `main` PR，由人工合并，遵循[GitHub 协作流程](contribution-workflow.md)。此类整合 PR 的 Windows CI 在合并前运行规则/格式检查、原生 PowerShell 产物契约、完整 headless 场景测试和覆盖率门禁；按 `pull_request` 默认检出待合并结果。PR 不自动执行图形 FPS 测量，也不导出正式 Windows 包，工作流的 Windows Release 导出仍仅在 `main` 运行。现有并发取消组继续按 `github.ref` 区分，后续更新同一 PR 会取消旧运行。
 
 Windows 与 macOS 工作流都通过 `actions/setup-dotnet` 的 `global-json-file` 读取同一 SDK 版本；`global.json` 禁用版本前滚与预览版，仓库内的编译、格式检查和工具命令必须选择该确切 SDK，缺少时明确失败。项目目标框架为 `net10.0`；双平台 CI 除固定的 SDK 10.0.401 外暂保留 `8.0.x` 安装，其中 Windows 覆盖率工具 `dotnet-coverage` 仍以 `net8.0` 发布并使用 .NET 8 运行时。安装步骤后续均输出 `dotnet --version` 作为实际版本证据。
 
