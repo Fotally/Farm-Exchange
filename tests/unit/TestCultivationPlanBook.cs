@@ -11,7 +11,7 @@ public partial class TestCultivationPlanBook : Node
     public override void _Ready() => GetTree().Quit(RunChecks() ? 0 : 1);
 
     public static bool RunChecks() => CheckDraftSchedule() && CheckEntryIdentityLifetime() &&
-        CheckValidation() && CheckStartSeasonValidation() && CheckSharedPlans() &&
+        CheckValidation() && CheckStartSeasonValidation() && CheckSeasonEndValidation() && CheckSharedPlans() &&
         CheckModesAndCache() && CheckOneRoundAndYearWrap() && CheckManualAndFacade() &&
         CheckSeasonRescue() && CheckHarvestPlanDateActivation() && CheckRescueWithinPlanBar() &&
         CheckExecutedEntriesAfterEdit() && CheckPreservedRoundDoesNotConsumeEntry() &&
@@ -138,6 +138,46 @@ public partial class TestCultivationPlanBook : Node
             CultivationPlanBook.Validate(safe).RiskEntryIds.Count != 0 ||
             !CultivationPlanBook.Validate(request with { Entries = Array.Empty<CultivationEntry>() }).Success)
             return Fail("同种连续、冬春冲突、禁生风险或全年度休耕错误");
+        return true;
+    }
+
+    private static bool CheckSeasonEndValidation()
+    {
+        (CropKind Crop, int EndDay)[] boundaries =
+        {
+            (CropKind.Wheat, 84), (CropKind.Wheat, 420),
+            (CropKind.Corn, 168), (CropKind.Rice, 168),
+            (CropKind.Potato, 84), (CropKind.Potato, 252),
+            (CropKind.Sunflower, 168), (CropKind.Sugarcane, 252),
+            (CropKind.Radish, 84), (CropKind.Radish, 420),
+        };
+        foreach ((CropKind crop, int endDay) in boundaries)
+        {
+            int lastSafeDay = (endDay - CropCatalog.Get(crop).GrowthDays) % 336;
+            foreach (int delay in new[] { 0, 1 })
+            {
+                var entries = new[] { new CultivationEntry(7, crop, lastSafeDay + delay) };
+                CultivationValidation draft = CultivationPlanBook.ValidateEntries(entries);
+                CultivationValidation saved = CultivationPlanBook.Validate(new("季末边界", CultivationMode.Immediate, entries));
+                if (!draft.Success || !saved.Success || draft.RiskEntryIds.Count != delay ||
+                    saved.RiskEntryIds.Count != delay || (delay == 1 &&
+                        (draft.RiskEntryIds[0] != 7 || saved.RiskEntryIds[0] != 7)))
+                    return Fail($"{crop} 整数日周期恰达禁生边界或晚一天的风险判定错误");
+            }
+            CultivationValidation wrongStart = CultivationPlanBook.ValidateEntries(
+                new[] { new CultivationEntry(7, crop, endDay % 336) });
+            if (wrongStart.Success || wrongStart.RiskEntryIds.Count != 0)
+                return Fail($"{crop} 从首个禁生季起点开始未拒绝或被错误归为风险");
+        }
+        foreach (CultivationEntry entry in new[] {
+            new CultivationEntry(1, CropKind.Corn, 83), new CultivationEntry(1, CropKind.Rice, 83),
+            new CultivationEntry(1, CropKind.Sunflower, 83), new CultivationEntry(1, CropKind.Sugarcane, 167),
+            new CultivationEntry(1, CropKind.Wheat, 335), new CultivationEntry(1, CropKind.Radish, 335) })
+        {
+            CultivationValidation check = CultivationPlanBook.ValidateEntries(new[] { entry });
+            if (!check.Success || check.RiskEntryIds.Count != 0)
+                return Fail($"{entry.Crop} 相邻适季跨季或冬春连续被错误截断");
+        }
         return true;
     }
 

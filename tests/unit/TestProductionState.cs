@@ -17,7 +17,7 @@ public partial class TestProductionState : Node
     }
 
     public static bool RunChecks() => CheckLand() && CheckPlacementMessages() &&
-        CheckFarming() && CheckWater() && CheckPlantingRules() && CheckSeasonFailure() &&
+        CheckFarming() && CheckWater() && CheckPlantingRules() && CheckGrowingWindows() && CheckSeasonFailure() &&
         CheckSowingControl() && CheckSeasonMaturity() && CheckExpectedRoundEnd() &&
         CheckProcessing() && CheckProcessingReserve();
 
@@ -238,6 +238,82 @@ public partial class TestProductionState : Node
             Check(CropKind.Wheat, season * 5 - 825) != PlantingFailure.None ||
             Check(CropKind.Wheat, season * 5 - 824) != PlantingFailure.InsufficientTime)
             return Fail("连续适宜季节或跨年边界没有按完整区间计算");
+        return true;
+    }
+
+    private static bool CheckGrowingWindows()
+    {
+        // 每季起点后的首个禁生季序号；5 表示下一年的夏季，-1 表示当前禁生。
+        (CropKind Crop, int[] Ends)[] windows =
+        {
+            (CropKind.Wheat, new[] { 1, -1, 5, 5 }),
+            (CropKind.Corn, new[] { 2, 2, -1, -1 }),
+            (CropKind.Rice, new[] { 2, 2, -1, -1 }),
+            (CropKind.Potato, new[] { 1, -1, 3, -1 }),
+            (CropKind.Sunflower, new[] { 2, 2, -1, -1 }),
+            (CropKind.Sugarcane, new[] { -1, 3, 3, -1 }),
+            (CropKind.Radish, new[] { 1, -1, 5, 5 }),
+        };
+        foreach ((CropKind crop, int[] ends) in windows)
+            for (int year = 0; year < 2; year++)
+                for (int season = 0; season < 4; season++)
+                {
+                    long now = (year * 336L + season * 84L) * GameTimeUnits.PerDay;
+                    uint second = (uint)(now / GameTimeUnits.PerSecond);
+                    CalendarSnapshot calendar = new GameCalendar(second).Snapshot;
+                    bool allowed = ends[season] >= 0;
+                    long end = allowed ? (year * 336L + ends[season] * 84L) * GameTimeUnits.PerDay : now;
+                    if (PlantingRules.GetGrowingWindowEndTimeUnits(crop, now) != end ||
+                        PlantingRules.Check(crop, calendar, false) !=
+                            (allowed ? PlantingFailure.None : PlantingFailure.WrongSeason) ||
+                        PlantingRules.CanSow(crop, calendar, false) != allowed)
+                        return Fail($"{crop} 第 {year + 1} 年季 {season} 的适季起点或连续区间错误");
+                    if (!allowed)
+                        continue;
+                    if (PlantingRules.GetGrowingWindowEndTimeUnits(crop, now + 1) != end ||
+                        PlantingRules.GetGrowingWindowEndTimeUnits(crop, end - 1) != end ||
+                        PlantingRules.GetGrowingWindowEndTimeUnits(crop, end) != end)
+                        return Fail($"{crop} 精确单位的季末临界点或冬春环绕错误");
+
+                    int growthSeconds = GameTimeUnits.RemainingSeconds(CropCatalog.Get(crop).GrowthDays * GameTimeUnits.PerDay);
+                    foreach (bool wet in new[] { false, true })
+                    {
+                        uint lastSafe = (uint)(end / GameTimeUnits.PerSecond - growthSeconds - 1 - (wet ? 0 : 1));
+                        CalendarSnapshot safe = new GameCalendar(lastSafe).Snapshot;
+                        CalendarSnapshot risky = new GameCalendar(lastSafe + 1).Snapshot;
+                        if (PlantingRules.Check(crop, safe, wet) != PlantingFailure.None ||
+                            PlantingRules.Check(crop, risky, wet) != PlantingFailure.InsufficientTime ||
+                            !PlantingRules.CanSow(crop, risky, wet))
+                            return Fail($"{crop} 干湿田播种预算的边界相等、晚一秒或风险允许约定错误");
+                    }
+
+                    var farms = new FarmingSystem(1);
+                    farms.Place(0, crop);
+                    farms.SupplyWater(0);
+                    if (!farms.TryWork(0, calendar))
+                        return Fail($"{crop} 在适季起点无法实际播种");
+                    FarmSnapshot growing = farms.Get(0);
+                    if (farms.GetExpectedRoundEndTimeUnits(0, now) != now + growthSeconds * GameTimeUnits.PerSecond ||
+                        farms.Get(0) != growing)
+                        return Fail($"{crop} 正常成熟预测未对齐经营 tick 或修改农田");
+
+                    farms.RestartCrop(0, crop);
+                    CalendarSnapshot late = new GameCalendar((uint)(end / GameTimeUnits.PerSecond - 1)).Snapshot;
+                    if (!farms.TryWork(0, late))
+                        return Fail($"{crop} 季末风险被误用作实际播种拒绝");
+                    growing = farms.Get(0);
+                    if (farms.GetExpectedRoundEndTimeUnits(0, end - GameTimeUnits.PerSecond) != end ||
+                        farms.Get(0) != growing || farms.AdvanceGrowth(0, out _, WeatherKind.Sunny))
+                        return Fail($"{crop} 禁生结束预测错误、修改农田或提前收获");
+                    Season forbidden = new GameCalendar((uint)(end / GameTimeUnits.PerSecond)).Snapshot.Season;
+                    if (farms.TryMatureBeforeDisallowedSeason(0, forbidden, out _))
+                        return Fail($"{crop} 完整周期被错误促熟");
+                    farms.ClearDisallowedCrops(forbidden);
+                    if (farms.Get(0).Stage != CropStage.None || farms.Get(0).HasWater ||
+                        farms.GetExpectedRoundEndTimeUnits(0, end) != null ||
+                        farms.AdvanceGrowth(0, out _, WeatherKind.Sunny))
+                        return Fail($"{crop} 禁生清除被预测或执行为收获");
+                }
         return true;
     }
 

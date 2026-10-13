@@ -266,10 +266,10 @@ public partial class CultivationWindow : DraggableWindow
         _selectedEntry = id;
         CultivationEntry entry = _draft.First(e => e.Id == id);
         int end = entry.StartDay + entry.LengthDays;
-        string crossing = entry.StartDay / 84 != (end - 1) / 84 ? " · 跨季同一轮" : "";
-        if (end > 336) crossing += " · 冬春跨年";
+        string crossing = entry.StartDay / GameCalendar.DaysPerSeason != (end - 1) / GameCalendar.DaysPerSeason ? " · 跨季同一轮" : "";
+        if (end > GameCalendar.DaysPerYear) crossing += " · 冬春跨年";
         _entryInfo.Text = $"{FarmGame.GetCrop(entry.Crop).CropName} · 完整 {entry.LengthDays} 天\n" +
-            $"{Date(entry.StartDay)} → {(end >= 336 ? "次年 " : "")}{Date(end % 336)}{crossing}";
+            $"{Date(entry.StartDay)} → {(end >= GameCalendar.DaysPerYear ? "次年 " : "")}{Date(end % GameCalendar.DaysPerYear)}{crossing}";
         RefreshTimeline();
     }
 

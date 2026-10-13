@@ -185,16 +185,7 @@ internal sealed class FarmingSystem
             return null;
         long normalEnd = now + (long)GameTimeUnits.RemainingSeconds(farm.RemainingTimeUnits) *
             GameTimeUnits.PerSecond;
-        const int seasonUnits = 84 * GameTimeUnits.PerDay;
-        long seasonNumber = now / seasonUnits;
-        GrowingSeasons seasons = CropCatalog.Get(farm.CropKind).GrowingSeasons;
-        for (int offset = 1; offset <= 4; offset++)
-        {
-            Season next = (Season)((seasonNumber + offset) % 4);
-            if ((seasons & (GrowingSeasons)(1 << (int)next)) == 0)
-                return Math.Min(normalEnd, (seasonNumber + offset) * seasonUnits);
-        }
-        return normalEnd;
+        return Math.Min(normalEnd, PlantingRules.GetGrowingWindowEndTimeUnits(farm.CropKind, now));
     }
 
     /**

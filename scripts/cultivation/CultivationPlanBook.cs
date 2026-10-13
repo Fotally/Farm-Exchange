@@ -9,8 +9,7 @@ namespace FarmExchange.Cultivation;
 
 internal sealed class CultivationPlanBook
 {
-    private const int DaysPerYear = 336;
-    private const long YearUnits = DaysPerYear * GameTimeUnits.PerDay;
+    private const long YearUnits = GameCalendar.DaysPerYear * GameTimeUnits.PerDay;
     private readonly FarmingSystem _farming;
     private readonly Dictionary<int, Plan> _plans = new();
     private readonly Dictionary<int, Binding> _bindings = new();
@@ -35,27 +34,22 @@ internal sealed class CultivationPlanBook
         {
             if (entry.Id <= 0 || !ids.Add(entry.Id))
                 return new("作物条编号必须为正数且不能重复", risks.AsReadOnly());
-            if (!CropCatalog.IsDefined(entry.Crop) || entry.StartDay < 0 || entry.StartDay >= DaysPerYear)
+            if (!CropCatalog.IsDefined(entry.Crop) || entry.StartDay < 0 || entry.StartDay >= GameCalendar.DaysPerYear)
                 return new("无效作物或年度日期", risks.AsReadOnly());
             CropDefinition crop = CropCatalog.Get(entry.Crop);
-            for (int day = 0; day < crop.GrowthDays; day++)
-            {
-                Season season = GameCalendar.GetDate((uint)(entry.StartDay + day)).Season;
-                if ((crop.GrowingSeasons & (GrowingSeasons)(1 << (int)season)) == 0)
-                {
-                    if (day == 0)
-                        return new($"{crop.CropName}不能从不适宜季节开始安排", risks.AsReadOnly());
-                    risks.Add(entry.Id);
-                    break;
-                }
-            }
+            long start = (long)entry.StartDay * GameTimeUnits.PerDay;
+            long growingEnd = PlantingRules.GetGrowingWindowEndTimeUnits(entry.Crop, start);
+            if (growingEnd == start)
+                return new($"{crop.CropName}不能从不适宜季节开始安排", risks.AsReadOnly());
+            if (start + crop.GrowthDays * GameTimeUnits.PerDay > growingEnd)
+                risks.Add(entry.Id);
         }
         CultivationEntry[] sorted = entries.OrderBy(entry => entry.StartDay).ToArray();
         for (int i = 0; i < sorted.Length; i++)
         {
             CultivationEntry current = sorted[i];
             CultivationEntry next = sorted[(i + 1) % sorted.Length];
-            int nextDay = next.StartDay + (i == sorted.Length - 1 ? DaysPerYear : 0);
+            int nextDay = next.StartDay + (i == sorted.Length - 1 ? GameCalendar.DaysPerYear : 0);
             int gap = nextDay - current.StartDay - current.LengthDays;
             if (gap < 0)
                 return new("作物条重叠（包含冬春年度首尾）", risks.AsReadOnly());
