@@ -127,7 +127,7 @@ public partial class TestWorkerScheduler : Node
         for (int second = 0; second < 206; second++)
             farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
         FarmSnapshot harvested = farms.Get(0);
-        if (farms.TryCompleteWork(sow, spring) || farms.Get(0) != harvested)
+        if (farms.TryCompleteWork(sow, spring) || farms.IsCompletedWorkCurrent(sow) || farms.Get(0) != harvested)
             return Fail("收获新轮被同格旧播种请求启动");
 
         sow = farms.GetWorkNeed(0, spring)!.Value;
@@ -145,12 +145,36 @@ public partial class TestWorkerScheduler : Node
         if (farms.TryCompleteWork(sow, spring))
             return Fail("夹具清空重建后旧凭据重新生效");
 
-        farms.SetCrop(0, CropKind.Corn);
+        sow = farms.GetWorkNeed(0, spring)!.Value;
+        farms.RestartCrop(0, CropKind.Wheat);
+        if (farms.TryCompleteWork(sow, spring) || farms.Get(0).Stage != CropStage.None)
+            return Fail("同种强制重启复活了旧播种请求");
+        sow = farms.GetWorkNeed(0, spring)!.Value;
+        farms.TryCompleteWork(sow, spring);
+        water = farms.GetWorkNeed(0, spring)!.Value;
+        farms.RestartCrop(0, CropKind.Wheat);
+        if (farms.TryCompleteWork(water, spring) || farms.IsCompletedWorkCurrent(sow) ||
+            farms.Get(0).Stage != CropStage.None)
+            return Fail("同种强制重启接受旧供水请求或保留了旧成功播种");
+
         farms.TryWork(0, spring);
+        water = farms.GetWorkNeed(0, spring)!.Value;
+        farms.SetCrop(0, CropKind.Corn);
+        if (farms.TryCompleteWork(water, spring) || farms.Get(0).Stage != CropStage.None)
+            return Fail("异种切换接受了旧供水请求");
+
+        farms.TryWork(0, spring);
+        water = farms.GetWorkNeed(0, spring)!.Value;
+        farms.Remove(0);
+        farms.Place(0, CropKind.Corn);
+        if (farms.TryCompleteWork(water, spring) || farms.Get(0).Stage != CropStage.None)
+            return Fail("同格同种重建接受了旧供水请求");
+        sow = farms.GetWorkNeed(0, spring)!.Value;
+        farms.TryCompleteWork(sow, spring);
         water = farms.GetWorkNeed(0, spring)!.Value;
         farms.ClearDisallowedCrops(Season.Autumn);
         FarmSnapshot cleared = farms.Get(0);
-        if (farms.TryCompleteWork(water, spring) || farms.Get(0) != cleared)
+        if (farms.TryCompleteWork(water, spring) || farms.IsCompletedWorkCurrent(sow) || farms.Get(0) != cleared)
             return Fail("越季清理后旧供水动作改变了空田");
         return true;
     }
