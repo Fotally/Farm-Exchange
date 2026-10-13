@@ -145,6 +145,10 @@ public partial class TestRoadMap : Node
         if (map.ChunkRedrawCount != beforeRedraws)
             return Fail("设施纹理变化不应重建草地/道路地面块");
         int builtRedraws = map.ChunkRedrawCount;
+        bool graphical = DisplayServer.GetName() != "headless";
+        map.ClearSelection();
+        await LayoutFrames(parent);
+        Image? unselected = graphical ? parent.GetViewport().GetTexture().GetImage() : null;
         Vector2I selected = new(-1, -1);
         map.SelectionChanged += cell => selected = cell;
         foreach (var space in new[] { game.GetBuildingSpace(farm)!, game.GetBuildingSpace(processor)! })
@@ -152,14 +156,23 @@ public partial class TestRoadMap : Node
             {
                 Vector2I child = space.AnchorCell + offset;
                 map.SelectAtScreenPosition(ScreenCenter(map, child));
+                await LayoutFrames(parent);
                 if (selected != child || game.GetBuildingSpace(selected) != space)
                     return Fail("平移后的任一生产子格未关联同一整座设施");
+                if (map.ChunkRedrawCount != builtRedraws)
+                    return Fail("任一生产子格的选框重建了地图块");
+                if (unselected != null)
+                {
+                    Image image = parent.GetViewport().GetTexture().GetImage();
+                    if (!HasGoldenOutline(image, map, space.AnchorCell, 3, 3) ||
+                        !HasUnchangedInterior(image, unselected, map, space.AnchorCell))
+                        return Fail($"选择子格{child}未绘制完整外围，或金框覆盖了占地内部边");
+                }
             }
         map.SelectAtScreenPosition(ScreenCenter(map, farm + new Vector2I(2, 2)));
         await LayoutFrames(parent);
         if (map.ChunkRedrawCount != builtRedraws)
             return Fail("多格设施选框重建了地图块");
-        bool graphical = DisplayServer.GetName() != "headless";
         if (graphical)
         {
             map.ClearSelection();
@@ -265,6 +278,27 @@ public partial class TestRoadMap : Node
                 Color pixel = image.GetPixel(Mathf.RoundToInt(screen.X), Mathf.RoundToInt(screen.Y));
                 if (pixel.R <= pixel.G + 0.04f || pixel.G <= pixel.B + 0.1f)
                     return false;
+            }
+        return true;
+    }
+
+    private static bool HasUnchangedInterior(Image image, Image unselected, WorldMap map, Vector2I anchorCell)
+    {
+        for (int row = 0; row < 3; row++)
+            for (int col = 0; col < 3; col++)
+            {
+                Vector2[] corners = MapCoordinates.GridRectangleOutline(anchorCell + new Vector2I(col, row), 1, 1);
+                // 内部边中点远离外围线帽；比较未选中的真实底图，避免将原图颜色误判为金框。
+                foreach (int side in new[] { 1, 2 })
+                {
+                    if (side == 1 && col == 2 || side == 2 && row == 2) continue;
+                    Vector2 screen = map.GetGlobalTransformWithCanvas() *
+                        corners[side].Lerp(corners[side + 1], .5f);
+                    int x = Mathf.RoundToInt(screen.X);
+                    int y = Mathf.RoundToInt(screen.Y);
+                    if (!image.GetPixel(x, y).IsEqualApprox(unselected.GetPixel(x, y)))
+                        return false;
+                }
             }
         return true;
     }

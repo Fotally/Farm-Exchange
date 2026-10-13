@@ -2,6 +2,7 @@ using Godot;
 using System.Collections.Generic;
 using System.Linq;
 using FarmExchange.Gameplay;
+using FarmExchange.Land;
 using FarmExchange.World;
 
 public partial class TestWorldMap : Node
@@ -77,17 +78,23 @@ public partial class TestWorldMap : Node
             GD.PushError("基础格、3×3设施尺寸或地图边缘错误");
             return false;
         }
-        return CheckPreviewEdges();
+        return CheckFootprintEdges();
     }
 
-    private static bool CheckPreviewEdges()
+    private static bool CheckFootprintEdges()
     {
+        var anchor = new Vector2I(7, 382);
+        foreach (BuildingKind building in new[] { BuildingKind.Farm, BuildingKind.Processor, BuildingKind.Road })
+        {
+            int size = building == BuildingKind.Road ? 1 : 3;
+            if (!CheckOuterEdges(anchor, BuildingFootprint.Get(building).Offsets, size, size))
+                return false;
+        }
         // 使用当前规格之外的 2×4 占地验证外围几何，没有新增可建建筑类型。
         var offsets = new HashSet<Vector2I>();
         for (int row = 0; row < 4; row++)
             for (int col = 0; col < 2; col++)
                 offsets.Add(new Vector2I(col, row));
-        var anchor = new Vector2I(7, 382);
         var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
         Vector2I conflict = anchor + new Vector2I(0, 1);
         if (!game.TryPlace(conflict, BuildingKind.Road, default).Success)
@@ -104,22 +111,34 @@ public partial class TestWorldMap : Node
             GD.PushError("2×4 占地的覆盖、数量或逐格冲突/越界反馈未读取实际偏移");
             return false;
         }
+        return CheckOuterEdges(anchor, offsets.ToArray(), 2, 4);
+    }
+
+    private static bool CheckOuterEdges(Vector2I anchor, IReadOnlyList<Vector2I> footprintOffsets, int columns, int rows)
+    {
+        var offsets = new HashSet<Vector2I>(footprintOffsets);
         var edges = new HashSet<(Vector2, Vector2)>();
-        foreach (Vector2I offset in offsets)
+        foreach (Vector2I offset in footprintOffsets)
             foreach (var edge in PlacementPreviewGeometry.GetCellOuterEdges(anchor, offset, offsets))
                 if (!edges.Add(edge))
                 {
-                    GD.PushError("不同占地规格的预览外围出现重复边");
+                    GD.PushError($"{columns}×{rows} 占地外围出现重复边");
                     return false;
                 }
-        Vector2[] outline = MapCoordinates.GridRectangleOutline(anchor, 2, 4);
-        if (edges.Count != 12)
+        Vector2[] outline = MapCoordinates.GridRectangleOutline(anchor, columns, rows);
+        int expectedEdges = 2 * (columns + rows);
+        if (edges.Count != expectedEdges)
         {
-            GD.PushError("2×4 占地外围未从实际偏移生成12条外边");
+            GD.PushError($"{columns}×{rows} 占地外围未从实际偏移生成{expectedEdges}条外边");
             return false;
         }
         foreach (var (start, end) in edges)
         {
+            if (!Mathf.IsEqualApprox(start.DistanceTo(end), new Vector2(32, 16).Length()))
+            {
+                GD.PushError($"{columns}×{rows} 占地外围出现非基础格边长的线段");
+                return false;
+            }
             bool onOuterEdge = false;
             for (int side = 0; side < outline.Length; side++)
             {
@@ -131,7 +150,7 @@ public partial class TestWorldMap : Node
             }
             if (!onOuterEdge)
             {
-                GD.PushError("预览外围绘制了内部边或限制了越界边的位置");
+                GD.PushError($"{columns}×{rows} 占地外围绘制了内部边或限制了越界边的位置");
                 return false;
             }
         }
