@@ -25,6 +25,7 @@
 - [FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)、[推进顺序](architecture/game-state/farm-game/implementation-tick-order.md)及[等价批量实现](architecture/game-state/farm-game/implementation-batched-simulation.md)：单tick和批量共用相位，平静区间直接累计，真实事件提供稳定检查点。
 - [CropCatalog 接口](architecture/farming/crop-catalog/interface-crop-catalog.md)、[Inventory 接口](architecture/inventory/inventory/interface-inventory.md)与[Wallet 接口](architecture/economy/wallet/interface-wallet.md)：作物定义、分类库存和余额的唯一拥有者。
 - [LandOccupancy 接口](architecture/land/land-occupancy/interface-land-occupancy.md)、[PlacementRules 接口](architecture/land/placement-rules/interface-placement-rules.md)、[FarmingSystem 接口](architecture/farming/farming-system/interface-farming-system.md)、[播种与适季时间规则接口](architecture/farming/planting-rules/interface-planting-rules.md)、[ProcessingSystem 接口](architecture/processing/processing-system/interface-processing-system.md)和[WorkerScheduler 接口](architecture/workers/worker-scheduler/interface-worker-scheduler.md)：地块占用、放置与播种检查、生产状态和三人工人调度。
+- [农田工作身份实现](architecture/farming/farming-system/implementation-work-identity-proposal.md)：本轮与未来播种许可分离，同轮浇水和成功动作保持、真正换轮失效。
 - [内部换季成熟实现](architecture/farming/farming-system/implementation-season-maturity.md)：禁生边界的精确比较、本轮结束预测、共同收获终结与原入库路径。
 - [耕作表接口](architecture/cultivation/interface-cultivation-plan-book.md)及[年度事件实现](architecture/cultivation/implementation-annual-events.md)：共享配置、独立草稿排程与完整保存检查、生命周期条编号、整表删除及引用解除、逐田引用与预备缓存、年度环绕、休耕缓冲及逐轮执行重验。
 - [耕作表窗口接口](architecture/ui/cultivation-window/interface-cultivation-window.md)及[年度时间图实现](architecture/ui/cultivation-window/implementation-annual-timeline.md)：草稿、共享应用、整条居中拖动、跨季片段与候选完整排程预检；可读条内信息及短片段悬浮提示。
@@ -52,6 +53,7 @@
 - [道路详情接口](architecture/ui/road-details-panel/interface-road-details-panel.md)：固定用途说明与移除意图，不读取作物或加工状态。
 - [统一 UI 倍率接口](architecture/ui/ui-scaling/interface-ui-scaling.md)：按原始排版独立设置整体与字体倍率、动态继承及1080P固定像素策略。
 - [原型图标](architecture/ui/ui-icons/interface-ui-icons.md)与[设施缩略图](architecture/ui/facility-preview/interface-facility-preview.md)：复用主稿SVG并展示实际快照锚点，保持世界素材。
+- [镜头编辑输入实现](architecture/world/camera-controller/implementation-editing-input-proposal.md)：真实编辑焦点集中阻断键盘平移，场景树处理帧回归及退出编辑后的恢复。
 - [NPC 角色场景接口](architecture/characters/npc-character/interface-npc-character.md)及[独立预览操作](architecture/ui/npc-preview/interface-npc-preview.md)：角色动画、移动和切换图集。
 
 列出全部接口文档：`rg --files docs/architecture -g 'interface-*.md'`。新增模块时按模块路径添加具名接口文档；实现细节另写 `implementation-` 前缀文件。
@@ -61,6 +63,7 @@
 - [系统规划](project/roadmap.md)与[后续功能计划](project/deferred-features-plan.md)：当前范围、未确认事项及后续入口。
 - [UI视觉基准](project/ui-visual-prototype.md)：已采用的像素田园布局、1080P和固定倍率参考。
 - [构建与验收](project/build-and-validation.md)、[.NET 10 目标框架、SDK 与 CI](project/continuous-integration.md)、[测试方法](project/testing.md)、[手工游玩验收](project/manual-playthrough.md)。
+- [Windows 分发与性能证据实现](project/validation-artifacts-proposal.md)：CI／发布共用启动及干净 ZIP 检查，性能失败后保留本次已生成的报告和截图。
 - [GitHub协作](project/contribution-workflow.md)、[PR独立审查skill](../.codex/skills/farm-exchange-review-pr/SKILL.md)、[议题模板](../.github/ISSUE_TEMPLATE/)及[模板来源](research/issue-template-sources.md)：提交PR后先询问是否审查，明确同意才委派。
 - [素材管理](project/asset-organization.md)、[素材来源](project/asset-sources.md)、[清亮v2基准](research/bright-complete-v2.md)。
 - [设施朝向实施范围](project/facility-orientation-proposal.md)：仅建前旋转、每座q0起始、四向资源与随机装饰；道路连接规则由 [#143](https://github.com/Fotally/Farm-Exchange/issues/143) 跟踪。
