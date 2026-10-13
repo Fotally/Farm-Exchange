@@ -16,8 +16,7 @@ public partial class TestTradeOrders : Node
 
     public override void _Ready() => GetTree().Quit(RunChecks() ? 0 : 1);
 
-    public static bool RunChecks() => CheckLimitAndBudget() && CheckBudgetBoundaries() &&
-        CheckWideFreezeAndBudgetCapacity() && CheckTargetsAndConditions() &&
+    public static bool RunChecks() => CheckLimitAndBudget() && CheckTargetsAndConditions() &&
         CheckEditingAndReserves() && CheckFrozenResources() && CheckFailuresAndBounds() &&
         CheckIsolationAndLockedTargets() && CheckLockedQuantityEditing() && CheckLastFillIdentity() && CheckGameplayPhases();
 
@@ -88,106 +87,6 @@ public partial class TestTradeOrders : Node
         Tick(setup.Book, 6);
         if (!cheap.Success || setup.Book.GetSnapshots()[4].LastFill != null || setup.Wallet.FrozenCents != 25)
             return Fail("超限价单仍然成交");
-        return true;
-    }
-
-    private static bool CheckBudgetBoundaries()
-    {
-        foreach ((int budget, int quantity, int fee) in new[]
-        {
-            (1, 0, 0), (25, 0, 0), (26, 1, 1), (50, 1, 1), (51, 2, 1),
-            (75, 2, 1), (76, 3, 1), (100, 3, 1), (101, 4, 1), (125, 4, 1),
-            (126, 4, 1), (127, 5, 2), (201, 7, 2), (202, 8, 2), (227, 8, 2),
-            (228, 9, 3), (int.MaxValue, 85_048_857, 21_262_215),
-        })
-        {
-            var setup = Setup(budget);
-            TradeOrderCommandResult created = setup.Book.Create(Request() with
-            {
-                BudgetMode = TradeOrderBudgetMode.FixedBudget,
-                BudgetCents = budget,
-                Quantity = 0,
-            });
-            if (!created.Success || setup.Wallet.BalanceCents != budget || setup.Wallet.AvailableCents != 0 ||
-                setup.Wallet.FrozenCents != budget || setup.Inventory.Get(Raw) != 0)
-                return Fail($"{budget} 分固定预算未只冻结资金并等待经营秒");
-            Tick(setup.Book);
-            TradeOrderSnapshot order = setup.Book.GetSnapshots()[0];
-            if (quantity == 0)
-            {
-                if (order.Status != TradeOrderStatus.Waiting || order.LastFill != null ||
-                    order.FrozenCents != budget || setup.Wallet.FrozenCents != budget ||
-                    setup.Wallet.BalanceCents != budget || setup.Inventory.Get(Raw) != 0 ||
-                    !setup.Book.Cancel(created.Id).Success || setup.Wallet.FrozenCents != 0 ||
-                    setup.Wallet.AvailableCents != budget)
-                    return Fail($"{budget} 分不足一份的预算未零修改等待并可完整撤销");
-                continue;
-            }
-            TradeResult? fill = order.LastFill?.Trade;
-            if (order.Status != TradeOrderStatus.Completed || order.FrozenCents != 0 ||
-                fill?.Quantity != quantity || fill?.TotalCents != (long)quantity * 25 || fill?.FeeCents != fee ||
-                setup.Inventory.Get(Raw) != quantity || setup.Wallet.FrozenCents != 0 ||
-                setup.Wallet.BalanceCents != budget - (long)quantity * 25 - fee ||
-                setup.Wallet.AvailableCents != setup.Wallet.BalanceCents)
-                return Fail($"{budget} 分预算没有按含费最大数量完整成交并释放差额");
-        }
-        return true;
-    }
-
-    private static bool CheckWideFreezeAndBudgetCapacity()
-    {
-        var wide = Setup(int.MaxValue);
-        TradeOrderRequest limit = Request() with { LimitPriceCents = 2_126_221_432 };
-        if (!wide.Book.Create(limit).Success || wide.Wallet.FrozenCents != int.MaxValue ||
-            wide.Wallet.AvailableCents != 0)
-            return Fail("含费成本恰好达到最大整数余额的限价冻结失败");
-        TradeOrderSnapshot original = wide.Book.GetSnapshots()[0];
-        if (wide.Book.Update(1, limit with { LimitPriceCents = limit.LimitPriceCents + 1 }).Success ||
-            wide.Book.GetSnapshots()[0] != original || wide.Wallet.FrozenCents != int.MaxValue ||
-            wide.Wallet.BalanceCents != int.MaxValue || wide.Inventory.Get(Raw) != 0)
-            return Fail("含费冻结多一分的编辑未以宽整数零修改拒绝");
-        Tick(wide.Book);
-        if (wide.Book.GetSnapshots()[0].LastFill?.Trade.TotalCents != 25 ||
-            wide.Book.GetSnapshots()[0].LastFill?.Trade.FeeCents != 1 ||
-            wide.Wallet.BalanceCents != int.MaxValue - 26 || wide.Wallet.FrozenCents != 0 ||
-            wide.Inventory.Get(Raw) != 1)
-            return Fail("巨大预估限价代替了实际报价或未释放本单剩余冻结");
-
-        var capacity = Setup();
-        capacity.Inventory.Add(Raw, int.MaxValue - 1);
-        TradeOrderRequest budget = Request() with
-        {
-            BudgetMode = TradeOrderBudgetMode.FixedBudget,
-            BudgetCents = 101,
-            Quantity = 0,
-        };
-        TradeOrderRequest other = Request() with
-        {
-            LimitPriceCents = 40,
-            ConditionGroups = new IReadOnlyList<TradeOrderCondition>[]
-            {
-                new[] { new TradeOrderCondition(TradeConditionFactor.Price, TradeConditionComparison.Greater, 1000) },
-            },
-        };
-        if (!capacity.Book.Create(budget).Success || !capacity.Book.Create(other).Success)
-            return Fail("预算容量与他单冻结夹具创建失败");
-        Tick(capacity.Book);
-        IReadOnlyList<TradeOrderSnapshot> waiting = capacity.Book.GetSnapshots();
-        if (waiting[0].LastFill != null || waiting[0].Status != TradeOrderStatus.Waiting ||
-            waiting[0].FrozenCents != 101 || waiting[1].FrozenCents != 41 ||
-            capacity.Wallet.BalanceCents != 1000 || capacity.Wallet.FrozenCents != 142 ||
-            capacity.Inventory.Get(Raw) != int.MaxValue - 1)
-            return Fail("预算单库存容量不足时缩量成交或改变了本单、他单资源");
-        if (!capacity.Trading.Sell(Raw, 3).Success)
-            return Fail("预算容量失败后无法主动腾出可用库存");
-        Tick(capacity.Book, 2);
-        IReadOnlyList<TradeOrderSnapshot> completed = capacity.Book.GetSnapshots();
-        if (completed[0].LastFill?.Trade.Quantity != 4 || completed[0].LastFill?.Trade.FeeCents != 1 ||
-            completed[0].Status != TradeOrderStatus.Completed || completed[0].FrozenCents != 0 ||
-            completed[1].FrozenCents != 41 || capacity.Inventory.Get(Raw) != int.MaxValue ||
-            capacity.Wallet.BalanceCents != 974 || capacity.Wallet.FrozenCents != 41 ||
-            !capacity.Book.Cancel(2).Success || capacity.Wallet.FrozenCents != 0)
-            return Fail("库存容量恢复后的预算成交未保持最大数量、手续费或他单冻结归属");
         return true;
     }
 

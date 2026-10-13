@@ -204,7 +204,7 @@ internal sealed class TradeOrderBook
             int quantity = request.Frequency == TradeOrderFrequency.Once ? order.LockedQuantity :
                 QuantityFor(request);
             if (request.BudgetMode == TradeOrderBudgetMode.FixedBudget)
-                quantity = _trading.GetOrderBudgetQuantity(request.BudgetCents, price);
+                quantity = BudgetQuantity(request.BudgetCents, price);
             if (reason == null && quantity <= 0)
             {
                 reason = request.BudgetMode == TradeOrderBudgetMode.FixedBudget
@@ -269,8 +269,9 @@ internal sealed class TradeOrderBook
             return "一次委托的目标差额须为正数";
         if (request.Side == TradeOrderSide.Buy)
         {
+            long total = (long)quantity * request.LimitPriceCents;
             long allocation = request.BudgetMode == TradeOrderBudgetMode.FixedBudget
-                ? request.BudgetCents : _trading.EstimateOrderBuyExpenseCents(quantity, request.LimitPriceCents);
+                ? request.BudgetCents : total + (total + 99) / 100;
             long available = (long)_wallet.AvailableCents + (previous?.FrozenCents ?? 0);
             if (allocation > available)
                 return "可用金币不足以冻结委托预算";
@@ -339,6 +340,22 @@ internal sealed class TradeOrderBook
             TradeOrderQuantityMode.SellToTarget => Math.Max(0, stock - request.Quantity),
             _ => throw new ArgumentOutOfRangeException(nameof(request)),
         };
+    }
+
+    private static int BudgetQuantity(int budget, int price)
+    {
+        int low = 0;
+        int high = budget / price;
+        while (low < high)
+        {
+            int middle = low + (int)(((long)high - low + 1) / 2);
+            long total = (long)middle * price;
+            if (total + (total + 99) / 100 <= budget)
+                low = middle;
+            else
+                high = middle - 1;
+        }
+        return low;
     }
 
     private string? UnmetConditions(TradeOrderRequest request, int price, Season season, OrderEvaluationObservation? detail,

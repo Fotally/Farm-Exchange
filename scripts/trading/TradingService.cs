@@ -32,44 +32,6 @@ internal sealed class TradingService
     internal TradeResult Buy(CommodityId commodity, int quantity) => BuyCore(commodity, quantity, 0, false, 0);
 
     /**
-     * <summary>按给定数量和预估单价查询一次委托买入的含费支出，不冻结或修改资源。</summary>
-     * <param name="quantity">已确定的非负整数数量，零返回零支出。</param>
-     * <param name="unitPriceCents">正整数单价，单位为分；限价单传预估最高买价。</param>
-     * <returns>宽整数含费总支出，可超过钱包整数容量。</returns>
-     * <remarks>不读取当前报价或余额；内部调用的非法参数抛参数异常。</remarks>
-     */
-    internal long EstimateOrderBuyExpenseCents(int quantity, int unitPriceCents)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(quantity);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(unitPriceCents);
-        return CalculateAmounts(quantity, unitPriceCents, true).ExpenseCents;
-    }
-
-    /**
-     * <summary>按给定报价查询固定含费预算内可完整买入的最大整数数量。</summary>
-     * <param name="budgetCents">非负总预算，单位为分，包含委托手续费。</param>
-     * <param name="unitPriceCents">执行时正整数报价，单位为分。</param>
-     * <returns>预算内最大数量，不足一份时为零。</returns>
-     * <remarks>不读取或修改资源，不以库存容量或现金保留缩减数量；非法参数抛参数异常。</remarks>
-     */
-    internal int GetOrderBudgetQuantity(int budgetCents, int unitPriceCents)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegative(budgetCents);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(unitPriceCents);
-        int low = 0;
-        int high = budgetCents / unitPriceCents;
-        while (low < high)
-        {
-            int middle = low + (int)(((long)high - low + 1) / 2);
-            if (EstimateOrderBuyExpenseCents(middle, unitPriceCents) <= budgetCents)
-                low = middle;
-            else
-                high = middle - 1;
-        }
-        return low;
-    }
-
-    /**
      * <summary>按执行时报价完整买入委托商品，并收取向上取整到分的 1% 手续费。</summary>
      * <param name="commodity">十四种合法商品之一。</param>
      * <param name="quantity">完整买入数量，须为正整数。</param>
@@ -101,22 +63,24 @@ internal sealed class TradingService
         if (capacityRejected)
             return Failed(TradeFailure.InventoryCapacityExceeded);
         int unitPriceCents = _market.GetQuote(commodity).PriceCents;
-        var amounts = CalculateAmounts(quantity, unitPriceCents, chargeFee);
+        long totalCents = (long)quantity * unitPriceCents;
+        long feeCents = chargeFee ? (totalCents + 99) / 100 : 0;
+        long expenseCents = totalCents + feeCents;
         long availableCents = (long)_wallet.AvailableCents + frozenCents;
-        bool fundsRejected = amounts.ExpenseCents > availableCents;
+        bool fundsRejected = expenseCents > availableCents;
         checks?.Checked(TradeRuleCheck.Funds, !fundsRejected);
         if (fundsRejected)
             return Failed(TradeFailure.InsufficientFunds, unitPriceCents);
-        bool reserveRejected = availableCents - amounts.ExpenseCents < reserveCents;
+        bool reserveRejected = availableCents - expenseCents < reserveCents;
         checks?.Checked(TradeRuleCheck.Reserve, !reserveRejected);
         if (reserveRejected)
             return Failed(TradeFailure.CashReserveNotMet, unitPriceCents);
         checks?.Accepted();
-        _wallet.SpendForOrder((int)amounts.ExpenseCents, frozenCents);
+        _wallet.SpendForOrder((int)expenseCents, frozenCents);
         _inventory.Add(commodity, quantity);
-        return new TradeResult(TradeFailure.None, quantity, amounts.TotalCents)
+        return new TradeResult(TradeFailure.None, quantity, totalCents)
         {
-            FeeCents = amounts.FeeCents,
+            FeeCents = feeCents,
             UnitPriceCents = unitPriceCents,
         };
     }
@@ -151,19 +115,17 @@ internal sealed class TradingService
         if (stockRejected)
             return Failed(TradeFailure.InsufficientStock);
         int unitPriceCents = _market.GetQuote(commodity).PriceCents;
-        var amounts = CalculateAmounts(quantity, unitPriceCents, chargeFee);
-        bool capacityRejected = amounts.IncomeCents > int.MaxValue - _wallet.BalanceCents;
+        long totalCents = (long)quantity * unitPriceCents;
+        long feeCents = chargeFee ? (totalCents + 99) / 100 : 0;
+        long incomeCents = totalCents - feeCents;
+        bool capacityRejected = incomeCents > int.MaxValue - _wallet.BalanceCents;
         checks?.Checked(TradeRuleCheck.Capacity, !capacityRejected);
         if (capacityRejected)
             return Failed(TradeFailure.WalletCapacityExceeded, unitPriceCents);
         checks?.Accepted();
         _inventory.RemoveForOrder(commodity, quantity, frozenQuantity);
-        _wallet.Credit((int)amounts.IncomeCents);
-        return new TradeResult(TradeFailure.None, quantity, amounts.TotalCents)
-        {
-            FeeCents = amounts.FeeCents,
-            UnitPriceCents = unitPriceCents,
-        };
+        _wallet.Credit((int)incomeCents);
+        return new TradeResult(TradeFailure.None, quantity, totalCents) { FeeCents = feeCents, UnitPriceCents = unitPriceCents };
     }
 
     internal TradeResult SellAll(CommodityId commodity)
@@ -223,14 +185,6 @@ internal sealed class TradingService
             _inventory.Remove(new CommodityId(crop.Kind, CommodityKind.Product), quantities[(int)crop.Kind]);
         _wallet.Credit((int)totalCents);
         return new(new TradeResult(TradeFailure.None, sold, totalCents), Array.AsReadOnly(lines));
-    }
-
-    private static (long TotalCents, long FeeCents, long ExpenseCents, long IncomeCents) CalculateAmounts(
-        int quantity, int unitPriceCents, bool chargeFee)
-    {
-        long totalCents = (long)quantity * unitPriceCents;
-        long feeCents = chargeFee ? (totalCents + 99) / 100 : 0;
-        return (totalCents, feeCents, totalCents + feeCents, totalCents - feeCents);
     }
 
     private static TradeResult Failed(TradeFailure failure, int? unitPriceCents = null) =>
