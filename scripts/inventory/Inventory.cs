@@ -67,12 +67,23 @@ internal sealed class Inventory
     internal void AddProduct(CropKind crop, int quantity) =>
         Add(new CommodityId(crop, CommodityKind.Product), quantity);
 
-    internal bool TryTakeRawForProcessing(CropKind crop)
+    /**
+     * <summary>原子领取未冻结且超过底线的匹配原料，不足上限时领取全部可领取量。</summary>
+     * <param name="crop">合法原料作物。</param>
+     * <param name="maximumQuantity">正整数领取上限，由加工模块提供。</param>
+     * <param name="quantity">实际领取量；等待时为零。</param>
+     * <returns>有可领取量时一次扣除成功，否则库存和冻结零修改。</returns>
+     */
+    internal bool TryTakeRawForProcessing(CropKind crop, int maximumQuantity, out int quantity)
     {
         int index = IndexOf(crop);
-        if (GetProcessingAvailability(crop) != RawProcessingAvailability.Available)
+        if (maximumQuantity <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumQuantity));
+        quantity = Math.Min(maximumQuantity,
+            Math.Max(0, GetAvailable(new CommodityId(crop, CommodityKind.Raw)) - _rawReserve[index]));
+        if (quantity == 0)
             return false;
-        _rawStock[index]--;
+        _rawStock[index] -= quantity;
         return true;
     }
 

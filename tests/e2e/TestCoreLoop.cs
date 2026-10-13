@@ -101,7 +101,7 @@ public partial class TestCoreLoop : Node
                 main.AdvanceSimulation(1);
                 if (!detail.Visible || detail.Position != new Vector2(1200, 170) ||
                     !ContainsVisibleText(detail, cell == road ? "道路" : cell == farm.AnchorCell ? "生长周期" :
-                        cell == processor.AnchorCell ? "加工周期" : "空地"))
+                        cell == processor.AnchorCell ? "每批加工" : "空地"))
                     return Fail("关闭目录后未保留原选择类型或窗口位置");
             }
             return true;
@@ -637,7 +637,7 @@ public partial class TestCoreLoop : Node
         Button remove = Find<Button>(roadDetails, "RemoveRoadButton");
         if (!detail.Visible || !roadDetails.IsVisibleInTree() || !remove.IsVisibleInTree() ||
             !ContainsVisibleText(detail, "当前仅用于布局和外观") || !ContainsVisibleText(detail, "不退还建造费") ||
-            ContainsVisibleText(detail, "生长周期") || ContainsVisibleText(detail, "加工周期") ||
+            ContainsVisibleText(detail, "生长周期") || ContainsVisibleText(detail, "每批加工") ||
             ContainsVisibleText(detail, "库存") || ContainsVisibleText(detail, "售价"))
             return Fail("道路详情误读作物/加工字段或没有独立拆除说明");
         main.AdvanceSimulation(1);
@@ -686,7 +686,7 @@ public partial class TestCoreLoop : Node
 
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(90, 90));
         if (!detail.Visible || ContainsVisibleText(detail, "生长周期") ||
-            ContainsVisibleText(detail, "加工周期") || ContainsVisibleText(detail, "库存"))
+            ContainsVisibleText(detail, "每批加工") || ContainsVisibleText(detail, "库存"))
             return Fail("空地详情显示了生产或库存信息");
 
         build.EmitSignal(Button.SignalName.Pressed);
@@ -785,7 +785,9 @@ public partial class TestCoreLoop : Node
         if (main.Game.GetPlot(processor).Building != BuildingKind.Processor ||
             main.Game.MoneyCents != 3000 || cancel.Visible ||
             !ContainsVisibleText(detail, "等待萝卜") ||
-            !ContainsVisibleText(detail, "加工周期：投入原料后 0.5 天完成") ||
+            !ContainsVisibleText(detail, "每批加工 0.5 天，少量批次同样耗时。") ||
+            !ContainsVisibleText(detail, "每批最多 9 份，投入与产出 1:1。") ||
+            main.Game.GetProcessorDetails(processor).BatchQuantity != 0 ||
             Find<Label>(detail, "ProcessorProductPrice").Text != "0.50" ||
             Find<Label>(detail, "ProcessorProductStock").Text != "0" ||
             ContainsVisibleText(detail, "生长周期", labelsOnly: true) ||
@@ -812,15 +814,21 @@ public partial class TestCoreLoop : Node
         Find<Button>(buildWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);
 
         bool sawProcessing = false;
+        int radishHarvested = 0;
         for (int i = 0; i < 250; i++)
         {
             main.AdvanceSimulation(1);
             sawProcessing |= ContainsVisibleText(detail, "加工中");
+            foreach (ProductionResult result in main.Game.GetPresentationResults())
+                if (result.Kind == ProductionResultKind.Harvest && result.CropKind == CropKind.Radish)
+                    radishHarvested += result.Quantity;
         }
         int radishProducts = main.Game.GetProductStock(CropKind.Radish);
         string radishProductPrice = (main.Game.GetProductPriceCents(CropKind.Radish) / 100m)
             .ToString("0.00", CultureInfo.InvariantCulture);
         if (!sawProcessing || radishProducts == 0 ||
+            main.Game.GetRawStock(CropKind.Radish) + radishProducts +
+                main.Game.GetProcessorDetails(processor).BatchQuantity != radishHarvested ||
             Find<Label>(detail, "ProcessorProductStock").Text != radishProducts.ToString(CultureInfo.InvariantCulture) ||
             Find<Label>(detail, "ProcessorProductPrice").Text != radishProductPrice)
             return Fail("萝卜加工场地没有显示随经营更新的售价与库存");

@@ -91,7 +91,11 @@ public partial class TestBatchedSimulation : Node
             FarmGame reference = ProductionGame(993, start, CropKind.Potato);
             FarmGame batched = ProductionGame(993, start, CropKind.Potato);
             SimulationAdvanceResult result = CompareAdvance(reference, batched, 4320 - start);
-            Require(start == 3669 ? result.Harvested >= 48 && result.Harvested <= 72 && result.Harvested == reference.GetRawStock(CropKind.Potato) + 2 : result.Harvested == 0, "禁生严格阈值不一致");
+            int invested = reference.GetBuildingSpaces().Where(space => space.Building == BuildingKind.Processor)
+                .Sum(space => reference.GetProcessorDetails(space.AnchorCell).BatchQuantity);
+            Require(start == 3669 ? result.Harvested >= 48 && result.Harvested <= 72 && invested == 18 &&
+                result.Harvested == reference.GetRawStock(CropKind.Potato) + invested : result.Harvested == 0 && invested == 0,
+                "禁生严格阈值或促熟收获与两坊实际投入守恒不一致");
             CompareAdvance(reference, batched, 40);
         }
     }
@@ -303,8 +307,8 @@ public partial class TestBatchedSimulation : Node
             Require(batched.CreateTradeOrder(sell).Success, "稳定检查点建卖单失败");
             return false;
         });
-        Require(first.AdvancedTicks == 53 && first.Produced == 2 && first.StoppedAtCheckpoint,
-            "产品第一次达到目标时没有精确停止（每批26秒，首次领取1秒）");
+        Require(first.AdvancedTicks == 27 && first.Produced == 4 && first.StoppedAtCheckpoint,
+            "产品第一次达到目标时没有精确停止（4份一批26秒，首次领取1秒）");
         for (uint i = 0; i < first.AdvancedTicks; i++)
             reference.AdvanceTick();
         Require(reference.CreateTradeOrder(sell).Success, "参考局建卖单失败");
@@ -412,6 +416,9 @@ public partial class TestBatchedSimulation : Node
         foreach (var space in spaces)
         {
             Require(reference.GetPlot(space.AnchorCell) == batched.GetPlot(space.AnchorCell), "设施生产状态不同");
+            if (space.Building == BuildingKind.Processor)
+                Require(reference.GetProcessorDetails(space.AnchorCell) == batched.GetProcessorDetails(space.AnchorCell),
+                    "加工锁量或详情不同");
             if (space.Building == BuildingKind.Farm)
                 Require(reference.GetFarmCultivation(space.AnchorCell) == batched.GetFarmCultivation(space.AnchorCell),
                     "计划引用或预备安排不同");

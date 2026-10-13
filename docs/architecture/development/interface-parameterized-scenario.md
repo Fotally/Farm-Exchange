@@ -31,7 +31,7 @@
 
 每项检查独立记录 `Passed`、`Failed`、`InsufficientEvidence` 或 `NotExecuted`。独立局所有必需检查通过才能给出 `Passed`；现场缺少批次凭据及完整资金历史，生产和资金归因明确记录证据不足，完成不会给出严格通过。
 
-报告包含配置引用、`configurationValidation=Passed`、实际种子、真实初始化命令、同步操作前后快照、真实区间及产出汇总、请求/实际倍率与来源、暂停观察、等待tick数、首次观察本单成交的tick、检查结果及终止快照。真实区间不冒充每秒都观察过；`fillFirstObservedTicks` 不是订单模块提供的成交时间戳。最终快照在停止检查点捕获，之后现场变化不修改报告证据。
+报告包含配置引用、`configurationValidation=Passed`、实际种子、真实初始化命令、同步操作前后快照、真实区间及产出汇总、请求/实际倍率与来源、暂停观察、等待tick数、首次观察本单成交的tick、检查结果及终止快照。每个 `ScenarioInterval` 增加稳定检查点的目标 `Processor` 快照，其 `BatchQuantity` 是当时真实锁量；命令前后、基准及终止 `ScenarioProcessor` 同样含此字段，空闲或目标不再为场地时为0。`Produced` 与区间 `Result.Produced` 继续表示实际份数，不能按完工批次数累加。报告 schema/flow 仍为1：这些是新增观察字段，既有字段含义、配置格式和流程决策不变；读取方应允许额外成员。真实区间不冒充每秒都观察过；`fillFirstObservedTicks` 不是订单模块提供的成交时间戳。最终快照在停止检查点捕获，之后现场变化不修改报告证据。
 
 报告位置及操作说明见[参数化测试使用说明](../../project/parameterized-tests-usage.md)，内部顺序见[固定流程实现](implementation-buy-process-sell.md)。
 

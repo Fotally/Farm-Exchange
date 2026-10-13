@@ -41,7 +41,7 @@ public readonly record struct PlotSnapshot(
 public readonly record struct FarmDetailsSnapshot(
     CropDefinition Crop, FarmStatus Status, int RawPriceCents, int RawStock, WeatherKind CurrentWeather = WeatherKind.Sunny);
 public readonly record struct ProcessorDetailsSnapshot(
-    CropDefinition Crop, ProcessorStatus Status, int ProductPriceCents, int ProductStock);
+    CropDefinition Crop, ProcessorStatus Status, int ProductPriceCents, int ProductStock, int BatchQuantity);
 public readonly record struct TickResult(int Harvested, int Produced, bool WorkerActed, bool DayAdvanced);
 public readonly record struct SaleResult(
     int Quantity, int RevenueCents, TradeFailure Failure = TradeFailure.None)
@@ -326,9 +326,10 @@ public sealed class FarmGame : IDisposable
         if (plot.Building != BuildingKind.Processor)
             throw new InvalidOperationException("该土地没有加工场地");
         CropDefinition crop = GetCrop(plot.CropKind);
-        ProcessorStatus status = _processing.GetStatus(_occupancy.ResolveAnchorIndex(IndexOf(cell)), _inventory);
+        int index = _occupancy.ResolveAnchorIndex(IndexOf(cell));
+        ProcessorStatus status = _processing.GetStatus(index, _inventory);
         return new ProcessorDetailsSnapshot(crop, status, GetProductPriceCents(crop.Kind),
-            GetProductStock(crop.Kind));
+            GetProductStock(crop.Kind), _processing.Get(index).BatchQuantity);
     }
 
     internal void FillWorldForBenchmark()
@@ -1053,13 +1054,13 @@ public sealed class FarmGame : IDisposable
                 observation?.EnterPhase(SimulationLogPhase.Processing);
                 timing?.BeginStage();
                 var before = _log?.ProductionDiagnostics.BeginProcessor(i, _processing, _inventory);
-                if (_processing.Advance(i, out CropKind productCrop))
+                if (_processing.Advance(i, _inventory, out CropKind productCrop, out int quantity))
                 {
-                    _inventory.AddProduct(productCrop, 1);
-                    _log?.Production?.Produced(productCrop);
-                    _log?.ProductionDiagnostics.Processed(i, before, _processing, _inventory, 1);
-                    RecordPresentationResult(i, productCrop, ProductionResultKind.Product, 1);
-                    produced++;
+                    _inventory.AddProduct(productCrop, quantity);
+                    _log?.Production?.Produced(productCrop, quantity);
+                    _log?.ProductionDiagnostics.Processed(i, before, _processing, _inventory, quantity);
+                    RecordPresentationResult(i, productCrop, ProductionResultKind.Product, quantity);
+                    produced += quantity;
                 }
                 timing?.EndStage("Processing");
             }
@@ -1396,7 +1397,10 @@ public sealed class FarmGame : IDisposable
     {
         foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
             if (space.Building == BuildingKind.Processor && _processing.TryStart(space.AnchorIndex, _inventory))
-                _log?.Production?.Consumed(_processing.Get(space.AnchorIndex).CropKind);
+            {
+                ProcessorSnapshot processor = _processing.Get(space.AnchorIndex);
+                _log?.Production?.Consumed(processor.CropKind, processor.BatchQuantity);
+            }
     }
 
     private void PlaceFarm(int index, CropKind crop, BuildingOrientation orientation)

@@ -175,7 +175,7 @@ public sealed class BuyProcessSellScenario
         uint advanced = checkpoint.ElapsedSeconds - _lastTicks;
         if (advanced == 0)
             return true;
-        Report.Intervals.Add(new ScenarioInterval(_lastTicks, checkpoint.ElapsedSeconds, advanced, checkpoint.IsEvent, checkpoint.Result));
+        Report.Intervals.Add(new ScenarioInterval(_lastTicks, checkpoint.ElapsedSeconds, advanced, checkpoint.IsEvent, checkpoint.Result, CaptureProcessor()));
         _lastTicks = checkpoint.ElapsedSeconds;
         Report.AdvancedTicks += advanced;
         Report.Produced += checkpoint.Result.Produced;
@@ -388,17 +388,23 @@ public sealed class BuyProcessSellScenario
 
     private ScenarioSnapshot Capture()
     {
-        Godot.Vector2I cell = _configuration.ProcessorAnchor;
-        PlotSnapshot plot = Game.TryGetPlot(cell, out PlotSnapshot value) == LandFailure.None ? value : default;
-        ProcessorStatus? status = plot.Building == BuildingKind.Processor ? Game.GetProcessorDetails(cell).Status : null;
         return new ScenarioSnapshot(Game.Calendar, Game.MoneyCents, Game.AvailableMoneyCents, Game.FrozenMoneyCents,
             Stock(_configuration.RawCommodity), Stock(_configuration.ProductCommodity), Game.GetRawReserve(_configuration.RawCommodity.Crop),
-            new ScenarioProcessor(cell.X, cell.Y, plot.Building, plot.CropKind, plot.RemainingSeconds, status),
+            CaptureProcessor(),
             Game.GetBuildingSpaces().Count, Game.GetQuote(_configuration.RawCommodity), Game.GetQuote(_configuration.ProductCommodity), Game.GetTradeOrders());
     }
 
     private ScenarioStock Stock(CommodityId commodity) => new(Game.GetStock(commodity), Game.GetAvailableStock(commodity), Game.GetFrozenStock(commodity));
     private static bool StockRelation(ScenarioStock stock) => stock.Total == (long)stock.Available + stock.Frozen;
+    private ScenarioProcessor CaptureProcessor()
+    {
+        Godot.Vector2I cell = _configuration.ProcessorAnchor;
+        PlotSnapshot plot = Game.TryGetPlot(cell, out PlotSnapshot value) == LandFailure.None ? value : default;
+        ProcessorDetailsSnapshot? processor = plot.Building == BuildingKind.Processor ? Game.GetProcessorDetails(cell) : null;
+        return new ScenarioProcessor(cell.X, cell.Y, plot.Building, plot.CropKind, plot.RemainingSeconds,
+            processor?.Status, processor?.BatchQuantity ?? 0);
+    }
+
     private string StageText() => Stage switch
     {
         ScenarioStage.Preparing => "准备",

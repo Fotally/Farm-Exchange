@@ -312,9 +312,9 @@ public partial class TestTradeOrders : Node
         setup.Book.Create(Request(TradeOrderSide.Sell, quantity: 2) with { Commodity = Product });
         if (!rawSell.Success || setup.Inventory.Get(Raw) != 10 || setup.Inventory.GetFrozen(Raw) != 8 ||
             setup.Inventory.GetAvailable(Raw) != 2 || setup.Trading.Sell(Raw, 3).Success ||
-            setup.Inventory.TryTakeRawForProcessing(CropKind.Radish) == false ||
-            setup.Inventory.TryTakeRawForProcessing(CropKind.Radish) == false ||
-            setup.Inventory.TryTakeRawForProcessing(CropKind.Radish))
+            setup.Inventory.TryTakeRawForProcessing(CropKind.Radish, 1, out _) == false ||
+            setup.Inventory.TryTakeRawForProcessing(CropKind.Radish, 1, out _) == false ||
+            setup.Inventory.TryTakeRawForProcessing(CropKind.Radish, 1, out _))
             return Fail("冻结库存被手动出售或加工消耗，或可用库存不能正常领取");
         if (setup.Trading.SellAll(Raw).Quantity != 0 || setup.Trading.SellAllProducts().Quantity != 1 ||
             setup.Inventory.Get(Product) != 2 || setup.Inventory.GetFrozen(Product) != 2)
@@ -424,7 +424,9 @@ public partial class TestTradeOrders : Node
             return Fail("冻结原料被全场加工领取或手动全售使用");
         game.CancelTradeOrder(3);
         game.AdvanceTick();
-        if (game.GetRawStock(CropKind.Radish) != 1 || game.GetPlot(new Vector2I(0, 0)).RemainingSeconds != 26)
+        if (game.GetRawStock(CropKind.Radish) != 0 || game.GetFrozenStock(Raw) != 0 ||
+            game.GetPlot(new Vector2I(0, 0)).RemainingSeconds != 26 ||
+            game.GetProcessorDetails(new Vector2I(0, 0)).BatchQuantity != 2)
             return Fail("取消后的原料未恢复正常加工领取");
         return true;
     }

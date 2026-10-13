@@ -6,7 +6,7 @@
 
 1. 读取本秒开始的地区天气，按空间实例锚点索引顺序，仅对九格判定为降雨的农田各一次调用 `FarmingSystem.SupplyWater`；暂停时不应用降雨。
 2. 按空间实例锚点索引顺序各一次推进 `FarmingSystem` 的生长和 `ProcessingSystem` 的在加工批次；到期结果由 `FarmGame` 交给 `Inventory` 入库。收获清除本轮水分，本秒降雨不立即补水。成熟田入库后先通知计划 Module 的 `Harvested`：计划田先关闭空田播种并保存目标，防止本条复种或下一条借旧日历提前播种；手动预备仍即时接续目标。若本步将跨季，对新季禁生的生长中作物按精确剩余单位执行内部促熟；成功仍走同一 `CollectHarvest` 入库和计划通知。
-3. 按 `Y * 384 + X` 递增顺序让 `ProcessingSystem` 的空闲场地，通过 `Inventory.TryTakeRawForProcessing` 领取超过该种当前底线的一份原料；后一个场地读取前一个扣减后的数量。
+3. 按 `Y * 384 + X` 递增顺序让 `ProcessingSystem` 的空闲场地，通过 `Inventory.TryTakeRawForProcessing` 一次领取扣除冻结后超过该种当前底线的最多9份匹配原料，并由加工 Module 锁定本批实际量；后一个场地读取前一个扣减后的数量。
 4. 调用一次 `WorkerScheduler.AdvanceOneSecond`，按固定编号让三人各推进完整一秒；内部先统一释放失效认领，再选择有效且未认领的农田并推进移动或工作。实际工作经 `FarmingSystem.TryCompleteWork` 重验目标凭据、动作需求与播种条件；到田的移动秒不同时播种，干田播种与原地接续浇水分别占完整一秒。湿田播种后直接生长；`WorkerActed` 聚合本秒是否至少一人真正完成动作，移动不计入。工人完成后立即调用计划 Module 的 `RecordSownCrops`，仅登记实际播种凭据，在下一个日历/换季清理相位前保留本步发生的 Sow；不查询预备安排或执行日期事件。
 5. `GameCalendar` 累计一秒，并同步当前天气快照，天气变化不回溯本秒生长；跨季时让 `FarmingSystem.ClearDisallowedCrops` 按新季节一次清理剩余禁生的待水或生长中作物及水分、进度，保留农田与选种；跨入新日时交 `MarketQuotes.Advance` 公布前日消息或执行本次正式报价，非报价日价格保持。随后按新累计精确单位调用 `CultivationPlanBook.Synchronize`，执行到期日期事件、发现供水确定的完成日期或换季中断并更新相关预备缓存，不按每日重新扫描表。日历进入新日与行情实际报价分别具有独立语义。
 6. 交 `TradeOrderBook` 按原建单顺序各检查一次活动委托，使用刚更新的正式价格与日历；同单多个条件组成立不重复执行，后单读取前单成交后的资源。持续目标数量按当时总库存计算，一次目标用建单时锁定数量；资源不足或条件未满足保持等待，失败零修改。一次成交消费该单冻结资源并释放差额，持续策略不冻结。
@@ -46,3 +46,8 @@
 单 tick 与批量入口另用短生命周期的 `SimulationLogOperation` 观察原异常，在每个实际步骤前更新阶段。容量检查、最近事件查询、平静累计、事件准备和检查点各有真实 Phase，六个经营阶段保持上表顺序，平静累计后的日历和行情标为 Calendar。此标记不依赖详细计时开启。catch 只交付原异常后 `throw;`，原生产结束、诊断轮询和批次计时 finally 顺序保持；Dispose 只清理日志传播关联，不推断成功或回滚已发生的效果。内部命令异常已记录时不重复发出推进异常，详见[共用异常观察](../../logging/implementation-exception-observation.md)。
 
 农田每轮开始生长时独立锁定6～9倍浮点基础量；生长相位按本秒整田天气累计实际消耗的精确单位，末秒只计剩余量。正常及促熟共用 CropHarvestResult，CollectHarvest 按 Quantity 入库、记日志及表现，不能用 CropDefinition.HarvestQuantity 基准代替真实收成。详见[农田接口](../../farming/farming-system/interface-farming-system.md)。
+
+
+批量加工完工使用 `ProcessingSystem.Advance` 返回的锁定量一次入库，`TickResult.Produced` 和 `ProductionResult.Quantity` 都是实际成品份数。消耗日志在 `TryStart` 成功后读取同一加工快照的批量，完工日志在入库成功后记录相同返回量；中途补充公共库存不追加已有批次。单批时长、顺序与领取时点不变，详见[加工 Interface](../../processing/processing-system/interface-processing-system.md)。
+
+越季连接回归通过真实收获建立历史原料，完成首批九份并拆除已领取第二批九份的场地，再跨入禁生季节；检查未投入原料、已经入库成品和金币保持，按两批实际锁量核对拆除损失，不以旧单份加工常量推导历史库存。

@@ -63,7 +63,7 @@
 
 `PlotSnapshot.GrowthProgress` 是农田实际生长精确单位除以本轮总单位所得的 0～1 比例；非生长状态为零。它与 RemainingSeconds 的向上取整剩余秒分别供表现选档和玩家时间展示，不从取整秒反推生长档。
 
-`GetPresentationResults()` 返回最近完整经营秒的独立只读 `IReadOnlyList<ProductionResult>`，字段为 ElapsedSeconds、AnchorCell、CropKind、Kind、Quantity、WorkerNumber。Kind 为 Sow、Water、Harvest、Product；播种/浇水只从实际成功回调记录，自动产出从实际入库路径记录，换季促熟共用 Harvest，工人动作 Quantity=0、自动产出 WorkerNumber=0。完成后立刻领取下一加工批次仍保留本秒 Product。
+`GetPresentationResults()` 返回最近完整经营秒的独立只读 `IReadOnlyList<ProductionResult>`，字段为 ElapsedSeconds、AnchorCell、CropKind、Kind、Quantity、WorkerNumber。Kind 为 Sow、Water、Harvest、Product；播种/浇水只从实际成功回调记录，自动产出从实际入库路径记录，换季促熟共用 Harvest，工人动作 Quantity=0、自动产出 WorkerNumber=0。加工 Product 的 Quantity 是本次锁定批量对应的实际成品份数，完成后立刻领取下一加工批次仍保留本秒 Product。
 
 `IsPresentationResultCurrent(result)` 是开始播放的完整校验：结果须属于本局当前秒及当前保留集合，工人动作还须经 FarmingSystem 的 `IsCompletedWorkCurrent` 确认原轮次。`IsPresentationTargetCurrent(result)` 单独验证已经开始的片段：内部保存 LandOccupancy 已有的不可变 BuildingSpaceSnapshot 引用，以引用一致性确认原设施仍在，并委托同一成功动作轮次判断；它不限制秒数，让公共倍率的片段自然完成。单纯启停播种、计划关闭复种及保留当前轮的预备/应用/编辑不使已成功动作失效。拆除同格重建产生新引用，不使旧结果复活；改种/重启/收获换轮/换季清理通过 FarmingSystem 失效原动作，不清空其他实例结果。待执行任务仍经 `TryCompleteWork` 重验当前需求，不能借成功动作校验跳过执行检查。没有新增永久 ID、事件历史或第二份土地状态，调用方不能修改集合或内部凭据。
 
@@ -96,3 +96,6 @@
 启用日志时整批提交共用 `GameplayLog` 与 `CommandObservation`，一次 `PlaceRoads/RemoveRoads` 对应一次收到、真实领域结果和一次终结；没有逐格伪造玩家命令或多次扣费事件。拒绝记录零实际格数/零扣费，范围拆除的材料明细由同次真实目标快照提供，日志不重做校验。原请求与移除明细最多采样前 32 项且记录原数量及截断，完整结果数量仍不截断，字段见 [日志 schema](../../../project/runtime-log-schema-v1.md)。
 
 `TestFarmGame.CheckBatchRoadPlacement/Failures/FrozenMoney/Removal` 覆盖五种材质、暂停、L 形去重候选、执行重验、设施冲突、越界、重复/空范围、非法材质与来源、可用金币准确耗尽、冻结金额不可使用、跨设施混材质拆路、非连续道路、重复范围去重、失败稳定引用、旧快照不变及逐格拆除继续可用。
+
+
+`GetProcessorDetails(cell)` 返回 `ProcessorDetailsSnapshot`，任一子格解析同一场地，包含作物、状态、当期成品报价、公共成品库存及 `BatchQuantity`。最后一项只读转发加工 Module 当前锁量，空闲为0，少量批次不以容量九份冒充投入；本批已完成且同秒重启时详情显示新批量，最近 `ProductionResult` 仍保留刚完成旧批的份数。该快照用于详情及开发流程证据，不转移批次状态归属。

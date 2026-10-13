@@ -116,7 +116,7 @@ public partial class TestProductionState : Node
         var processors = new ProcessingSystem(2);
         var inventory = new GoodsInventory();
         CropKind invalid = (CropKind)999;
-        if (processors.Advance(0, out _) || processors.TryStart(0, inventory) ||
+        if (processors.Advance(0, inventory, out _, out _) || processors.TryStart(0, inventory) ||
             !Throws<InvalidOperationException>(() => processors.Get(0)) ||
             !Throws<InvalidOperationException>(() => processors.Remove(0)) ||
             !Throws<ArgumentOutOfRangeException>(() => processors.Place(0, invalid)) ||
@@ -125,21 +125,21 @@ public partial class TestProductionState : Node
 
         processors.Place(0, CropKind.Radish);
         if (!Throws<InvalidOperationException>(() => processors.Place(0, CropKind.Wheat)) ||
-            processors.Get(0) != new ProcessorSnapshot(CropKind.Radish, 0) ||
-            processors.TryStart(0, inventory) || processors.Advance(0, out _))
+            processors.Get(0) != new ProcessorSnapshot(CropKind.Radish, 0, 0) ||
+            processors.TryStart(0, inventory) || processors.Advance(0, inventory, out _, out _))
             return Fail("重复放置或无原料时加工状态错误");
 
         inventory.AddRaw(CropKind.Radish, 2);
-        if (!processors.TryStart(0, inventory) || inventory.GetRaw(CropKind.Radish) != 1 ||
-            processors.TryStart(0, inventory) || inventory.GetRaw(CropKind.Radish) != 1 ||
+        if (!processors.TryStart(0, inventory) || inventory.GetRaw(CropKind.Radish) != 0 ||
+            processors.TryStart(0, inventory) || inventory.GetRaw(CropKind.Radish) != 0 ||
             processors.Get(0).RemainingSeconds != 26)
             return Fail("加工领取、重复启动或半日时长错误");
         for (int second = 1; second < 26; second++)
-            if (processors.Advance(0, out _) || processors.Get(0).RemainingSeconds <= 0)
+            if (processors.Advance(0, inventory, out _, out _) || processors.Get(0).RemainingSeconds <= 0)
                 return Fail("腌制坊在目标秒数之前完成加工");
-        if (!processors.Advance(0, out CropKind product) || product != CropKind.Radish ||
-            processors.Get(0) != new ProcessorSnapshot(CropKind.Radish, 0) ||
-            processors.Advance(0, out _) || inventory.GetRaw(CropKind.Radish) != 1)
+        if (!processors.Advance(0, inventory, out CropKind product, out int quantity) || product != CropKind.Radish || quantity != 2 ||
+            processors.Get(0) != new ProcessorSnapshot(CropKind.Radish, 0, 0) ||
+            processors.Advance(0, inventory, out _, out _) || inventory.GetRaw(CropKind.Radish) != 0)
             return Fail("加工到期后没有一次性完成或库存被重复领取");
         processors.Remove(0);
         if (processors.HasProcessor(0) || processors.TryStart(0, inventory))

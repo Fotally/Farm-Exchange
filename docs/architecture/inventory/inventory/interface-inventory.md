@@ -12,11 +12,13 @@
 | `AddRaw(crop, quantity)`、`AddProduct(crop, quantity)` | 收获或完成加工时入库；拒绝无效作物、负数和整数溢出，失败时数量不变。 |
 | `GetRawReserve(crop)`、`SetRawReserve(crop, quantity)` | 查询或设置该种原料的非负整数底线，默认 0；允许高于现存库存。无效作物或负数抛出参数异常，状态不变；设置不触发加工。 |
 | `GetProcessingAvailability(crop)` | 只读返回可领取、没有可用原料或受保留底线限制。可用库存为零优先返回没有原料，不消费库存。 |
-| `TryTakeRawForProcessing(crop)` | 与只读可领取判断共用规则：可用原料严格多于底线时取出一份，否则失败且不改变总量或冻结。 |
+| `TryTakeRawForProcessing(crop, maximumQuantity, out quantity)` | 与只读可领取判断共用规则：先扣冻结得到可用量，再一次领取超过底线的至多 `maximumQuantity` 份；实际量从 out 返回，不足上限全部领取。上限须为正整数，由加工 Module 决定当前九份规则；无可领取量时返回 false、数量0且总量/冻结零修改，非法上限或作物在修改前抛参数异常。 |
 | `TakeAllRaw(crop)`、`TakeAllProducts()` | 清空可用部分，保留冻结；正式交易由 `TradingService` 完整预检后按数量扣减。 |
 
 公开值类型 `CommodityId(CropKind Crop, CommodityKind Kind)` 位于 `scripts/inventory/CommodityId.cs`，类别为 `Raw` 或 `Product`；`IsDefined` 是商品是否合法的唯一判断。统一入口与 `GetRaw`、`AddProduct` 等既有生产入口共用两份分类数组，不新增交易持仓。每种库存上限为 `int.MaxValue`。
 
 `Inventory` 不决定价格，也不持有金币。加工保留底线只限制自动加工；手动出售可扣减底线内的可用部分，且不清除底线。一次卖单冻结与加工底线分别维护，手动交易和加工都不能消费冻结商品。买入原料进入同一公共库存，操作不触发加工。`FarmGame` 按经营领取阶段协调加工；新建场地保持立即执行同一全场领取路径。完整交易由[交易模块](../../trading/trading-service/interface-trading-service.md)协调，玩家规则见[库存、行情与即时交易](../../../gameplay/trading/sales.md)和[委托策略](../../../gameplay/trading/orders.md)。
 
-`tests/unit/TestResources.cs` 验证统一与既有接口共用库存、默认底线、低于/等于/高于底线、逐种独立、非法值与整数上限；`TestTradingService.cs` 验证交易失败零修改、手动出售底线库存与买入后的领取时点；`TestTradeOrders.cs` 验证冻结、编辑释放及手动交易和加工隔离。
+`tests/unit/TestResources.cs` 验证统一与既有接口共用库存、默认底线、低于/等于/高于底线、逐种独立、非法值与整数上限；`TestTradingService.cs` 验证交易失败零修改、手动出售底线库存与买入后的领取时点；`TestTradeOrders.cs` 验证冻结、编辑释放及手动交易和加工隔离；`TestBatchProcessing.cs` 验证批量原子领取、冻结与底线叠加、最大整数库存和失败零修改。
+
+`TestTradeOrders.CheckGameplayPhases` 保留委托成交晚于加工领取的相位断言，先完整冻结两份真实原料阻止领取，撤单后下一经营秒一次锁定两份、公共原料归零且冻结释放；不再以旧单份领取量判断恢复。

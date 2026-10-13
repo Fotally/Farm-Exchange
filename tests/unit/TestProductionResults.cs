@@ -214,12 +214,13 @@ public partial class TestProductionResults : Node
     {
         var game = Empty();
         Vector2I processor = new(189, 192);
-        game.Buy(new CommodityId(CropKind.Radish, CommodityKind.Raw), 3);
+        game.Buy(new CommodityId(CropKind.Radish, CommodityKind.Raw), 12);
         game.BuildProcessor(processor, CropKind.Radish);
         game.AdvanceTicks(26);
         var result = game.GetPresentationResults().Single(r => r.Kind == ProductionResultKind.Product);
-        if (result.Quantity != 1 || game.GetPlot(processor).RemainingSeconds != 26 ||
-            !game.IsPresentationResultCurrent(result) || game.GetProductStock(CropKind.Radish) != 1)
+        if (result.Quantity != 9 || game.GetPlot(processor).RemainingSeconds != 26 ||
+            game.GetProcessorDetails(processor).BatchQuantity != 3 ||
+            !game.IsPresentationResultCurrent(result) || game.GetProductStock(CropKind.Radish) != 9)
             return Fail("加工当秒完成再启动丢失本次产出证据");
         game.RemoveBuilding(processor);
         game.BuildProcessor(processor, CropKind.Radish);
