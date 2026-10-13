@@ -8,8 +8,27 @@ public readonly record struct CalendarSnapshot(
 
 public sealed class GameCalendar
 {
-    private const uint DaysPerMonth = 28;
-    private const uint DaysPerYear = 336;
+    /**
+     * <summary>固定历法中每月的游戏日数。</summary>
+     */
+    public const int DaysPerMonth = 28;
+    /**
+     * <summary>固定历法中每季的月数。</summary>
+     */
+    public const int MonthsPerSeason = 3;
+    /**
+     * <summary>固定历法中每年的季数，顺序对应 Season。</summary>
+     */
+    public const int SeasonsPerYear = 4;
+    /**
+     * <summary>由月长和每季月数导出的游戏日数。</summary>
+     */
+    public const int DaysPerSeason = DaysPerMonth * MonthsPerSeason;
+    /**
+     * <summary>由季长和每年季数导出的游戏日数。</summary>
+     */
+    public const int DaysPerYear = DaysPerSeason * SeasonsPerYear;
+    private const uint SecondsPerSeason = DaysPerSeason * GameTimeUnits.PerDay / GameTimeUnits.PerSecond;
     private uint _elapsedSeconds;
 
     public bool IsPaused { get; private set; }
@@ -34,7 +53,7 @@ public sealed class GameCalendar
         uint dayOfYear = elapsedDays % DaysPerYear;
         int monthIndex = (int)(dayOfYear / DaysPerMonth);
         return new GameDate(elapsedDays, (int)(elapsedDays / DaysPerYear) + 1,
-            monthIndex + 1, (int)(dayOfYear % DaysPerMonth) + 1, (Season)(monthIndex / 3));
+            monthIndex + 1, (int)(dayOfYear % DaysPerMonth) + 1, (Season)(monthIndex / MonthsPerSeason));
     }
 
     public void SetPaused(bool paused) => IsPaused = paused;
@@ -43,7 +62,7 @@ public sealed class GameCalendar
      * <summary>查询下一季节起点的完整经营秒距离。</summary>
      * <returns>严格晚于当前时刻的季节边界距离。</returns>
      */
-    internal uint SecondsUntilNextSeason => 4320u - _elapsedSeconds % 4320u;
+    internal uint SecondsUntilNextSeason => SecondsPerSeason - _elapsedSeconds % SecondsPerSeason;
 
     /**
      * <summary>将未来游戏日起点转换为首个到达它的经营秒距离。</summary>
