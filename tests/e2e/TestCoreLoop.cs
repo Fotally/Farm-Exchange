@@ -28,8 +28,85 @@ public partial class TestCoreLoop : Node
         parent.AddChild(main);
         bool passed = Check(main);
         main.QueueFree();
-        return passed && CheckFootprintUi(parent) && CheckRainUi(parent) && CheckReserveUi(parent) && CheckRoadUi(parent) &&
+        return passed && CheckSimulationRecovery(parent) && CheckCatalogRefresh(parent) &&
+            CheckFootprintUi(parent) && CheckRainUi(parent) && CheckReserveUi(parent) && CheckRoadUi(parent) &&
             CheckMarketUi(parent);
+    }
+
+    private static bool CheckSimulationRecovery(Node parent)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        parent.AddChild(main);
+        main.SetProcess(false);
+        try
+        {
+            var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
+            var map = main.GetNode<WorldMap>("WorldMap");
+            var farm = System.Linq.Enumerable.First(main.Game.GetBuildingSpaces(), space => space.Building == BuildingKind.Farm);
+            map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm.AnchorCell);
+            CommodityId commodity = new(main.Game.GetPlot(farm.AnchorCell).CropKind, CommodityKind.Raw);
+            if (main.AdvanceSimulation(0.5) != 0) return Fail("主场景半 tick 夹具未保留小数");
+            uint advanced = main.AdvanceSimulation(0.5, _ =>
+            {
+                if (!main.Game.Buy(commodity, 1).Success) throw new System.InvalidOperationException("买入夹具失败");
+                throw new System.InvalidOperationException("受控主场景检查点异常");
+            });
+            if (advanced != 1 || main.Game.Calendar.ElapsedSeconds != 1 || main.Driver.Progress != 0 ||
+                !Find<Label>(ui, "MessageLabel").Text.Contains("推进中断") ||
+                !ContainsVisibleText(Find<Control>(ui, "DetailWindow"),
+                    $"{FarmGame.GetCrop(commodity.Crop).CropName}原料库存：{main.Game.GetRawStock(commodity.Crop)}"))
+                return Fail("主场景检查点失败丢失实际秒数或详情库存未刷新");
+            bool moneyMatches = false;
+            foreach (Node label in Find<Control>(ui, "ResourcesPanel").FindChildren("*", "Label", true, false))
+                if (((Label)label).Text == UiElements.FormatCoins(main.Game.AvailableMoneyCents)) moneyMatches = true;
+            if (!moneyMatches || main.AdvanceSimulation(0.5) != 0 || main.Game.Calendar.ElapsedSeconds != 1)
+                return Fail("主场景异常后的资金显示或继续推进不一致");
+            double progress = main.Driver.Progress;
+            if (main.AdvanceSimulation(double.MaxValue) != 0 || main.Driver.Progress != progress ||
+                main.Game.Calendar.ElapsedSeconds != 1 || !Find<Label>(ui, "MessageLabel").Text.Contains("被拒绝"))
+                return Fail("主场景推进前拒绝改变进度或伪装成部分推进");
+            return true;
+        }
+        finally { main.Free(); }
+    }
+
+    private static bool CheckCatalogRefresh(Node parent)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        parent.AddChild(main);
+        main.SetProcess(false);
+        try
+        {
+            var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
+            var map = main.GetNode<WorldMap>("WorldMap");
+            var detail = Find<Control>(ui, "DetailWindow");
+            var catalog = Find<Control>(ui, "BuildWindow");
+            var farm = System.Linq.Enumerable.First(main.Game.GetBuildingSpaces(), space => space.Building == BuildingKind.Farm);
+            var processor = System.Linq.Enumerable.First(main.Game.GetBuildingSpaces(), space => space.Building == BuildingKind.Processor);
+            Vector2I road = new(95, 95);
+            if (!main.Game.TryPlaceRoads(new[] { road }, FarmExchange.Land.RoadMaterial.Dirt).Success)
+                return Fail("目录刷新道路夹具创建失败");
+            foreach (Vector2I cell in new[] { new Vector2I(90, 90), farm.AnchorCell, processor.AnchorCell, road })
+            {
+                map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+                if (!detail.Visible) return Fail("目录打开前原选择详情未显示");
+                detail.Position = new Vector2(1200, 170);
+                Find<Button>(ui, "BuildButton").EmitSignal(Button.SignalName.Pressed);
+                Find<Button>(ui, "PauseButton").EmitSignal(Button.SignalName.Pressed);
+                if (!catalog.Visible || detail.Visible) return Fail("暂停刷新重新显示目录后的详情");
+                Find<Button>(ui, "PauseButton").EmitSignal(Button.SignalName.Pressed);
+                main.AdvanceSimulation(1);
+                if (!catalog.Visible || detail.Visible) return Fail("经营刷新重新显示目录后的详情");
+                Find<Button>(catalog, "CloseButton").EmitSignal(Button.SignalName.Pressed);
+                main.AdvanceSimulation(1);
+                if (!detail.Visible || detail.Position != new Vector2(1200, 170) ||
+                    !ContainsVisibleText(detail, cell == road ? "道路" : cell == farm.AnchorCell ? "生长周期" :
+                        cell == processor.AnchorCell ? "加工周期" : "空地"))
+                    return Fail("关闭目录后未保留原选择类型或窗口位置");
+            }
+            return true;
+        }
+        finally { main.Free(); }
     }
 
     public static async Task<bool> RunLayoutChecks(Node parent)
@@ -615,6 +692,13 @@ public partial class TestCoreLoop : Node
         build.EmitSignal(Button.SignalName.Pressed);
         if (!buildWindow.Visible || detail.Visible)
             return Fail("建造入口未打开目录");
+        pause.EmitSignal(Button.SignalName.Pressed);
+        if (!buildWindow.Visible || detail.Visible)
+            return Fail("目录打开后暂停刷新恢复了详情");
+        pause.EmitSignal(Button.SignalName.Pressed);
+        main.AdvanceSimulation(1);
+        if (!buildWindow.Visible || detail.Visible)
+            return Fail("目录打开后继续经营刷新恢复了详情");
         buildWindow.Position = new Vector2(9999, 9999);
         build.EmitSignal(Button.SignalName.Pressed);
         Vector2 viewportSize = main.GetViewport().GetVisibleRect().Size;
