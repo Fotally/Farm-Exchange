@@ -4,6 +4,12 @@
 
 ## 自动化测试与覆盖率
 
+计划供水修复的回归继续由 `TestProductionState`、`TestProductionResults`、`TestCultivationPlanBook` 和 `TestWorkerScheduler` 的既有 TestSuite 入口运行。通过真实 FarmGame 的三田／四田、两种计划、手动预备、首次应用与重应用、雨水取消及单秒／批量对照，验证当前 Water 认领和成功 Sow 保持；旧待执行 Sow 禁播再启用不复活，真正重启、拆建、收获及禁生清理继续失效。实现见[农田工作身份](../architecture/farming/farming-system/implementation-work-identity-proposal.md)。
+
+`TestCameraInteraction.RunResizeChecksAsync` 在真实 Main 中使用 GUI 焦点、公开 Input 事件和场景树自动处理帧，验证名称与原料保留数字编辑时镜头不动、释放／隐藏编辑后持键平移恢复及松键停止；受控 0.1 秒回调仅补充速度与焦点类型检查。另覆盖 WASD、Ctrl+A、多窗口、TextEdit、SpinBox、只读和按钮焦点、鼠标释放、尺寸往返及真实全屏。有窗口时等待实际绘制完成并保存 1920×1080 编辑截图；headless 输入注入不替代操作系统中文 IME 组合窗口验收。实现见[镜头输入](../architecture/world/camera-controller/implementation-editing-input-proposal.md)。
+
+`tools/Test-ValidationArtifacts.ps1` 已接入 Windows CI 静态阶段，以真实受控进程和目录／ZIP输入验证启动成功、非零与 60 秒超时、证据保存失败保源、两次启动后分发目录及最终 ZIP 干净、schema 字节和其他依赖完整。FPS 契约覆盖成功、落盘后失败、部分／零产物、skipped、取消及未勾选，失败收集不改变原测量结论。可单独执行 `pwsh -NoProfile -File tools/Test-ValidationArtifacts.ps1`；Linux apphost 夹具不作为原生 Windows 游戏启动证据。完整操作与实际产物路径见[分发和性能证据](validation-artifacts-proposal.md)。
+
 道路 #143 的领域检查接入 `TestFarmGame`、`TestLandOccupancy` 与 `TestBuildingLogging`，验证五材质不可变快照、整段重验、冻结资金、失败零修改、范围只拆道路和批量日志一次终结。`TestRoadMap` 调用 `TestRoadAppearance`（独立入口 `tests/integration/test_road_appearance.tscn`），验证全部16种连接 mask、稳定变体、混材质及跨8×8缓存块的正式／新建／拆除外观，以及移动、隐藏和取消后的恢复；有窗口运行同时检查实际纹理像素并保存截图。`tests/e2e/test_road_placement.tscn` 使用真实主场景与原生输入验证五材质未点击的单格起点预览、移动与隐藏恢复、只读状态及相邻旧路连接，再验证两次短按、两种L形轨迹、投影直线拆除、失败保段、两级取消、拖动与界面防穿透及暂停。上述检查均由 `TestSuite` 调用，原生产设施建造与旋转测试继续保留。道路图形夹具的正式准备与清理通过 Main 原有建拆操作，在截图前比较可见金币、冻结／可用金额、道路和设施计数与真实模型，暂停下也必须一致；仅同步地图不构成 UI 同步验收。
 
 道路图形验收在 Debug 编译与导入后串行执行：先用 `tests/performance/test_full_world_fps.tscn` 保存同条件修改前后满地图报告和截图，再运行 `tests/performance/test_road_fps.tscn`，以1920×1080的真实主界面、五材质道路及移动新建／拆除预览测量帧率。平均至少60 FPS、P95帧间隔不超过16.67 ms；截图、报告和命令输出保存在 `build/issue143-validation/`，具体结果以当轮证据为准，不将未运行结果写成通过。
@@ -34,6 +40,8 @@
 ```
 
 脚本在 Debug 编译后先让 Godot 导入图片，再使用仓库锁定的 `dotnet-coverage` 版本生成 `coverage/coverage.cobertura.xml`。覆盖率只统计 `scripts/` 中的业务脚本，排除 `tests/` 和 Godot 自动生成源码。以 `scripts/` 的每个一级目录为模块，**每个模块及业务脚本总体的行覆盖率均不得低于 80%**；高覆盖率模块不能抵消未达标模块。`Run-Tests.ps1` 调用统一的 `Test-Coverage.ps1`，动态发现一级目录，按文件与行号去重、同一行任一记录命中即覆盖，自动输出并检查各模块与总体的有效行、已覆盖行及百分比；任一项低于 80% 或缺少有效数据即失败。本地与 CI 共用该门禁，不再要求人工另算模块结果。路径口径、缺失检查及独立夹具命令见[自动覆盖率门禁](../static-checks/coverage.md)。修改业务功能时必须在同一 issue 中同步修改或补充对应测试；不得通过排除业务文件降低统计范围。覆盖率报告与 `coverage/` 目录不纳入 Git。
+
+手动勾选 performance 时，CI 在普通场景与覆盖率成功后独立调用 `Run-PerformanceTests.ps1`；本地 `Run-Tests.ps1 -Performance` 仍在同一前置完成后调用相同命令。测量开始清理本次三个固定输出，成功和失败均由显式状态条件收集实际 `performance.json`、`performance.png`、`performance-end.png` 及缺失清单，原阈值失败继续使 job 失败。取消后跳过收集；前置失败未开始测量时不生成性能产物。artifact 名包含提交、run-id 和 attempt，保留 14 天。
 
 ## 日志专项验收
 

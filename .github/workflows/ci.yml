@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  pull_request:
+    branches:
+      - dev
   push:
     branches:
       - dev
@@ -72,16 +75,19 @@ jobs:
           ./tools/Repair-RuleLinks.ps1
           ./tools/Test-StaticChecks.ps1
           dotnet --version
+          ./tools/Test-ValidationArtifacts.ps1
           dotnet format whitespace FarmExchange.sln --verify-no-changes
 
       - name: 运行场景测试并检查行覆盖率
         shell: pwsh
         run: |
-          if ('${{ inputs.performance }}' -eq 'true') {
-            ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE -Performance
-          } else {
-            ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE
-          }
+          ./tools/Run-Tests.ps1 -GodotConsole $env:GODOT_CONSOLE
+
+      - name: 运行满地图 FPS 测量
+        id: fps
+        if: ${{ inputs.performance == true }}
+        shell: pwsh
+        run: ./tools/Run-PerformanceTests.ps1 -GodotConsole $env:GODOT_CONSOLE
 
       - name: 上传覆盖率报告
         if: always()
@@ -92,12 +98,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: 保存满地图 FPS 证据
+        id: save-fps
+        if: ${{ !cancelled() && inputs.performance == true && (steps.fps.outcome == 'success' || steps.fps.outcome == 'failure') }}
+        shell: pwsh
+        run: |
+          ./tools/Save-PerformanceEvidence.ps1 -SourceDirectory coverage -DestinationDirectory 'build/validation/performance-${{ github.run_id }}-${{ github.run_attempt }}' -MeasurementOutcome '${{ steps.fps.outcome }}'
+
       - name: 上传满地图 FPS 报告
-        if: ${{ inputs.performance == true }}
+        if: ${{ !cancelled() && inputs.performance == true && (steps.fps.outcome == 'success' || steps.fps.outcome == 'failure') && steps.save-fps.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
-          name: performance-${{ github.sha }}
-          path: coverage/performance.json
+          name: performance-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/validation/performance-${{ github.run_id }}-${{ github.run_attempt }}/
           if-no-files-found: error
           retention-days: 14
 
@@ -141,18 +154,22 @@ jobs:
               -not (Test-Path -LiteralPath $managedAssembly)) {
             throw "Godot 导出未生成完整的 C# 可执行构建，退出码：$LASTEXITCODE"
           }
-          New-Item -ItemType Directory -Path build/windows/logs -Force | Out-Null
-          Copy-Item -LiteralPath docs/project/runtime-log-schema-v1.md -Destination build/windows/logs/schema-v1.md -Force
 
       - name: 启动导出程序验收
+        id: distribution
         if: github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
-          $executable = (Resolve-Path -LiteralPath build/windows/FarmExchange.exe).Path
-          $process = Start-Process -FilePath $executable -ArgumentList @('--headless', '--quit-after', '5') -WindowStyle Hidden -Wait -PassThru
-          if ($process.ExitCode -ne 0) {
-            throw "导出程序启动失败，退出码：$($process.ExitCode)"
-          }
+          ./tools/Invoke-WindowsDistribution.ps1 -BuildDirectory build/windows -SchemaPath docs/project/runtime-log-schema-v1.md -EvidenceDirectory 'build/validation/windows-${{ github.run_id }}-${{ github.run_attempt }}'
+
+      - name: 上传 Windows 启动验收证据
+        if: ${{ !cancelled() && (steps.distribution.outcome == 'success' || steps.distribution.outcome == 'failure') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-validation-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/validation/windows-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: 上传 Windows 构建
         if: github.ref == 'refs/heads/main'

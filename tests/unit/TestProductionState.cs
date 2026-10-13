@@ -292,16 +292,23 @@ public partial class TestProductionState : Node
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         farms.Place(0, CropKind.Radish);
         FarmWorkRequest oldSow = farms.GetWorkNeed(0, spring)!.Value;
+        farms.SetSowingEnabled(0, true);
+        if (farms.GetWorkNeed(0, spring) != oldSow)
+            return Fail("重复启用播种使现有凭据失效");
         farms.SetSowingEnabled(0, false);
         if (farms.Get(0).SowingEnabled || farms.GetWorkNeed(0, spring) != null ||
             farms.TryCompleteWork(oldSow, spring))
             return Fail("休耕未禁播或接受了旧播种凭据");
         farms.SupplyWater(0);
         farms.SetSowingEnabled(0, true);
-        if (farms.TryCompleteWork(oldSow, spring) || !farms.TryWork(0, spring))
+        FarmWorkRequest sow = farms.GetWorkNeed(0, spring)!.Value;
+        farms.SetSowingEnabled(0, true);
+        if (farms.GetWorkNeed(0, spring) != sow || farms.TryCompleteWork(oldSow, spring) ||
+            !farms.TryCompleteWork(sow, spring) || farms.TryCompleteWork(sow, spring))
             return Fail("恢复播种复活旧任务或未保留空田水分");
         farms.RestartCrop(0, CropKind.Radish);
-        if (farms.Get(0).Stage != CropStage.None || !farms.Get(0).HasWater ||
+        if (farms.IsCompletedWorkCurrent(sow) || farms.TryCompleteWork(sow, spring) ||
+            farms.Get(0).Stage != CropStage.None || !farms.Get(0).HasWater ||
             farms.Get(0).RemainingTimeUnits != 0 || !farms.TryWork(0, spring))
             return Fail("同种立即改种未中断本轮或丢失水分");
         farms.RestartCrop(0, CropKind.Corn);
@@ -311,17 +318,20 @@ public partial class TestProductionState : Node
 
         farms.Remove(0);
         farms.Place(0, CropKind.Radish);
-        farms.TryWork(0, spring);
+        sow = farms.GetWorkNeed(0, spring)!.Value;
+        farms.TryCompleteWork(sow, spring);
         FarmWorkRequest oldWater = farms.GetWorkNeed(0, spring)!.Value;
         farms.SetSowingEnabled(0, false);
         FarmWorkRequest water = farms.GetWorkNeed(0, spring)!.Value;
-        if (water.Kind != FarmWorkKind.Water || farms.TryCompleteWork(oldWater, spring) ||
-            !farms.TryCompleteWork(water, spring) || farms.Get(0).Stage != CropStage.Growing)
-            return Fail("禁播影响了待水本轮或旧工作凭据没有失效");
+        if (water != oldWater || water.Kind != FarmWorkKind.Water || !farms.IsCompletedWorkCurrent(sow) ||
+            !farms.TryCompleteWork(oldWater, spring) || farms.TryCompleteWork(water, spring) ||
+            !farms.IsCompletedWorkCurrent(oldWater) || farms.Get(0).Stage != CropStage.Growing)
+            return Fail("禁播失效了同轮供水或成功播种，或重复执行了已完成供水");
         farms.SetSowingEnabled(0, false);
         for (int second = 0; second < 206; second++)
             farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
-        if (farms.GetWorkNeed(0, spring) != null || farms.Get(0).HasWater)
+        if (farms.GetWorkNeed(0, spring) != null || farms.Get(0).HasWater ||
+            farms.IsCompletedWorkCurrent(sow) || farms.IsCompletedWorkCurrent(oldWater))
             return Fail("禁播田收获后自动复种或遗留水分");
 
         CalendarSnapshot riskySpring = new GameCalendar(4319).Snapshot;

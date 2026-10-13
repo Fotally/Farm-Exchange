@@ -1,10 +1,12 @@
 using System;
+using System.Linq;
 using Godot;
 using FarmExchange.Weather;
 using FarmExchange.Cultivation;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
 using FarmExchange.Time;
+using FarmExchange.Workers;
 
 public partial class TestCultivationPlanBook : Node
 {
@@ -12,7 +14,7 @@ public partial class TestCultivationPlanBook : Node
 
     public static bool RunChecks() => CheckDraftSchedule() && CheckEntryIdentityLifetime() &&
         CheckValidation() && CheckStartSeasonValidation() && CheckSharedPlans() &&
-        CheckModesAndCache() && CheckOneRoundAndYearWrap() && CheckManualAndFacade() &&
+        CheckModesAndCache() && CheckOneRoundAndYearWrap() && CheckManualAndFacade() && CheckPreservedWorkContinuity() &&
         CheckSeasonRescue() && CheckHarvestPlanDateActivation() && CheckRescueWithinPlanBar() &&
         CheckExecutedEntriesAfterEdit() && CheckPreservedRoundDoesNotConsumeEntry() &&
         CheckSowBeforeSeasonClearIsConsumed() && CheckSeasonEndCache() &&
@@ -20,6 +22,57 @@ public partial class TestCultivationPlanBook : Node
 
     private static CultivationPlanRequest Request(CultivationMode mode = CultivationMode.PrepareNext) =>
         new("春季轮作", mode, new[] { new CultivationEntry(1, CropKind.Radish, 0), new CultivationEntry(2, CropKind.Wheat, 5) });
+
+    private static bool CheckPreservedWorkContinuity()
+    {
+        foreach (CultivationMode? mode in new CultivationMode?[] { null, CultivationMode.Immediate, CultivationMode.PrepareNext })
+        {
+            var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+            Vector2I[] farms = { new(189, 189), new(192, 189), new(195, 189), new(198, 189) };
+            if (!game.TryPlace(farms[3], BuildingKind.Farm, CropKind.Radish).Success)
+                return Fail("保留当前轮回归未能建立第四田");
+            foreach (Vector2I farm in farms)
+                game.SetFarmCrop(farm, CropKind.Radish);
+            game.AdvanceTick();
+            PlotSnapshot current = game.GetPlot(farms[0]);
+            ProductionResult sow = game.GetPresentationResults().Single(result => result.AnchorCell == farms[0]);
+            var workers = game.GetWorkers();
+            bool RoundIsCurrent() => game.GetPlot(farms[0]) == current &&
+                game.GetWorkers().SequenceEqual(workers) && game.IsPresentationResultCurrent(sow) &&
+                game.IsPresentationTargetCurrent(sow) && game.Calendar.ElapsedSeconds == 1;
+
+            if (mode is CultivationMode plannedMode)
+            {
+                var request = new CultivationPlanRequest("保留待水本轮", plannedMode,
+                    new[] { new CultivationEntry(1, CropKind.Radish, 0) });
+                int id = game.CreateCultivationPlan(request).Id;
+                if (game.ApplyCultivationPlan(id, new[] { farms[0] }) != null || !RoundIsCurrent())
+                    return Fail($"{mode}首次应用计划失效了当前轮或已成功播种");
+                if (game.ApplyCultivationPlan(id, new[] { farms[0] }) != null || !RoundIsCurrent())
+                    return Fail($"{mode}同表重应用失效了当前轮或已成功播种");
+                var edited = request with { Entries = new[] { new CultivationEntry(1, CropKind.Corn, 5) } };
+                if (!game.UpdateCultivationPlan(id, edited).Success || !RoundIsCurrent() ||
+                    game.ApplyCultivationPlan(id, new[] { farms[0] }) != null || !RoundIsCurrent())
+                    return Fail($"{mode}编辑及重应用后续条中断了待水当前轮");
+            }
+            else if (game.PrepareFarmCrop(farms[0], CropKind.Corn) != null || !RoundIsCurrent() ||
+                game.GetFarmCultivation(farms[0]).PreparedCrop != CropKind.Corn ||
+                game.GetFarmCultivation(farms[0]).PlanId != null)
+                return Fail("手动预备下一轮失效了当前轮或已成功播种");
+
+            game.AdvanceTick();
+            var waters = game.GetPresentationResults();
+            var wateredWorkers = game.GetWorkers();
+            for (int worker = 0; worker < 3; worker++)
+                if (game.GetPlot(farms[worker]).Crop != CropStage.Growing || !game.GetPlot(farms[worker]).HasWater ||
+                    wateredWorkers[worker].GridPosition != workers[worker].GridPosition ||
+                    wateredWorkers[worker].Activity != WorkerActivity.Idle ||
+                    !waters.Any(result => result.Kind == ProductionResultKind.Water && result.WorkerNumber == worker + 1 &&
+                        result.AnchorCell == farms[worker] && game.IsPresentationResultCurrent(result)))
+                    return Fail($"{mode?.ToString() ?? "手动预备"}在保留当前轮后破坏了原工人供水续接");
+        }
+        return true;
+    }
 
     private static bool CheckDraftSchedule()
     {

@@ -40,12 +40,5 @@ if ($LASTEXITCODE -ne 0) {
 & (Join-Path $PSScriptRoot 'Test-Coverage.ps1') -ReportPath coverage/coverage.cobertura.xml | Out-Null
 
 if ($Performance) {
-    $report = 'coverage/performance.json'
-    Remove-Item -LiteralPath $report -ErrorAction SilentlyContinue
-    & $GodotConsole --path . tests/performance/test_full_world_fps.tscn
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $report)) {
-        throw "Graphics performance test failed with exit code $LASTEXITCODE"
-    }
-    $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
-    Write-Host "Full-world average FPS: $([Math]::Round($result.AverageFps, 1)); P95 frame time: $([Math]::Round($result.P95FrameMs, 2)) ms"
+    & (Join-Path $PSScriptRoot 'Run-PerformanceTests.ps1') -GodotConsole $GodotConsole
 }

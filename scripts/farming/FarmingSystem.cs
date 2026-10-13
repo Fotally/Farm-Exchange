@@ -13,13 +13,13 @@ internal readonly record struct FarmSnapshot(
 
 internal enum FarmWorkKind { Sow, Water }
 
-internal readonly record struct FarmWorkRequest(int CellIndex, int Revision, FarmWorkKind Kind);
+internal readonly record struct FarmWorkRequest(int CellIndex, int RoundRevision, FarmWorkKind Kind, int SowingRevision);
 
 internal sealed class FarmingSystem
 {
     private readonly Random _yieldRandom;
     private readonly FarmState?[] _farms;
-    private readonly int[] _farmRevisions;
+    private readonly int[] _roundRevisions;
     private readonly List<int> _indices = new();
     private IReadOnlyList<int>? _indicesSnapshot;
 
@@ -27,7 +27,7 @@ internal sealed class FarmingSystem
     {
         _yieldRandom = new Random(seed);
         _farms = new FarmState?[cellCount];
-        _farmRevisions = new int[cellCount];
+        _roundRevisions = new int[cellCount];
     }
 
     internal ProductionDiagnostics? Diagnostics { get; set; }
@@ -37,11 +37,11 @@ internal sealed class FarmingSystem
     /**
      * <summary>只读验证已成功作业仍属于当前农田轮次，不要求该动作再次可执行。</summary>
      * <param name="completedWork">本模块曾确认成功的完整工作凭据。</param>
-     * <returns>原实例仍在且改种、拆建、收获、播种启停或换季未失效其版本。</returns>
+     * <returns>原实例仍在且改种、拆建、收获或换季未失效其轮次；播种启停不影响已成功动作。</returns>
      */
-    internal bool IsWorkRevisionCurrent(FarmWorkRequest completedWork) =>
+    internal bool IsCompletedWorkCurrent(FarmWorkRequest completedWork) =>
         _farms[completedWork.CellIndex] != null &&
-        _farmRevisions[completedWork.CellIndex] == completedWork.Revision;
+        _roundRevisions[completedWork.CellIndex] == completedWork.RoundRevision;
     internal bool HasFarm(int index) => _farms[index] != null;
 
     internal FarmSnapshot Get(int index)
@@ -58,7 +58,7 @@ internal sealed class FarmingSystem
             throw new ArgumentOutOfRangeException(nameof(crop));
         if (_farms[index] != null)
             throw new InvalidOperationException("土地已有农田状态");
-        _farmRevisions[index]++;
+        _roundRevisions[index]++;
         _farms[index] = new FarmState(crop);
         int insertion = _indices.BinarySearch(index);
         _indices.Insert(~insertion, index);
@@ -69,7 +69,7 @@ internal sealed class FarmingSystem
     {
         if (_farms[index] == null)
             throw new InvalidOperationException("土地没有农田状态");
-        _farmRevisions[index]++;
+        _roundRevisions[index]++;
         _farms[index] = null;
         _indices.Remove(index);
         _indicesSnapshot = null;
@@ -95,7 +95,7 @@ internal sealed class FarmingSystem
         if (!CropCatalog.IsDefined(crop))
             throw new ArgumentOutOfRangeException(nameof(crop));
         FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
-        _farmRevisions[index]++;
+        _roundRevisions[index]++;
         farm.CropKind = crop;
         farm.Stage = CropStage.None;
         farm.RemainingTimeUnits = 0;
@@ -103,7 +103,7 @@ internal sealed class FarmingSystem
 
     /**
      * <summary>启停空田播种，已播种作物仍可浇水生长。</summary>
-     * <remarks>启停变化使旧工人任务凭据失效，重复设置不修改版本。</remarks>
+     * <remarks>启停变化仅使旧播种凭据失效，保留本轮浇水及已成功动作；重复设置不修改版本。</remarks>
      * <param name="index">现有农田的锚点索引。</param>
      * <param name="enabled">是否允许空田播种。</param>
      */
@@ -113,7 +113,7 @@ internal sealed class FarmingSystem
         if (farm.SowingEnabled == enabled)
             return;
         farm.SowingEnabled = enabled;
-        _farmRevisions[index]++;
+        farm.SowingRevision++;
     }
 
     internal void SupplyWater(int index)
@@ -234,7 +234,7 @@ internal sealed class FarmingSystem
         farm.Stage = CropStage.None;
         farm.RemainingTimeUnits = 0;
         farm.HasWater = false;
-        _farmRevisions[index]++;
+        _roundRevisions[index]++;
         return new CropHarvestResult(farm.CropKind, quantity);
     }
 
@@ -250,9 +250,9 @@ internal sealed class FarmingSystem
         {
             if (!farm.SowingEnabled || !PlantingRules.CanSow(farm.CropKind, calendar, farm.HasWater, diagnostics, index))
                 return null;
-            return new FarmWorkRequest(index, _farmRevisions[index], FarmWorkKind.Sow);
+            return new FarmWorkRequest(index, _roundRevisions[index], FarmWorkKind.Sow, farm.SowingRevision);
         }
-        return new FarmWorkRequest(index, _farmRevisions[index], FarmWorkKind.Water);
+        return new FarmWorkRequest(index, _roundRevisions[index], FarmWorkKind.Water, 0);
     }
 
     internal bool TryCompleteWork(FarmWorkRequest request, CalendarSnapshot calendar)
@@ -295,7 +295,7 @@ internal sealed class FarmingSystem
             farm.Stage = CropStage.None;
             farm.RemainingTimeUnits = 0;
             farm.HasWater = false;
-            _farmRevisions[index]++;
+            _roundRevisions[index]++;
             result.Record(farm.CropKind);
             Diagnostics?.Cleared(index, before, this);
         }
@@ -326,7 +326,7 @@ internal sealed class FarmingSystem
     internal void Clear()
     {
         foreach (int index in _indices)
-            _farmRevisions[index]++;
+            _roundRevisions[index]++;
         Array.Clear(_farms);
         _indices.Clear();
         _indicesSnapshot = null;
@@ -339,6 +339,7 @@ internal sealed class FarmingSystem
         internal int RemainingTimeUnits;
         internal bool HasWater;
         internal bool SowingEnabled = true;
+        internal int SowingRevision;
         internal double RandomBaseQuantity;
         internal int GrownTimeUnits;
         internal long WeatherPercentTimeUnits;
