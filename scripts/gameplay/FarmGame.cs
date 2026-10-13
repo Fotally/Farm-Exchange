@@ -1129,7 +1129,7 @@ public sealed class FarmGame : IDisposable
     /**
      * <summary>验证表现结果仍属于当前秒与原实例，农田动作仍属于原轮次。</summary>
      * <param name="result">从本局最近结果快照读取的结果。</param>
-     * <returns>拆除重建、农田改种重启、换季清理或新经营秒使旧结果失效。</returns>
+     * <returns>拆除重建、农田改种重启、收获换轮、换季清理或新经营秒使旧结果失效。</returns>
      */
     public bool IsPresentationResultCurrent(ProductionResult result)
     {
@@ -1140,15 +1140,15 @@ public sealed class FarmGame : IDisposable
 
     /**
      * <summary>验证已经开始播放的成功结果仍属于原设施及有效工作轮次，允许片段跨经营秒完成。</summary>
-     * <remarks>仅用于已经消费的片段；开始播放仍须使用最近秒结果及 IsPresentationResultCurrent，不补播历史。</remarks>
+     * <remarks>仅用于已经消费的片段；开始播放仍须使用最近秒结果及 IsPresentationResultCurrent，不补播历史；单纯播种启停不改变成功动作所属轮次。</remarks>
      * <param name="result">本局已消费的真实成功结果。</param>
-     * <returns>原实例仍在且农田工作凭据有效；拆建、改种或换季清理使其失效。</returns>
+     * <returns>原实例仍在且农田成功动作的轮次仍有效；拆建、改种、收获换轮或换季清理使其失效。</returns>
      */
     public bool IsPresentationTargetCurrent(ProductionResult result)
     {
         if (result.Space == null || !ReferenceEquals(GetBuildingSpace(result.AnchorCell), result.Space))
             return false;
-        return result.CompletedWork is not FarmWorkRequest work || _farming.IsWorkRevisionCurrent(work);
+        return result.CompletedWork is not FarmWorkRequest work || _farming.IsCompletedWorkCurrent(work);
     }
 
     private void ClearPresentationResults()
