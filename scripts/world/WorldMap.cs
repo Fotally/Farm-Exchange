@@ -666,14 +666,9 @@ public partial class WorldMap : Node2D
             }
             // 土地拥有固定占地偏移；只绘制外侧边，任一子格均得到同一完整选框。
             var offsets = new HashSet<Vector2I>(space.Footprint.Offsets);
-            Vector2I[] neighbours = { new(0, -1), new(1, 0), new(0, 1), new(-1, 0) };
             foreach (Vector2I offset in space.Footprint.Offsets)
-            {
-                Vector2[] outline = MapCoordinates.GridRectangleOutline(space.AnchorCell + offset, 1, 1);
-                for (int side = 0; side < 4; side++)
-                    if (!offsets.Contains(offset + neighbours[side]))
-                        DrawLine(outline[side], outline[(side + 1) % 4], SelectedColor, 3f);
-            }
+                foreach ((Vector2 start, Vector2 end) in PlacementPreviewGeometry.GetCellOuterEdges(space.AnchorCell, offset, offsets))
+                    DrawLine(start, end, SelectedColor, 3f);
         }
     }
 }
