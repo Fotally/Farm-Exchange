@@ -4,6 +4,10 @@
 
 ## 自动化测试与覆盖率
 
+正式素材缩略图 #149 由 `TestFacilityThumbnails.RunChecksAsync` 在真实主场景检查七加工建筑、五材质三格道路、拆路角标、目录筛选与选择及加工／道路详情的真实锚点；农田与选种沿用原 SVG；拆路以土路作背景，派生前后检查土路与工具图标缓存的像素、尺寸不变，headless与有窗口入口共用同一断言。夹具通过真实暂停按钮刷新界面，并检查经营暂停与按钮、日期副文本和工人状态一致，避免直接改模型后保存旧界面。独立有窗口入口为 `tests/e2e/test_facility_thumbnails.tscn`，至少1920×1080检查默认、整体UI与独立字体倍率，并保存目录和详情截图至 `build/issue149-validation/`。图片完整、图文分区与像素边缘需要目视核对，headless 行为检查不替代画面验收。
+
+水域地块详情 #173 由 `TestWaterDetails.RunChecksAsync` 接入 `TestSuite`，使用固定种子的真实含水主场景，按本局权威地形寻找池塘内部、岸边含水格及未占用完整陆地。经地图选择入口反复切换，检查经营刷新、暂停与恢复后的中文详情，并验证农田、加工场地及道路详情和拆路后空地提示。有窗口运行 `tests/e2e/test_water_details.tscn`，在至少1920×1080保存水面、岸边与空地截图到 `build/issue173/`；headless 检查不替代画面验收。
+
 #35 批量加工由 `TestBatchProcessing` 经真实库存、加工与经营入口验证每批最多9份、少量批次完整周期、零原料、底线与冻结、稳定竞争领取、锁量不追加、拆除损失及实际入库守恒；单秒与批量推进必须一致，七作物产能检查使用明确数量和天气输入。`TestBatchProcessingUi.RunChecksAsync` 接入 `TestSuite`，使用真实主场景验证满批、少批、等待状态、暂停补料与拆除；有窗口独立运行 `tests/e2e/test_batch_processing_ui.tscn`，在1920×1080保存截图到 `build/issue35-ui-validation/`，检查批量、周期、损失说明和操作按钮完整可见。headless 检查行为和排版，不代替截图验收。
 
 批量加工单元及1080P详情夹具显式使用合法纯陆地配置；主场景夹具等待 `ReadyTask` 完成后读取经营状态，原九份批量及满批／少批断言保持。

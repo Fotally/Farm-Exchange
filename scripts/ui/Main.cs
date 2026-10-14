@@ -67,6 +67,7 @@ public partial class Main : Node2D
     private CultivationWindow _cultivationWindow = null!;
     private Label _detailCell = null!;
     private PanelContainer _emptyDetails = null!;
+    private Label _emptyDetailText = null!;
     private FarmDetailsPanel _farmDetails = null!;
     private ProcessorDetailsPanel _processorDetails = null!;
     private RoadDetailsPanel _roadDetails = null!;
@@ -424,7 +425,7 @@ public partial class Main : Node2D
         detailBody.AddChild(detailContent);
         _detailCell = MakeLabel("", 13, Ink);
         detailContent.AddChild(_detailCell);
-        _emptyDetails = MakeInfoCard("空地\n点击底部“建造”选择建筑，再点击地图空位摆放。");
+        _emptyDetails = MakeInfoCard("", out _emptyDetailText);
         detailContent.AddChild(_emptyDetails);
         _farmDetails = new FarmDetailsPanel { Name = "FarmDetailsPanel" };
         _farmDetails.ChangeCropRequested += () => OpenCrop(prepareNext: false);
@@ -1225,6 +1226,10 @@ public partial class Main : Node2D
         _detailCell.Text = space == null ? $"地块 ({cell.X}, {cell.Y})" :
             $"建筑锚点 ({space.AnchorCell.X}, {space.AnchorCell.Y}) · 占地 {space.Footprint.Offsets.Count} 格";
         _emptyDetails.Visible = plot.Building == BuildingKind.None;
+        if (_emptyDetails.Visible)
+            _emptyDetailText.Text = GameState.Terrain.IsFullLand(cell)
+                ? "空地\n点击底部“建造”选择建筑，再点击地图空位摆放。"
+                : "水域\n不可建造。只有完整陆地才能建造，岸边含水地块也不可建造。";
         _farmDetails.Visible = plot.Building == BuildingKind.Farm;
         _processorDetails.Visible = plot.Building == BuildingKind.Processor;
         _roadDetails.Visible = plot.Building == BuildingKind.Road;

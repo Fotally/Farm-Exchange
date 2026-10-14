@@ -27,7 +27,7 @@ public partial class ProcessorDetailsPanel : VBoxContainer
     public ProcessorDetailsPanel()
     {
         AddThemeConstantOverride("separation", 11);
-        _preview = new FacilityPreview { Name = "ProcessorFacilityPreview" };
+        _preview = new FacilityPreview(BuildingKind.Processor) { Name = "ProcessorFacilityPreview" };
         AddChild(_preview);
         var heading = new HBoxContainer();
         _title = MakeLabel("", 27, Ink);

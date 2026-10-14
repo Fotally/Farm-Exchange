@@ -98,9 +98,13 @@ public partial class TestSuite : Node
             GD.Print("端到端测试：主场景经营流程");
             bool coreLoopPassed = TestCoreLoop.RunChecks(this);
             coreLoopPassed = await TestCoreLoop.RunRoadChecksAsync(this) && coreLoopPassed;
+            GD.Print("端到端测试：水域、岸边与完整陆地详情");
+            coreLoopPassed = await TestWaterDetails.RunChecksAsync(this) && coreLoopPassed;
             GD.Print("端到端测试：建造检索、选种信息与设施真实进度");
             bool facilitiesPassed = await TestUiFacilities.RunChecksAsync(this);
             facilitiesPassed = await TestBatchProcessingUi.RunChecksAsync(this) && facilitiesPassed;
+            GD.Print("端到端测试：七加工与五材质正式缩略图、详情锚点及倍率图文分区");
+            facilitiesPassed = await TestFacilityThumbnails.RunChecksAsync(this) && facilitiesPassed;
             GD.Print("性能测试：满地图 headless 负载");
             bool loadPassed = TestFullWorldLoad.RunChecks();
             GD.Print("端到端测试：库存编辑真实布局与滚动");

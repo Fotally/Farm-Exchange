@@ -10,10 +10,12 @@
 
 道路详情使用共享纸面木框与深棕正文，先显示「道路 · 1×1 基础格」及当前用途，再说明建造目录内的连续铺路入口；末尾说明拆除释放占地且不退费，`RemoveRoadButton` 使用低强调按钮。只调整视觉和信息顺序，经营接口、事件与拆除结果保持。
 
-`RefreshPlacement(BuildingSpaceSnapshot)` 读取正式道路快照的 `RoadMaterial` 更新标题，并更新 [FacilityPreview](../facility-preview/interface-facility-preview.md) 中的 `1 × 1` 占地与真实锚点；材质名称与「已铺设」徽标同行。工具说明为“选择道路材质、短按起点与终点成段铺设”，逐格详情拆除继续保持。基准标题 27、状态和正文 14、弱说明 12、间距 11；缩略高度 107，低强调移除高度 35、文字 13。倍率由统一模块维护，面板仍只发出原有 `RemoveRequested` 意图。
+`RefreshPlacement(BuildingSpaceSnapshot)` 读取正式道路快照的 `RoadMaterial` 更新标题，并更新 [FacilityPreview](../facility-preview/interface-facility-preview.md) 中的同材质三格短直路段、`1 × 1` 占地与真实锚点；材质名称与「已铺设」徽标同行。道路必须具有真实材质，不以土路兜底。三格图仅为与目录一致的材质示意，标签和拆除目标仍为当前真实单格实例；详情不添加拆路工具角标。工具说明为“选择道路材质、短按起点与终点成段铺设”，逐格详情拆除继续保持。基准标题 27、状态和正文 14、弱说明 12、间距 11；缩略最低高度 107，至少 64 像素图片区和实际字号标签区由纵向容器分开排列，字体增大自然扩高；低强调移除高度 35、文字 13。倍率由统一模块维护，面板仍只发出原有 `RemoveRequested` 意图。
 
 标题与 `RoadCurrentStatus` 短徽标关闭自动折行，保持单行；工具图标后的 `RoadNextStep` 获得横向剩余宽度，按两行正式说明显示，不按单字竖排。验收除了外层范围，也检查短状态行数和说明的实际可读宽度。
 
 标题节点为 `RoadTitle`，纳入实际单行排版检查。说明直接由横向容器安排图标及扩展标签，不依赖非容器按钮安排子节点。
 
 标题中文名称直接读取 [UiElements](../ui-elements/interface-ui-elements.md) 的 `RoadMaterialName`，与目录和 Main 共用同一展示转换，不依赖 Main 提供文字。`TestUiFacilities` 从真实道路快照更新详情，核对五材质标题与目录名称；未定义材质的名称转换仍抛出参数名为 `material` 的 `ArgumentOutOfRangeException`。
+
+`TestFacilityThumbnails` 通过真实主场景建造五材质道路、选择实例并检查与目录相同的纹理、实际锚点及图文分区；1920×1080 有窗口截图保存于 `build/issue149-validation/road-{material}-1920.png`，运行事实由关联议题的验收记录维护。

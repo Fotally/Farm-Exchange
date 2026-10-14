@@ -56,6 +56,10 @@
 
 起点有效／占用截图均在任何准备性正式建造之前获取，占用来自开局农田实际子格，保持模型与UI同为50.00金币、0道路。随后旧路连接夹具经Main目录选择材质与真实两次短按准备，末尾经Main直线拆路工具清理，正常命令统一刷新金币与近况；清理后检查资源面板金额和道路计数与模型一致，避免后续目录截图继承直接修改经营夹具后的旧UI。
 
+未占用地块的 `BuildingKind.None` 只说明没有建筑，不说明地形。`RefreshDetail` 在该分支读取本局 `Game.Terrain.IsFullLand(cell)`：完整陆地继续显示“空地”及原建造提示，池塘水面与岸边含水格统一显示“水域”和“不可建造”，说明只有完整陆地才允许建造。详情不保存地形副本、不复算岸线，也不改写经营模块的建筑占用语义。普通选择、经营刷新、暂停与恢复共用这次查询，农田、加工场地与道路仍使用各自的原详情和操作。
+
+[#173](https://github.com/Fotally/Farm-Exchange/issues/173) 回归由 `tests/e2e/TestWaterDetails.cs` 在真实含水主场景中等待 `ReadyTask` 后完成：从同局权威地形寻找池塘内部、岸边含水和未占用完整陆地，通过 `WorldMap.SelectAtScreenPosition` 选择，反复切换并经过真实经营推进和暂停按钮刷新；另检查农田改种入口、加工投入产出说明、道路拆除及拆后空地详情。该检查已接入统一 `TestSuite`，独立场景为 `tests/e2e/test_water_details.tscn`。有窗口执行时以至少1920×1080保存修前与修后水面、修后岸边和陆地截图至 `build/issue173/`，headless执行检查相同详情行为。
+
 `Main` 的当前 `Placement` 唯一持有候选 `BuildingOrientation`，每座候选从 `Q0` 开始。农田和加工摆放中的 R 与 `RotatePlacementButton` 共用内部旋转入口，按 `Q0→Q1→Q2→Q3→Q0` 更新候选并刷新预览，按钮显示当前 q。快捷键在 `_Input` 接收，但忽略重复按键、Ctrl/Alt/Meta 组合及 `LineEdit`/`TextEdit` 输入焦点，不截获文本编辑；道路与非摆放状态没有入口。近况面板使用主题次按钮把旋转和取消并排显示，整体/字体倍率仍由 `UiScaling` 管理。
 
 预览和预检分别向 `WorldMap.UpdatePlacementPreview` 与 `FarmGame.CheckPlacement` 传同一个候选方向，实际建造向 `TryPlace(..., orientation: ...)` 提交该方向，UI不修改实例纹理或正式朝向。成功后当前类型保持、下一座方向重置 `Q0`；失败仍为当前候选，方向保留；取消丢弃候选，重新选类型从 `Q0` 开始。暂停不限制操作，旋转本身不推进经营或修改资源。实例正式朝向由土地模块保存，建成后详情不提供旋转命令；当前3×3占地与工作中心保持一致。

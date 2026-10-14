@@ -51,10 +51,10 @@
 - [局部动效实现](architecture/world/world-map/implementation-bright-motion.md)与[环境装饰实现](architecture/world/world-map/implementation-environment-decoration.md)：建筑内部层级、逐株根点、真实产出反馈、32类纯环境的随机四向与建造清除。
 - [WorkerPresentation 接口](architecture/world/worker-presentation/interface-worker-presentation.md)：三人工人快照、真实成功作业、清亮 v2 动作、脚根排序、暂停与倍率插值；[FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)统一定义最近经营秒结果。
 - [镜头输入接口](architecture/world/camera-controller/interface-camera-controller.md)：内部封装玩家倍率、窗口适配和输入换算，场景与 UI 无需协调缩放步骤。
-- [主界面接口](architecture/ui/main/interface-main.md)、[可拖动窗口](architecture/ui/draggable-window/interface-draggable-window.md)、[建造目录](architecture/ui/build-catalog-window/interface-build-catalog-window.md)、[库存窗口](architecture/ui/inventory-window/interface-inventory-window.md)、[市场窗口](architecture/ui/market-window/interface-market-window.md)与[可点击 HTML 原型](architecture/ui/main/prototype-main.html)：场景命令分发、异常后的实际状态刷新、目录详情互斥、共同道路候选、建造摆放及窗口位置记忆。选种及两类详情的接口由主界面文档继续导航。
+- [主界面接口](architecture/ui/main/interface-main.md)、[可拖动窗口](architecture/ui/draggable-window/interface-draggable-window.md)、[建造目录](architecture/ui/build-catalog-window/interface-build-catalog-window.md)、[库存窗口](architecture/ui/inventory-window/interface-inventory-window.md)、[市场窗口](architecture/ui/market-window/interface-market-window.md)与[可点击 HTML 原型](architecture/ui/main/prototype-main.html)：场景命令分发、异常后的实际状态刷新、空地与水域详情、目录详情互斥、共同道路候选、建造摆放及窗口位置记忆。选种及两类详情的接口由主界面文档继续导航。
 - [道路详情接口](architecture/ui/road-details-panel/interface-road-details-panel.md)：固定用途说明与移除意图，不读取作物或加工状态。
 - [统一 UI 倍率接口](architecture/ui/ui-scaling/interface-ui-scaling.md)：按原始排版独立设置整体与字体倍率、动态继承及1080P固定像素策略。
-- [原型图标](architecture/ui/ui-icons/interface-ui-icons.md)与[设施缩略图](architecture/ui/facility-preview/interface-facility-preview.md)：复用主稿SVG并展示实际快照锚点，保持世界素材。
+- [原型图标](architecture/ui/ui-icons/interface-ui-icons.md)与[设施缩略图](architecture/ui/facility-preview/interface-facility-preview.md)：图标、农田与选种沿用主稿SVG；加工和道路缩略复用正式PNG，目录与详情共用取图并显示真实锚点及道路材质。
 - [镜头编辑输入实现](architecture/world/camera-controller/implementation-editing-input-proposal.md)：真实编辑焦点集中阻断键盘平移，场景树处理帧回归及退出编辑后的恢复。
 - [NPC 角色场景接口](architecture/characters/npc-character/interface-npc-character.md)及[独立预览操作](architecture/ui/npc-preview/interface-npc-preview.md)：角色动画、移动和切换图集。
 

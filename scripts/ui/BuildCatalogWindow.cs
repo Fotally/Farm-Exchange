@@ -68,13 +68,13 @@ public partial class BuildCatalogWindow : DraggableWindow
         }
         foreach (RoadMaterial material in Enum.GetValues<RoadMaterial>())
         {
-            Button roadCard = MakeFacilityCard(BuildingKind.Road, default);
+            Button roadCard = MakeFacilityCard(BuildingKind.Road, default, material);
             roadCard.Name = material == RoadMaterial.Dirt ? "RoadCard" : $"RoadCard{material}";
             roadCard.Pressed += () => RoadRequested?.Invoke(material);
             _roadCards.Add(material, roadCard);
             _cards.AddChild(roadCard);
         }
-        _roadRemovalCard = MakeFacilityCard(BuildingKind.Road, default);
+        _roadRemovalCard = MakeFacilityCard(BuildingKind.Road, default, removing: true);
         _roadRemovalCard.Name = "RoadRemovalCard";
         _roadRemovalCard.Pressed += () => RoadRemovalRequested?.Invoke();
         _cards.AddChild(_roadRemovalCard);
@@ -96,12 +96,15 @@ public partial class BuildCatalogWindow : DraggableWindow
         _tabs.Add(kind, tab);
     }
 
-    private static Button MakeFacilityCard(BuildingKind building, CropKind crop)
+    private static Button MakeFacilityCard(BuildingKind building, CropKind crop,
+        RoadMaterial material = RoadMaterial.Dirt, bool removing = false)
     {
         Button card = MakeSecondaryButton("", 220, 200);
         card.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         card.AddThemeFontSizeOverride("font_size", 12);
-        card.Icon = FacilityPreview.Texture(building, crop);
+        card.Icon = removing ? FacilityPreview.RoadRemovalTexture() :
+            FacilityPreview.Texture(building, crop, roadMaterial: material);
+        if (building != BuildingKind.Farm) card.TextureFilter = TextureFilterEnum.Nearest;
         card.ExpandIcon = true;
         card.AddThemeConstantOverride("icon_max_width", 145);
         card.IconAlignment = HorizontalAlignment.Center;
