@@ -96,6 +96,12 @@ public static class TestProductionDiagnostics
         }
         Require(details.Where(line => line.Contains("Transition: \"ProcessingStarted\"")).All(line => !line.Contains("Quantity:")),
             "加工启动虚构第二次扣料");
+        Require(details.Any(line => line.Contains("Transition: \"RawClaimed\"") && Number(line, "Quantity") == 9) &&
+            details.Any(line => line.Contains("Transition: \"ProcessingStarted\"") &&
+                Number(line, "BatchQuantityBefore") == 0 && Number(line, "BatchQuantityAfter") == 9) &&
+            details.Any(line => line.Contains("Transition: \"Processed\"") && Number(line, "Quantity") == 9 &&
+                Number(line, "BatchQuantityBefore") == 9 && Number(line, "BatchQuantityAfter") == 0),
+            "详细加工日志没有投影真实满批锁量与完工份数");
         Require(details.Any(line => Transition(line, "RawClaimed", "ReadyToProcess", "WaitingForRaw")) &&
             details.Any(line => Transition(line, "Processed", "Processing", "ReadyToProcess")),
             "加工状态没有读取真实库存可领取状态");
@@ -243,7 +249,7 @@ public static class TestProductionDiagnostics
         ProcessingSystem processing, FarmExchange.Inventory.Inventory inventory, int count)
     {
         var farmBefore = new FarmSnapshot(CropKind.Radish, CropStage.Seeded, 0);
-        var processorBefore = new ProcessorDiagnosticState(CropKind.Radish, ProcessorStatus.Processing, 1);
+        var processorBefore = new ProcessorDiagnosticState(CropKind.Radish, ProcessorStatus.Processing, 1, 1);
         var idle = new WorkerTaskDiagnosticState(WorkerActivity.Idle, null);
         var moving = new WorkerTaskDiagnosticState(WorkerActivity.Moving, 0);
         for (int i = 0; i < count; i++)

@@ -91,7 +91,7 @@ public partial class TestResources : Node
     {
         var stock = new GoodsInventory();
         stock.AddRaw(CropKind.Wheat, 3);
-        if (!stock.TryTakeRawForProcessing(CropKind.Wheat) || stock.GetRaw(CropKind.Wheat) != 2 ||
+        if (!stock.TryTakeRawForProcessing(CropKind.Wheat, 1, out _) || stock.GetRaw(CropKind.Wheat) != 2 ||
             stock.GetRaw(CropKind.Corn) != 0)
             return Fail("加工领取改变了错误的原料库存");
         stock.TakeAllRaw(CropKind.Wheat);
@@ -123,15 +123,15 @@ public partial class TestResources : Node
 
         stock.AddRaw(CropKind.Radish, 3);
         stock.SetRawReserve(CropKind.Radish, 4);
-        if (stock.TryTakeRawForProcessing(CropKind.Radish) || stock.GetRaw(CropKind.Radish) != 3 ||
+        if (stock.TryTakeRawForProcessing(CropKind.Radish, 1, out _) || stock.GetRaw(CropKind.Radish) != 3 ||
             stock.GetProcessingAvailability(CropKind.Radish) != RawProcessingAvailability.Reserved)
             return Fail("库存低于保留底线仍被领取");
         stock.SetRawReserve(CropKind.Radish, 3);
-        if (stock.TryTakeRawForProcessing(CropKind.Radish))
+        if (stock.TryTakeRawForProcessing(CropKind.Radish, 1, out _))
             return Fail("库存等于保留底线仍被领取");
         stock.SetRawReserve(CropKind.Radish, 2);
         if (stock.GetProcessingAvailability(CropKind.Radish) != RawProcessingAvailability.Available ||
-            !stock.TryTakeRawForProcessing(CropKind.Radish) || stock.TryTakeRawForProcessing(CropKind.Radish) ||
+            !stock.TryTakeRawForProcessing(CropKind.Radish, 1, out _) || stock.TryTakeRawForProcessing(CropKind.Radish, 1, out _) ||
             stock.GetRaw(CropKind.Radish) != 2 || stock.GetRawReserve(CropKind.Wheat) != 0)
             return Fail("领取未保留底线，或影响了其他品种");
 
@@ -149,7 +149,7 @@ public partial class TestResources : Node
             return Fail("公共原料出售受底线阻止，或出售清除了底线");
         stock.SetRawReserve(CropKind.Radish, 0);
         stock.AddRaw(CropKind.Radish, 1);
-        if (!stock.TryTakeRawForProcessing(CropKind.Radish) || stock.GetRaw(CropKind.Radish) != 0)
+        if (!stock.TryTakeRawForProcessing(CropKind.Radish, 1, out _) || stock.GetRaw(CropKind.Radish) != 0)
             return Fail("默认底线 0 未允许最后一份原料加工");
         return true;
     }

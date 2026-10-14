@@ -42,8 +42,8 @@ internal sealed class ProductionLog
     });
 
     internal void Harvested(CropKind crop, int quantity) => Observe(() => _harvested[(int)crop] += quantity);
-    internal void Consumed(CropKind crop) => Observe(() => _consumed[(int)crop]++);
-    internal void Produced(CropKind crop) => Observe(() => _produced[(int)crop]++);
+    internal void Consumed(CropKind crop, int quantity) => Observe(() => _consumed[(int)crop] += quantity);
+    internal void Produced(CropKind crop, int quantity) => Observe(() => _produced[(int)crop] += quantity);
     internal void WorkerCompleted(FarmWorkKind kind) => Observe(() =>
     {
         if (kind == FarmWorkKind.Sow) _sown++;

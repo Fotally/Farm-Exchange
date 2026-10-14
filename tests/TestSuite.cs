@@ -33,6 +33,7 @@ public partial class TestSuite : Node
         bool resourcesPassed = TestResources.RunChecks();
         GD.Print("单元测试：土地、农田与加工状态边界");
         bool productionStatePassed = TestProductionState.RunChecks();
+        productionStatePassed = TestBatchProcessing.RunChecks() && productionStatePassed;
         productionStatePassed = TestWeatherSystem.RunChecks() && productionStatePassed;
         productionStatePassed = TestWeatherYield.RunChecks() && productionStatePassed;
         GD.Print("单元测试：完整设施空间、子格映射与放置几何");
@@ -89,6 +90,7 @@ public partial class TestSuite : Node
         bool coreLoopPassed = TestCoreLoop.RunChecks(this);
         GD.Print("端到端测试：建造检索、选种信息与设施真实进度");
         bool facilitiesPassed = TestUiFacilities.RunChecks(this);
+        facilitiesPassed = await TestBatchProcessingUi.RunChecksAsync(this) && facilitiesPassed;
         GD.Print("性能测试：满地图 headless 负载");
         bool loadPassed = TestFullWorldLoad.RunChecks();
         GD.Print("端到端测试：库存编辑真实布局与滚动");

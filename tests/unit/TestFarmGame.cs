@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using Godot;
@@ -349,7 +350,7 @@ public partial class TestFarmGame : Node
             if (game.AdvanceTick().Harvested != 0)
                 return Fail("九个子格导致农田进度被重复推进");
         TickResult harvest = game.AdvanceTick();
-        if (harvest.Harvested < 36 || game.GetRawStock(CropKind.Radish) != harvest.Harvested - 1 ||
+        if (harvest.Harvested < 36 || game.GetRawStock(CropKind.Radish) != harvest.Harvested - 9 ||
             game.GetPlot(processor).RemainingSeconds != 26)
             return Fail("多格农田收成或加工领取被按子格倍增");
         foreach (Vector2I offset in BuildingFootprint.Get(BuildingKind.Processor).Offsets)
@@ -359,9 +360,9 @@ public partial class TestFarmGame : Node
         for (int second = 0; second < 25; second++)
             if (game.AdvanceTick().Produced != 0)
                 return Fail("九个子格导致加工批次被重复推进");
-        if (game.AdvanceTick().Produced != 1 || game.GetProductStock(CropKind.Radish) != 1 ||
-            game.GetRawStock(CropKind.Radish) != harvest.Harvested - 2 || !game.HasConsistentState())
-            return Fail("一座加工场地没有每批次仅产出、领取一份");
+        if (game.AdvanceTick().Produced != 9 || game.GetProductStock(CropKind.Radish) != 9 ||
+            game.GetRawStock(CropKind.Radish) != harvest.Harvested - 18 || !game.HasConsistentState())
+            return Fail("一座加工场地没有每批次产出、领取实际九份");
         return true;
     }
 
@@ -504,23 +505,25 @@ public partial class TestFarmGame : Node
             if (game.GetRawStock(crop.Kind) != 0)
                 return Fail($"{crop.CropName}过早成熟");
             TickResult harvest = game.AdvanceTick();
+            int batchQuantity = Math.Min(9, harvest.Harvested);
             if (harvest.Harvested < crop.HarvestQuantity * 6 || harvest.Harvested > crop.HarvestQuantity * 9 ||
-                game.GetRawStock(crop.Kind) != harvest.Harvested - 1 ||
+                game.GetRawStock(crop.Kind) != harvest.Harvested - batchQuantity ||
+                game.GetProcessorDetails(processor).BatchQuantity != batchQuantity ||
                 game.GetPlot(processor).RemainingSeconds != processingSeconds)
                 return Fail($"{crop.CropName}未按时收获并投入对应场地");
             SaleResult rawSale = game.SellRaw(crop.Kind);
-            if (rawSale.Quantity != harvest.Harvested - 1)
+            if (rawSale.Quantity != harvest.Harvested - batchQuantity)
                 return Fail($"{crop.CropName}原料库存或加工中的原料出售错误");
             for (int i = 0; i < processingSeconds - 1; i++)
                 game.AdvanceTick();
             if (game.GetProductStock(crop.Kind) != 0)
                 return Fail($"{crop.ProductName}过早产出");
             TickResult finished = game.AdvanceTick();
-            if (finished.Produced != 1 || game.GetProductStock(crop.Kind) != 1)
+            if (finished.Produced != batchQuantity || game.GetProductStock(crop.Kind) != batchQuantity)
                 return Fail($"{crop.ProductName}未按时产出");
-            int expectedRevenue = game.GetProductPriceCents(crop.Kind);
+            int expectedRevenue = batchQuantity * game.GetProductPriceCents(crop.Kind);
             SaleResult sale = game.SellAll();
-            if (sale.Quantity != 1 || sale.RevenueCents != expectedRevenue ||
+            if (sale.Quantity != batchQuantity || sale.RevenueCents != expectedRevenue ||
                 game.MoneyCents != 3000 + expectedRevenue + rawSale.RevenueCents ||
                 game.GetProductStock(crop.Kind) != 0 || game.SellAll().Quantity != 0)
                 return Fail($"{crop.ProductName}出售或库存更新错误");
@@ -580,7 +583,7 @@ public partial class TestFarmGame : Node
             return Fail("原料被直接出售");
         game.RemoveBuilding(processor);
         game.BuildProcessor(processor, CropKind.Corn);
-        if (game.GetRawStock(CropKind.Corn) != cornHarvest - 1 ||
+        if (game.GetRawStock(CropKind.Corn) != cornHarvest - 9 ||
             game.GetPlot(processor).RemainingSeconds != 155)
             return Fail("新建匹配场地没有自动处理库存原料");
         return true;
@@ -821,15 +824,19 @@ public partial class TestFarmGame : Node
         if (historyQuantity < 36)
             return Fail("越季连接回归没有建立真实历史收成");
         game.BuildProcessor(processor, CropKind.Radish);
+        int completedBatchQuantity = game.GetProcessorDetails(processor).BatchQuantity;
         for (int step = 0; step < 26; step++)
             game.AdvanceTick();
-        game.RemoveBuilding(processor); // 拆除第二批已投入物，留下 4 原料与 1 成品。
+        int discardedBatchQuantity = game.GetProcessorDetails(processor).BatchQuantity;
+        game.RemoveBuilding(processor); // 第一批九份入库；第二批九份投入随拆除丢弃，其余原料保留。
         while (game.Calendar.ElapsedSeconds < 4319)
             game.AdvanceTick();
         int rawStock = game.GetRawStock(CropKind.Radish);
         int productStock = game.GetProductStock(CropKind.Radish);
         int money = game.MoneyCents;
-        if (rawStock != historyQuantity - 2 || productStock != 1)
+        if (completedBatchQuantity != 9 || discardedBatchQuantity != 9 ||
+            rawStock != historyQuantity - completedBatchQuantity - discardedBatchQuantity ||
+            productStock != completedBatchQuantity)
             return Fail("越季连接回归没有保留两类历史库存");
 
         // 复用现有负载夹具建立临界点进行中的作物，不人为延迟工人供水。

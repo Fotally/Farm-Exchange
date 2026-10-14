@@ -121,8 +121,10 @@ public partial class TestUiFacilities : Node
         PlotSnapshot processing = game.GetPlot(processor);
         Label remaining = Find<Label>(main, "ProcessorActualProgress");
         if (processing.RemainingSeconds <= 0 || !Find<ProgressBar>(main, "ProcessorProgress").Visible ||
-            !remaining.Text.Contains($"实际剩余 {Days(processing.RemainingSeconds)} 天"))
-            return Fail("加工详情未显示真实批次进度");
+            !remaining.Text.Contains($"实际剩余 {Days(processing.RemainingSeconds)} 天") ||
+            game.GetProcessorDetails(processor).BatchQuantity != 1 ||
+            !Find<Label>(main, "ProcessorRelation").Text.Contains("本批投入 1 份"))
+            return Fail("加工详情未显示真实少量批次和进度");
         string pausedText = remaining.Text;
         double pausedValue = Find<ProgressBar>(main, "ProcessorProgress").Value;
         game.SetPaused(true);

@@ -47,19 +47,19 @@ public static class TestProductionLogging
         using var game = Empty(logging);
         game.SetPaused(true);
         Require(game.BuildProcessor(Processor, CropKind.Radish) == null, "准备空闲加工场地失败");
-        Require(game.Buy(Raw, 4).Success, "买入原料失败");
-        game.SetRawReserve(CropKind.Radish, 4);
+        Require(game.Buy(Raw, 5).Success, "买入原料失败");
+        game.SetRawReserve(CropKind.Radish, 5);
         Require(game.BuildProcessor(new(192, 192), CropKind.Radish) == null, "准备第二场地失败");
-        Require(game.GetStock(Raw) == 4, "底线未阻挡开工");
-        game.SetRawReserve(CropKind.Radish, 0);
+        Require(game.GetStock(Raw) == 5, "底线未阻挡开工");
+        game.SetRawReserve(CropKind.Radish, 1);
         now = 60_000;
         Require(game.BuildProcessor(new(195, 192), CropKind.Radish) == null, "暂停新建失败");
         string first = Events(text).Single();
-        Require(Value(first, "RawConsumedByCrop", "Radish") == 3 && Value(first, "ProducedByCrop", "Radish") == 0,
+        Require(Value(first, "RawConsumedByCrop", "Radish") == 4 && Value(first, "ProducedByCrop", "Radish") == 0,
             "暂停新建触发的全场领取没有独立记实际投入");
         Require(Stock(first, "Start", Raw) == 0 && Stock(first, "End", Raw) == 1 && Number(first, "SimulationSecondsEnd") == 0,
             "暂停窗口边界或库存错误");
-        Require(Number(first, "MoneyStartCents") - Number(first, "MoneyEndCents") == 3000 + 4 * game.GetQuote(Raw).PriceCents,
+        Require(Number(first, "MoneyStartCents") - Number(first, "MoneyEndCents") == 3000 + 5 * game.GetQuote(Raw).PriceCents,
             "建造与买入资金边界错误");
         Require(game.CreateTradeOrder(new TradeOrderRequest(Raw, TradeOrderSide.Sell, TradeOrderFrequency.Once,
             TradeOrderQuantityMode.Fixed, 1, TradeOrderBudgetMode.None, 0, 0, CashReserveMode.Amount, 0,
@@ -70,15 +70,15 @@ public static class TestProductionLogging
         now = 120_000;
         game.AdvanceTicks(26);
         string second = Events(text).Last();
-        Require(Value(second, "RawConsumedByCrop", "Radish") == 0 && Value(second, "ProducedByCrop", "Radish") == 3,
+        Require(Value(second, "RawConsumedByCrop", "Radish") == 0 && Value(second, "ProducedByCrop", "Radish") == 4,
             "跨窗完工被倒算为当窗投入");
-        Require(Stock(second, "Start", Raw) == Stock(first, "End", Raw) && Stock(second, "End", Product) == 3,
+        Require(Stock(second, "Start", Raw) == Stock(first, "End", Raw) && Stock(second, "End", Product) == 4,
             "期末未复用为下窗期初");
-        Require(game.Sell(Product, 1).Success && game.Buy(Product, 2).Success && game.SellAll().Quantity == 4,
+        Require(game.Sell(Product, 1).Success && game.Buy(Product, 2).Success && game.SellAll().Quantity == 5,
             "商品买卖准备失败");
         game.Dispose();
         string tail = Events(text).Last();
-        Require(Stock(tail, "Start", Product) == 3 && Stock(tail, "End", Product) == 0 &&
+        Require(Stock(tail, "Start", Product) == 4 && Stock(tail, "End", Product) == 0 &&
             Value(tail, "ProducedByCrop", "Radish") == 0 && tail.Contains("IsPartialWindow: true"), "尾段交易或窗口重复计产出");
         foreach (string line in Events(text))
         {

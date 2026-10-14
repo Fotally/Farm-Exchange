@@ -154,7 +154,7 @@ public partial class TestParameterizedScenario : Node
             Advance(driver, scenario);
             if (scenario.Outcome != ScenarioOutcome.Passed || scenario.Report.Produced != config.Quantity ||
                 scenario.Report.Final!.Product.Total != 0 || scenario.Report.Final.BuildingCount != 1 ||
-                scenario.Report.OrderWaitTicks != 1 || scenario.Report.ActualSeed != config.Seed || driver.Rate != config.TimePlan[^1].Rate)
+                scenario.Report.OrderWaitTicks != 1 || scenario.Report.ActualSeed != config.Seed || driver.Rate != scenario.CurrentRateIntent)
                 return Fail("独立Q份流程或实际配置倍率未通过：" + scenario.Progress);
             foreach (ScenarioCheck check in scenario.Report.Checks)
                 if (check.Status != ScenarioCheckStatus.Passed)
@@ -171,6 +171,27 @@ public partial class TestParameterizedScenario : Node
             Advance(Driver(scenario), scenario);
             if (scenario.Outcome != ScenarioOutcome.Passed || scenario.Report.Produced != 2 || scenario.Game.GetBuildingSpaces().Count != 1)
                 return Fail("七原料Q=2共用流程未通过：" + crop.Kind + " " + scenario.Progress);
+        }
+        ScenarioConfiguration twelve = Load(directory, Config(quantity: 12, processingLimit: 53).Replace(
+            "[{\"endDate\":\"01-02-01\",\"rate\":1}]",
+            "[{\"endDate\":\"01-01-02\",\"rate\":2},{\"endDate\":\"01-02-01\",\"rate\":16}]"));
+        var twelveScenario = Start(directory, twelve);
+        var twelveDriver = Driver(twelveScenario);
+        Advance(twelveDriver, twelveScenario);
+        if (twelveScenario.Outcome != ScenarioOutcome.Passed || twelveScenario.Report.Produced != 12 ||
+            twelveScenario.Report.ProcessingWaitTicks != 53 || twelveDriver.Rate != 16 ||
+            !twelveScenario.Report.Intervals.Exists(interval => interval.Processor.BatchQuantity == 9) ||
+            !twelveScenario.Report.Intervals.Exists(interval => interval.Result.Produced == 9 && interval.Processor.BatchQuantity == 3) ||
+            !twelveScenario.Report.Intervals.Exists(interval => interval.Result.Produced == 3 && interval.Processor.BatchQuantity == 0))
+            return Fail("跨九份的开发流程报告没有保留实际批量、末批与份数汇总");
+        string twelveReport = twelveScenario.WriteReport();
+        using (JsonDocument json = JsonDocument.Parse(File.ReadAllText(twelveReport)))
+        {
+            bool serialized = false;
+            foreach (JsonElement interval in json.RootElement.GetProperty("intervals").EnumerateArray())
+                serialized |= interval.GetProperty("processor").GetProperty("batchQuantity").GetInt32() == 9;
+            if (!serialized || json.RootElement.GetProperty("produced").GetInt64() != 12)
+                return Fail("报告JSON把实际加工份数退回批次数或遗漏锁量");
         }
         return true;
     }

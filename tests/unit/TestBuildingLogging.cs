@@ -229,13 +229,14 @@ public static class TestBuildingLogging
         game.SetPaused(true);
         Require(game.BuildProcessor(new(0, 0), CropKind.Radish) == null, "旧加工场地创建失败");
         Require(game.SetRawReserve(CropKind.Radish, 2, CommandOrigin.Scenario) == RawReserveFailure.None, "底线设置失败");
-        Require(game.Buy(new(CropKind.Radish, CommodityKind.Raw), 2).Success, "暂停原料买入失败");
-        Require(game.SetRawReserve(CropKind.Radish, 0) == RawReserveFailure.None && game.GetRawStock(CropKind.Radish) == 2,
+        Require(game.Buy(new(CropKind.Radish, CommodityKind.Raw), 12).Success, "暂停原料买入失败");
+        Require(game.SetRawReserve(CropKind.Radish, 0) == RawReserveFailure.None && game.GetRawStock(CropKind.Radish) == 12,
             "设置底线错误触发领取");
         Require(game.SetRawReserve(CropKind.Radish, -5) == RawReserveFailure.InvalidQuantity &&
             game.SetRawReserve((CropKind)999, 4) == RawReserveFailure.InvalidCrop, "底线非法请求未拒绝");
         Require(game.BuildProcessor(new(3, 0), CropKind.Radish) == null && game.GetRawStock(CropKind.Radish) == 0 &&
             game.GetPlot(new(0, 0)).RemainingSeconds > 0 && game.GetPlot(new(3, 0)).RemainingSeconds > 0 &&
+            game.GetProcessorDetails(new(0, 0)).BatchQuantity == 9 && game.GetProcessorDetails(new(3, 0)).BatchQuantity == 3 &&
             game.Calendar.ElapsedSeconds == 0, "暂停新建未保持原全场领取语义");
         string processor = Events(text, "BuildingPlaced").Last();
         Require(processor.Contains("IsPaused: true") && processor.Contains("Crop: \"Radish\"") &&

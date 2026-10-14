@@ -110,10 +110,10 @@ public sealed record ScenarioConfigurationReference(string Path, string CaseId, 
 public sealed record ScenarioCheck(string Name, ScenarioCheckStatus Status, string Evidence);
 public sealed record ScenarioOperation(string Name, uint ElapsedTicks, object Request, object Result, ScenarioSnapshot Before, ScenarioSnapshot After);
 public sealed record ScenarioPreparation(string Name, object Request, object Result);
-public sealed record ScenarioInterval(uint StartTicks, uint EndTicks, uint AdvancedTicks, bool IsEvent, TickResult Result);
+public sealed record ScenarioInterval(uint StartTicks, uint EndTicks, uint AdvancedTicks, bool IsEvent, TickResult Result, ScenarioProcessor Processor);
 public sealed record ScenarioTimeObservation(uint ElapsedTicks, double RequestedRate, double ActualRate, string Source, bool IsPaused);
 public sealed record ScenarioStock(int Total, int Available, int Frozen);
-public sealed record ScenarioProcessor(int X, int Y, BuildingKind Building, CropKind Crop, int RemainingSeconds, ProcessorStatus? Status);
+public sealed record ScenarioProcessor(int X, int Y, BuildingKind Building, CropKind Crop, int RemainingSeconds, ProcessorStatus? Status, int BatchQuantity);
 public sealed record ScenarioSnapshot(CalendarSnapshot Calendar, int BalanceCents, int AvailableCents, int FrozenCents,
     ScenarioStock Raw, ScenarioStock Product, int RawReserve, ScenarioProcessor Processor,
     int BuildingCount, MarketQuoteSnapshot RawQuote, MarketQuoteSnapshot ProductQuote, IReadOnlyList<TradeOrderSnapshot> Orders);
