@@ -146,24 +146,28 @@ public static class TestDiagnosticCapture
         game.Log.Diagnostics.Stop();
         game.Log.Diagnostics.Start(new(new[] { "ViewChanged" }, IncludeGameEvents: true));
         view.Observe(new(1920, 1080), new(1920, 1080), 1.5f, Vector2.Zero, 0);
-        for (int i = 0; i < 2000; i++)
-            view.Observe(new(1920, 1080), new(1920, 1080), 1.5f, Vector2.Zero, 0);
-        long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 2000; i++)
-            view.Observe(new(1920, 1080), new(1920, 1080), 1.5f, Vector2.Zero, 0);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        MeasureViewAllocations(view, changes: false);
+        long allocated = MeasureViewAllocations(view, changes: false);
         Require(allocated == 0, "已选择视图事件的稳定帧产生托管分配：" + allocated);
     }
 
     private static void CheckUnallocatedViewChanges(ViewDiagnostics view, string mode)
     {
-        for (int i = 0; i < 2000; i++)
-            view.Observe(new(1920, 1080), new(1920, 1080), 1.5f, new(i, i), i);
+        MeasureViewAllocations(view, changes: true);
+        long allocated = MeasureViewAllocations(view, changes: true);
+        Require(allocated == 0, mode + "的实际视图变化产生托管分配：" + allocated);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static long MeasureViewAllocations(ViewDiagnostics view, bool changes)
+    {
+        // 预执行与正式采样走相同计量路径，包含两次计数读取；断言和消息留在测量外。
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 2000; i++)
-            view.Observe(new(1920, 1080), new(1920, 1080), 1.5f, new(i, i), i);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Require(allocated == 0, mode + "的实际视图变化产生托管分配：" + allocated);
+        {
+            view.Observe(new(1920, 1080), new(1920, 1080), 1.5f, changes ? new(i, i) : Vector2.Zero, changes ? i : 0);
+        }
+        return GC.GetAllocatedBytesForCurrentThread() - before;
     }
 
     private static void CheckSubmissionExpiry()

@@ -28,7 +28,7 @@
 
 `RuntimeLog.ProcessFrame` 只由 `Main._Process` 开头调用一次。独立局、驱动不重复采样。第一帧建立高精度基线，此后仅累计 count/sum/max；60 秒窗口和会话关闭尾段输出 ProcessFrames，未保存逐帧数组，也没有局身份或经营秒。关闭顺序为各局生产/性能/诊断尾段与 GameEnded、进程帧尾段、SessionEnded。
 
-`ViewDiagnostics` 对比实际窗口、视口、CameraController 玩家倍率与地图本地镜头中心；缓存增量来自 WorldMap 已执行 `_Draw` 的计数，QueueRedraw 不代表重建完成。每帧的值比较、基线更新和门禁，与含捕获 lambda 的私有记录方法分开；未开启、未选择该事件或 Release 门禁拒绝时，不进入会分配闭包和字段的慢路径。稳定帧只更新固定量的观察基线，不输出重复事件。`TestDiagnosticCapture` 对未开启、未选择事件的连续真实视图变化以及已选择事件的稳定帧，预热后检查严格零托管分配。Main 的 DEBUG 内部 `LoggingFactory` 与 `InitialSeed` 仅供图形验收夹具在父 `_EnterTree`、任何 Game/Driver 初始化之前设置，并于结束清空；发布编译不包含这些接缝。
+`ViewDiagnostics` 对比实际窗口、视口、CameraController 玩家倍率与地图本地镜头中心；缓存增量来自 WorldMap 已执行 `_Draw` 的计数，QueueRedraw 不代表重建完成。每帧的值比较、基线更新和门禁，与含捕获 lambda 的私有记录方法分开；未开启、未选择该事件或 Release 门禁拒绝时，不进入会分配闭包和字段的慢路径。稳定帧只更新固定量的观察基线，不输出重复事件。`TestDiagnosticCapture` 对未开启、未选择事件的连续真实视图变化以及已选择事件的稳定帧，复用同一个禁止内联的完整计量函数：固定预执行一次，再正式采样 2000 次，包含相同的两次当前线程分配计数读取；断言及消息构造位于计量外。三种场景均要求严格零托管分配，不重试、不取最小值、不设置容差；测量限制见[日志专项验收](implementation-validation.md#视图零分配计量)。Main 的 DEBUG 内部 `LoggingFactory` 与 `InitialSeed` 仅供图形验收夹具在父 `_EnterTree`、任何 Game/Driver 初始化之前设置，并于结束清空；发布编译不包含这些接缝。
 
 `TestDiagnosticCapture`、`TestPerformanceLogging` 以及生产/交易诊断测试经 TestSuite 注册。内部 `RuntimeLog.CaptureDiagnostics(writer, uptime, timestamp?)` 只控制诊断/性能的现实窗口和高精度时间，不改变公共日志头和生产资源窗口时钟；用于预算、故障传播、批次返回值、暂停和多局帧归属验证。真实运行及故障/图形证据以专项验收工件为准。
 
