@@ -10,4 +10,4 @@
 
 暂停时仍可主动交易与修改底线，日历、行情和生产均保持。市场展示十四商品当前报价、上次报价、实际涨跌和库存，并显示本次、下一次实际报价日期及已公布消息。刷新保留所选商品、数量草稿、输入焦点与光标；点击执行时重新使用已生效报价。
 
-交易命令见[FarmGame 接口](../../architecture/game-state/farm-game/interface-farm-game.md)，完整结算见[TradingService 接口](../../architecture/trading/trading-service/interface-trading-service.md)。`tests/unit/TestTradingService.cs` 验证收支守恒、失败零修改、全售完整性、当前价、暂停交易与买入领取时点，并在整百分前后货值下检查即时买卖持续零费；主场景交易由端到端测试验收。
+交易命令见[FarmGame 接口](../../architecture/game-state/farm-game/interface-farm-game.md)，完整结算见[TradingService 接口](../../architecture/trading/trading-service/interface-trading-service.md)。`tests/unit/trading/TestTradingService.cs` 验证收支守恒、失败零修改、全售完整性、当前价、暂停交易与买入领取时点，并在整百分前后货值下检查即时买卖持续零费；主场景交易由端到端测试验收。

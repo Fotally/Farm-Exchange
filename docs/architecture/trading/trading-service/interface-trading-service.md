@@ -32,7 +32,7 @@
 
 上述经营入口增加可选 CommandOrigin，默认 Player；来源仅允许 Player/Scenario，非法值在任何指令记录与业务提交前抛参数异常。经营层的局部执行手续负责一次业务调用及原异常传播，领域日志观察请求和真实结果，不执行交易。全部加工品只记录一次 AllProductsSold 及七条明细，兼容入口不重复发出单商品交易事件。新增 `TestTradeLogging` 覆盖来源、冻结下全售、实际价、聚合明细和真实 File 日志；经营规则仍由原 `TestTradingService` 验证。
 
-库存接口见[统一公共库存](../../inventory/inventory/interface-inventory.md)，委托配置和相位见[委托模块](../trade-order-book/interface-trade-order-book.md)，经营顺序见[经营步进](../../game-state/farm-game/implementation-tick-order.md)。`tests/unit/TestTradingService.cs` 验证十四商品收支守恒、失败零修改、库存与钱包容量、全成品出售完整性、执行时价格、暂停交易与买入后的加工领取，以及整百分前后买卖费用、含费精确余额、现金保留、净收入容量和同边界即时零费；`TestTradeOrders` 通过完整建单及成交行为验证估算与预算能力，不依赖私有金额计算。
+库存接口见[统一公共库存](../../inventory/inventory/interface-inventory.md)，委托配置和相位见[委托模块](../trade-order-book/interface-trade-order-book.md)，经营顺序见[经营步进](../../game-state/farm-game/implementation-tick-order.md)。`tests/unit/trading/TestTradingService.cs` 验证十四商品收支守恒、失败零修改、库存与钱包容量、全成品出售完整性、执行时价格、暂停交易与买入后的加工领取，以及整百分前后买卖费用、含费精确余额、现金保留、净收入容量和同边界即时零费；`TestTradeOrders` 通过完整建单及成交行为验证估算与预算能力，不依赖私有金额计算。
 
 ## 有界规则诊断
 

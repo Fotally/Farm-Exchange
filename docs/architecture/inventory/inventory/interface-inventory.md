@@ -19,6 +19,6 @@
 
 `Inventory` 不决定价格，也不持有金币。加工保留底线只限制自动加工；手动出售可扣减底线内的可用部分，且不清除底线。一次卖单冻结与加工底线分别维护，手动交易和加工都不能消费冻结商品。买入原料进入同一公共库存，操作不触发加工。`FarmGame` 按经营领取阶段协调加工；新建场地保持立即执行同一全场领取路径。完整交易由[交易模块](../../trading/trading-service/interface-trading-service.md)协调，玩家规则见[库存、行情与即时交易](../../../gameplay/trading/sales.md)和[委托策略](../../../gameplay/trading/orders.md)。
 
-`tests/unit/TestResources.cs` 验证统一与既有接口共用库存、默认底线、低于/等于/高于底线、逐种独立、非法值与整数上限；`TestTradingService.cs` 验证交易失败零修改、手动出售底线库存与买入后的领取时点；`TestTradeOrders.cs` 验证冻结、编辑释放及手动交易和加工隔离；`TestBatchProcessing.cs` 验证批量原子领取、冻结与底线叠加、最大整数库存和失败零修改。
+`tests/unit/inventory/TestResources.cs` 验证统一与既有接口共用库存、默认底线、低于/等于/高于底线、逐种独立、非法值与整数上限；`tests/unit/trading/TestTradingService.cs` 验证交易失败零修改、手动出售底线库存与买入后的领取时点；`tests/unit/trading/TestTradeOrders.cs` 验证冻结、编辑释放及手动交易和加工隔离；`tests/unit/processing/TestBatchProcessing.cs` 验证批量原子领取、冻结与底线叠加、最大整数库存和失败零修改。
 
 `TestTradeOrders.CheckGameplayPhases` 保留委托成交晚于加工领取的相位断言，先完整冻结两份真实原料阻止领取，撤单后下一经营秒一次锁定两份、公共原料归零且冻结释放；不再以旧单份领取量判断恢复。

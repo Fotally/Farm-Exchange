@@ -24,7 +24,7 @@
 
 本模块不判断建造费用。`PlacementRules` 读取本表和余额，统一返回放置原因；`FarmGame` 在同一经营命令中协调完整占地与锚点上的一份生产状态。道路只登记或释放本表，不创建 `FarmingSystem` / `ProcessingSystem` 状态。主要占用类别由 `BuildingKind` 表示，道路在原枚举之后追加为 `Road`，不改变旧值。
 
-`tests/unit/TestLandOccupancy.cs` 通过上述接口验证任意锚点、九子格同实例、四向子格朝向一致、固定工作中心、非法朝向零登记、道路只允许 q0、四角道路、贴边生产设施、部分越界和末端冲突零修改、任意子格整体拆除、道路互斥、重建恢复 q0 与清理、实例排序及旧快照不可变性。
+`tests/unit/land/TestLandOccupancy.cs` 通过上述接口验证任意锚点、九子格同实例、四向子格朝向一致、固定工作中心、非法朝向零登记、道路只允许 q0、四角道路、贴边生产设施、部分越界和末端冲突零修改、任意子格整体拆除、道路互斥、重建恢复 q0 与清理、实例排序及旧快照不可变性。
 
 道路占用与材质由本模块唯一维护；`FarmGame` 将成功建拆后的稳定只读实例快照交给 `TerrainMap`，后者仅派生原生导航区域成本，五材质同等偏好。道路不影响工人速度、碰撞或陆地可达性，`WorkerScheduler` 仍唯一维护移动计时，不读取道路改变速度；`TerrainMap` 不接管计时。保持一秒推进与只读工人快照 Interface，不另复制一份业务道路占用，也不通过 UI 或动画计算经营速度。道路准备及最新版本同步见 [FarmGame Interface](../../game-state/farm-game/interface-farm-game.md)。
 

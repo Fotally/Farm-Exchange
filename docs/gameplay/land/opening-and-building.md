@@ -18,4 +18,4 @@
 
 道路按实际四邻格自动连接，五种材质仅改变外观，跨材质仍连接；与生产设施的任一占用子格互斥，重复铺路拒绝整段且不扣费，不覆盖或自动跳过旧路。预览包含候选与受影响旧路的操作后连接形状，冲突格不能当作新路。退出工具后可在道路详情拆除一个基础格，不退款。道路不产生原料、加工批次或水分，不改变工人速度、通行或可达性；道路选路偏好会影响新规划路线和到田时刻，五种材质同等优先，详见[道路规则](roads.md)。
 
-建造和移除命令见[FarmGame 接口](../../architecture/game-state/farm-game/interface-farm-game.md)，玩家操作见[主界面接口](../../architecture/ui/main/interface-main.md)。`tests/unit/TestFarmGame.cs` 验证开局、按类型收费、道路互斥与整批执行重验、无路/有路/断路三轮生产和余额限制；`tests/e2e/TestCoreLoop.cs` 验证目录与单格详情，`TestBuildPlacement` 验证农田／七加工场地连续摆放、四向、R输入焦点、取消、冻结提示及真实镜头输入，`TestRoadPlacement` 独立覆盖五材质整段与拆路交互，避免把道路再按单次点击建造验收。
+建造和移除命令见[FarmGame 接口](../../architecture/game-state/farm-game/interface-farm-game.md)，玩家操作见[主界面接口](../../architecture/ui/main/interface-main.md)。`tests/unit/gameplay/TestFarmGame.cs` 验证开局、按类型收费、道路互斥与整批执行重验、无路/有路/断路三轮生产和余额限制；`tests/e2e/TestCoreLoop.cs` 验证目录与单格详情，`TestBuildPlacement` 验证农田／七加工场地连续摆放、四向、R输入焦点、取消、冻结提示及真实镜头输入，`TestRoadPlacement` 独立覆盖五材质整段与拆路交互，避免把道路再按单次点击建造验收。

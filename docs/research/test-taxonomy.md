@@ -8,7 +8,7 @@
 
 | 标准类别 | 判断依据 | 本项目实际检查 | 执行 |
 | --- | --- | --- | --- |
-| 单元测试（Unit） | 独立检查一个模块的规则或计算。 | `tests/unit/TestFarmGame.cs` 检查经营状态，`TestMarketRules.cs` 检查市场及换日，`TestWorldMap.cs` 独立检查坐标换算与地图范围。 | 每次自动化运行。 |
+| 单元测试（Unit） | 独立检查一个模块的规则或计算。 | `tests/unit/gameplay/TestFarmGame.cs` 检查经营状态，`tests/unit/market/TestMarketRules.cs` 检查市场及换日，`tests/unit/world/TestWorldMap.cs` 独立检查坐标换算与地图范围。 | 每次自动化运行。 |
 | 集成测试（Integration） | 检查多个模块连接后的行为。 | `tests/integration/TestCameraInteraction.cs` 在主场景连接镜头、地图和界面，检查选格及拖动。 | 每次自动化运行。 |
 | 端到端测试（End-to-end） | 穿过一项功能的多个阶段。 | `tests/e2e/TestCoreLoop.cs` 通过主场景完成选地、种植、加工和出售。 | 每次自动化运行。 |
 | 性能测试（Performance） | 测量指定负载下的时间和帧率。 | `tests/performance/TestFullWorldLoad.cs` 在 16,384 格最大已定义负载下测 50 tick；`TestFullWorldFps.cs` 测移动镜头 FPS。 | 逻辑负载每次运行；图形 FPS 按需运行。 |

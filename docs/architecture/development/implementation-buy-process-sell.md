@@ -32,7 +32,7 @@
 
 窗口用同一幂等报告尝试入口处理正常完成、中止和宿主退出；退出入口不再访问子控件。独立局在保存成功或失败后释放日志，确保报告事件先于 `GameEnded`；原地流程始终保留主局。公共 Adapter 只持流程日志关联和终结去重，不拥有执行、配置或报告文件操作，见[时间与流程日志](../logging/implementation-time-scenario-observation.md)。
 
-[TestParameterizedScenario](../../../tests/unit/TestParameterizedScenario.cs) 通过真实共用驱动及公开经营接口验证严格配置、文件修改后参数固定、原始BOM摘要、Q=1、Q=3及Q=12（9+3批次、53秒加工等待、实际量报告）、倍率变段、暂停、现场已有批次/订单、手动改速中断、预算与日期边界、正式拒绝、底线阻塞、目标移除、撤单、中止、终止快照及路径/输出错误。长期用例保存在 [tests/scenario-configs/buy-process-sell](../../../tests/scenario-configs/buy-process-sell/)，复用现有TestSuite。
+[TestParameterizedScenario](../../../tests/unit/development/TestParameterizedScenario.cs) 通过真实共用驱动及公开经营接口验证严格配置、文件修改后参数固定、原始BOM摘要、Q=1、Q=3及Q=12（9+3批次、53秒加工等待、实际量报告）、倍率变段、暂停、现场已有批次/订单、手动改速中断、预算与日期边界、正式拒绝、底线阻塞、目标移除、撤单、中止、终止快照及路径/输出错误。长期用例保存在 [tests/scenario-configs/buy-process-sell](../../../tests/scenario-configs/buy-process-sell/)，复用现有TestSuite。
 
 `TestScenarioLogging` 覆盖八种真实终结结果、实际加载凭据固定、提前 RunId、主局/独立局身份、同值选择中断顺序、报告成功/冲突失败及采集开关/写入故障等价；运行结果见项目验收记录。
 
