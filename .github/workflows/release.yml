@@ -56,11 +56,12 @@ jobs:
             throw "版本 $version 已有标签，请使用新的版本号"
           }
 
-          $platforms = @(
-            @{ Name = 'Windows'; Workflow = 'ci.yml'; ArtifactPrefix = 'FarmExchange-windows-x86_64'; OutputPrefix = 'windows' },
+          $checks = @(
+            @{ Name = '测试'; Workflow = 'ci.yml' },
+            @{ Name = 'Windows'; Workflow = 'windows.yml'; ArtifactPrefix = 'FarmExchange-windows-x86_64'; OutputPrefix = 'windows' },
             @{ Name = 'macOS'; Workflow = 'macos.yml'; ArtifactPrefix = 'FarmExchange-macos-universal'; OutputPrefix = 'macos' }
           )
-          foreach ($platform in $platforms) {
+          foreach ($platform in $checks) {
             $runResponse = gh api "repos/$repository/actions/workflows/$($platform.Workflow)/runs?branch=main&head_sha=$($env:GITHUB_SHA)&status=success&per_page=1"
             if ($LASTEXITCODE -ne 0) {
               throw "查询 $($platform.Name) CI 运行记录失败"
@@ -75,6 +76,12 @@ jobs:
                 $ciRun.head_repository.full_name -cne $repository -or
                 $ciRun.status -cne 'completed' -or $ciRun.conclusion -cne 'success') {
               throw "$($platform.Name) CI 来源、提交或完成状态与本次发布不一致"
+            }
+
+            if (-not $platform.ArtifactPrefix) {
+              "$($platform.Name) 源 CI：$($ciRun.html_url)；提交：$($env:GITHUB_SHA)" |
+                Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+              continue
             }
 
             $artifactName = "$($platform.ArtifactPrefix)-$($env:GITHUB_SHA)"

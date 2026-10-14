@@ -39,8 +39,8 @@ gh api -H "Accept: application/vnd.github.raw+json" 'repos/Fotally/Farm-Exchange
 
 ## Main 分支保护
 
-`main` 要求通过 Pull Request 合并，并禁止直接推送、强制推送和删除。持续集成检查名为 `测试与导出`：`dev` 推送执行 headless 测试和 80% 业务脚本行覆盖率门槛；PR 人工合并进入 `main` 后再次测试，并在通过后导出、启动验证和上传 Windows x86_64 构建。地图绘制、镜头、实体负载或渲染相关修改需要图形 FPS 数据时，可手动触发工作流并勾选 `performance`，生成独立性能报告；普通推送不自动运行图形性能测试。工作流细节及本地复现命令见[构建与验收](build-and-validation.md)。
+`main` 要求通过 Pull Request 合并，并禁止直接推送、强制推送和删除。测试检查名为 `测试与覆盖率`；测试、Windows 构建和 macOS 构建在 `dev`、`main` 推送时独立并行运行，并均保留手动入口。测试执行 headless 场景及总体、逐模块 80% 行覆盖率门禁；两平台各自导出与启动验收。分支保护如引用旧检查名，须同步调整。GitHub Actions 不执行图形 FPS；涉及地图、渲染或 UI 的修改仍必须本地运行至少 1080P 的 FPS 验收并保存前后截图，其他修改按需执行。工作流细节及本地复现命令见[构建与验收](build-and-validation.md)。
 
 ## 版本发布
 
-版本发布只能在人工合并 `dev` → `main` 后从 `main` 发起。版本号判定、构建目录、正式压缩包命名和验收条件以项目根目录 `AGENTS.md` 的“版本发布”为唯一规则来源。操作者指定版本号并手动触发独立发布工作流，复用触发时 `main` 同提交成功的 Windows 与 macOS CI 产物；两平台都准备成功后，由工作流创建版本标签和单个 GitHub Release，同时上传 Windows x86_64 与 macOS Universal 2 两份 ZIP。标签、GitHub Release 与两平台压缩包的版本号一致才算发布完成，`build/` 内容不提交进 Git。详细操作及失败处理统一见[正式版本发布](release.md)。
+版本发布只能在人工合并 `dev` → `main` 后从 `main` 发起。版本号判定、构建目录、正式压缩包命名和验收条件以项目根目录 `AGENTS.md` 的“版本发布”为唯一规则来源。操作者指定版本号并手动触发独立发布工作流，要求触发时 `main` 同提交的测试、Windows 构建、macOS 构建三条 CI 全部成功，再复用两平台构建产物；两平台都准备成功后，由工作流创建版本标签和单个 GitHub Release，同时上传 Windows x86_64 与 macOS Universal 2 两份 ZIP。标签、GitHub Release 与两平台压缩包的版本号一致才算发布完成，`build/` 内容不提交进 Git。详细操作及失败处理统一见[正式版本发布](release.md)。

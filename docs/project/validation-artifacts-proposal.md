@@ -1,5 +1,7 @@
 # Windows 分发内容和失败性能证据修复设计
 
+当前入口已由 [#174](https://github.com/Fotally/Farm-Exchange/issues/174) 调整：Windows 导出独立至 `windows.yml`，有窗口 FPS 仅本地运行，发布要求同提交测试与两平台构建全部成功。下文保留原修复设计的历史依据，现行触发方式以 [持续集成](continuous-integration.md) 为准。
+
 关联 [#137](https://github.com/Fotally/Farm-Exchange/issues/137) 和 [#138](https://github.com/Fotally/Farm-Exchange/issues/138)。修复分支为 `fix/137-138-ci-artifacts`，基线为 `ed84e455d703e59cc0257b7295fe6c866e6987f6`。两项共同修改 Windows CI 的产物流程，安排在同一分支，仍按两个 issue 分别验收。2026-10-13 已实施下述脚本、两处工作流调用及自动契约；整合到 dev 后的正式引擎/Windows 导出闭环和远端 Actions 实际上传待验收。现行操作规则见 [持续集成](continuous-integration.md)、[Windows 构建](windows-build.md) 和 [正式发布](release.md)。
 
 两个真实调用方复用一个完整 Windows 分发准备命令：检查构建、真实启动、保存验收日志、清理仅属于验收的 runtime/debug 数据、检查干净分发内容，并在发布时生成及验证 ZIP。性能流程另用明确测量步骤与失败后收集，把“性能是否通过”与“证据是否保存”分别记录。
