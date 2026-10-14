@@ -27,6 +27,7 @@ public partial class TestRoadPlacement : Node
         window.Size = new Vector2I(1920, 1080);
         await Frames(parent);
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         Find<Button>(main, "PauseButton").EmitSignal(Button.SignalName.Pressed);
         try

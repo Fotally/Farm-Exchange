@@ -8,7 +8,7 @@
 | `PlacementResult` | `Success`、`Failure`、`ChargedCents`、`ErrorMessage`；执行成功才返回实际扣费，失败不扣费。 |
 | `LandFailure` | `None`、`InvalidBuilding`、`InvalidCrop`、`OutOfBounds`、`Occupied`、`InsufficientFunds`，追加 `InvalidOrientation` 保留原值。先验证类型和生产设施作物，再查朝向、完整占地范围、完整占用和余额；合法类型为农田、加工场地、道路，未知类别不得进入占用表。道路没有作物语义，跳过作物检查；两类生产建筑仍要求合法作物。生产设施只接受 q0～q3，道路只接受 q0，其他值正常返回 `InvalidOrientation` 与“无效建筑朝向”。 |
 
-内部 `Check(anchorCell, building, crop, occupancy, balanceCents, costCents, orientation=Q0)` 接受当前只读余额和经营入口提供的单座费用；朝向和完整几何检查委托 [LandOccupancy](../land-occupancy/interface-land-occupancy.md) 的 `CheckFootprint`。生产设施占九格但只按一座收费，道路按一格收费；旋转没有额外费用。部分越界先于范围内冲突返回 `OutOfBounds`，任一子格已有设施时返回 `Occupied`；失败费用均为零。
+内部 `Check(anchorCell, building, crop, occupancy, terrain, balanceCents, costCents, orientation=Q0)` 接收本局不可变地形、当前只读余额和经营入口提供的单座费用；朝向和完整几何检查委托 [LandOccupancy](../land-occupancy/interface-land-occupancy.md) 的 `CheckFootprint`。生产设施占九格但只按一座收费，道路按一格收费；旋转没有额外费用。范围、占用通过后逐格查询同一 `TerrainMap.IsFullLand`，任一格四角含水即返回追加的 `Water`，不再检查资金；完整陆地通过后检查余额。部分越界先于范围内冲突返回 `OutOfBounds`，任一子格已有设施时返回 `Occupied`；失败费用均为零。免费开局共用完整地形检查，含水局不能调用满地图夹具。
 
 `TryPlace` 在同步执行时重新调用相同规则，不信任早先的预检；通过后按 `FarmGame.GetBuildingCostCents(building)` 的统一类型价格扣款、在锚点登记一份生产状态并登记完整占地。道路只写占用，不建立生产状态、不触发加工领取；加工场地建成后立即按稳定锚点顺序扫描空闲场地领取原料。免费开局建筑用同一规则检查范围、类型和占用，费用为零；满地图基准仍走专用内部夹具。
 
@@ -16,7 +16,7 @@
 
 玩家规则见[开局与建筑建造](../../../gameplay/land/opening-and-building.md)；经营入口见[FarmGame 接口](../../game-state/farm-game/interface-farm-game.md)。
 
-PlacementDiagnostics 只由实际 TryPlace 命令重验后调用，接收原请求朝向与同次 CheckPlacementCore 返回的稳定失败码，按现有短路顺序投影已执行的 Building/Crop/Orientation/Bounds/Occupancy/Funds；非法建筑早拒只记录 Building=false，道路不补造作物检查，非法朝向后不投影范围、占用或余额。拒绝后不补查后续项。显式 Cells 坐标范围命中后才构造字段。公开 CheckPlacement 与实际执行共享同一私有规则入口，纯预检不输出 RuleChecked 或命令，不消耗执行诊断预算；实际重验只执行一次，RuleChecked 也不等于最终建造已经成功。
+PlacementDiagnostics 只由实际 TryPlace 命令重验后调用，接收原请求朝向与同次 CheckPlacementCore 返回的稳定失败码，按现有短路顺序投影已执行的 Building/Crop/Orientation/Bounds/Occupancy/Terrain/Funds；非法建筑早拒只记录 Building=false，道路不补造作物检查，非法朝向后不投影范围、占用或余额。拒绝后不补查后续项。显式 Cells 坐标范围命中后才构造字段。公开 CheckPlacement 与实际执行共享同一私有规则入口，纯预检不输出 RuleChecked 或命令，不消耗执行诊断预算；实际重验只执行一次，RuleChecked 也不等于最终建造已经成功。
 
 ## 整批道路结果
 
@@ -24,6 +24,6 @@ PlacementDiagnostics 只由实际 TryPlace 命令重验后调用，接收原请�
 
 `RoadPlacementCheck(Failure,CellCount,CostCents)` 提供 `Allowed/ErrorMessage`，`CostCents` 使用 long 分，正常拒绝仍保留候选格数乘道路统一单价格的费用供界面展示。`RoadPlacementResult(Failure,CellCount,ChargedCents)` 提供 `Success/ErrorMessage`，成功返回实际格数与 long 扣费；失败实际格数与扣费均为零。`RoadRemovalResult(Failure,RemovedCount)` 提供 `Success/ErrorMessage`，仅统计实际移除的去重道路格，失败为零；拆除不退款。
 
-新建候选不复用或跳过已有道路，不替换材质；所有生产设施子格同样阻挡。完整范围与重复候选先于占用检查，占用先于可用资金检查。道路只接受五种合法材质；执行不信任先前预检。规则与调用顺序见 [FarmGame 整批道路命令](../../game-state/farm-game/interface-farm-game.md#整批道路命令)。
+新建候选不复用或跳过已有道路，不替换材质；所有生产设施子格同样阻挡。完整范围与重复候选先于占用检查，再逐格检查完整陆地，最后检查可用资金；含水岸格返回 `Water`，整段资源零修改。道路只接受五种合法材质；执行不信任先前预检。规则与调用顺序见 [FarmGame 整批道路命令](../../game-state/farm-game/interface-farm-game.md#整批道路命令)。
 
 内部纯判断 `IsValidRoadMaterial(RoadMaterial)` 以 `RoadMaterial` 枚举的实际定义为合法来源，负值和未定义正值返回假；不再维护第二套列表或数量上限。FarmGame 的批量道路检查、LandOccupancy 登记及 RoadAppearance 预览共用此判断，各自保留错误语义：经营正常返回 `InvalidRoadMaterial`；土地仅在道路登记时检查，抛出参数名为 `roadMaterial` 的 `ArgumentOutOfRangeException`；外观新建与拆除预览均检查，抛出参数名为 `material` 的相同异常。该判断不拥有占地、资金或预览状态，也不提供资源注册或扩展机制。

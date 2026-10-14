@@ -55,7 +55,8 @@ public partial class WorkerPresentation : Node2D
             for (int i = 0; i < _workers.Length; i++)
             {
                 WorkerVisual worker = _workers[i];
-                worker.From = worker.To = worker.Position = snapshots[i].GridPosition;
+                worker.Position = snapshots[i].GridPosition;
+                worker.Movement = null;
                 if (worker.Result is ProductionResult old && !_game.IsPresentationTargetCurrent(old))
                 {
                     worker.Result = null;
@@ -71,12 +72,16 @@ public partial class WorkerPresentation : Node2D
         }
         if (_snapshotSecond != _game.Calendar.ElapsedSeconds)
         {
+            bool consecutive = _game.Calendar.ElapsedSeconds == _snapshotSecond + 1;
             _snapshotSecond = _game.Calendar.ElapsedSeconds;
             var snapshots = _game.GetWorkers();
             for (int i = 0; i < _workers.Length; i++)
             {
-                _workers[i].From = _workers[i].Position;
-                _workers[i].To = snapshots[i].GridPosition;
+                WorkerVisual worker = _workers[i];
+                worker.Movement = consecutive && snapshots[i].Movement is WorkerMovementSnapshot movement &&
+                    movement.ElapsedSeconds == _snapshotSecond && _game.IsWorkerMovementCurrent(movement)
+                    ? movement : null;
+                worker.Position = snapshots[i].GridPosition;
             }
             foreach (ProductionResult result in _game.GetPresentationResults())
             {
@@ -85,7 +90,7 @@ public partial class WorkerPresentation : Node2D
                     continue;
                 WorkerVisual worker = _workers[result.WorkerNumber - 1];
                 worker.Result = result;
-                worker.From = worker.Position = worker.To;
+                worker.Movement = null;
                 worker.NewAction = true;
             }
             _interpolationSeconds = 0;
@@ -98,9 +103,21 @@ public partial class WorkerPresentation : Node2D
         for (int i = 0; i < _workers.Length; i++)
         {
             WorkerVisual worker = _workers[i];
-            worker.Position = worker.From.Lerp(worker.To, progress);
-            Vector2 direction = MapCoordinates.GridPositionToLocal(worker.To) -
-                MapCoordinates.GridPositionToLocal(worker.From);
+            Vector2 direction = Vector2.Zero;
+            if (worker.Movement is WorkerMovementSnapshot movement &&
+                _game.IsWorkerMovementCurrent(movement) && !accelerated)
+            {
+                double distance = movement.FromDistance + (movement.ToDistance - movement.FromDistance) * progress;
+                worker.Position = movement.Path.GetPositionAtDistance(distance).ToVector2();
+                direction = MapCoordinates.GridPositionToLocal(movement.Path.GetDirectionAtDistance(distance));
+            }
+            else
+            {
+                worker.Movement = null;
+                worker.Position = current[i].GridPosition;
+                if (current[i].Movement is WorkerMovementSnapshot latest)
+                    direction = MapCoordinates.GridPositionToLocal(latest.Path.GetDirectionAtDistance(latest.ToDistance));
+            }
             if (worker.Result is ProductionResult old)
             {
                 Vector2 workCell = BuildingFootprint.WorkCell(old.AnchorCell, BuildingKind.Farm);
@@ -118,8 +135,9 @@ public partial class WorkerPresentation : Node2D
                 _ => null,
             };
             worker.Character.ShowAt(ToLocal(_map.GetGridWorldPosition(worker.Position)), direction,
-                moving: accelerated ? current[i].Activity == WorkerActivity.Moving :
-                    progress < 1 && direction != Vector2.Zero,
+                moving: accelerated ? current[i].Activity == WorkerActivity.Moving &&
+                    current[i].Movement is WorkerMovementSnapshot latestMovement && _game.IsWorkerMovementCurrent(latestMovement) :
+                    worker.Movement.HasValue && progress < 1 && direction != Vector2.Zero,
                 paused: false, animationRate: accelerated ? 1 : rate,
                 workAction: action, restartAction: worker.NewAction);
             worker.NewAction = false;
@@ -129,8 +147,7 @@ public partial class WorkerPresentation : Node2D
     private sealed class WorkerVisual
     {
         internal readonly NpcCharacter Character;
-        internal Vector2 From;
-        internal Vector2 To;
+        internal WorkerMovementSnapshot? Movement;
         internal Vector2 Position;
         internal ProductionResult? Result;
         internal bool NewAction;
@@ -138,7 +155,7 @@ public partial class WorkerPresentation : Node2D
         internal WorkerVisual(NpcCharacter character, Vector2 position)
         {
             Character = character;
-            From = To = Position = position;
+            Position = position;
         }
     }
 }

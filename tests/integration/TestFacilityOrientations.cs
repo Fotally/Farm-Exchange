@@ -21,7 +21,7 @@ public static class TestFacilityOrientations
         for (int direction = 1; direction < 4; direction++)
             for (int crop = 0; crop < CropNames.Length; crop++)
             {
-                var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+                var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
                 foreach (BuildingSpaceSnapshot space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
                 if (crop == (int)CropKind.Sugarcane) game.AdvanceTicks(4320);
                 var orientation = (BuildingOrientation)direction;

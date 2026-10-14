@@ -14,7 +14,7 @@
 
 时间比例为 7 游戏日＝360 秒、28 日/月、3 月/季、12 月/年，共 336 日/年。完整经过的游戏日数按 `floor(累计秒数 × 7 / 360)` 计算，乘法使用更宽整数，不把 360/7 先取整。日期在跨过分数边界后的首个整秒切换：第 51 秒仍为第 1 日，第 52 秒为第 2 日，第 360 秒为第 8 日。第 1 年春 1 月 1 日从第 0 秒开始；每个新周从周内第 1 日开始。
 
-调用方只传模拟推进量，不传动画帧时长或上次打开程序的现实时间。主界面展示 `Snapshot` 的季、年、月、日。`GameTimeUnits` 位于 `scripts/time/GameTimeUnits.cs`，是生产模块共用的比例单位：一模拟秒 7 单位、一日 360 单位、半日 180 单位；`RemainingSeconds` 向上取整，保证到期落在两次整秒之间时按首个到达整秒结算。独立日历测试见 `tests/unit/TestGameCalendar.cs`，经营连接测试见 `tests/unit/TestFarmGame.cs`。
+调用方只传模拟推进量，不传动画帧时长或上次打开程序的现实时间。主界面展示 `Snapshot` 的季、年、月、日。`GameTimeUnits` 位于 `scripts/time/GameTimeUnits.cs`，是生产模块共用的比例单位：一模拟秒 7 单位、一日 360 单位、半日 180 单位；`RemainingSeconds` 向上取整，保证到期落在两次整秒之间时按首个到达整秒结算。独立日历测试见 `tests/unit/time/TestGameCalendar.cs`，经营连接测试见 `tests/unit/gameplay/TestFarmGame.cs`。
 
 `GameDate` 定义位于 `scripts/time/GameDate.cs`，市场读取它显示本次、下次及公告日期。日期换算在累计 `uint32` 日数范围内同样不会回绕；实际经营范围仍由累计 `uint32` 模拟秒限定。节日改期属于 [MarketQuotes](../../market/market-quotes/interface-market-quotes.md) 的报价排期规则，日历模块只提供日期与季节，不管理商品或事件。T09B 补充的独立测试检查两种日期读取的一致性、节日日期和日数上限。
 

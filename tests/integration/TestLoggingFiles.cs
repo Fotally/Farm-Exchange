@@ -24,7 +24,7 @@ public static class TestLoggingFiles
             CheckDescriptorRouting(Path.Combine(root, "descriptor-routing"));
             using var invalidConfiguration = RuntimeLog.OpenFile(Path.Combine(root, "invalid"), false,
                 new LogEnvironment(), new LogFileRetention(RuntimeBytes: 0), _ => { });
-            using var game = new FarmGame(17, invalidConfiguration);
+            using var game = new FarmGame(17, invalidConfiguration, terrainRules: TerrainTestFixtures.AllLandRules);
             Require(game.Buy(new CommodityId(CropKind.Wheat, CommodityKind.Raw), 1).Success &&
                 invalidConfiguration.Health.Health == LoggingHealth.Unavailable, "日志初始化故障未隔离");
             GD.Print("日志真实 File 样例：" + root);
@@ -40,7 +40,7 @@ public static class TestLoggingFiles
             new LogEnvironment(GameVersion: "", BuildKind: "Debug", WindowWidth: 0, WindowHeight: 0), retention))
         using (var second = RuntimeLog.OpenFile(directory, true, new LogEnvironment(BuildKind: "Debug"), retention))
         {
-            var games = new[] { new FarmGame(17, first), new FarmGame(17, first), new FarmGame(17, second) };
+            var games = new[] { new FarmGame(17, first, terrainRules: TerrainTestFixtures.AllLandRules), new FarmGame(17, first, terrainRules: TerrainTestFixtures.AllLandRules), new FarmGame(17, second, terrainRules: TerrainTestFixtures.AllLandRules) };
             Parallel.For(0, games.Length, index =>
             {
                 for (int i = 0; i < 20; i++) games[index].Buy(new CommodityId(CropKind.Wheat, CommodityKind.Raw), 0);
@@ -73,7 +73,7 @@ public static class TestLoggingFiles
         for (int attempt = 0; attempt < 2; attempt++)
         {
             using var log = RuntimeLog.OpenFile(directory, false, new LogEnvironment(BuildKind: "Release"), retention);
-            using var game = new FarmGame(17, log);
+            using var game = new FarmGame(17, log, terrainRules: TerrainTestFixtures.AllLandRules);
             for (int i = 0; i < 30; i++) game.Buy(new CommodityId(CropKind.Wheat, CommodityKind.Raw), -1);
             Require(log.Health.Health == LoggingHealth.Healthy, "小阈值滚动故障");
         }
@@ -118,7 +118,7 @@ public static class TestLoggingFiles
         File.WriteAllText(directory, "不可作为目录");
         int diagnostics = 0;
         using var log = RuntimeLog.OpenFile(directory, true, new LogEnvironment(), diagnostic: _ => diagnostics++);
-        using var game = new FarmGame(17, log);
+        using var game = new FarmGame(17, log, terrainRules: TerrainTestFixtures.AllLandRules);
         Require(game.Buy(new CommodityId(CropKind.Wheat, CommodityKind.Raw), 1).Success && game.GetRawStock(CropKind.Wheat) == 1,
             "不可写目录阻止真实交易");
         Require(log.Health.Health == LoggingHealth.Unavailable && diagnostics > 0 && File.ReadAllText(directory) == "不可作为目录",
@@ -172,7 +172,7 @@ public static class TestLoggingFiles
         {
             Require(log.Health.Health == expectedHealth && log.Health.FailureCount == expectedFailures,
                 "独立目标配置故障未保留真实健康或关闭了可用目标");
-            using (var game = new FarmGame(17, log))
+            using (var game = new FarmGame(17, log, terrainRules: TerrainTestFixtures.AllLandRules))
             {
                 var result = game.Buy(new CommodityId(CropKind.Wheat, CommodityKind.Raw), 1);
                 Require(result.Success && game.GetRawStock(CropKind.Wheat) == 1, "目标初始化故障阻止了真实买入");

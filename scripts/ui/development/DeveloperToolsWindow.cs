@@ -2,11 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Godot;
 using FarmExchange.Development;
 using FarmExchange.Gameplay;
 using FarmExchange.Logging;
 using FarmExchange.Time;
+using FarmExchange.Terrain;
 using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
@@ -39,6 +42,10 @@ public partial class DeveloperToolsWindow : DraggableWindow
     private bool _isCurrent;
     private bool _reportAttempted;
     private bool _observedPaused;
+    private bool _preparing;
+    private bool _shuttingDown;
+    private CancellationTokenSource? _preparationCancellation;
+    internal Task PreparationTask { get; private set; } = Task.CompletedTask;
 
     /**
      * <summary>组装绑定当前局、唯一驱动和配置库的开发窗口。</summary>
@@ -220,16 +227,19 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     internal void ShutdownScenario()
     {
+        _shuttingDown = true;
+        _preparationCancellation?.Cancel();
         _scenario?.Abort("开发窗口宿主退出");
         SaveFinishedReport();
     }
 
     private bool IsRunning => _scenario?.IsRunning == true;
+    private bool IsBusy => _preparing || IsRunning;
     private void RefreshCatalog() => _catalog.ShowFlows(_library?.Flows ?? Array.Empty<ScenarioFlowDefinition>(), _flowId);
 
     private void SelectFlow(string id)
     {
-        if (IsRunning || _library == null) return;
+        if (IsBusy || _library == null) return;
         ExecuteEdit(() =>
         {
             if (_flowId != id)
@@ -259,7 +269,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void SelectProfile(int index)
     {
-        if (IsRunning || _confirmation.Visible || index < 0 || index >= _entries.Count) return;
+        if (IsBusy || _confirmation.Visible || index < 0 || index >= _entries.Count) return;
         ScenarioConfigurationEntry entry = _entries[index];
         if (_draft?.IsDirty == true)
         {
@@ -301,7 +311,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void ConfirmSaveAs()
     {
-        if (IsRunning || _draft == null) return;
+        if (IsBusy || _draft == null) return;
         _confirmation.Open("为这份配置输入新名称。另存为从修订1开始，原配置保留。", name =>
             ExecuteEdit(() => ReplaceDraft(_library!.SaveAs(_draft, name))), enterName: true);
         UpdateStep();
@@ -309,7 +319,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void ConfirmDeleteFlow(string id)
     {
-        if (IsRunning || _library == null) return;
+        if (IsBusy || _library == null) return;
         ScenarioFlowDefinition flow = _library.Flows.Single(item => item.Id == id);
         _confirmation.Open("删除流程「" + flow.Name + "」？\n从目录移除，并删除此流程的所有可写配置；内置示例、历史报告和流程代码保留。", _ =>
             ExecuteEdit(() =>
@@ -334,7 +344,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void ConfirmDeleteConfiguration()
     {
-        if (IsRunning || _draft == null || _draft.Entry!.IsReadOnly) return;
+        if (IsBusy || _draft == null || _draft.Entry!.IsReadOnly) return;
         ScenarioConfigurationEntry entry = _draft.Entry;
         _confirmation.Open("删除配置「" + entry.CaseId + "」？\n删除此配置文件，已有报告保留。", _ =>
             ExecuteEdit(() =>
@@ -350,7 +360,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void ExecuteEdit(Action action, bool synchronizeDeletionFailure = false)
     {
-        if (IsRunning) return;
+        if (IsBusy) return;
         try { action(); }
         catch (Exception error) when (IsConfigurationError(error))
         {
@@ -388,7 +398,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void Navigate(int destination)
     {
-        if (IsRunning || _confirmation.Visible || destination > 0 && _flowId == null || destination == 2 && _draft == null) return;
+        if (IsBusy || _confirmation.Visible || destination > 0 && _flowId == null || destination == 2 && _draft == null) return;
         _step = destination;
         UpdateStep();
         if (destination == 1) _editor.Form.RestoreFocus();
@@ -405,7 +415,7 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     private void UpdateStep()
     {
-        bool locked = IsRunning || _confirmation.Visible;
+        bool locked = IsBusy || _confirmation.Visible;
         _catalog.Visible = _step == 0;
         _editor.Visible = _step == 1;
         _result.Visible = _step == 2;
@@ -436,9 +446,18 @@ public partial class DeveloperToolsWindow : DraggableWindow
             button.AddThemeColorOverride(state, selected ? new Color("fff3d8") : Ink);
     }
 
-    private void Start()
+    private async void Start()
     {
-        if (IsRunning || _draft == null || _library == null) return;
+        if (IsBusy || _shuttingDown || _draft == null || _library == null) return;
+        PreparationTask = PrepareAndStartAsync();
+        await PreparationTask;
+    }
+
+    private async Task PrepareAndStartAsync()
+    {
+        if (IsBusy || _shuttingDown || _draft == null || _library == null) return;
+        using var cancellation = new CancellationTokenSource();
+        _preparationCancellation = cancellation;
         try
         {
             ScenarioConfiguration configuration = _library.LoadForRun(_draft);
@@ -446,7 +465,20 @@ public partial class DeveloperToolsWindow : DraggableWindow
             _runDirectory = ScenarioReport.CreateRunDirectory(root);
             _reportAttempted = false;
             _isCurrent = configuration.Target == "current";
-            _scenario = BuyProcessSellScenario.Start(configuration, _runDirectory, _isCurrent ? _currentGame : null, logging: _logging);
+            _scenario = null;
+            _preparing = true;
+            UpdateStep();
+            _result.Progress.Text = _isCurrent ? "准备当前局流程…" : "正在准备独立局地形与导航…";
+            BuyProcessSellScenario scenario = await BuyProcessSellScenario.StartAsync(GetTree(), configuration,
+                _runDirectory, _isCurrent ? _currentGame : null, logging: _logging, cancellationToken: cancellation.Token);
+            if (_shuttingDown || !IsInsideTree() || cancellation.IsCancellationRequested)
+            {
+                scenario.Abort("宿主退出或准备已中止");
+                if (!_isCurrent) scenario.Game.Dispose();
+                return;
+            }
+            _scenario = scenario;
+            _preparing = false;
             _independentDriver = _isCurrent ? null : new SimulationDriver(_scenario.Game.Log?.Time);
             _observedPaused = _scenario.Game.IsPaused;
             if (_scenario.IsRunning) ApplyScenarioRate();
@@ -457,9 +489,25 @@ public partial class DeveloperToolsWindow : DraggableWindow
             _step = 2;
             RefreshProgress();
         }
-        catch (Exception error) when (IsConfigurationError(error))
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
-            SetFeedback((error is ScenarioConfigurationException ? "启动失败（配置错误）：" : "启动失败（输出错误）：") + error.Message);
+            if (!_shuttingDown && IsInsideTree())
+            {
+                _result.Progress.Text = "准备已中止，尚未开始经营流程";
+                SetFeedback("未执行经营命令，未生成执行报告。");
+            }
+        }
+        catch (Exception error) when (IsConfigurationError(error) || error is TerrainCreationException or System.Text.Json.JsonException)
+        {
+            if (!_shuttingDown && IsInsideTree())
+                SetFeedback((error is ScenarioConfigurationException or System.Text.Json.JsonException ? "启动失败（配置错误）：" :
+                    error is TerrainCreationException ? "启动失败（地形与导航）：" : "启动失败（输出错误）：") + error.Message);
+        }
+        finally
+        {
+            _preparing = false;
+            _preparationCancellation = null;
+            if (!_shuttingDown && IsInsideTree()) UpdateStep();
         }
     }
 
@@ -518,6 +566,11 @@ public partial class DeveloperToolsWindow : DraggableWindow
 
     internal void Abort(string reason)
     {
+        if (_preparing)
+        {
+            _preparationCancellation?.Cancel();
+            return;
+        }
         if (!IsRunning) return;
         _scenario!.Abort(reason);
         RefreshProgress();

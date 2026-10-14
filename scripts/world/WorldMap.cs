@@ -32,6 +32,8 @@ public partial class WorldMap : Node2D
     private readonly Texture2D[,] _buildings = new Texture2D[7, 4];
     private readonly Texture2D[,,] _crops = new Texture2D[7, 3, 4];
     private Texture2D _grass = null!;
+    private ShaderMaterial _waterMaterial = null!;
+    internal double WaterAnimationSeconds { get; private set; }
     private readonly Texture2D[] _drySoil = new Texture2D[4];
     private readonly Texture2D[] _wetSoil = new Texture2D[4];
     private readonly Texture2D[] _seeds = new Texture2D[4];
@@ -79,7 +81,7 @@ public partial class WorldMap : Node2D
         _depthLayer = new Node2D { Name = "DepthSorted", YSortEnabled = true };
         AddChild(_soilLayer);
         AddChild(_depthLayer);
-        _environment = new EnvironmentDecorations(_depthLayer);
+        _environment = new EnvironmentDecorations(_depthLayer, game.Terrain);
         for (int row = 0; row < ChunksPerSide; row++)
         {
             for (int col = 0; col < ChunksPerSide; col++)
@@ -184,6 +186,9 @@ public partial class WorldMap : Node2D
     private void LoadTextures()
     {
         _grass = GD.Load<Texture2D>("res://assets/gameplay/terrain/terrain_81_mesh.png");
+        _waterMaterial = new ShaderMaterial { Shader = GD.Load<Shader>("res://scripts/world/water_ripples.gdshader") };
+        _waterMaterial.SetShaderParameter("water_mask", GD.Load<Texture2D>("res://assets/gameplay/terrain/water_81.png"));
+        _waterMaterial.SetShaderParameter("ripples", GD.Load<Texture2D>("res://assets/gameplay/terrain/ripples.png"));
         string[] materials = { "dirt", "gravel", "cobble", "brick", "slab" };
         var roadAtlases = new Texture2D[materials.Length];
         for (int index = 0; index < materials.Length; index++)
@@ -224,6 +229,11 @@ public partial class WorldMap : Node2D
         if (canvasTransform != _lastCanvasTransform || viewportSize != _lastViewportSize)
             UpdateVisibleChunks();
         AdvanceMotions(delta);
+        if (!_game.IsPaused)
+        {
+            WaterAnimationSeconds += delta * (_driver?.Rate ?? 1);
+            _waterMaterial.SetShaderParameter("elapsed_seconds", (float)(WaterAnimationSeconds % 120));
+        }
         _weather.Update(_game.ActiveWeatherRegions, _viewBounds, delta, _game.IsPaused, _driver?.Rate ?? 1);
     }
 
@@ -345,7 +355,7 @@ public partial class WorldMap : Node2D
      * <param name="crop">当前选定作物，用于农田或加工类型标记。</param>
      * <param name="anchorCell">鼠标指向的候选锚点，可在地图范围外。</param>
      * <param name="orientation">合法世界朝向；省略时为 Q0，朝向不改变占地与工作中心。</param>
-     * <remarks>只检查当前占地的越界与实际占用，不登记建筑、不改金币，不同步地图块。</remarks>
+     * <remarks>只检查当前占地的越界、完整陆地与实际占用，不登记建筑、不改金币，不同步地图块。</remarks>
      */
     public void UpdatePlacementPreview(BuildingKind building, CropKind crop, Vector2I anchorCell,
         BuildingOrientation orientation = BuildingOrientation.Q0)
@@ -570,6 +580,7 @@ public partial class WorldMap : Node2D
         private readonly int _firstRow;
         private readonly RoadAppearance.RoadTile?[] _roads = new RoadAppearance.RoadTile?[ChunkSize * ChunkSize];
         private readonly ArrayMesh _mesh = new();
+        private readonly MeshInstance2D _surface;
         private bool _dirty = true;
 
         public Rect2 Bounds { get; }
@@ -577,6 +588,14 @@ public partial class WorldMap : Node2D
         public MapChunk(WorldMap map, int firstCol, int firstRow)
         {
             _map = map;
+            _surface = new MeshInstance2D
+            {
+                Mesh = _mesh,
+                Texture = map._grass,
+                Material = map._waterMaterial,
+                ShowBehindParent = true
+            };
+            AddChild(_surface);
             _firstCol = firstCol;
             _firstRow = firstRow;
             ZIndex = -2;
@@ -616,8 +635,8 @@ public partial class WorldMap : Node2D
                     int mapRow = _firstRow + row;
                     int start = vertices.Count;
                     vertices.AddRange(Outline(new Vector2I(mapCol, mapRow)));
-                    int variant = (mapCol * 73 + mapRow * 17) % 23 == 0 ? 1 : 0;
-                    int atlasIndex = 80 + 81 * variant; // 四角均为grass，保持全可经营地图。
+                    int variant = (mapCol * 73 + mapRow * 17) % 3;
+                    int atlasIndex = _map._game.Terrain.GetCell(new Vector2I(mapCol, mapRow)).TernaryCode + 81 * variant;
                     Vector2 uvBase = new((atlasIndex % 9) * 68 + 2, (atlasIndex / 9) * 36 + 2);
                     foreach (Vector2 corner in corners)
                         uvs.Add((uvBase + corner) / _map._grass.GetSize());
@@ -630,7 +649,7 @@ public partial class WorldMap : Node2D
             arrays[(int)Mesh.ArrayType.Index] = indices.ToArray();
             _mesh.ClearSurfaces();
             _mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-            DrawMesh(_mesh, _map._grass);
+
             for (int row = 0; row < ChunkSize; row++)
                 for (int col = 0; col < ChunkSize; col++)
                     if (_roads[row * ChunkSize + col] is RoadAppearance.RoadTile road)

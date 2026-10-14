@@ -33,6 +33,7 @@ public partial class TestUiVisualLayout : Node
             parent.GetWindow().Size = size;
             await Frames(parent);
             var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
             parent.AddChild(main);
             main.SetProcess(false);
             try
@@ -69,6 +70,7 @@ public partial class TestUiVisualLayout : Node
                 await Capture(parent, "processor-detail-" + size.X + ".png");
                 HideWindows(main);
                 main.Game.TryPlace(new Vector2I(198, 192), BuildingKind.Road, CropKind.Wheat);
+                await main.Game.WaitForNavigationAsync(parent.GetTree());
                 map.SyncFromGame();
                 map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(198, 192));
                 await Frames(parent);

@@ -28,7 +28,7 @@
 
 `RuntimeLog.ProcessFrame` 只由 `Main._Process` 开头调用一次。独立局、驱动不重复采样。第一帧建立高精度基线，此后仅累计 count/sum/max；60 秒窗口和会话关闭尾段输出 ProcessFrames，未保存逐帧数组，也没有局身份或经营秒。关闭顺序为各局生产/性能/诊断尾段与 GameEnded、进程帧尾段、SessionEnded。
 
-`ViewDiagnostics` 对比实际窗口、视口、CameraController 玩家倍率与地图本地镜头中心；缓存增量来自 WorldMap 已执行 `_Draw` 的计数，QueueRedraw 不代表重建完成。每帧的值比较、基线更新和门禁，与含捕获 lambda 的私有记录方法分开；未开启、未选择该事件或 Release 门禁拒绝时，不进入会分配闭包和字段的慢路径。稳定帧只更新固定量的观察基线，不输出重复事件。`TestDiagnosticCapture` 对未开启、未选择事件的连续真实视图变化以及已选择事件的稳定帧，预热后检查严格零托管分配。Main 的 DEBUG 内部 `LoggingFactory` 与 `InitialSeed` 仅供图形验收夹具在父 `_EnterTree`、任何 Game/Driver 初始化之前设置，并于结束清空；发布编译不包含这些接缝。
+`ViewDiagnostics` 对比实际窗口、视口、CameraController 玩家倍率与地图本地镜头中心；缓存增量来自 WorldMap 已执行 `_Draw` 的计数，QueueRedraw 不代表重建完成。每帧的值比较、基线更新和门禁，与含捕获 lambda 的私有记录方法分开；未开启、未选择该事件或 Release 门禁拒绝时，不进入会分配闭包和字段的慢路径。稳定帧只更新固定量的观察基线，不输出重复事件。`TestDiagnosticCapture` 对未开启、未选择事件的连续真实视图变化以及已选择事件的稳定帧，复用同一个禁止内联的完整计量函数：固定预执行一次，再正式采样 2000 次，包含相同的两次当前线程分配计数读取；断言及消息构造位于计量外。三种场景均要求严格零托管分配，不重试、不取最小值、不设置容差；测量限制见[日志专项验收](implementation-validation.md#视图零分配计量)。Main 的 DEBUG 内部 `LoggingFactory` 与 `InitialSeed` 仅供图形验收夹具在父 `_EnterTree`、任何 Game/Driver 初始化之前设置，并于结束清空；发布编译不包含这些接缝。
 
 `TestDiagnosticCapture`、`TestPerformanceLogging` 以及生产/交易诊断测试经 TestSuite 注册。内部 `RuntimeLog.CaptureDiagnostics(writer, uptime, timestamp?)` 只控制诊断/性能的现实窗口和高精度时间，不改变公共日志头和生产资源窗口时钟；用于预算、故障传播、批次返回值、暂停和多局帧归属验证。真实运行及故障/图形证据以专项验收工件为准。
 
@@ -70,7 +70,7 @@
 
 `GameLog.Gameplay.BeginPlace/BeginRemove/BeginSetRawReserve` 记录原请求并返回一次观察；经营仍按原顺序执行，真实结果传给 `Complete`，异常传给 `Faulted` 后原样传播。`FarmGame.TryPlace/BuildFarm/BuildProcessor/RemoveBuilding/SetRawReserve` 增加默认 `Player` 的 `CommandOrigin`，开发流程准备显式传 `Scenario`；非法来源在记录和业务修改前抛出。`BeginPlace` 保留第4参数 `origin`，第5可选参数为 `orientation=Q0`，原请求和非法枚举值保持原样；成功建造结果读取已登记朝向，拆除前保存真实实例朝向。建造预检不形成命令。建造实际扣款来自 `PlacementResult.ChargedCents`，拆除和拒绝为零；拆除前保存真实子格对应的实例，库存底线不触发领取。建造触发的全场加工领取归生产流量，不混入资金事件。实际放置诊断按 Building、生产设施 Crop、Orientation、Bounds、Occupancy、Funds 的短路路径记录，`InvalidOrientation` 后不补造后续检查。
 
-`ProductionLog` 内部入口只接收真实事实：`Harvested(crop, quantity)`、`Consumed(crop)`、`Produced(crop)`、`WorkerCompleted(kind)`、`Cleared(CropClearResult)`。收获和完工均在库存提交成功后累计；开工只在 `TryStart` 成功后计一份；工人只消费调度器成功回调，降雨、等待、重复供水不计入。清理结果由农田原遍历返回逐作物实际轮数，未成熟清除不是库存损失份数。没有从表现结果缓存或额外全场扫描推导事实。
+`ProductionLog` 内部入口只接收真实事实：`Harvested(crop, quantity)`、`Consumed(crop, quantity)`、`Produced(crop, quantity)`、`WorkerCompleted(kind)`、`Cleared(CropClearResult)`。收获和完工均在库存提交成功后累计；开工只在 `TryStart` 成功后累计加工快照实际锁定的份数，完工按返回实际份数累计；一批至多九份，计数不是批次数；工人只消费调度器成功回调，降雨、等待、重复供水不计入。清理结果由农田原遍历返回逐作物实际轮数，未成熟清除不是库存损失份数。没有从表现结果缓存或额外全场扫描推导事实。
 
 换季事件秒中，促熟收获先于工人阶段，日期清理又在工人阶段之后：一块田可能先收获上一轮，随后工人播下新一轮，最后新一轮被禁生换季清理。此时收获份数、播种次数、清理轮数都应累计；同秒出现收获和清理不等于同一轮重复记账。测试同时检查真实库存与这三个事实，不改变已有相位顺序。
 
@@ -118,7 +118,7 @@
 
 `RuntimeLog.InitializationFailed(error)` 供实际不能初始化的接收点记录 `FatalException`，调用方继续传播原异常。异常文本作为数据转义并有明确预算，不允许注入事件头。
 
-`game.Dispose()` 先封存本局订单等待尾段，再幂等结束局关联，`EndReason=Released`，不会修改经营资源。宿主直接关闭会话时，会话先结束所有仍绑定局（`Shutdown`），再提交 `SessionEnded` 并释放目标。`RuntimeLog.Dispose()` 同样幂等；正常 flush 不保证强杀或断电末条必达。调用示例：
+`game.Log?.Dispose()` 只结束本局日志观察：先封存订单等待、生产与性能尾段，再幂等结束局关联，`EndReason=Released`；不释放经营资源，局仍可正常推进，后续操作不再记录本局事件。`game.Dispose()` 先完成同样的日志关闭，再释放本局地形导航资源；完整局释放后不得继续推进经营或求路，重复释放不会新增结束事件。宿主直接关闭会话时，会话先结束所有仍绑定局的日志观察（`Shutdown`），再提交 `SessionEnded` 并释放输出目标；局拥有者仍负责完整局的释放。`RuntimeLog.Dispose()` 同样幂等；正常 flush 不保证强杀或断电末条必达。调用示例：
 
 ```csharp
 using var log = RuntimeLog.OpenFile(logDirectory, development, environment);
@@ -161,3 +161,5 @@ File 使用成熟 `Serilog.Sinks.File 7.0.0`：UTF-8 无 BOM、同步逐事件 f
 `TestTradeLogging` 验证固定卖出、空库存与冻结下全售、批量七条明细与合计、容量拒绝实际价、来源、关闭日志等价以及集合/文本截断合并；真实 OpenFile 样例覆盖买卖、全售、订单等待至成交/取消、公告与报价，并检查双目标同一事件。`TestOrderLogging` 验证订单资源、短路覆盖、有界合并、尾段、跨商品编辑、大配置与跨局隔离；`TestMarketLogging` 核对实际公告和报价因素、随机序列等价及初始化回放不补造。领域采样的 ItemCount 和 formatter 的文本计数按路径合并，根 Truncated、TruncatedFields、TruncatedOriginalCounts 各出现一次，整事件仍受原尺寸预算。
 
 上述测试注册到 `TestSuite`。跨滚动文件读取按日期和编号的 Ordinal 文件名顺序，不重新排序事件掩盖回退。单商品正常业务仍没有可由合法公开调用构造的抛出分支；不增加异常注入开关。公开 TradeLogOperation 的异常测试保留原异常引用及关联，实际经营 catch/throw 同时由代码审查核对。系统时钟回拨、真正跨进程同时启动、磁盘耗尽、强杀和断电需另做环境验收。受控详细诊断和重放执行器未实现。
+
+暂停新建的全场领取日志回归使用12份真实买入：旧场地按稳定格序先锁定9份，新场地锁定余下3份，日历仍为0；BuildingPlaced只记录建造资金，领取流量仍由生产事实入口累计，不在建造事件重复计数。

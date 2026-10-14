@@ -16,7 +16,7 @@ public partial class TestCoreLoop : Node
         GetWindow().Size = new Vector2I(1920, 1080);
         for (int frame = 0; frame < 2; frame++)
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        bool passed = RunChecks(this) && await RunLayoutChecks(this);
+        bool passed = RunChecks(this) && await RunRoadChecksAsync(this) && await RunLayoutChecks(this);
         if (passed)
             GD.Print("主场景建造与窗口操作检查通过");
         GetTree().Quit(passed ? 0 : 1);
@@ -24,18 +24,47 @@ public partial class TestCoreLoop : Node
 
     public static bool RunChecks(Node parent)
     {
+        if (!RunProcessingSeedChecks(parent)) return false;
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         bool passed = Check(main);
         main.QueueFree();
-        return passed && CheckSimulationRecovery(parent) && CheckCatalogRefresh(parent) &&
-            CheckFootprintUi(parent) && CheckRainUi(parent) && CheckReserveUi(parent) && CheckRoadUi(parent) &&
+        return passed && CheckSimulationRecovery(parent) &&
+            CheckFootprintUi(parent) && CheckRainUi(parent) && CheckReserveUi(parent) &&
             CheckMarketUi(parent);
+    }
+
+    public static bool RunProcessingSeedChecks(Node parent)
+    {
+        int? previousSeed = Main.InitialSeed;
+        WeatherMode previousWeather = Main.InitialWeatherMode;
+        try
+        {
+            Main.InitialWeatherMode = WeatherMode.Explicit;
+            foreach (int seed in new[] { 0, 8 })
+            {
+                Main.InitialSeed = seed;
+                var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+                main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
+                parent.AddChild(main);
+                main.SetProcess(false);
+                try { if (!Check(main, expectedOtherRadishBatch: seed == 8)) return false; }
+                finally { main.Free(); }
+            }
+            return true;
+        }
+        finally
+        {
+            Main.InitialSeed = previousSeed;
+            Main.InitialWeatherMode = previousWeather;
+        }
     }
 
     private static bool CheckSimulationRecovery(Node parent)
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.SetProcess(false);
         try
@@ -70,9 +99,10 @@ public partial class TestCoreLoop : Node
         finally { main.Free(); }
     }
 
-    private static bool CheckCatalogRefresh(Node parent)
+    private static async Task<bool> CheckCatalogRefreshAsync(Node parent)
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.SetProcess(false);
         try
@@ -86,6 +116,7 @@ public partial class TestCoreLoop : Node
             Vector2I road = new(95, 95);
             if (!main.Game.TryPlaceRoads(new[] { road }, FarmExchange.Land.RoadMaterial.Dirt).Success)
                 return Fail("目录刷新道路夹具创建失败");
+            await main.Game.WaitForNavigationAsync(parent.GetTree());
             foreach (Vector2I cell in new[] { new Vector2I(90, 90), farm.AnchorCell, processor.AnchorCell, road })
             {
                 map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
@@ -101,7 +132,7 @@ public partial class TestCoreLoop : Node
                 main.AdvanceSimulation(1);
                 if (!detail.Visible || detail.Position != new Vector2(1200, 170) ||
                     !ContainsVisibleText(detail, cell == road ? "道路" : cell == farm.AnchorCell ? "生长周期" :
-                        cell == processor.AnchorCell ? "加工周期" : "空地"))
+                        cell == processor.AnchorCell ? "每批加工" : "空地"))
                     return Fail("关闭目录后未保留原选择类型或窗口位置");
             }
             return true;
@@ -113,7 +144,7 @@ public partial class TestCoreLoop : Node
     {
         var window = new InventoryWindow();
         parent.AddChild(window);
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, terrainRules: TerrainTestFixtures.AllLandRules);
         CommodityId radish = new(CropKind.Radish, CommodityKind.Raw);
         if (!game.Buy(radish, 2).Success || !game.CreateTradeOrder(new TradeOrderRequest(radish,
             TradeOrderSide.Sell, TradeOrderFrequency.Once, TradeOrderQuantityMode.Fixed, 1,
@@ -188,7 +219,7 @@ public partial class TestCoreLoop : Node
 
     private static async Task<bool> CheckMarketLayout(Node parent)
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, terrainRules: TerrainTestFixtures.AllLandRules);
         for (int i = 0; i < 669; i++) game.AdvanceTick();
         var window = new MarketWindow();
         parent.AddChild(window);
@@ -237,6 +268,7 @@ public partial class TestCoreLoop : Node
     private static bool CheckMarketUi(Node parent)
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         bool passed = CheckMarketControls(main);
         main.QueueFree();
@@ -346,6 +378,7 @@ public partial class TestCoreLoop : Node
     private static bool CheckFootprintUi(Node parent)
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         try
         {
@@ -543,22 +576,67 @@ public partial class TestCoreLoop : Node
         try
         {
             var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
             parent.AddChild(main);
             return main;
         }
         finally { Main.InitialWeatherMode = previous; }
     }
 
-    private static bool CheckRoadUi(Node parent)
+    public static async Task<bool> RunRoadChecksAsync(Node parent)
     {
+        if (!await CheckCatalogRefreshAsync(parent)) return false;
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
-        bool passed = CheckRoadControls(main);
+        main.SetProcess(false);
+        bool passed = await CheckRoadControls(main);
         main.QueueFree();
-        return passed;
+        return passed && await CheckRoadCheckpointAsync(parent);
     }
 
-    private static bool CheckRoadControls(Main main)
+    private static async Task<bool> CheckRoadCheckpointAsync(Node parent)
+    {
+        var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
+        parent.AddChild(main);
+        main.SetProcess(false);
+        try
+        {
+            Vector2I road = new(183, 185);
+            var farm = System.Linq.Enumerable.First(main.Game.GetBuildingSpaces(), space => space.Building == BuildingKind.Farm);
+            foreach (bool building in new[] { true, false })
+            {
+                if (main.Game.SetFarmCrop(farm.AnchorCell, main.Game.GetPlot(farm.AnchorCell).CropKind) != null ||
+                    main.AdvanceSimulation(0.25) != 0 || main.Driver.Progress != 0.25)
+                    return Fail("道路检查点夹具没有保留已有小数进度");
+                uint started = main.Game.Calendar.ElapsedSeconds;
+                int callbacks = 0;
+                uint advanced = main.AdvanceSimulation(8, point =>
+                {
+                    callbacks++;
+                    bool success = building ? main.Game.TryPlaceRoads(new[] { road }, FarmExchange.Land.RoadMaterial.Dirt).Success :
+                        main.Game.TryRemoveRoads(new[] { road }).Success;
+                    if (!success) throw new System.InvalidOperationException("道路检查点真实建拆失败");
+                    return true;
+                });
+                if (advanced != 1 || callbacks != 1 || main.Game.Calendar.ElapsedSeconds != started + 1 ||
+                    main.Driver.Progress != 0 || main.Game.IsNavigationReady || main.AdvanceSimulation(100) != 0 ||
+                    main.Game.Calendar.ElapsedSeconds != started + 1 || main.Driver.Progress != 0)
+                    return Fail("检查点建拆后继续推进了剩余tick，或准备期间消费了经营时间");
+                await main.Game.WaitForNavigationAsync(parent.GetTree());
+                if (!main.Game.IsNavigationReady || main.Driver.Progress != 0 ||
+                    main.AdvanceSimulation(0.5) != 0 || main.Driver.Progress != 0.5 ||
+                    main.AdvanceSimulation(0.5) != 1 || main.Game.Calendar.ElapsedSeconds != started + 2 ||
+                    main.Driver.Progress != 0)
+                    return Fail("道路检查点准备后重复消费旧小数或追赶了丢弃的剩余帧时间");
+            }
+            return true;
+        }
+        finally { main.Free(); }
+    }
+
+    private static async Task<bool> CheckRoadControls(Main main)
     {
         var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
         var map = main.GetNode<WorldMap>("WorldMap");
@@ -636,10 +714,17 @@ public partial class TestCoreLoop : Node
         Control roadDetails = Find<Control>(detail, "RoadDetailsPanel");
         Button remove = Find<Button>(roadDetails, "RemoveRoadButton");
         if (!detail.Visible || !roadDetails.IsVisibleInTree() || !remove.IsVisibleInTree() ||
-            !ContainsVisibleText(detail, "当前仅用于布局和外观") || !ContainsVisibleText(detail, "不退还建造费") ||
-            ContainsVisibleText(detail, "生长周期") || ContainsVisibleText(detail, "加工周期") ||
+            !ContainsVisibleText(detail, "工人选路优先道路") || !ContainsVisibleText(detail, "不退还建造费") ||
+            ContainsVisibleText(detail, "生长周期") || ContainsVisibleText(detail, "每批加工") ||
             ContainsVisibleText(detail, "库存") || ContainsVisibleText(detail, "售价"))
             return Fail("道路详情误读作物/加工字段或没有独立拆除说明");
+        if (main.Game.IsNavigationReady || main.AdvanceSimulation(10) != 0)
+            return Fail("道路准备阶段仍推进了主场景经营");
+        double progress = main.Driver.Progress;
+        uint seconds = main.Game.Calendar.ElapsedSeconds;
+        await main.Game.WaitForNavigationAsync(main.GetTree());
+        if (main.Driver.Progress != progress || main.Game.Calendar.ElapsedSeconds != seconds)
+            return Fail("道路准备消耗了驱动进度或经营秒");
         main.AdvanceSimulation(1);
         if (!object.ReferenceEquals(remove, Find<Button>(roadDetails, "RemoveRoadButton")) ||
             !roadDetails.IsVisibleInTree() || Find<Label>(ui, "WorkerCountLabel").Text != "3 名工人")
@@ -658,7 +743,7 @@ public partial class TestCoreLoop : Node
         return true;
     }
 
-    private static bool Check(Main main)
+    private static bool Check(Main main, bool? expectedOtherRadishBatch = null)
     {
         var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
         var map = main.GetNode<WorldMap>("WorldMap");
@@ -686,7 +771,7 @@ public partial class TestCoreLoop : Node
 
         map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(90, 90));
         if (!detail.Visible || ContainsVisibleText(detail, "生长周期") ||
-            ContainsVisibleText(detail, "加工周期") || ContainsVisibleText(detail, "库存"))
+            ContainsVisibleText(detail, "每批加工") || ContainsVisibleText(detail, "库存"))
             return Fail("空地详情显示了生产或库存信息");
 
         build.EmitSignal(Button.SignalName.Pressed);
@@ -785,7 +870,9 @@ public partial class TestCoreLoop : Node
         if (main.Game.GetPlot(processor).Building != BuildingKind.Processor ||
             main.Game.MoneyCents != 3000 || cancel.Visible ||
             !ContainsVisibleText(detail, "等待萝卜") ||
-            !ContainsVisibleText(detail, "加工周期：投入原料后 0.5 天完成") ||
+            !ContainsVisibleText(detail, "每批加工 0.5 天，少量批次同样耗时。") ||
+            !ContainsVisibleText(detail, "每批最多 9 份，投入与产出 1:1。") ||
+            main.Game.GetProcessorDetails(processor).BatchQuantity != 0 ||
             Find<Label>(detail, "ProcessorProductPrice").Text != "0.50" ||
             Find<Label>(detail, "ProcessorProductStock").Text != "0" ||
             ContainsVisibleText(detail, "生长周期", labelsOnly: true) ||
@@ -812,18 +899,44 @@ public partial class TestCoreLoop : Node
         Find<Button>(buildWindow, "CloseButton").EmitSignal(Button.SignalName.Pressed);
 
         bool sawProcessing = false;
+        int radishHarvested = 0;
         for (int i = 0; i < 250; i++)
         {
             main.AdvanceSimulation(1);
             sawProcessing |= ContainsVisibleText(detail, "加工中");
+            foreach (ProductionResult result in main.Game.GetPresentationResults())
+                if (result.Kind == ProductionResultKind.Harvest && result.CropKind == CropKind.Radish)
+                    radishHarvested += result.Quantity;
         }
         int radishProducts = main.Game.GetProductStock(CropKind.Radish);
         string radishProductPrice = (main.Game.GetProductPriceCents(CropKind.Radish) / 100m)
             .ToString("0.00", CultureInfo.InvariantCulture);
+        int allRadishBatchQuantity = 0;
+        int otherRadishBatchQuantity = 0;
+        var radishBatches = new System.Collections.Generic.List<string>();
+        foreach (var space in main.Game.GetBuildingSpaces())
+        {
+            if (space.Building != BuildingKind.Processor || main.Game.GetPlot(space.AnchorCell).CropKind != CropKind.Radish) continue;
+            int quantity = main.Game.GetProcessorDetails(space.AnchorCell).BatchQuantity;
+            allRadishBatchQuantity += quantity;
+            if (space.AnchorCell != processor) otherRadishBatchQuantity += quantity;
+            radishBatches.Add($"{space.AnchorCell}:{quantity}");
+        }
+        string processingFacts = $"seed={main.Game.Terrain.Seed},tick={main.Game.Calendar.ElapsedSeconds}," +
+            $"harvested={radishHarvested},raw={main.Game.GetRawStock(CropKind.Radish)},products={radishProducts}," +
+            $"selectedBatch={main.Game.GetProcessorDetails(processor).BatchQuantity},allBatches={allRadishBatchQuantity}," +
+            $"otherBatches={otherRadishBatchQuantity},batches=[{string.Join(';', radishBatches)}]," +
+            $"money={main.Game.MoneyCents},sawProcessing={sawProcessing}," +
+            $"stockLabel={Find<Label>(detail, "ProcessorProductStock").Text}," +
+            $"priceLabel={Find<Label>(detail, "ProcessorProductPrice").Text},expectedPrice={radishProductPrice}";
+        if (expectedOtherRadishBatch is bool expected && (otherRadishBatchQuantity > 0) != expected)
+            return Fail("固定回归的其他萝卜场地真实在制批次不符合预期：" + processingFacts);
         if (!sawProcessing || radishProducts == 0 ||
+            main.Game.GetRawStock(CropKind.Radish) + radishProducts +
+                allRadishBatchQuantity != radishHarvested ||
             Find<Label>(detail, "ProcessorProductStock").Text != radishProducts.ToString(CultureInfo.InvariantCulture) ||
             Find<Label>(detail, "ProcessorProductPrice").Text != radishProductPrice)
-            return Fail("萝卜加工场地没有显示随经营更新的售价与库存");
+            return Fail("萝卜加工场地没有显示随经营更新的售价与库存：" + processingFacts);
         Find<Button>(ui, "MarketButton").EmitSignal(Button.SignalName.Pressed);
         Button sell = Find<Button>(marketWindow, "SellButton");
         if (!marketWindow.Visible || sell.Disabled || ContainsVisibleText(marketWindow, "待定") ||

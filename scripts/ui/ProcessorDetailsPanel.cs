@@ -18,6 +18,7 @@ public partial class ProcessorDetailsPanel : VBoxContainer
     private readonly Label _stock;
     private readonly Label _remaining;
     private readonly Label _nextStep;
+    private readonly Label _removalLoss;
     private readonly ProgressBar _progress;
 
     public event Action? RemoveRequested;
@@ -53,6 +54,7 @@ public partial class ProcessorDetailsPanel : VBoxContainer
         relation.AddChild(_relation);
         AddChild(relation);
         _processing = MakeLabel("", 12, Muted);
+        _processing.Name = "ProcessorBatchRules";
         AddChild(_processing);
         var metrics = new HBoxContainer();
         metrics.AddThemeConstantOverride("separation", 11);
@@ -60,6 +62,7 @@ public partial class ProcessorDetailsPanel : VBoxContainer
         metrics.AddChild(MakeMetric("加工品当前报价", "金币", "ProcessorProductPrice", out _price));
         AddChild(metrics);
         _nextStep = MakeLabel("", 14, Muted);
+        _nextStep.Name = "ProcessorNextStep";
         AddChild(_nextStep);
         Button inventory = MakeButton("管理原料库存", Mid, 0, 56);
         inventory.Name = "ProcessorInventoryButton";
@@ -69,7 +72,9 @@ public partial class ProcessorDetailsPanel : VBoxContainer
         inventory.AddThemeConstantOverride("icon_max_width", 23);
         inventory.Pressed += () => InventoryRequested?.Invoke();
         AddChild(inventory);
-        AddChild(MakeLabel("移除丢失已投入原料及未完成批次，不退还建造费。", 12, Muted));
+        _removalLoss = MakeLabel("", 12, Muted);
+        _removalLoss.Name = "ProcessorRemovalLoss";
+        AddChild(_removalLoss);
         Button remove = MakeQuietButton("移除加工场地 · 不退款", 0, 35);
         remove.AddThemeFontSizeOverride("font_size", 13);
         remove.Name = "RemoveButton";
@@ -77,6 +82,10 @@ public partial class ProcessorDetailsPanel : VBoxContainer
         AddChild(remove);
     }
 
+    /**
+     * <summary>按真实加工快照显示当前锁定批量、单批规则、库存及状态。</summary>
+     * <param name="details">当前选中加工实例的详情；空闲时 BatchQuantity 为零。</param>
+     */
     public void Refresh(ProcessorDetailsSnapshot details)
     {
         string status = details.Status switch
@@ -88,8 +97,13 @@ public partial class ProcessorDetailsPanel : VBoxContainer
         };
         _title.Text = details.Crop.BuildingName;
         _status.Text = status;
-        _relation.Text = $"1 份{details.Crop.CropName} → 1 份{details.Crop.ProductName}";
-        _processing.Text = $"加工周期：投入原料后 {details.Crop.ProcessingHalfDays / 2m:0.#} 天完成";
+        _relation.Text = details.BatchQuantity > 0 ?
+            $"本批投入 {details.BatchQuantity} 份{details.Crop.CropName} → {details.BatchQuantity} 份{details.Crop.ProductName}" :
+            $"1 份{details.Crop.CropName} → 1 份{details.Crop.ProductName}";
+        _processing.Text = $"每批最多 9 份，投入与产出 1:1。\n每批加工 {details.Crop.ProcessingHalfDays / 2m:0.#} 天，少量批次同样耗时。";
+        _removalLoss.Text = details.BatchQuantity > 0 ?
+            $"移除丢失本批已投入的 {details.BatchQuantity} 份原料，不退还建造费。" :
+            "移除不退还建造费；加工中会丢失本批已投入原料。";
         _price.Text = FormatCoins(details.ProductPriceCents);
         _price.TooltipText = $"{details.Crop.ProductName}加工品当前报价";
         _stock.Text = details.ProductStock.ToString(CultureInfo.InvariantCulture);

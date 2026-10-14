@@ -1,4 +1,6 @@
 using Godot;
+using System.Threading;
+using System.Threading.Tasks;
 using FarmExchange.Gameplay;
 using FarmExchange.Cultivation;
 using FarmExchange.Inventory;
@@ -6,6 +8,7 @@ using FarmExchange.Land;
 using FarmExchange.Logging;
 using FarmExchange.Market;
 using FarmExchange.Time;
+using FarmExchange.Terrain;
 using FarmExchange.Trading;
 using FarmExchange.World;
 using FarmExchange.Weather;
@@ -17,7 +20,14 @@ public partial class Main : Node2D
 {
     private FarmGame? _currentGame;
     private RuntimeLog? _logging;
-    private FarmGame GameState => InitializeGame();
+    private FarmGame GameState => _currentGame ?? throw new System.InvalidOperationException("地图仍在准备，经营尚未开始");
+    private bool _sceneReady;
+    private bool _exiting;
+    private readonly CancellationTokenSource _initializationCancellation = new();
+    private Label _preparationLabel = null!;
+    internal Task ReadyTask { get; private set; } = Task.CompletedTask;
+    private Task _navigationPreparation = Task.CompletedTask;
+    private bool _navigationFailed;
     private SimulationDriver _driver = null!;
     private WorkerPresentation _workerPresentation = null!;
     private Button _rateButton = null!;
@@ -27,6 +37,7 @@ public partial class Main : Node2D
     // 图形夹具必须在父节点 _EnterTree 中设置，在任何 Game/Driver 读取之前生效。
     internal static System.Func<RuntimeLog>? LoggingFactory { get; set; }
     internal static int? InitialSeed { get; set; }
+    internal TerrainRules? InitialTerrainRules { get; set; }
     internal static WeatherMode InitialWeatherMode { get; set; } = WeatherMode.Natural;
     private DeveloperToolsWindow _developerWindow = null!;
 #endif
@@ -73,18 +84,11 @@ public partial class Main : Node2D
     }
 
     internal FarmGame Game => GameState;
-    internal SimulationDriver Driver
-    {
-        get
-        {
-            InitializeGame();
-            return _driver;
-        }
-    }
+    internal SimulationDriver Driver => _sceneReady ? _driver :
+        throw new System.InvalidOperationException("地图仍在准备，时间驱动尚未就绪");
 
-    private FarmGame InitializeGame()
+    private async Task<FarmGame> CreateGameAsync()
     {
-        if (_currentGame != null) return _currentGame;
 #if DEBUG
         const bool development = true;
 #else
@@ -114,28 +118,57 @@ public partial class Main : Node2D
             }
             else _logging = RuntimeLog.Disabled();
         }
-        try
-        {
 #if DEBUG
-            _currentGame = new FarmGame(InitialSeed, logging: _logging, weatherMode: InitialWeatherMode);
+        if (InitialTerrainRules?.IsAllLand == true)
+            return new FarmGame(InitialSeed, logging: _logging, weatherMode: InitialWeatherMode, terrainRules: InitialTerrainRules);
+        return await FarmGame.CreateAsync(GetTree(), InitialSeed, logging: _logging,
+            weatherMode: InitialWeatherMode, terrainRules: InitialTerrainRules,
+            cancellationToken: _initializationCancellation.Token);
 #else
-            _currentGame = new FarmGame(logging: _logging);
+        return await FarmGame.CreateAsync(GetTree(), logging: _logging,
+            cancellationToken: _initializationCancellation.Token);
 #endif
-            _driver = new SimulationDriver(_currentGame.Log?.Time);
-        }
-        catch (System.Exception error)
-        {
-            _logging.InitializationFailed(error);
-            _logging.Dispose();
-            throw;
-        }
-        return _currentGame;
     }
 
-    public override void _Ready()
+    public override async void _Ready()
+    {
+        ReadyTask = InitializeSceneAsync();
+        try { await ReadyTask; }
+        catch (System.Exception error)
+        {
+            if (_exiting) return;
+            _logging?.InitializationFailed(error);
+            _logging?.Dispose();
+            _preparationLabel.Text = "地图准备失败：" + error.Message;
+            GD.PushError(error.ToString());
+        }
+    }
+
+    private async Task InitializeSceneAsync()
     {
         _worldMap = GetNode<WorldMap>("WorldMap");
         _camera = GetNode<CameraController>("Camera2D");
+        _camera.ProcessMode = ProcessModeEnum.Disabled;
+        _uiRoot = GetNode<Control>("CanvasLayer/UiRoot");
+        _uiRoot.Theme = SharedTheme;
+        _preparationLabel = new Label
+        {
+            Name = "MapPreparationLabel",
+            Text = "正在准备地图…",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        _uiRoot.AddChild(_preparationLabel);
+        _preparationLabel.AddThemeColorOverride("font_color", new Color("f1e3c0"));
+        _preparationLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        FarmGame game = await CreateGameAsync();
+        if (_exiting)
+        {
+            game.Dispose();
+            return;
+        }
+        _currentGame = game;
+        _driver = new SimulationDriver(game.Log?.Time);
         ProcessPriority = 1;
         _worldMap.SetGame(GameState, _driver);
         GetNode<Camera2D>("Camera2D").GlobalPosition = _worldMap.GetGridWorldPosition(
@@ -147,16 +180,21 @@ public partial class Main : Node2D
         _worldMap.SelectionChanged += OnSelectionChanged;
         _camera.MapShortClicked += OnMapShortClicked;
         _camera.MapPointerMoved += OnMapPointerMoved;
-        _uiRoot = GetNode<Control>("CanvasLayer/UiRoot");
-        _uiRoot.Theme = SharedTheme;
         BuildInterface();
         UiScaling.Bind(_uiRoot);
         _driver.RateChanged += RefreshSimulationRate;
         RefreshUi();
+        _preparationLabel.QueueFree();
+        _sceneReady = true;
+        _camera.ProcessMode = ProcessModeEnum.Inherit;
     }
 
     public override void _ExitTree()
     {
+        _exiting = true;
+        _sceneReady = false;
+        _initializationCancellation.Cancel();
+        _initializationCancellation.Dispose();
         if (_camera != null)
         {
             _camera.MapShortClicked -= OnMapShortClicked;
@@ -172,6 +210,7 @@ public partial class Main : Node2D
 
     public override void _Process(double delta)
     {
+        if (!_sceneReady) return;
         _logging?.ProcessFrame();
         AdvanceSimulation(delta);
 #if DEBUG
@@ -184,18 +223,19 @@ public partial class Main : Node2D
 
     internal uint AdvanceSimulation(double delta, System.Func<SimulationCheckpoint, bool>? checkpoint = null)
     {
+        if (!_sceneReady) return 0;
+        if (!GameState.IsNavigationReady)
+        {
+            EnsureNavigationPreparation();
+            return 0;
+        }
         _tickHarvested = _tickProduced = 0;
         System.Func<SimulationCheckpoint, bool> observe = checkpoint == null ? ObserveSimulationCheckpoint :
             point => ObserveSimulationCheckpoint(point) && checkpoint(point);
         uint advanced;
         try
         {
-#if DEBUG
-            advanced = _driver.Advance(delta, GameState, observe,
-                _developerWindow.GetCurrentMaxTicks);
-#else
-            advanced = _driver.Advance(delta, GameState, observe);
-#endif
+            advanced = _driver.Advance(delta, GameState, observe, GetMaxAdvanceTicks);
         }
         catch (System.InvalidOperationException error)
         {
@@ -212,6 +252,47 @@ public partial class Main : Node2D
             SetMessage($"收获 {_tickHarvested} 份原料，加工产出 {_tickProduced} 份");
         if (advanced > 0) RefreshAfterGameChange(worldChanged: true);
         return advanced;
+    }
+
+    private uint GetMaxAdvanceTicks()
+    {
+        if (!GameState.IsNavigationReady) return 0;
+#if DEBUG
+        return _developerWindow.GetCurrentMaxTicks();
+#else
+        return uint.MaxValue;
+#endif
+    }
+
+    private void EnsureNavigationPreparation()
+    {
+        if (_exiting || _navigationFailed || GameState.IsNavigationReady || !_navigationPreparation.IsCompleted) return;
+        _navigationPreparation = PrepareNavigationAsync();
+    }
+
+    private async Task PrepareNavigationAsync()
+    {
+        RefreshActivity();
+        try
+        {
+            await GameState.WaitForNavigationAsync(GetTree(), _initializationCancellation.Token);
+            if (!_exiting) RefreshActivity();
+        }
+        catch (System.OperationCanceledException) when (_exiting) { }
+        catch (System.Exception error)
+        {
+            if (_exiting) return;
+            _navigationFailed = true;
+            _sceneReady = false;
+            SetMessage("道路导航准备失败：" + error.Message);
+            GD.PushError(error.ToString());
+#if DEBUG
+            _developerWindow.Abort("道路导航准备失败：" + error.Message);
+#endif
+            GameState.Dispose();
+            _uiRoot.ProcessMode = ProcessModeEnum.Disabled;
+            _camera.ProcessMode = ProcessModeEnum.Disabled;
+        }
     }
 
     private bool ObserveSimulationCheckpoint(SimulationCheckpoint point)
@@ -987,6 +1068,7 @@ public partial class Main : Node2D
 
     private void RefreshAfterGameChange(bool worldChanged)
     {
+        EnsureNavigationPreparation();
         if (worldChanged)
             _worldMap.SyncFromGame();
         RefreshUi();
@@ -1047,7 +1129,8 @@ public partial class Main : Node2D
         _farmCountLabel.Text = $"{farms} 块农田";
         _processorCountLabel.Text = $"{processors} 处加工场地";
         _activityLabel.Text = $"道路 {roads} 格\n" +
-            (GameState.IsPaused ? "经营已暂停，仍可主动交易。" : "工人自动照料，成熟后自动入库。");
+            (!GameState.IsNavigationReady ? "正在更新道路，稍候继续经营。" :
+                GameState.IsPaused ? "经营已暂停，仍可主动交易。" : "工人自动照料，成熟后自动入库。");
     }
 
     private void TogglePause()

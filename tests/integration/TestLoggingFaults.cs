@@ -38,7 +38,7 @@ public static class TestLoggingFaults
     {
         using var writer = new ControlledWriter { DelayMilliseconds = 5 };
         using var logging = RuntimeLog.Capture(writer);
-        using var game = new FarmGame(130, logging);
+        using var game = new FarmGame(130, logging, terrainRules: TerrainTestFixtures.AllLandRules);
         int writesBefore = writer.Attempts;
         var watch = Stopwatch.StartNew();
         var result = game.Buy(new(CropKind.Wheat, CommodityKind.Raw), 1);
@@ -56,7 +56,7 @@ public static class TestLoggingFaults
         using var writer = new ControlledWriter();
         int diagnostics = 0;
         using var logging = RuntimeLog.Capture(writer, diagnostic: _ => diagnostics++);
-        using var game = new FarmGame(130, logging);
+        using var game = new FarmGame(130, logging, terrainRules: TerrainTestFixtures.AllLandRules);
         writer.Fail = true;
         var commodity = new CommodityId(CropKind.Wheat, CommodityKind.Raw);
         var result = game.Buy(commodity, 2);
@@ -75,7 +75,7 @@ public static class TestLoggingFaults
         string directory = ProjectSettings.GlobalizePath("res://build/issue130-validation/persistent-file-" + Guid.NewGuid().ToString("N"));
         using var logging = RuntimeLog.OpenFile(directory, false, new(), new(128, 10), _ => { });
         BlockNextRoll(Path.Combine(directory, "runtime"));
-        using var game = new FarmGame(130, logging);
+        using var game = new FarmGame(130, logging, terrainRules: TerrainTestFixtures.AllLandRules);
         long before = logging.Health.FailureCount;
         for (int index = 0; index < 20; index++) game.Buy(new(CropKind.Wheat, CommodityKind.Raw), 0);
         Require(logging.Health.FailureCount >= before + 60 && logging.Health.Health == LoggingHealth.Unavailable && game.MoneyCents == 5000,
@@ -87,7 +87,7 @@ public static class TestLoggingFaults
         string directory = ProjectSettings.GlobalizePath("res://build/issue130-validation/exception-file-" + Guid.NewGuid().ToString("N"));
         using var logging = RuntimeLog.OpenFile(directory, false, new(), new(128, 10), _ => { });
         BlockNextRoll(Path.Combine(directory, "runtime"));
-        using var game = new FarmGame(130, logging);
+        using var game = new FarmGame(130, logging, terrainRules: TerrainTestFixtures.AllLandRules);
         var driver = new SimulationDriver(game.Log!.Time);
         var original = new ProjectedException();
         long before = logging.Health.FailureCount;

@@ -73,8 +73,8 @@ internal sealed class ProductionDiagnostics
         });
     }
 
-    internal void RawClaimed(int index, ProcessorDiagnosticState? before, ProcessingSystem processing, GoodsInventory inventory) =>
-        ProcessorChanged(index, before, processing, inventory, "RawClaimed", 1);
+    internal void RawClaimed(int index, ProcessorDiagnosticState? before, ProcessingSystem processing, GoodsInventory inventory, int quantity) =>
+        ProcessorChanged(index, before, processing, inventory, "RawClaimed", quantity);
     internal void ProcessingStarted(int index, ProcessorDiagnosticState? before, ProcessingSystem processing, GoodsInventory inventory) =>
         ProcessorChanged(index, before, processing, inventory, "ProcessingStarted");
     internal void Processed(int index, ProcessorDiagnosticState? before, ProcessingSystem processing, GoodsInventory inventory, int quantity) =>
@@ -96,6 +96,8 @@ internal sealed class ProductionDiagnostics
             var fields = Fields(index, "Processor", before.Crop, transition);
             fields["StateBefore"] = before.Status.ToString();
             fields["StateAfter"] = after.Status.ToString();
+            fields["BatchQuantityBefore"] = before.BatchQuantity;
+            fields["BatchQuantityAfter"] = after.BatchQuantity;
             fields["RemainingSeconds"] = after.RemainingSeconds;
             if (quantity.HasValue) fields["Quantity"] = quantity.Value;
             _context.Diagnostics.Capture(ProcessorEvent, "选定加工场地实际状态转换", fields);
@@ -139,7 +141,7 @@ internal sealed class ProductionDiagnostics
     private static ProcessorDiagnosticState ProcessorState(int index, ProcessingSystem processing, GoodsInventory inventory)
     {
         ProcessorSnapshot state = processing.Get(index);
-        return new(state.CropKind, processing.GetStatus(index, inventory), state.RemainingSeconds);
+        return new(state.CropKind, processing.GetStatus(index, inventory), state.RemainingSeconds, state.BatchQuantity);
     }
 
     private static Dictionary<string, object?> Anchor(int index) => new()
@@ -149,4 +151,4 @@ internal sealed class ProductionDiagnostics
     };
 }
 
-internal readonly record struct ProcessorDiagnosticState(CropKind Crop, ProcessorStatus Status, int RemainingSeconds);
+internal readonly record struct ProcessorDiagnosticState(CropKind Crop, ProcessorStatus Status, int RemainingSeconds, int BatchQuantity);

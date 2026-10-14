@@ -119,8 +119,8 @@ scripts/
 
 现有[测试汇总](../../../tests/TestSuite.cs)按 `RunChecks()` / `RunChecksAsync()` 调用单元、集成和 e2e，最终以退出码反馈；[现有测试脚本](../../../tools/Run-Tests.ps1)运行指定 Godot headless 场景并生成覆盖率。本设计不替换这些入口，不把整个 TestSuite 搬进玩家正在运行的主场景。
 
-- 单元层继续验证规则本身，例如 [TestTradingService](../../../tests/unit/TestTradingService.cs) 的真实结算与容量、[TestTradeOrders](../../../tests/unit/TestTradeOrders.cs) 的冻结与成交；其 `CheckGameplayPhases()` 已覆盖暂停不自动执行、订单买入晚于加工领取、冻结原料不能加工等关键时点。场景不重复写这些算法的断言大全。
-- 经营路径的现有检查，如 [TestFarmGame](../../../tests/unit/TestFarmGame.cs) 的加工保留线/建造领取与公共推进，仍是本例依赖的规则依据；跨模块流程只检查本流程的可观察结果及状态关系。
+- 单元层继续验证规则本身，例如 [TestTradingService](../../../tests/unit/trading/TestTradingService.cs) 的真实结算与容量、[TestTradeOrders](../../../tests/unit/trading/TestTradeOrders.cs) 的冻结与成交；其 `CheckGameplayPhases()` 已覆盖暂停不自动执行、订单买入晚于加工领取、冻结原料不能加工等关键时点。场景不重复写这些算法的断言大全。
+- 经营路径的现有检查，如 [TestFarmGame](../../../tests/unit/gameplay/TestFarmGame.cs) 的加工保留线/建造领取与公共推进，仍是本例依赖的规则依据；跨模块流程只检查本流程的可观察结果及状态关系。
 - 集成层继续检查驱动、地图与 [TestWorkerPresentation](../../../tests/integration/TestWorkerPresentation.cs) 等表现联动；e2e 的 [TestCoreLoop](../../../tests/e2e/TestCoreLoop.cs) 已通过真实 Main、按钮和 Timer 信号检查经营界面，后续仅在选定工具入口后增加对应启动/进度/中止/刷新验收。
 - 如果此具体流程以后成为稳定回归需求，可以由现有测试入口调用同一流程逻辑并读取报告，测试侧只负责夹具、受控推进和映射成功/失败；不再实现一份不同的买入加工卖出脚本。共享规则断言若确有重复，再提取最小检查函数，不先迁移全部测试。
 

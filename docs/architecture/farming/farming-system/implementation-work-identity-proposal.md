@@ -73,6 +73,6 @@ FarmingSystem 的 Depth 来自少量完整判断支撑工人、计划、表现�
 
 实施文件归本分支独占：`scripts/farming/FarmingSystem.cs`、`scripts/gameplay/FarmGame.cs`。公开 `ProductionResult` 无需变化，WorkerScheduler 与 CultivationPlanBook 算法无需修改。
 
-测试归本分支独占：`tests/unit/TestProductionState.cs`、`TestProductionResults.cs`、`TestCultivationPlanBook.cs`、`TestWorkerScheduler.cs`。专题文档归本分支独占：本目录 Interface 和本方案、工人 Interface、年度表 Interface、`docs/gameplay/production/water-and-rain.md`、`seasonal-cultivation.md`、FarmGame Interface。
+测试归本分支独占：`tests/unit/farming/TestProductionState.cs`、`tests/unit/gameplay/TestProductionResults.cs`、`tests/unit/cultivation/TestCultivationPlanBook.cs`、`tests/unit/workers/TestWorkerScheduler.cs`。专题文档归本分支独占：本目录 Interface 和本方案、工人 Interface、年度表 Interface、`docs/gameplay/production/water-and-rain.md`、`seasonal-cultivation.md`、FarmGame Interface。
 
 `AGENTS.md`、`docs/README.md` 和 `docs/project/testing.md` 由 dev 集成步骤统一更新，三个修复分支不各自编辑。若需要超出上述文件，先重新核对所有权，避免暗中跨入其他分支。实现整合到 dev 后完成审查、编译、完整测试、覆盖率、Windows Release 导出和启动，再按现行流程交付，不能把专项回归当作完整交付。

@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
 using FarmExchange.Land;
 using FarmExchange.Logging;
 using FarmExchange.Trading;
+using FarmExchange.Terrain;
 
 namespace FarmExchange.Development;
 
@@ -61,19 +64,60 @@ public sealed class BuyProcessSellScenario
      * <param name="currentGame">current模式必需的真实对象；独立模式忽略。</param>
      * <param name="actualSeed">现场已知的实际种子；未知传空。</param>
      * <param name="logging">与主局共享的日志会话；独立局使用，现场沿用原局关联。</param>
+     * <param name="terrainRules">同步独立局必须显式提供纯陆地配置；默认含水独立局使用 StartAsync。</param>
      * <returns>同一流程运行器；独立局仅运行新数据对象。</returns>
+     * <remarks>当前局导航未就绪时在首个业务命令前拒绝，调用方须改用 StartAsync。</remarks>
      */
     public static BuyProcessSellScenario Start(ScenarioConfiguration configuration, string reportDirectory,
-        FarmGame? currentGame = null, int? actualSeed = null, RuntimeLog? logging = null)
+        FarmGame? currentGame = null, int? actualSeed = null, RuntimeLog? logging = null, TerrainRules? terrainRules = null)
     {
         string directory = Path.GetFullPath(reportDirectory);
         if (!Directory.Exists(directory)) throw new DirectoryNotFoundException("运行前创建的报告目录不存在：" + directory);
         bool independent = configuration.Target == "independent";
-        FarmGame game = independent ? new FarmGame(configuration.Seed, logging, GamePurpose.ScenarioIndependent) :
+        FarmGame game = independent ? new FarmGame(configuration.Seed, logging, GamePurpose.ScenarioIndependent, terrainRules: terrainRules) :
             currentGame ?? throw new ArgumentNullException(nameof(currentGame));
+        if (!independent && !game.IsNavigationReady)
+            throw new InvalidOperationException("当前局道路导航尚未准备完成，请使用 StartAsync");
+        return PrepareGame(configuration, directory, game, independent ? configuration.Seed : actualSeed, independent);
+    }
+
+    /**
+     * <summary>等待独立局地形或当前局最新道路导航就绪，再执行真实准备命令。</summary>
+     * <param name="tree">等待原生导航同步的活动场景树。</param>
+     * <param name="configuration">已严格加载的本次参数。</param>
+     * <param name="reportDirectory">已创建并验证可写的唯一报告目录。</param>
+     * <param name="currentGame">现场模式使用的当前局。</param>
+     * <param name="actualSeed">现场已知种子。</param>
+     * <param name="logging">共享日志会话。</param>
+     * <param name="cancellationToken">宿主退出或中止准备的取消信号。</param>
+     * <returns>完整准备的流程；地形失败或取消不替换地图、不开始业务流程。</returns>
+     */
+    public static async Task<BuyProcessSellScenario> StartAsync(Godot.SceneTree tree,
+        ScenarioConfiguration configuration, string reportDirectory, FarmGame? currentGame = null,
+        int? actualSeed = null, RuntimeLog? logging = null, CancellationToken cancellationToken = default)
+    {
+        string directory = Path.GetFullPath(reportDirectory);
+        if (!Directory.Exists(directory)) throw new DirectoryNotFoundException("运行前创建的报告目录不存在：" + directory);
+        cancellationToken.ThrowIfCancellationRequested();
+        bool independent = configuration.Target == "independent";
+        FarmGame game = independent ? await FarmGame.CreateAsync(tree, configuration.Seed, logging,
+            GamePurpose.ScenarioIndependent, cancellationToken: cancellationToken) :
+            currentGame ?? throw new ArgumentNullException(nameof(currentGame));
+        if (!independent) await game.WaitForNavigationAsync(tree, cancellationToken);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            if (independent) game.Dispose();
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        return PrepareGame(configuration, directory, game, independent ? configuration.Seed : actualSeed, independent);
+    }
+
+    private static BuyProcessSellScenario PrepareGame(ScenarioConfiguration configuration, string directory,
+        FarmGame game, int? actualSeed, bool independent)
+    {
         try
         {
-            var scenario = new BuyProcessSellScenario(configuration, directory, game, independent ? configuration.Seed : actualSeed);
+            var scenario = new BuyProcessSellScenario(configuration, directory, game, actualSeed);
             scenario.Prepare(independent);
             return scenario;
         }
@@ -175,7 +219,7 @@ public sealed class BuyProcessSellScenario
         uint advanced = checkpoint.ElapsedSeconds - _lastTicks;
         if (advanced == 0)
             return true;
-        Report.Intervals.Add(new ScenarioInterval(_lastTicks, checkpoint.ElapsedSeconds, advanced, checkpoint.IsEvent, checkpoint.Result));
+        Report.Intervals.Add(new ScenarioInterval(_lastTicks, checkpoint.ElapsedSeconds, advanced, checkpoint.IsEvent, checkpoint.Result, CaptureProcessor()));
         _lastTicks = checkpoint.ElapsedSeconds;
         Report.AdvancedTicks += advanced;
         Report.Produced += checkpoint.Result.Produced;
@@ -388,17 +432,23 @@ public sealed class BuyProcessSellScenario
 
     private ScenarioSnapshot Capture()
     {
-        Godot.Vector2I cell = _configuration.ProcessorAnchor;
-        PlotSnapshot plot = Game.TryGetPlot(cell, out PlotSnapshot value) == LandFailure.None ? value : default;
-        ProcessorStatus? status = plot.Building == BuildingKind.Processor ? Game.GetProcessorDetails(cell).Status : null;
         return new ScenarioSnapshot(Game.Calendar, Game.MoneyCents, Game.AvailableMoneyCents, Game.FrozenMoneyCents,
             Stock(_configuration.RawCommodity), Stock(_configuration.ProductCommodity), Game.GetRawReserve(_configuration.RawCommodity.Crop),
-            new ScenarioProcessor(cell.X, cell.Y, plot.Building, plot.CropKind, plot.RemainingSeconds, status),
+            CaptureProcessor(),
             Game.GetBuildingSpaces().Count, Game.GetQuote(_configuration.RawCommodity), Game.GetQuote(_configuration.ProductCommodity), Game.GetTradeOrders());
     }
 
     private ScenarioStock Stock(CommodityId commodity) => new(Game.GetStock(commodity), Game.GetAvailableStock(commodity), Game.GetFrozenStock(commodity));
     private static bool StockRelation(ScenarioStock stock) => stock.Total == (long)stock.Available + stock.Frozen;
+    private ScenarioProcessor CaptureProcessor()
+    {
+        Godot.Vector2I cell = _configuration.ProcessorAnchor;
+        PlotSnapshot plot = Game.TryGetPlot(cell, out PlotSnapshot value) == LandFailure.None ? value : default;
+        ProcessorDetailsSnapshot? processor = plot.Building == BuildingKind.Processor ? Game.GetProcessorDetails(cell) : null;
+        return new ScenarioProcessor(cell.X, cell.Y, plot.Building, plot.CropKind, plot.RemainingSeconds,
+            processor?.Status, processor?.BatchQuantity ?? 0);
+    }
+
     private string StageText() => Stage switch
     {
         ScenarioStage.Preparing => "准备",

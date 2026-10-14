@@ -4,7 +4,7 @@
 
 ## 事实、选项与建议分期
 
-现行 `FarmingSystem.AdvanceGrowth` 达到成熟目标后清除本轮，`FarmGame.CollectHarvest` 一次增加公共库存并通知年度表结束；禁生换季促熟共用该路径。`Inventory` 拥有可交易原料、加工品、冻结量和加工保留线，`ProcessingSystem` 自动领取可用且超过底线的一份原料。没有成熟待收、地面货物、运输目的地或携带容量。[作物规则](../gameplay/production/crop-growth.md)、[加工规则](../gameplay/production/processing.md)和[库存交易](../gameplay/trading/sales.md)是当前生效基准。
+现行 `FarmingSystem.AdvanceGrowth` 达到成熟目标后清除本轮，`FarmGame.CollectHarvest` 一次增加公共库存并通知年度表结束；禁生换季促熟共用该路径。`Inventory` 拥有可交易原料、加工品、冻结量和加工保留线，`ProcessingSystem` 自动领取未冻结且超过底线的最多9份匹配原料，锁定本批实际量且中途不追加；整批完成后按1:1产出等量成品，少量批次也使用完整周期（当前基线已按 #35 更新）。没有成熟待收、地面货物、运输目的地或携带容量。[作物规则](../gameplay/production/crop-growth.md)、[加工规则](../gameplay/production/processing.md)和[库存交易](../gameplay/trading/sales.md)是当前生效基准。
 
 | 选择 | 新增经营含义 | 素材范围 |
 | --- | --- | --- |

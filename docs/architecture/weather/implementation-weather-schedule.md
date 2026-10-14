@@ -72,6 +72,6 @@ for (int sample = 0; sample < sampleCount; sample++)
 
 ## 查询成本诊断
 
-专用场景 `tests/unit/test_weather_system.tscn` 接受显式参数 `--weather-query-probe`，通过公开 `GetFarmWeather` 查询满地图 8192 座农田，分别测试无活动区域和图形验收使用的雨／云／离屏雨三区。测量区分首次冷扫和随后 16 经营秒×每秒三相位的 48 次热扫：冷扫逐田与九格公开位置查询结果比对，记录其耗时与分配；热扫记录总耗时、P95 单次全场查询耗时、当前线程分配字节及一致的校验和。查询方法的 JIT 预热与强制 GC 在采样之外进行。
+专用场景 `tests/unit/weather/test_weather_system.tscn` 接受显式参数 `--weather-query-probe`，通过公开 `GetFarmWeather` 查询满地图 8192 座农田，分别测试无活动区域和图形验收使用的雨／云／离屏雨三区。测量区分首次冷扫和随后 16 经营秒×每秒三相位的 48 次热扫：冷扫逐田与九格公开位置查询结果比对，记录其耗时与分配；热扫记录总耗时、P95 单次全场查询耗时、当前线程分配字节及一致的校验和。查询方法的 JIT 预热与强制 GC 在采样之外进行。
 
 输出写入 `coverage/weather-query-probe/performance.json`，改动前后的数据由验收流程保存到既有产物目录。此探针仅在专用场景显式调用时执行；日常 `RunChecks` 继续验证业务行为，实际图形帧间隔门槛由1080P天气性能场景验收。

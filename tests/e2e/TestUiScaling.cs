@@ -35,6 +35,7 @@ public partial class TestUiScaling : Node
             await Frames(parent);
             bool reparentingPassed = await CheckReparenting(parent);
             main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
             parent.AddChild(main);
             main.SetProcess(false);
             main.Game.SetPaused(true);

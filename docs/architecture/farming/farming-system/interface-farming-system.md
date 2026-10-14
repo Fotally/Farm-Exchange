@@ -30,7 +30,7 @@
 
 播种许可版本属于现有农田状态，仅在启停值实际变化时递增。`Sow` 使用当前许可版本；`Water` 的许可版本固定为零，只随轮次或真实需水条件变化失效。`SetCrop` 同品种不重启、重复设置同一启停值不改凭据。雨水通过改变真实需求取消任务：已开始生长就不再需要人工浇水。调用方保存不透明凭据，不读取计数、不解释启停原因。该凭据不是全局实体标识，也不承诺调度优先级。
 
-`WorkerScheduler` 只查询工作需求并调用指定工作操作，不取得可变农田状态。`FarmGame` 在步进开始时查询各农田九格天气，只向整田判定为降雨的实例供水，再按固定相位把正常成熟结果交给 `Inventory`；换季时先报告并沿原路径入库补救成熟，随后清理禁生未成熟作物，并由计划更新后续安排。调用方不逐字段清除农田，也不记录历史失败状态；已收获空田不会被越季清理。移除农田删除其水分状态。精确阈值与共同终结路径见[换季成熟实现](implementation-season-maturity.md)，播种检查见[PlantingRules 接口](../planting-rules/interface-planting-rules.md)，工人移动与三人认领见[WorkerScheduler 接口](../../workers/worker-scheduler/interface-worker-scheduler.md)。旧对象、旧轮、雨水满足及季末执行重验的专项测试位于 `tests/unit/TestWorkerScheduler.cs`。
+`WorkerScheduler` 只查询工作需求并调用指定工作操作，不取得可变农田状态。`FarmGame` 在步进开始时查询各农田九格天气，只向整田判定为降雨的实例供水，再按固定相位把正常成熟结果交给 `Inventory`；换季时先报告并沿原路径入库补救成熟，随后清理禁生未成熟作物，并由计划更新后续安排。调用方不逐字段清除农田，也不记录历史失败状态；已收获空田不会被越季清理。移除农田删除其水分状态。精确阈值与共同终结路径见[换季成熟实现](implementation-season-maturity.md)，播种检查见[PlantingRules 接口](../planting-rules/interface-planting-rules.md)，工人移动与三人认领见[WorkerScheduler 接口](../../workers/worker-scheduler/interface-worker-scheduler.md)。旧对象、旧轮、雨水满足及季末执行重验的专项测试位于 `tests/unit/workers/TestWorkerScheduler.cs`。
 
 模块不解析占用子格或决定设施形状；`FarmGame` 在土地接口解析锚点后调用，`WorkerScheduler` 从 `Indices` 取得真实锚点。少量容量测试数组直接验证生产状态，完整空间几何由土地测试负责。
 

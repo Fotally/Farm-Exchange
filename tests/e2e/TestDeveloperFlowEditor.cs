@@ -30,6 +30,7 @@ public partial class TestDeveloperFlowEditor : Node
             builtin[name + ".json"] = File.ReadAllBytes(ProjectSettings.GlobalizePath("res://tests/scenario-configs/buy-process-sell/" + name + ".json"));
         var library = new ScenarioConfigurationLibrary(builtin, user);
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.SetProcess(false);
         var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
@@ -125,6 +126,7 @@ public partial class TestDeveloperFlowEditor : Node
                 return Fail("覆盖没有增加修订或改动了内置示例");
             Find<Button>(window, "ScenarioEditorContinueButton").EmitSignal(Button.SignalName.Pressed);
             Find<Button>(window, "ScenarioStartButton").EmitSignal(Button.SignalName.Pressed);
+            await window.PreparationTask;
             window.AdvanceIndependent(100);
             string previousReport = Find<Label>(window, "ScenarioReportPathLabel").Text;
             if (!previousReport.StartsWith("报告：", StringComparison.Ordinal) || !File.Exists(previousReport[3..]))

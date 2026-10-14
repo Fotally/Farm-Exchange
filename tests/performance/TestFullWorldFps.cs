@@ -30,6 +30,11 @@ public partial class TestFullWorldFps : Node
     private bool _placementPreview;
     private string ReportName => _placementPreview ? "performance-placement" : "performance";
 
+    public override void _EnterTree()
+    {
+        GetNode<Main>("Main").InitialTerrainRules = TerrainTestFixtures.AllLandRules;
+    }
+
     public override void _Ready()
     {
         if (DisplayServer.GetName() == "headless")

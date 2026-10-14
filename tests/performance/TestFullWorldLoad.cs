@@ -12,7 +12,7 @@ public partial class TestFullWorldLoad : Node
 
     public static bool RunChecks()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, terrainRules: TerrainTestFixtures.AllLandRules);
         game.FillWorldForBenchmark();
         int farms = 0;
         int processors = 0;

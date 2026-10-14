@@ -49,3 +49,5 @@ E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.e
 ZIP 路径必须位于构建和证据目录之外，已有最终包拒绝覆盖。命令先生成临时 ZIP，直接检查其 EXE/PCK/程序集、schema 字节和无 runtime/debug 会话，再发布为最终路径；失败不留下冒充已验收的最终包。CI 上传目录与正式发布第二次启动使用同一命令，避免任一处启动日志混入玩家输入。
 
 Windows GUI 程序经 PowerShell 的 `&` 直接调用后，`$LASTEXITCODE` 可能保持空值；分发命令等待真实进程退出，并读取实际 `ExitCode`。玩家从干净包首次启动后仍在 exe 同级 `logs/runtime/*.log` 生成本次业务会话，阅读规则见[日志 schema v1](runtime-log-schema-v1.md)。工具契约检查命令为 `./tools/Test-ValidationArtifacts.ps1`；它构建真实可执行的受控夹具，验证启动失败、60 秒超时、日志保存失败、干净 ZIP 及首次启动行为，不替代上述正式 Windows 导出程序验收。
+
+#110 四个正式／开发导出预设均在 `include_filter` 显式包含 `assets/gameplay/terrain/terrain_rules.json` 和 `assets/gameplay/terrain/shoreline_templates.json`。它们是地形正式运行资源，不能只依赖编辑器中的文件；PNG 与 shader 沿正常资源依赖导出。导出启动须用默认含水局验证资源完整，不通过开发纯陆地输入绕过生成。

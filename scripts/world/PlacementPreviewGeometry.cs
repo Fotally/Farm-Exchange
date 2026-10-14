@@ -20,7 +20,7 @@ internal static class PlacementPreviewGeometry
         {
             Vector2I cell = anchorCell + offsets[index];
             cells[index] = new PreviewCell(cell,
-                !MapCoordinates.ContainsCell(cell) || game.GetBuildingSpace(cell) != null);
+                !game.Terrain.IsFullLand(cell) || game.GetBuildingSpace(cell) != null);
         }
         return cells;
     }

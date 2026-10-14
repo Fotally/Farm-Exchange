@@ -331,16 +331,17 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | 字段 | 类型/单位 | 含义 |
 | --- | --- | --- |
 | `RuleKind` | `Placement/Planting/Trade` | 所执行的规则检查类别 |
-| `CheckResults` | 字符串→布尔字典 | 稳定检查项是否通过；Placement 为 Building/Crop/Bounds/Occupancy/Funds，并可选新增 Orientation（在 Crop 后、Bounds 前），道路不执行 Crop；非法朝向后省略 Bounds/Occupancy/Funds。Planting 为 Season/Time，Trade 为 Commodity/Quantity/Funds/Stock/Capacity/Reserve；未执行项省略，不写 false 冒充检查失败 |
+| `CheckResults` | 字符串→布尔字典 | 稳定检查项是否通过；Placement 为 Building/Crop/Orientation/Bounds/Occupancy/Terrain/Funds，道路不执行 Crop；朝向拒绝后省略后续项，占用拒绝不检查 Terrain，含水拒绝为 Terrain=false 且省略 Funds。Planting 为 Season/Time，Trade 为 Commodity/Quantity/Funds/Stock/Capacity/Reserve；未执行项省略，不写 false 冒充检查失败 |
 | `ProductionKind` | `Farm/Processor` | 状态来自农田还是加工场地 |
 | `StateBefore`、`StateAfter` | 状态字符串 | Farm 使用 CropStage 的 `None/Seeded/Growing`；Processor 使用详情状态 `WaitingForRaw/Processing/WaitingForReserve/ReadyToProcess`，分别为待原料/加工中/因底线等待/具备领取条件 |
 | `HasWaterBefore`、`HasWaterAfter` | 布尔 | 农田本轮供水状态；加工场地省略 |
-| `Transition` | 字符串枚举 | `Sown/Watered/GrowthStarted/Harvested/Cleared/RawClaimed/ProcessingStarted/Processed`；Harvested/Processed 加 Quantity（实际产量），RawClaimed 加 Quantity=1（领取量），Cleared 不写虚构产量 |
+| `BatchQuantityBefore`、`BatchQuantityAfter` | 可选非负 int32，份 | 仅 Processor 的 ProductionStateChanged 转换前后实际锁量；空闲0，当前进行中1～9，不等于本次入库或再次扣料 |
+| `Transition` | 字符串枚举 | `Sown/Watered/GrowthStarted/Harvested/Cleared/RawClaimed/ProcessingStarted/Processed`；Harvested/Processed 加 Quantity（实际产量），RawClaimed 加 Quantity（实际领取量，当前1～9份），Cleared 不写虚构产量 |
 | `RemainingSeconds` | 非负整数，经营秒 | 当前状态剩余经营秒，按现有比例换算向上取整；不是现实秒或内部时间单位 |
 | `WorkerNumber` | 正整数 | 现有工人编号，见上文 |
 | `ActivityBefore`、`ActivityAfter` | 工人活动枚举 | `Idle/Moving/Sowing/Watering`＝空闲/移动/播种/浇水；不是任务成功/失败结果 |
 | `TargetAnchorBefore`、`TargetAnchorAfter` | 锚点或 null | 认领的农田实例锚点，不是实际工作中心格；输入 WorkerSnapshot.TargetCell 须先按实际含义核对转换 |
-| `PositionBefore`、`PositionAfter` | `{ X, Y }` 小数对象，基础格单位 | 工人经营快照格位置，不是屏幕像素、地图本地像素或视觉插值位置 |
+| `PositionBefore`、`PositionAfter` | `{ X, Y }` 小数对象，基础格单位 | 权威 double 连续经营位置，变化判断使用该坐标而非 Vector2 显示投影；不是屏幕像素、地图本地像素或视觉插值位置 |
 | `Conditions` | 评估对象二维数组 | 对应原 ConditionGroups，每项 Factor/Comparison/Value 含义同配置，额外 `Actual` 是本次实际数值（同 Value 单位）、`Satisfied` 是布尔；按原组/项顺序对应 |
 | `ConfiguredConditionGroupCount` | 非负 int32 | 原订单配置的条件组总数，不把未访问组当成已执行 |
 | `EvaluatedConditionGroupCount`、`EvaluatedConditionCount` | 非负 int32、非负 int64 | 原短路路径实际访问的组数及实际求值条件总数；后续未访问 OR 组不属于日志截断 |
@@ -392,7 +393,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `EventPayloadRejected` | 两类/WRN | 原事件核心内容无法完整输出时的有界说明；OriginalEventName、可取得的原关联键、RejectionReason；原事件不作为完整证据 |
 | `BusinessException`、`FatalException` | 两类/ERR 或 FTL | 真正异常的接收边界；ExceptionType、Exception，已有命令/订单/设施标识加相应字段；前者 ERR，确实不能初始化/继续的后者 FTL |
 | `RuleChecked` | debug/DBG | 实际建造/播种执行重验或交易检查完成；RuleKind、CheckResults、Outcome、相关 Cell/Anchor/Crop/Commodity；交易另带Side/RequestMode，全部加工品的聚合Capacity检查省略单一Commodity；不等于该命令已提交成功；UI预览、详情/提示查询及排程预检不触发该事件 |
-| `ProductionStateChanged` | debug/DBG | 指定对象的受控采集，实际状态转换后；ProductionKind、Anchor、Crop、Transition、StateBefore、StateAfter、RemainingSeconds；农田加供水前后，数量按 Transition 定义 |
+| `ProductionStateChanged` | debug/DBG | 指定对象的受控采集，实际状态转换后；ProductionKind、Anchor、Crop、Transition、StateBefore、StateAfter、RemainingSeconds；农田加供水前后，加工可加 BatchQuantityBefore/After，数量按 Transition 定义 |
 | `WorkerTaskChanged` | debug/DBG | 指定工人的受控采集，任务认领/释放或活动状态变化；WorkerNumber、ActivityBefore、ActivityAfter、TargetAnchorBefore、TargetAnchorAfter |
 | `WorkerMoved` | debug/VRB | 专项观察指定工人经营移动；WorkerNumber、PositionBefore、PositionAfter，不采集每帧插值 |
 | `OrderEvaluated` | debug/VRB | 开启专项采集后，选定订单真实求值逐次记录；OrderId、ConditionSatisfied、ConditionGroupsSatisfied、WaitingCategories、EvaluationCoverage、ConfiguredConditionGroupCount、EvaluatedConditionGroupCount、EvaluatedConditionCount；Conditions为实际访问组中的有界样本，ComputedQuantity/ComputedBudgetCents仅在本次实际计算时提供；未执行项省略。稳定等待变化仍由runtime的OrderWaitChanged记录，不另有默认DBG流 |
@@ -426,7 +427,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 
 订单：主局 G1 的 OrderId=1 创建一次限价买单，5 份、最高 100 分。总余额 10000 分，冻结 505 分，可用变为 9495 分；真实求值时当前价 120，记录 LimitPrice 等待。报价降至 100 后 OrderFilled 记录货值 500、手续费 5、总余额 9495、冻结 0、可用仍 9495，库存增加 5。随后等待恢复记录不产生第二笔扣款。独立局 G2 的 OrderId=1 与此单无关。这里只演示订单自身结算边界，不把随后加工领取并入成交差额。
 
-加工：窗口 A 期初原料 10 份，收获 4、买入 3、卖出 2、实际开工领取 6，尚未完工，则期末原料 9，RawConsumedByCrop=6、ProducedByCrop=0。窗口 B 这 6 个批次完成入库、卖出加工品 1，且没有新开工，则该窗口消耗 0、产出 6、加工品净增 5。这是当前每次领取 1 份的多批次合计示意，不改变配方；两窗口之间不允许从产量倒推消耗。若 A 尾段缺失，则不能仅凭 B 恢复 A 的完整原料流向。
+加工：窗口 A 期初原料 10 份，收获 4、买入 3、卖出 2、实际开工领取 6，尚未完工，则期末原料 9，RawConsumedByCrop=6、ProducedByCrop=0。窗口 B 这个6份批次完成入库、卖出加工品 1，且没有新开工，则该窗口消耗 0、产出 6、加工品净增 5。这是不足九份的单批示意，同批仍耗完整时长，投入与产出1:1；两窗口之间不允许从产量倒推消耗。若 A 尾段缺失，则不能仅凭 B 恢复 A 的完整原料流向。
 
 ### 采集与格式预算
 
