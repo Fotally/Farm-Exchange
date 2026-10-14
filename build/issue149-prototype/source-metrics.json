@@ -1,0 +1,93 @@
+[
+  {
+    "source": "assets\\gameplay\\buildings\\wheat_workshop_q0.png",
+    "canvas": [
+      256,
+      240
+    ],
+    "alpha_bbox": [
+      75,
+      57,
+      185,
+      208
+    ]
+  },
+  {
+    "source": "assets\\gameplay\\buildings\\corn_workshop_q0.png",
+    "canvas": [
+      256,
+      240
+    ],
+    "alpha_bbox": [
+      27,
+      65,
+      230,
+      217
+    ]
+  },
+  {
+    "source": "assets\\gameplay\\buildings\\rice_workshop_q0.png",
+    "canvas": [
+      256,
+      240
+    ],
+    "alpha_bbox": [
+      41,
+      36,
+      213,
+      217
+    ]
+  },
+  {
+    "source": "assets\\gameplay\\buildings\\potato_workshop_q0.png",
+    "canvas": [
+      256,
+      240
+    ],
+    "alpha_bbox": [
+      31,
+      87,
+      226,
+      214
+    ]
+  },
+  {
+    "source": "assets\\gameplay\\buildings\\sunflower_workshop_q0.png",
+    "canvas": [
+      256,
+      240
+    ],
+    "alpha_bbox": [
+      39,
+      42,
+      222,
+      214
+    ]
+  },
+  {
+    "source": "assets\\gameplay\\buildings\\sugarcane_workshop_q0.png",
+    "canvas": [
+      256,
+      240
+    ],
+    "alpha_bbox": [
+      34,
+      45,
+      224,
+      214
+    ]
+  },
+  {
+    "source": "assets\\gameplay\\buildings\\radish_workshop_q0.png",
+    "canvas": [
+      256,
+      240
+    ],
+    "alpha_bbox": [
+      30,
+      66,
+      224,
+      219
+    ]
+  }
+]
