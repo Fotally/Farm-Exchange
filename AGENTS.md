@@ -55,15 +55,16 @@
 - `scripts/ui/UiIcons.cs` 与 `FacilityPreview.cs`：复用原型 SVG 的线条图标及设施/作物缩略，只读快照展示真实锚点。图标跟随整体倍率，字体倍率仅调整文字；素材来源见 `assets/ui/source_notes.md`，不替换世界地图与人物素材。
 - `scripts/ui/TradeOrdersWindow.cs`：从市场打开的委托与策略窗口，编辑商品、两种买单预算、数量、现金保留及条件组；列表读取真实状态、冻结和最近成交费用，编辑保留原 ID，每秒刷新不重建草稿控件；窗口不计算费用或修改经营资源。
 - `scripts/ui/CultivationWindow.cs`、`CultivationTimeline.cs` 与 `CultivationCropCard.cs`：共享年度表管理、四季时间图与作物拖动来源。鼠标居中抓取整条，落位跨季拆分及冬春环绕，任一片段操作原条；纸色方形时间带和作物条保留月份并显示周刻度，条内居中信息放不下时悬停显示整轮周期及起止日期。窗口唯一构造替换后的候选草稿，读取表的下一可用编号并仅在新增成功后推进草稿编号；拖放预检及实际落位复用独立条目排程检查，未命名也可编辑，完整保存仍要求名称。拒绝时原草稿与正式表保持并说明原因；农田勾选的普通、悬停、按下及焦点字色保持深色可读。选中已保存表可整表删除，成功清空编辑器；编辑草稿、整表删除与批量应用只提交经营意图，两种手动指令展示接管影响。窗口显示计划日期、农田引用与实际生产进度，动画不推进经营。
-- `tests/unit/`：经营流程、土地占用、农田与加工状态边界、交易、作物定义、库存、钱包、市场、独立日历、地区天气配置及地图坐标的单元测试；天气配置变体按JSON字段编辑并覆盖排版差异，配置字段扩展与预排规模调整的维护要求见天气接口和排程专题；`tests/integration/`：镜头输入、地图选择与 NPC 动画预览的集成测试；`tests/e2e/`：主场景经营流程的端到端测试；`tests/performance/`：必跑的满地图 50 tick 负载测试（含角落实体推进检查）与按需的有窗口 FPS 性能测试。图形测试要求平均至少 60 FPS、P95 帧间隔不超过 16.67 ms，并保存前后截图。根目录 `TestSuite` 汇总 headless 检查；导出程序启动是构建冒烟测试。
+- `tests/unit/`：经营流程、土地占用、农田与加工状态边界、交易、作物定义、库存、钱包、市场、独立日历、地区天气配置及地图坐标的单元测试；天气配置变体按JSON字段编辑并覆盖排版差异，配置字段扩展与预排规模调整的维护要求见天气接口和排程专题；`tests/integration/`：镜头输入、地图选择与 NPC 动画预览的集成测试；`tests/e2e/`：主场景经营流程的端到端测试；`tests/performance/`：必跑的满地图 50 tick 负载测试（含角落实体推进检查）与本地有窗口 FPS 性能测试；涉及地图、渲染或 UI 的修改必跑，其他修改按需执行。图形测试要求平均至少 60 FPS、P95 帧间隔不超过 16.67 ms，并保存前后截图。根目录 `TestSuite` 汇总 headless 检查；导出程序启动是构建冒烟测试。
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、导入 Godot 图片资源、运行必需的 headless 测试套件、生成 Cobertura 报告，由 `tools/Test-Coverage.ps1` 按文件与行号去重，动态检查业务脚本总体及每个一级模块行覆盖率不低于 80%；`tools/Test-CoverageGate.ps1` 验证门禁夹具；`-Performance` 追加图形性能测试和 JSON 报告。
-- `tools/Invoke-WindowsDistribution.ps1`：CI 与发布共用的完整分发命令，真实启动并保存退出事实，先保全再移出 runtime/debug 日志、保留同版本 schema 与全部运行依赖，发布 ZIP 复验通过后才交付。`Run-PerformanceTests.ps1` 与 `Save-PerformanceEvidence.ps1` 分别维护测量失败和实际文件清单；`Test-ValidationArtifacts.ps1` 以真实进程及文件夹具约束两处工作流。修改分发内容或失败证据路径时读取 `docs/project/validation-artifacts-proposal.md`。
+- `tools/Invoke-WindowsDistribution.ps1`：CI 与发布共用的完整分发命令，真实启动并保存退出事实，先保全再移出 runtime/debug 日志、保留同版本 schema 与全部运行依赖，发布 ZIP 复验通过后才交付。`Run-PerformanceTests.ps1` 与 `Save-PerformanceEvidence.ps1` 分别维护测量失败和实际文件清单；`Test-ValidationArtifacts.ps1` 以真实进程及文件夹具约束 Windows 构建、发布及本地性能证据。修改分发内容或失败证据路径时读取 `docs/project/validation-artifacts-proposal.md`。
 - `tools/Run-LoggingPerformance.ps1`、`Test-LoggingLifecycle.ps1` 与 `Test-LoggingRelease.ps1`：日志专项1080P、1×/16×矩阵，独立进程退出及实际Release程序集前置门禁，门禁探针同样以 `net10.0` 为目标；独立控制台通过现有配置接口显式加载正式天气 JSON，记录配置来源与哈希。测试场景与探针只生成本地证据，不更改正式采集策略。执行及故障边界见 `docs/architecture/logging/implementation-validation.md`。
 - `tools/Repair-RuleLinks.ps1` 与 `tools/Test-StaticChecks.ps1`：按 `.codex/rule-links.json` 修复及检查目录指令符号链接，并检查文档路径、内部链接和脚本命名空间。
 - `global.json` 与 `FarmExchange.csproj`：前者唯一固定开发与双平台 CI 的 SDK 10.0.401，禁止前滚和预览版；后者将项目目标框架设为 `net10.0`。工作流按 `global.json` 选用 .NET 10 SDK，另保留 `8.0.x` 安装供覆盖率工具运行，版本维护与本地检查见 `docs/project/continuous-integration.md`。
-- `.github/workflows/ci.yml`：静态检查阶段输出实际 SDK 版本并执行完整 C# 空白格式验证，定位和复验见 `docs/static-checks/ci.md`；`dev` 推送时自动运行 headless 测试；手动触发时独立执行图形 FPS 测量，成功或失败均收集本次 JSON、前后截图及缺失清单；`main` 推送在测试通过后额外完成 Windows Release 导出，共用分发命令验收启动、保全运行日志并上传干净构建。
+- `.github/workflows/ci.yml`：独立测试 CI，保留静态检查、headless 测试及总体和逐模块 80% 覆盖率；不运行有窗口 FPS，不导出 Windows。与两平台构建在 dev/main 推送时并行运行，并保留手动入口。
+- `.github/workflows/windows.yml`：独立 Windows Release 编译、资源导入、导出及启动验收，dev/main 推送和手动触发；共用分发命令保全日志并上传干净提交级构建与独立证据。
 - `.github/workflows/macos.yml`：在 macOS runner 上编译、导出 Universal 2 ZIP、检查双架构程序集并启动应用，上传提交级构建产物。
-- `.github/workflows/release.yml`：独立手动发布游戏版本；操作者输入版本号，复用触发时 main 同提交成功的 Windows 与 macOS CI 产物。精确检出发布提交的工具和 schema；Windows 下载后共用分发命令再次验收启动、保全日志并检查最终干净 ZIP，macOS 检查 Universal 2 ZIP 后保持原包字节；两平台准备成功后创建标签与单个 GitHub Release，上传两份版本 ZIP。操作与失败处理见 `docs/project/release.md`。
+- `.github/workflows/release.yml`：独立手动发布游戏版本；操作者输入版本号，要求触发时 main 同提交的测试、Windows 构建、macOS 构建三条 CI 全部成功，再复用两平台产物。精确检出发布提交的工具和 schema；Windows 下载后共用分发命令再次验收启动、保全日志并检查最终干净 ZIP，macOS 检查 Universal 2 ZIP 后保持原包字节；两平台准备成功后创建标签与单个 GitHub Release，上传两份版本 ZIP。操作与失败处理见 `docs/project/release.md`。
 - `export_presets.cfg`：定义 Windows x86_64 与 macOS Universal 2 正式验收构建，以及保留开发节点脚本资源的本地 Windows Dev / macOS Dev 预设；开发包不进入 CI 或正式发布。
 - `.codex/skills/farm-exchange-review-pr/SKILL.md`：提交PR后的可选择独立审查入口，先询问是否审查，明确同意后委派新的指定模型子Agent；绑定准确PR版本，检查规则落实、深模块设计、维护成本和验收证据，保持只读。
 - `.github/ISSUE_TEMPLATE/`：六类中文议题正文模板的唯一维护位置，供 GitHub 网页与 `.codex/skills/farm-exchange-submit-issue/SKILL.md` 共用；skill 负责查重、按模板填写与提交核对。模板在人工合入默认分支后供网页使用，来源说明见 `docs/research/issue-template-sources.md`。
@@ -90,7 +91,7 @@
 
 1. 正式版本只从已人工合并的 `main` 发布。版本号使用 `v主版本.次版本.修订版本`：不兼容既有存档或核心玩法规则时递增主版本；兼容地新增玩法、系统或内容时递增次版本；兼容地修复缺陷、优化性能或调整表现、文档和构建时递增修订版本。首个稳定公开版本为 `v1.0.0`，此前使用 `v0.次版本.修订版本`。
 2. `build/windows/` 是可覆盖的 Windows x86_64 中间导出目录，不纳入 Git。正式发布包写入 `build/releases/v主版本.次版本.修订版本/`，文件名分别为 `FarmExchange-v主版本.次版本.修订版本-windows-x86_64.zip` 和 `FarmExchange-v主版本.次版本.修订版本-macos-universal.zip`。
-3. 发布前必须在 `main` 对目标提交完成 Release 编译、自动化场景测试、导出程序启动验收；独立发布工作流要求同提交的 Windows 与 macOS CI 均成功，复用两平台产物；Windows 下载后再验收启动并打包，macOS 保留已在 CI 验收的原始 ZIP，无需本地上传。版本号由操作者指定，两平台准备成功后创建同版本 Git 标签与单个 GitHub Release，上传两份 ZIP。发布完成以标签、GitHub Release、两平台压缩包版本号一致为准。
+3. 发布前必须在 `main` 对目标提交完成 Release 编译、自动化场景测试、导出程序启动验收；独立发布工作流要求同提交的测试、Windows 构建、macOS 构建三条 CI 全部成功，复用两平台产物；Windows 下载后再验收启动并打包，macOS 保留已在 CI 验收的原始 ZIP，无需本地上传。版本号由操作者指定，两平台准备成功后创建同版本 Git 标签与单个 GitHub Release，上传两份 ZIP。发布完成以标签、GitHub Release、两平台压缩包版本号一致为准。
 
 # 文档索引
 

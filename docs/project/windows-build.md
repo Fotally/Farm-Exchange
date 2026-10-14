@@ -1,5 +1,7 @@
 # Windows 构建与导出
 
+独立 `windows.yml` 与 macOS 一样支持 `dev`、`main` 推送及手动构建，与测试 CI 并行。完整触发、提交级产物和失败证据约定见 [持续集成](continuous-integration.md)。
+
 ## 构建来源
 
 - 开发 SDK：安装 .NET SDK 10.0.401；仓库根目录的 [global.json](../../global.json) 是本地与 CI 的唯一 SDK 选择约束，禁用版本前滚与预览版。项目目标框架为 `net10.0`，游戏使用 .NET 10 运行时；完整测试中的 `dotnet-coverage` 工具仍需 .NET 8 运行时。

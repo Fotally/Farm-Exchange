@@ -3,7 +3,7 @@
 - [Windows 构建与导出](windows-build.md)：.NET 10 目标框架、指定引擎、导出模板、Release 构建和程序启动。
 - [macOS 构建与验收](macos-build.md)：Universal 2 ZIP、macOS CI 与应用包启动检查。
 - [自动化测试与性能测量](testing.md)：headless 场景、覆盖率、满地图负载和图形 FPS。
-- [GitHub Actions](continuous-integration.md)：dev、main 和手动性能工作流。
+- [GitHub Actions](continuous-integration.md)：测试与双平台构建三条并行 CI、手动入口及发布门禁。
 - [正式版本发布](release.md)：版本号、压缩包和发布验收。
 - [当前玩法人工验收](manual-playthrough.md)：地图、七种作物、日历、建造、加工与交易操作。
 

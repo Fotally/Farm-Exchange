@@ -27,7 +27,7 @@ function Get-WorkflowStep {
 }
 
 function Test-WorkflowCondition {
-    param([string]$Step, [bool]$Performance, [string]$Outcome, [bool]$Cancelled = $false, [string]$CollectionOutcome = 'success')
+    param([string]$Step, [string]$Outcome, [bool]$Cancelled = $false)
     $match = [regex]::Match($Step, '(?m)^        if: (?<condition>.+)\r?$')
     $condition = if ($match.Success) { $match.Groups['condition'].Value.Trim() } else { 'success()' }
     $condition = $condition -replace '^\$\{\{\s*|\s*\}\}$', ''
@@ -35,8 +35,6 @@ function Test-WorkflowCondition {
     if ($condition -notmatch '\b(success|failure|cancelled|always)\(' -and ($Cancelled -or $Outcome -eq 'failure')) {
         return $false
     }
-    $condition = $condition.Replace('inputs.performance', "`$$($Performance.ToString().ToLowerInvariant())")
-    $condition = $condition.Replace('steps.fps.outcome', "'$Outcome'").Replace('steps.save-fps.outcome', "'$CollectionOutcome'")
     $condition = $condition.Replace('steps.distribution.outcome', "'$Outcome'").Replace('steps.package.outcome', "'$Outcome'")
     $condition = $condition.Replace('cancelled()', "`$$($Cancelled.ToString().ToLowerInvariant())")
     $condition = $condition.Replace('success()', "`$$(((-not $Cancelled) -and $Outcome -ne 'failure').ToString().ToLowerInvariant())")
@@ -59,39 +57,33 @@ $branchFilter = [regex]::Match($pullRequest.Groups['config'].Value, '(?ms)^    b
     @([regex]::Matches($branchFilter.Groups['block'].Value, '(?m)^      - ([^\r\n]+)') | ForEach-Object { $_.Groups[1].Value.Trim().Trim("'", '"') })
 }
 Assert-Contract ($targets.Count -eq 1 -and $targets[0] -ceq 'dev') 'PR 门禁仅对 dev 目标启用'
-$upload = Get-WorkflowStep $ci '上传满地图 FPS 报告'
-$collection = Get-WorkflowStep $ci '保存满地图 FPS 证据'
-foreach ($case in @(
-    @{ Name = '成功'; Performance = $true; Outcome = 'success'; Cancelled = $false; Expected = $true },
-    @{ Name = '阈值失败'; Performance = $true; Outcome = 'failure'; Cancelled = $false; Expected = $true },
-    @{ Name = '前置失败未测量'; Performance = $true; Outcome = 'skipped'; Cancelled = $false; Expected = $false },
-    @{ Name = '取消'; Performance = $true; Outcome = 'cancelled'; Cancelled = $true; Expected = $false },
-    @{ Name = '未选择测量'; Performance = $false; Outcome = 'skipped'; Cancelled = $false; Expected = $false }
-)) {
-    $actual = Test-WorkflowCondition $upload $case.Performance $case.Outcome $case.Cancelled
-    Assert-Contract ($actual -eq $case.Expected) "FPS $($case.Name)时上传条件应为 $($case.Expected)，实际 $actual"
-    $actual = Test-WorkflowCondition $collection $case.Performance $case.Outcome $case.Cancelled
-    Assert-Contract ($actual -eq $case.Expected) "FPS $($case.Name)时收集条件应为 $($case.Expected)，实际 $actual"
+$windows = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/windows.yml') -Raw
+$macosWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/macos.yml') -Raw
+$groups = @()
+foreach ($workflow in @($ci, $windows, $macosWorkflow)) {
+    Assert-Contract ($workflow -match '(?ms)^  push:\r?\n    branches:\r?\n      - dev\r?\n      - main' -and $workflow -match '(?m)^  workflow_dispatch:') '三条 CI 均须支持 dev/main 推送及手动运行'
+    Assert-Contract ($workflow -notmatch '(?m)^  needs:|^    needs:|workflow_run:') '测试与两平台构建须独立启动'
+    Assert-Contract ($workflow -notmatch 'inputs\.performance|Run-PerformanceTests\.ps1|Save-PerformanceEvidence\.ps1') 'GitHub CI 不得提供或执行有窗口 FPS 测量'
+    $groups += [regex]::Match($workflow, '(?m)^  group: (.+)\r?$').Groups[1].Value.Trim()
 }
-Assert-Contract (-not (Test-WorkflowCondition $upload $true 'success' $false 'failure')) '收集失败不能上传旧证据或伪装成功'
-Assert-Contract ($ci -notmatch 'continue-on-error:') '性能失败必须保持 job 失败'
+Assert-Contract (@($groups | Select-Object -Unique).Count -eq 3) '三条 CI 的并发取消组须相互独立'
 $headless = Get-WorkflowStep $ci '运行场景测试并检查行覆盖率'
-$measurement = Get-WorkflowStep $ci '运行满地图 FPS 测量'
-Assert-Contract ($headless -notmatch '-Performance') '普通测试步骤须与 FPS 测量分开'
-Assert-Contract ($measurement -match '(?m)^        id: fps\r?$' -and $measurement -match 'Run-PerformanceTests\.ps1') 'FPS outcome 必须对应独立的真实测量步骤'
-Assert-Contract (-not (Test-WorkflowCondition $measurement $false 'success')) '普通 push 和 PR 不得自动执行图形 FPS 测量'
-Assert-Contract ($upload -match 'retention-days: 14' -and $upload -match 'if-no-files-found: error' -and $upload -match 'github.run_id' -and $upload -match 'github.run_attempt') 'FPS 证据须包含运行身份并保留 14 天，上传缺失必须失败'
+Assert-Contract ($headless -match 'Run-Tests\.ps1' -and $headless -notmatch '-Performance') '测试 CI 须保留普通 headless 与覆盖率入口'
+Assert-Contract ($ci -notmatch 'export-release|Invoke-WindowsDistribution|FarmExchange-windows-x86_64') '测试 CI 不再承担 Windows 导出'
+$export = Get-WorkflowStep $windows '导出 Windows x86_64'
+Assert-Contract ($export -match '--export-release Windows' -and $export -notmatch '(?m)^        if:') 'Windows 导出须在 dev/main 与手动运行中执行'
+Get-WorkflowStep $windows '导入项目资源' | Out-Null
 $release = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/release.yml') -Raw
 foreach ($binding in @(
-    @{ Content = $ci; Startup = '启动导出程序验收'; Upload = '上传 Windows 启动验收证据' },
+    @{ Content = $windows; Startup = '启动导出程序验收'; Upload = '上传 Windows 启动验收证据' },
     @{ Content = $release; Startup = '验收 Windows 游戏并生成版本压缩包'; Upload = '上传 Windows 发布验收证据' }
 )) {
     $step = Get-WorkflowStep $binding.Content $binding.Startup
     Assert-Contract ($step -match 'Invoke-WindowsDistribution\.ps1' -and $step -match '-SchemaPath docs/project/runtime-log-schema-v1\.md' -and $step -notmatch 'Start-Process') 'CI 与发布须经同一真实分发命令'
     $step = Get-WorkflowStep $binding.Content $binding.Upload
-    Assert-Contract (Test-WorkflowCondition $step $false 'failure') 'Windows 启动失败时仍须上传已有证据'
-    Assert-Contract (-not (Test-WorkflowCondition $step $false 'skipped')) '未执行 Windows 验收不能上传旧证据'
-    Assert-Contract (-not (Test-WorkflowCondition $step $false 'cancelled' $true)) '取消后不承诺继续上传 Windows 证据'
+    Assert-Contract (Test-WorkflowCondition $step 'failure') 'Windows 启动失败时仍须上传已有证据'
+    Assert-Contract (-not (Test-WorkflowCondition $step 'skipped')) '未执行 Windows 验收不能上传旧证据'
+    Assert-Contract (-not (Test-WorkflowCondition $step 'cancelled' $true)) '取消后不承诺继续上传 Windows 证据'
 }
 $checkout = Get-WorkflowStep $release '检出本次发布提交的分发工具与 schema'
 Assert-Contract ($checkout -match 'ref: \$\{\{ github.sha \}\}') '发布 helper 与 schema 须从精确发布 SHA 检出'
@@ -102,6 +94,74 @@ Assert-Contract ($static -match '\./tools/Test-ValidationArtifacts\.ps1') '验�
 
 $evidenceRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot $EvidenceDirectory))
 $runRoot = Join-Path $evidenceRoot ([guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
+
+# 执行发布工作流中的真实预检脚本，仅替换 GitHub API，覆盖三条 CI 和两平台产物。
+$sourceStep = Get-WorkflowStep $release '核对版本与同提交成功 CI'
+$sourceMatch = [regex]::Match($sourceStep, '(?s)        run: \|\r?\n(?<script>.*)')
+Assert-Contract $sourceMatch.Success '发布来源预检必须提供可执行脚本'
+$sourceScript = [scriptblock]::Create(($sourceMatch.Groups['script'].Value -replace '(?m)^          ', ''))
+foreach ($case in @(
+    @{ Name = '成功'; Workflow = ''; Failure = ''; Error = $null },
+    @{ Name = '测试未成功'; Workflow = 'ci.yml'; Failure = 'missing'; Error = '尚无成功的 main 测试 CI' },
+    @{ Name = 'Windows 未成功'; Workflow = 'windows.yml'; Failure = 'missing'; Error = '尚无成功的 main Windows CI' },
+    @{ Name = 'macOS 未成功'; Workflow = 'macos.yml'; Failure = 'missing'; Error = '尚无成功的 main macOS CI' },
+    @{ Name = '测试提交不符'; Workflow = 'ci.yml'; Failure = 'sha'; Error = '来源、提交或完成状态' },
+    @{ Name = 'Windows 提交不符'; Workflow = 'windows.yml'; Failure = 'sha'; Error = '来源、提交或完成状态' },
+    @{ Name = 'macOS 提交不符'; Workflow = 'macos.yml'; Failure = 'sha'; Error = '来源、提交或完成状态' },
+    @{ Name = 'Windows 产物缺失'; Workflow = 'windows.yml'; Failure = 'artifact'; Error = '缺失或已过期' },
+    @{ Name = 'macOS 产物过期'; Workflow = 'macos.yml'; Failure = 'expired'; Error = '缺失或已过期' }
+)) {
+    & {
+        $names = @('GITHUB_REF', 'GITHUB_SHA', 'GITHUB_REPOSITORY', 'RELEASE_VERSION', 'GITHUB_OUTPUT', 'GITHUB_STEP_SUMMARY')
+        $saved = @{}
+        foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name) }
+        $requests = [Collections.Generic.List[string]]::new()
+        $fixtureOutput = Join-Path $runRoot 'release-output.txt'
+        try {
+            $env:GITHUB_REF = 'refs/heads/main'
+            $env:GITHUB_SHA = 'fixture-sha'
+            $env:GITHUB_REPOSITORY = 'fixture/repository'
+            $env:RELEASE_VERSION = 'v0.1.0'
+            $env:GITHUB_OUTPUT = $fixtureOutput
+            $env:GITHUB_STEP_SUMMARY = Join-Path $runRoot 'release-summary.txt'
+            Set-Content -LiteralPath $fixtureOutput -Value ''
+            function gh {
+                param([string]$Operation, [string]$Endpoint)
+                Assert-Contract ($Operation -eq 'api') '预检仅允许只读 API'
+                $requests.Add($Endpoint)
+                $global:LASTEXITCODE = 0
+                if ($Endpoint -match '/git/matching-refs/') { return '[]' }
+                if ($Endpoint -match '/workflows/(?<workflow>[^/]+)/runs\?') {
+                    $workflowName = $Matches['workflow']
+                    Assert-Contract ($Endpoint -match 'branch=main&head_sha=fixture-sha&status=success') '来源查询须限定 main、同提交与成功结果'
+                    if ($workflowName -eq $case.Workflow -and $case.Failure -eq 'missing') { return '{"workflow_runs":[]}' }
+                    $sha = if ($workflowName -eq $case.Workflow -and $case.Failure -eq 'sha') { 'other-sha' } else { $env:GITHUB_SHA }
+                    return @{ workflow_runs = @(@{ id = $workflowName; head_branch = 'main'; head_sha = $sha; head_repository = @{ full_name = $env:GITHUB_REPOSITORY }; status = 'completed'; conclusion = 'success'; html_url = "https://example.invalid/$workflowName" }) } | ConvertTo-Json -Depth 5 -Compress
+                }
+                if ($Endpoint -match '/runs/(?<workflow>[^/]+)/artifacts\?name=(?<artifact>[^&]+)') {
+                    $workflowName = $Matches['workflow']
+                    $artifactName = $Matches['artifact']
+                    Assert-Contract ($workflowName -ne 'ci.yml') '测试 CI 不应提供平台构建产物'
+                    if ($workflowName -eq $case.Workflow -and $case.Failure -eq 'artifact') { return '{"artifacts":[]}' }
+                    $expired = $workflowName -eq $case.Workflow -and $case.Failure -eq 'expired'
+                    return @{ artifacts = @(@{ name = $artifactName; expired = $expired; expires_at = [DateTimeOffset]::UtcNow.AddDays(1).ToString('o') }) } | ConvertTo-Json -Depth 4 -Compress
+                }
+                throw "未预期的 API：$Endpoint"
+            }
+            if ($case.Error) { Assert-Rejected { & $sourceScript } $case.Error }
+            else {
+                & $sourceScript
+                Assert-Contract (@($requests | Where-Object { $_ -match '/workflows/.+/runs\?' }).Count -eq 3) '发布须核对三条独立 CI'
+                $outputs = Get-Content -LiteralPath $fixtureOutput -Raw
+                Assert-Contract ($outputs.Contains('windows-run-id=windows.yml') -and $outputs.Contains('macos-run-id=macos.yml')) '下载来源须来自各自独立构建'
+            }
+        } finally {
+            foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }
+        }
+    }
+}
+
 $probeRoot = Join-Path $runRoot 'probe'
 New-Item -ItemType Directory -Path $probeRoot -Force | Out-Null
 [IO.File]::WriteAllText((Join-Path $evidenceRoot '.gdignore'), '')
