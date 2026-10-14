@@ -1,0 +1,43 @@
+{
+  "SourceTree": "ee842d47a8c27cdeec165a0361980cc6b2a80763",
+  "Date": "2026-10-15",
+  "ThumbnailResult": "headless及1920x1080专项exit0，拆路土路背景及工具角标",
+  "WaterResult": "seed12345含水主场景red exit1/green exit0",
+  "Files": [
+    {
+      "Source": "build/issue149-validation/catalog-processors-1920.png",
+      "Sha256": "7839CA850B4704ED9D1A7E98D0DC7A0EBBFA4DB5595D4DBC6B6D1894F2ADD3EC",
+      "Bytes": 184829
+    },
+    {
+      "Source": "build/issue149-validation/catalog-roads-1920.png",
+      "Sha256": "EB0F5DB27C956EE1AD6DD694E53DCA12F111DAED20D292E6D698D9ADDB192488",
+      "Bytes": 160430
+    },
+    {
+      "Source": "build/issue149-validation/detail-overall-1.25-font-1.2-1920.png",
+      "Sha256": "7B408446B256A826FAE1478D4DF57C68D8CD3FD4E74342A4800521CC9BDF03A0",
+      "Bytes": 204941
+    },
+    {
+      "Source": "build/issue173/before-water.png",
+      "Sha256": "306C8840C5111ABE0FDCDF4D56E68100AEF782D7E0AF1ED2BDF28654C0A1E15B",
+      "Bytes": 134280
+    },
+    {
+      "Source": "build/issue173/after-water.png",
+      "Sha256": "A03F8619B637BF1A6EC47282462BF451448471BBBDB781921FA70A3296BE7F3B",
+      "Bytes": 134291
+    },
+    {
+      "Source": "build/issue173/after-shore.png",
+      "Sha256": "6D92DD39C505B7FAD12E24BB2B90E835F78DD08802494AA72C20B6FBFAC1C0C7",
+      "Bytes": 136739
+    },
+    {
+      "Source": "build/issue173/after-land.png",
+      "Sha256": "22BC5BC7CC286F42BA27257F6E2AFA9B01A6FE7E6997FA8ED76E9B0DBD8AE23C",
+      "Bytes": 174472
+    }
+  ]
+}
