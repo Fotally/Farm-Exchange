@@ -16,6 +16,7 @@ public partial class TestLoggingLifecycle : Node
 
     public override void _EnterTree()
     {
+        GetNode<Main>("Main").InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         string[] args = OS.GetCmdlineUserArgs();
         _directory = Path.GetFullPath(args[Array.IndexOf(args, "--output") + 1]);
         _mode = args[Array.IndexOf(args, "--mode") + 1];
@@ -28,7 +29,7 @@ public partial class TestLoggingLifecycle : Node
     {
         GetWindow().Size = new(1920, 1080);
         GetWindow().Title = "FarmExchange-Logging-Lifecycle";
-        using var independent = new FarmGame(130, _logging, GamePurpose.ScenarioIndependent);
+        using var independent = new FarmGame(130, _logging, GamePurpose.ScenarioIndependent, terrainRules: TerrainTestFixtures.AllLandRules);
         independent.AdvanceTicks(5);
         independent.Dispose();
         independent.Dispose();

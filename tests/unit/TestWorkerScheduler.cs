@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Godot;
 using FarmExchange.Weather;
 using FarmExchange.Farming;
@@ -8,15 +9,131 @@ using FarmExchange.Gameplay;
 using FarmExchange.Land;
 using FarmExchange.Time;
 using FarmExchange.Workers;
+using FarmExchange.Terrain;
 
 public partial class TestWorkerScheduler : Node
 {
-    public override void _Ready() => GetTree().Quit(RunChecks() ? 0 : 1);
+    public override async void _Ready() => GetTree().Quit(RunChecks() && await RunWaterChecksAsync(GetTree()) ? 0 : 1);
 
     public static bool RunChecks() => CheckMovementAndWorkSeconds() && CheckThreeWorkersAndClaims() &&
         CheckFarmWorkCredentials() && CheckInvalidClaimsReleasedFirst() && CheckRainAndFractionalPosition() &&
         CheckPlantingRevalidation() && CheckPauseAndDeterminism() && CheckUnequalAssignments() &&
-        CheckBudgetsAndContinuousProduction() && CheckStableAnchorCursor();
+        CheckBudgetsAndContinuousProduction() && CheckStableAnchorCursor() && CheckRepeatedCancellation();
+
+    private static bool CheckRepeatedCancellation()
+    {
+        var farms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        var workers = new WorkerScheduler(TerrainTestFixtures.AllLandTerrain, new Vector2I(190, 190));
+        var calendar = new GameCalendar();
+        int? previous = null;
+        for (int iteration = 0; iteration < 100; iteration++)
+        {
+            if (previous.HasValue) farms.Remove(previous.Value);
+            Vector2I target = iteration % 2 == 0 ? new Vector2I(301, 277) : new Vector2I(27, 39);
+            int index = (target.Y - 1) * FarmGame.MapSize + target.X - 1;
+            farms.Place(index, CropKind.Radish);
+            LandPosition before = workers.GetSnapshots()[0].ExactPosition;
+            workers.AdvanceOneSecond(farms, calendar.Snapshot);
+            calendar.TryAdvanceSeconds(1);
+            WorkerSnapshot after = workers.GetSnapshots()[0];
+            if (after.Path is not LandPath path || path.Points[0] != before || after.ExactPosition != path.GetPositionAtDistance(3) ||
+                !double.IsFinite(after.ExactPosition.X) || !double.IsFinite(after.ExactPosition.Y))
+                return Fail("连续100次取消没有保留原double位置或累计移动采样");
+            previous = index;
+        }
+        return true;
+    }
+
+    public static async Task<bool> RunWaterChecksAsync(SceneTree tree)
+    {
+        using TerrainMap terrain = await TerrainMap.CreateAsync(12345, FarmGame.LoadTerrainRules(TerrainRules.ResourcePath), tree);
+        Vector2I start = default;
+        Vector2I target = default;
+        Vector2I blocked = default;
+        bool found = false;
+        for (int y = 2; y < FarmGame.MapSize - 2 && !found; y++)
+            for (int x = 3; x < FarmGame.MapSize - 4; x++)
+            {
+                if (terrain.IsFullLand(new Vector2I(x, y))) continue;
+                int end = x;
+                while (end < FarmGame.MapSize - 3 && !terrain.IsFullLand(new Vector2I(end, y))) end++;
+                if (end - x < 8) { x = end; continue; }
+                start = new Vector2I(x - 2, y);
+                target = new Vector2I(end + 2, y);
+                blocked = new Vector2I((x + end) / 2, y);
+                found = true;
+                break;
+            }
+        if (!found) return Fail("水域路线夹具未找到穿过池塘的起止点");
+        int targetIndex = (target.Y - 1) * FarmGame.MapSize + target.X - 1;
+        int blockedIndex = (blocked.Y - 1) * FarmGame.MapSize + blocked.X - 1;
+        var firstFarms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        var batchFarms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        foreach (FarmingSystem farms in new[] { firstFarms, batchFarms })
+        {
+            farms.Place(blockedIndex, CropKind.Radish);
+            farms.Place(targetIndex, CropKind.Radish);
+        }
+        var first = new WorkerScheduler(terrain, start);
+        var batch = new WorkerScheduler(terrain, start);
+        var firstCalendar = new GameCalendar();
+        var batchCalendar = new GameCalendar();
+        first.AdvanceOneSecond(firstFarms, firstCalendar.Snapshot);
+        batch.AdvanceOneSecond(batchFarms, batchCalendar.Snapshot);
+        firstCalendar.TryAdvanceSeconds(1);
+        batchCalendar.TryAdvanceSeconds(1);
+        WorkerSnapshot begun = first.GetSnapshots()[0];
+        if (begun.TargetCell != target || begun.Path is not LandPath route || route.Points.Count <= 2 ||
+            firstFarms.Get(blockedIndex).Stage != CropStage.None || begun.ExactPosition != route.GetPositionAtDistance(3))
+            return Fail("工人没有先完成绕水求路再认领，或无效水中目标阻塞了后续可达任务");
+        // 水中目标随后移除，批量可在真实行程的平静段推进。
+        firstFarms.Remove(blockedIndex);
+        batchFarms.Remove(blockedIndex);
+        int travelTicks = route.GetTravelTicks(3);
+        while (batchCalendar.Snapshot.ElapsedSeconds < travelTicks)
+        {
+            uint next = batch.GetNextEventSeconds(batchFarms, batchCalendar.Snapshot);
+            uint remaining = (uint)travelTicks - batchCalendar.Snapshot.ElapsedSeconds;
+            uint span = Math.Min(remaining, Math.Min(7u, next > 1 ? next - 1 : 1));
+            if (next > 1)
+                batch.AdvanceQuietSeconds(span, batchCalendar.Snapshot.ElapsedSeconds);
+            else
+                batch.AdvanceOneSecond(batchFarms, batchCalendar.Snapshot);
+            batchCalendar.TryAdvanceSeconds(span);
+            for (uint second = 0; second < span; second++)
+            {
+                first.AdvanceOneSecond(firstFarms, firstCalendar.Snapshot);
+                firstCalendar.TryAdvanceSeconds(1);
+            }
+            if (!first.GetSnapshots().SequenceEqual(batch.GetSnapshots()))
+                return Fail("绕水路径按单秒和不等长批量切分后精确位置、累计进度或最近秒凭据不同");
+        }
+        if (first.GetSnapshots()[0].ExactPosition != LandPosition.FromCell(target) ||
+            firstFarms.Get(targetIndex).Stage != CropStage.None || batchFarms.Get(targetIndex).Stage != CropStage.None)
+            return Fail("绕水整趟到达秒发生提前工作或未到精确终点");
+        if (!first.AdvanceOneSecond(firstFarms, firstCalendar.Snapshot) ||
+            firstFarms.Get(targetIndex).Stage != CropStage.Seeded)
+            return Fail("绕水到达后没有以独立一秒播种");
+
+        var cancelFarms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        cancelFarms.Place(targetIndex, CropKind.Radish);
+        var cancel = new WorkerScheduler(terrain, start);
+        cancel.AdvanceOneSecond(cancelFarms, new GameCalendar().Snapshot);
+        WorkerSnapshot moving = cancel.GetSnapshots()[0];
+        cancelFarms.Remove(targetIndex);
+        cancel.AdvanceOneSecond(cancelFarms, new GameCalendar(1).Snapshot);
+        WorkerSnapshot cancelled = cancel.GetSnapshots()[0];
+        if (cancelled.ExactPosition != moving.ExactPosition || cancelled.Activity != WorkerActivity.Idle ||
+            cancelled.Movement != null || cancelled.Path != null)
+            return Fail("绕水途中取消导致位置取整、瞬移或保留过期移动区间");
+        int returnIndex = (start.Y - 1) * FarmGame.MapSize + start.X - 1;
+        cancelFarms.Place(returnIndex, CropKind.Radish);
+        cancel.AdvanceOneSecond(cancelFarms, new GameCalendar(2).Snapshot);
+        WorkerSnapshot resumed = cancel.GetSnapshots()[0];
+        if (resumed.Path?.Points[0] != moving.ExactPosition || moving.Path?.Points[0] != LandPosition.FromCell(start))
+            return Fail("取消后的新路线没有从权威连续点接续，或旧快照被修改");
+        return true;
+    }
 
     private static bool CheckStableAnchorCursor()
     {
@@ -28,7 +145,7 @@ public partial class TestWorkerScheduler : Node
         farms.Place(first, CropKind.Radish);
         farms.Place(second, CropKind.Radish);
         var originalIndices = farms.Indices;
-        var workers = new WorkerScheduler(new Vector2I(6, 6));
+        var workers = new WorkerScheduler(TerrainTestFixtures.AllLandTerrain, new Vector2I(6, 6));
         workers.AdvanceOneSecond(farms, spring);
         workers.AdvanceOneSecond(farms, spring);
         farms.Place(insertedBefore, CropKind.Radish);
@@ -62,13 +179,13 @@ public partial class TestWorkerScheduler : Node
         var workers = CreateWorkers(Vector2I.Zero);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         IReadOnlyList<WorkerSnapshot> initial = workers.GetSnapshots();
-        if (initial.Count != 1 || initial[0] != new WorkerSnapshot(1, Vector2.One, null, WorkerActivity.Idle))
+        if (initial.Count != 1 || !Matches(initial[0], Vector2.One, null, WorkerActivity.Idle))
             return Fail("初始工人快照不是独立的空闲状态");
         if (workers.AdvanceOneSecond(farms, spring) ||
-            workers.GetSnapshots()[0] != new WorkerSnapshot(1, new Vector2(4, 4), WorkCell(cell), WorkerActivity.Moving))
+            !Matches(workers.GetSnapshots()[0], new Vector2(4, 4), WorkCell(cell), WorkerActivity.Moving))
             return Fail("斜向移动速度不是每秒三小格，或移动时提前执行工作");
         if (workers.AdvanceOneSecond(farms, spring) ||
-            workers.GetSnapshots()[0] != new WorkerSnapshot(1, new Vector2(7, 7), WorkCell(cell), WorkerActivity.Sowing) ||
+            !Matches(workers.GetSnapshots()[0], new Vector2(7, 7), WorkCell(cell), WorkerActivity.Sowing) ||
             farms.Get(IndexOf(cell)).Stage != CropStage.None)
             return Fail("到达的同一秒额外完成了播种");
         if (!workers.AdvanceOneSecond(farms, spring) ||
@@ -234,7 +351,7 @@ public partial class TestWorkerScheduler : Node
         int replacement = 9 * FarmGame.MapSize + 3;
         farms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
         farms.Place(removed, CropKind.Radish);
-        workers = new WorkerScheduler(Vector2I.One);
+        workers = new WorkerScheduler(TerrainTestFixtures.AllLandTerrain, Vector2I.One);
         workers.AdvanceOneSecond(farms, spring);
         if (!workers.GetSnapshots()[0].GridPosition.IsEqualApprox(new Vector2(4, 2.125f)))
             return Fail("非45度直线路线没有保留分数格位置");
@@ -482,7 +599,11 @@ public partial class TestWorkerScheduler : Node
         BuildingFootprint.WorkCell(cell * 3, BuildingKind.Farm);
 
     private static WorkerScheduler CreateWorkers(params Vector2I[] cells) =>
-        new(cells.Select(WorkCell).ToArray());
+        new(TerrainTestFixtures.AllLandTerrain, cells.Select(WorkCell).ToArray());
+
+    private static bool Matches(WorkerSnapshot worker, Vector2 position, Vector2I? target, WorkerActivity activity) =>
+        worker.WorkerNumber == 1 && worker.ExactPosition == LandPosition.FromVector2(position) &&
+        worker.GridPosition == position && worker.TargetCell == target && worker.Activity == activity;
 
     private static bool Fail(string message)
     {

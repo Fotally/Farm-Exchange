@@ -42,7 +42,12 @@ internal sealed class PlacementDiagnostics
                         if (result.Failure != LandFailure.OutOfBounds)
                         {
                             checks["Occupancy"] = result.Failure != LandFailure.Occupied;
-                            if (result.Failure != LandFailure.Occupied) checks["Funds"] = result.Failure != LandFailure.InsufficientFunds;
+                            if (result.Failure != LandFailure.Occupied)
+                            {
+                                checks["Terrain"] = result.Failure != LandFailure.Water;
+                                if (result.Failure != LandFailure.Water)
+                                    checks["Funds"] = result.Failure != LandFailure.InsufficientFunds;
+                            }
                         }
                     }
                 }

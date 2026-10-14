@@ -24,7 +24,7 @@ public static class TestPerformanceLogging
         long now = 0, timestamp = 0;
         using var text = new StringWriter();
         using var runtime = RuntimeLog.CaptureDiagnostics(text, () => now, () => timestamp);
-        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var result = game.AdvanceTicks(50, point => { timestamp += Stopwatch.Frequency / 1000; return true; });
         game.AdvanceTicks(0);
         game.SetPaused(true);
@@ -41,7 +41,7 @@ public static class TestPerformanceLogging
         Require(first.Contains("FailedBatchTotalMs: 10"), "高精度失败耗时不正确");
         game.Dispose();
         Require(Summaries(text, "GameAdvance").Length == 2 && Summaries(text, "GameAdvance").Last().Contains("BatchMaxMs: null"), "空尾段最大值不是未知");
-        using var manualGame = new FarmGame(1, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var manualGame = new FarmGame(1, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         runtime.BindGame(manualGame, 1)!.Dispose();
         Require(Summaries(text, "GameAdvance").Length == 2, "手动绑定冒充自动推进统计");
     }
@@ -51,8 +51,8 @@ public static class TestPerformanceLogging
         long now = 0, timestamp = 0;
         using var text = new StringWriter();
         using var runtime = RuntimeLog.CaptureDiagnostics(text, () => now, () => timestamp);
-        using var first = new FarmGame(42, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var second = new FarmGame(42, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var first = new FarmGame(42, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var second = new FarmGame(42, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         runtime.ProcessFrame();
         timestamp += Stopwatch.Frequency / 100;
         runtime.ProcessFrame();

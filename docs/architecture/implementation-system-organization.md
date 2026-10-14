@@ -23,6 +23,11 @@ flowchart LR
     WorldMap --> Footprint
     WorldMap --> FarmGame
     FarmGame --> LandOccupancy[LandOccupancy：实例与子格映射]
+    FarmGame --> TerrainMap[TerrainMap：不可变地形与完整路线]
+    TerrainMap --> TerrainRules[TerrainRules：严格配置与开局保护]
+    WorkerScheduler --> TerrainMap
+    PlacementRules --> TerrainMap
+    WorldMap --> TerrainMap
     LandOccupancy --> Footprint[BuildingFootprint：固定占地与工作中心]
     WorkerScheduler --> Footprint
     FarmGame --> PlacementRules[PlacementRules：放置预检与执行规则]
@@ -72,6 +77,7 @@ flowchart LR
 
 | 状态或计算 | 当前拥有者 | 其他模块的使用方式 |
 | --- | --- | --- |
+| 地形配置、共享水顶点、权威岸线及原生导航资源 | `TerrainMap` 与内部地形实现 | `TerrainRules` 集中校验不可变输入；异步建局等待 Godot 导航就绪，建造查询完整陆地，工人查询原生 A*／Funnel 完整路线，地图只读同一地形。保守离岸、连续导航分区与道路成本封装在[地形接口](terrain/interface-terrain-map.md)，土地仍唯一拥有道路占用；经营统一等待最新同步，已有行程保持。运行坐标为有限精度。 |
 | 实例锚点、类别、登记朝向、道路材质与子格到实例映射 | `LandOccupancy` | 全占地几何检查、一次登记和整体移除；经营与地图读取同一不可变空间快照，生产状态只在锚点保存一份。道路仍是单格实例，不保存路段历史。 |
 | 当前摆放类型与候选锚点、道路未提交段 | `Main` 与内部 `RoadSegmentGesture` | 每帧在镜头输入后重新定位，界面遮挡、离窗或拖动时隐藏；真实非按住地图移动确定道路网格轴，镜头位移只更新终点。未锁定起点时新建工具按当前鼠标格显示单格道路，不建立手势起点；两次短按调用完整经营命令；成功清段保留工具，右键／Esc 分段取消与退出，取消按钮直接退出。`WorldMap` 只保留候选绘制数据，不登记经营占用。 |
 | 道路整段新建与范围拆除 | `FarmGame` | 新建共用整批只读预检，重验所有格、材质和可用金币后统一扣费登记；失败零修改。范围拆除仅移除实际道路、不退款，UI 不逐格拼装结算。 |

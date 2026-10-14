@@ -30,7 +30,7 @@ public partial class RoadDetailsPanel : VBoxContainer
         status.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         heading.AddChild(status);
         AddChild(heading);
-        AddChild(MakeLabel("用途：当前仅用于布局和外观", 14, Muted));
+        AddChild(MakeLabel("工人选路优先道路，速度不变。\n无路陆地仍可通行。", 14, Muted));
         var next = new HBoxContainer();
         next.AddChild(UiIcons.Create(UiIcon.Build, 25, Muted));
         var nextStep = MakeLabel("建造目录 → 选择道路材质\n短按起点与终点成段铺设。", 14, Muted);

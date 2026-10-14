@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
@@ -11,20 +12,23 @@ using FarmExchange.World;
 
 public partial class TestUiFacilities : Node
 {
-    public override void _Ready()
+    public override async void _Ready()
     {
-        bool passed = RunChecks(this);
+        bool passed = await RunChecksAsync(this);
         if (passed) GD.Print("设施目录搜索、作物说明与真实生产进度检查通过");
         GetTree().Quit(passed ? 0 : 1);
     }
 
-    public static bool RunChecks(Node parent)
+    public static async Task<bool> RunChecksAsync(Node parent)
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         try
         {
-            return CheckCatalog(main) && CheckProductionProgress(main);
+            if (!CheckCatalog(main)) return false;
+            await main.Game.WaitForNavigationAsync(parent.GetTree());
+            return CheckProductionProgress(main);
         }
         finally
         {

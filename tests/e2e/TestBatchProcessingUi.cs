@@ -39,7 +39,9 @@ public partial class TestBatchProcessingUi : Node
             Main.InitialWeatherMode = WeatherMode.Explicit;
             await Frames(parent);
             main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
             parent.AddChild(main);
+            await main.ReadyTask;
             main.SetProcess(false);
             FarmGame game = main.Game;
             foreach (BuildingSpaceSnapshot space in game.GetBuildingSpaces().ToArray())

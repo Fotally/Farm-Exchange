@@ -273,7 +273,7 @@ public partial class TestLandOccupancy : Node
         Vector2I anchor = new(17, 23);
         PlacementCheck Check(Vector2I cell, BuildingKind kind = BuildingKind.Farm,
             CropKind crop = CropKind.Wheat, int balance = 1000, int cost = 1000) =>
-            PlacementRules.Check(cell, kind, crop, land, balance, cost);
+            PlacementRules.Check(cell, kind, crop, land, TerrainTestFixtures.AllLandTerrain, balance, cost);
         if (Check(anchor) != new PlacementCheck(LandFailure.None, 1000) ||
             Check(anchor, balance: 999) != new PlacementCheck(LandFailure.InsufficientFunds, 0) ||
             Check(anchor, BuildingKind.None) != new PlacementCheck(LandFailure.InvalidBuilding, 0) ||

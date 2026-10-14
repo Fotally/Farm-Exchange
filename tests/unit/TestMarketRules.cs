@@ -28,7 +28,7 @@ public partial class TestMarketRules : Node
             return Fail("市场曲线未从 5.00 金币开始");
         if (!Throws<ArgumentOutOfRangeException>(() => curve.GetPriceCents(0)))
             return Fail("市场曲线接受了第 0 天");
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         int[] initialPrices = { 500, 500, 600, 400, 800, 1000, 50 };
         int[] initialRawPrices = { 250, 250, 300, 200, 400, 500, 25 };
         foreach (CropDefinition crop in FarmGame.Crops)
@@ -61,7 +61,7 @@ public partial class TestMarketRules : Node
 
     private static bool CheckDayTiming()
     {
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         for (int i = 0; i < 51; i++)
             if (game.AdvanceTick().DayAdvanced || game.CurrentDay != 1)
                 return Fail("未跨过精确日界时提前进入下一天");
@@ -83,7 +83,7 @@ public partial class TestMarketRules : Node
 
     private static bool CheckPause()
     {
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         int price = game.CurrentFlourPriceCents;
         game.SetPaused(true);
         for (int i = 0; i < 100; i++)

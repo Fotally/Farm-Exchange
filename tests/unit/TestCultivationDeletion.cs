@@ -24,7 +24,7 @@ public partial class TestCultivationDeletion : Node
 
     private static bool CheckPreservedFarms(CultivationMode mode, CropStage stage, bool wet)
     {
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces().Where(space => space.Building == BuildingKind.Processor))
             game.RemoveBuilding(space.AnchorCell);
         Vector2I[] targets = { new(189, 189), new(192, 189) };

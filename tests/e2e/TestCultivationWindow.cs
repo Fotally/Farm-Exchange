@@ -73,6 +73,7 @@ public partial class TestCultivationWindow : Node
         try
         {
             Main main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
             parent.AddChild(main);
             Click(main, "PauseButton");
             Click(main, "CultivationButton");

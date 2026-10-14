@@ -1,12 +1,26 @@
 # FarmGame 对外接口
 
+## 不可变地形与建局
+
+默认含水局使用 `await FarmGame.CreateAsync(tree, ..., terrainRules=null, cancellationToken=default)`。工厂每次重新读取正式 JSON，完整生成地形并等待 Godot 原生导航同步后，才组装工人、开局设施与日志身份。同步构造器仅接受显式纯陆地配置，调用同一地形 Module 的立即完成分支；不能同步阻塞含水准备。`LoadTerrainRules(source)` 与 `ParseTerrainRules(json, source)` 共用真实 384×384 地图、开局设施完整占地和三名工人起点验证。外部解析配置仍重验尺寸和真实上下文，失败或取消不发布半成品局，不替换地图。宿主退出取消等待；组装前再次检查取消，已准备的地形立即释放。`Dispose()` 关闭本局日志并释放本局地形的原生导航资源。`Terrain` 原样提供不可变权威地形；独立地形随机不消耗开局作物序列。
+
+`IsNavigationReady` 表示本局最新成功建拆的道路成本已完成原生同步。成功单格道路放置、整段放置、通用单格移除道路或整段拆路都会立即使其为 `false`；生产设施变化、只读预检及失败道路命令不改变它。`await WaitForNavigationAsync(tree, cancellationToken)` 使用土地唯一拥有的稳定只读快照，合并同一局实际准备任务；准备期间新增建拆会在旧轮完成后继续处理最新快照，直到提交版本追平才发布就绪。五材质成本相同，道路 1、普通陆地 2；不修改工人速度、既有不可变路线或认领。
+
+`AdvanceTick`／`AdvanceTicks` 要求导航已就绪，未准备时在推进、日志相位和资源修改前抛出 `InvalidOperationException`，同步入口不会阻塞等物理帧。若完整经营检查点内成功建拆道路，即使回调要求继续，也在该已完成检查点返回停止，由宿主先等待准备。`WaitForNavigationAsync` 的调用令牌只取消该等待者，不中断其他宿主正在共用的局准备；`Dispose` 取消本局实际准备，再释放地形。准备失败持续传播该任务异常，由拥有者结束局，不回退旧地图或直线路线。首次铺路的显式纯陆地局同样需要真实 SceneTree 和原生准备；尚无道路且没有导航资源的纯陆地局仍可同步创建。
+
+日志观察可通过本局 `Log.Dispose()` 单独结束，仍存活的局可以继续经营并保持观察静默。`FarmGame.Dispose()` 同时释放地形导航资源，完整释放后不再推进或提交经营命令；日志生命周期夹具先结束观察，最后由局的拥有者释放完整局。
+
+普通建造、免费开局及整段道路均要求占地所有格四角无水；含水岸格也拒绝，稳定原因 `LandFailure.Water`，费用与资源保持零修改。`FillWorldForBenchmark` 只接受建局时明确选择合法纯陆地配置、导航已就绪且没有道路的局，在修改任何状态前检查，不重新生成或替换地形。含道路的局须先通过正式拆路命令清空道路并等待同步，不能直接清占用留下旧导航成本；前置拒绝保持全部状态。满图仍是 16,384 生产实例。
+
+`IsWorkerMovementCurrent(movement)` 只读重验实际路线记录的目标农田、原始完整工作凭据和原动作，使表现能在改种、拆除或雨水满足任务之后立即停止旧路线；到达秒仍有效，不要求快照活动继续为 Moving。该凭据原样来自 FarmingSystem，不在经营或表现模块重新拼接轮次与播种许可；禁播再启用不复活旧播种行程，同轮供水仍按真实需求保留。既有单秒／批量及生产结果回归显式使用纯陆地配置，继续覆盖新合入的工作身份和异常检查点修复。
+
 `DeleteCultivationPlan(id)` 删除共享配置并解除全部引用田的计划安排：保留各田当前作物、当前轮阶段、精确剩余时长和水分，恢复按当前作物自动复种，仍经工人和季节判断。成功返回 `null`；未知或已删除编号返回“耕作表不存在”且零修改。表编号不回收；不改变其他表、其他农田、手动预备、金币库存或日历，具体约定见[计划 Interface](../../cultivation/interface-cultivation-plan-book.md)。
 
 对应类型：FarmExchange.Gameplay.FarmGame，代码位于 scripts/gameplay/FarmGame.cs。调用方为主场景和地图；测试也通过该公开接口验证行为。当前只有一个实现，未声明 C# interface 类型。
 
 `FarmGame(seed?, logging?, purpose?, weatherMode=Natural, weatherRules=null)` 默认不采集日志；显式传入 `RuntimeLog` 时通过内部自动绑定在真实开局完成后建立局身份、初始化基线与生产观察。`purpose` 默认为 `GamePurpose.Main`，独立开发流程指定 `ScenarioIndependent`；非法用途在初始化前抛参数异常。天气配置在此建局组装点选择：省略时采用正式 `WeatherRules.Default`，开发／测试可传入 `WeatherRules.Parse` 返回的已验证不可变配置；天气执行器只接收该配置，局创建后不替换规则。只读 `Log` 返回已绑定上下文或 null，不允许重新安装。公开 `RuntimeLog.BindGame` 仍只用于手动领域观察，不自动采集已有局的生产。
 
-主动交易、订单、建拆、原料底线、六个耕作命令和暂停设置关联原指令、真实结果和一次结束，相关命令均接受可选 `origin=Player`。经营语义来源 `FarmExchange.Gameplay.CommandOrigin` 只有 Player/Scenario，其他值在记录与业务提交前抛出 `ArgumentOutOfRangeException(nameof(origin))`，资源零修改且不依赖采集开关。开发流程真实命令显式传 Scenario；自动订单成交、实际等待、行情与生产由所属领域观察，不伪造玩家命令。经营层保留原业务执行权和检查顺序，不持有日志字段或前后投影，日志不执行业务回调。输出失败不改业务结果、不重试命令，业务异常原样传播。`Dispose()` 幂等结束本局关联，先封存订单等待与生产尾段且不改变资源；开发宿主先终结流程和报告，再释放独立局，最后由 Main 关闭主局和会话，具体约定见[日志 Interface](../../logging/interface-logging.md)。
+主动交易、订单、建拆、原料底线、六个耕作命令和暂停设置关联原指令、真实结果和一次结束，相关命令均接受可选 `origin=Player`。经营语义来源 `FarmExchange.Gameplay.CommandOrigin` 只有 Player/Scenario，其他值在记录与业务提交前抛出 `ArgumentOutOfRangeException(nameof(origin))`，资源零修改且不依赖采集开关。开发流程真实命令显式传 Scenario；自动订单成交、实际等待、行情与生产由所属领域观察，不伪造玩家命令。经营层保留原业务执行权和检查顺序，不持有日志字段或前后投影，日志不执行业务回调。输出失败不改业务结果、不重试命令，业务异常原样传播。`Dispose()` 幂等结束本局关联，先封存订单等待与生产尾段，保留金币、库存和生产数据，再释放地形导航资源；开发宿主先终结流程和报告，再释放独立局，最后由 Main 关闭主局和会话，具体约定见[日志 Interface](../../logging/interface-logging.md)。
 
 | 用途 | 公开成员 | 调用方需要知道的约定 |
 | --- | --- | --- |

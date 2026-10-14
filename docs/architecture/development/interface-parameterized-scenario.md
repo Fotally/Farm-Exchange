@@ -6,9 +6,11 @@
 
 `ScenarioConfiguration.Load(path)` 一次读取原始UTF-8字节，计算SHA-256后严格解析。允许UTF-8 BOM，摘要仍包含BOM。未知、重复、缺失字段，非法类型、非整数数量、非正预算、未知版本/流程、非法原料、游戏日期与倍率均抛出 `ScenarioConfigurationException`。加载后的参数、只读时间段以及原文件绝对路径固定；修改文件只影响下一次加载。报告不保存配置副本或整份配置。
 
-`BuyProcessSellScenario.Start(configuration, reportDirectory, currentGame=null, actualSeed=null, logging=null)` 返回独立或现场共用的运行器。宿主先创建并验证唯一报告目录；启动时将其目录名固定为报告 `RunId`，首个流程命令之前记录开始。独立局创建显式种子 `FarmGame`，使用传入的共享日志会话并标记用途 `ScenarioIndependent`，先暂停，通过正式命令拆除赠送设施、付费建造唯一匹配场地并设置原料底线0；启动完成后允许独立驱动推进。现场必须传入真实对象，保留其原日志身份与 `Main` 用途，只绑定匹配场地，不解除暂停、拆设施、撤他单或改底线。现场实际种子未知时传空。正式拒绝保留在 `Outcome` 和报告中，不通过异常强迫成功。启动准备抛出原异常时释放已创建的独立局观察并继续传播异常。
+默认独立局使用 `await BuyProcessSellScenario.StartAsync(tree, configuration, reportDirectory, currentGame=null, actualSeed=null, logging=null, cancellationToken=default)`，等待含水地形和原生导航就绪后返回运行器；现场沿用现成局，无额外地图。同步 `Start(..., terrainRules=null)` 仅供现场或显式纯陆地基准，纯陆地配置仍经过正式契约与相同准备实现，不偷偷替换默认地图。宿主先创建并验证唯一报告目录；启动时将其目录名固定为报告 `RunId`，首个流程命令之前记录开始。独立局使用共享日志会话并标记 `ScenarioIndependent`，先暂停，再以正式命令拆除赠送设施、付费建造唯一匹配场地并设置原料底线0；启动完成后才绑定驱动。地形失败或取消不开始经营流程，已创建且未交付的独立局释放导航资源；准备异常保留原异常传播。现场必须传入真实对象，保留原日志身份和 `Main` 用途，只绑定匹配场地，不解除暂停、拆设施、撤他单或改底线；实际种子未知时传空。经营命令正常拒绝仍保留在 `Outcome` 和报告中。
 
 首段终点在任何经营命令前与实际基准核对。必须晚于当前时点，其他终点已在加载时严格递增。`processorAnchor` 必须是匹配场地的真实锚点，不能只传其子格。
+
+现场 `StartAsync` 先等待同一 `FarmGame.WaitForNavigationAsync`，成功后才建立流程身份及提交业务命令。同步 `Start` 只接受导航已就绪的现场；道路尚待同步时在流程开始与首个业务命令前抛出 `InvalidOperationException`，提示使用 `StartAsync`，不买入、不改库存或日期、不写执行报告。已就绪现场和显式纯陆地同步独立局继续保留原入口。`TestParameterizedScenario` 验证这一拒绝保持土地、资金、库存、加工进度与订单零修改。
 
 流程暂停、拆除、建造、底线、买入和创建一次卖单显式传入 `CommandOrigin.Scenario`，倍率选择使用 `SimulationRateSource.Scenario`。日志用同一会话的局身份、序号及命令来源关联经营行为；`RunId` 仅关联本次流程事件与 JSON 报告，不隐式附加到玩家或自动经营事件。
 

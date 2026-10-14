@@ -18,7 +18,7 @@ public partial class TestWeatherPresentation : Node
 
     public static bool RunChecks(Node parent)
     {
-        using var game = new FarmGame(34, weatherMode: WeatherMode.Explicit);
+        using var game = new FarmGame(34, weatherMode: WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var scope = new Node2D();
         parent.AddChild(scope);
         var camera = new Camera2D { Position = MapCoordinates.GridPositionToLocal(new Vector2(191.5f, 191.5f)) };

@@ -25,6 +25,7 @@ public partial class TestDeveloperToolsWindow : Node
     public static async Task<bool> RunChecksAsync(Node parent)
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.SetProcess(false);
         string directory = ProjectSettings.GlobalizePath("res://build/developer-window-tests/" + Guid.NewGuid().ToString("N"));
@@ -77,11 +78,17 @@ public partial class TestDeveloperToolsWindow : Node
             var abort = Find<Button>(window, "ScenarioAbortButton");
             File.Delete(file);
             start.EmitSignal(Button.SignalName.Pressed);
+            await window.PreparationTask;
             if (!Find<Label>(window, "ScenarioFeedbackLabel").Text.Contains("启动失败") ||
                 main.Game.MoneyCents != beforeBalance || main.Game.Calendar.ElapsedSeconds != beforeTicks)
                 return Fail("运行前配置文件缺失未明确反馈或修改了经营状态");
             File.WriteAllText(file, independentJson);
             start.EmitSignal(Button.SignalName.Pressed);
+            if (window.PreparationTask.IsCompleted || !start.Disabled || abort.Disabled ||
+                !Find<Label>(window, "ScenarioProgressLabel").Text.Contains("准备"))
+                return Fail("独立局未进入真实导航准备状态或准备期间没有锁定运行控件");
+            window.AdvanceIndependent(100);
+            await window.PreparationTask;
             if (!start.Disabled || abort.Disabled) return Fail("真实启动没有进入运行状态");
             byte[] runningBytes = File.ReadAllBytes(file);
             string changedJson = independentJson.Replace("\"quantity\":1", "\"quantity\":4");
@@ -101,6 +108,7 @@ public partial class TestDeveloperToolsWindow : Node
 
             if (!CheckReport(reportText[3..], runningBytes, 1)) return false;
             start.EmitSignal(Button.SignalName.Pressed);
+            await window.PreparationTask;
             if (!Find<Label>(window, "ScenarioFeedbackLabel").Text.Contains("配置文件已改变") || start.Disabled)
                 return Fail("外部变更未拒绝旧凭据启动");
             Find<Button>(window, "ScenarioResultBackButton").EmitSignal(Button.SignalName.Pressed);
@@ -110,6 +118,7 @@ public partial class TestDeveloperToolsWindow : Node
             Find<Button>(window, "ScenarioEditorContinueButton").EmitSignal(Button.SignalName.Pressed);
             byte[] reloadedBytes = File.ReadAllBytes(file);
             start.EmitSignal(Button.SignalName.Pressed);
+            await window.PreparationTask;
             window.AdvanceIndependent(100);
             reportText = Find<Label>(window, "ScenarioReportPathLabel").Text;
             if (!reportText.StartsWith("报告：") || !CheckReport(reportText[3..], reloadedBytes, 4)) return false;
@@ -119,6 +128,7 @@ public partial class TestDeveloperToolsWindow : Node
             Find<Button>(window, "ScenarioEditorContinueButton").EmitSignal(Button.SignalName.Pressed);
             main.Game.SetPaused(true);
             start.EmitSignal(Button.SignalName.Pressed);
+            await window.PreparationTask;
             main.AdvanceSimulation(100);
             window.AdvanceIndependent(100);
             if (!start.Disabled || abort.Disabled || main.Game.Calendar.ElapsedSeconds != beforeTicks ||
@@ -130,6 +140,7 @@ public partial class TestDeveloperToolsWindow : Node
                 !reportText.StartsWith("报告：") || !File.ReadAllText(reportText[3..]).Contains("Aborted"))
                 return Fail("手动改速没有中断整个现场流程并保留玩家倍率");
             start.EmitSignal(Button.SignalName.Pressed);
+            await window.PreparationTask;
             if (!start.Disabled) return Fail("中止后不能重新运行持久配置");
             string pendingDirectory = Find<Label>(window, "ScenarioReportPathLabel").Text[7..];
             File.WriteAllText(Path.Combine(pendingDirectory, "report.json"), "existing-report");
@@ -189,7 +200,7 @@ public partial class TestDeveloperToolsWindow : Node
         {
             using var text = new StringWriter();
             using var log = RuntimeLog.Capture(text);
-            using var game = new FarmGame(12345, log);
+            using var game = new FarmGame(12345, log, terrainRules: TerrainTestFixtures.AllLandRules);
             foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
             if (game.BuildProcessor(Vector2I.Zero, CropKind.Radish) != null) return Fail("退出夹具建造失败");
             game.SetPaused(true);
@@ -210,6 +221,7 @@ public partial class TestDeveloperToolsWindow : Node
             SelectProfile(window, "shutdown");
             Find<Button>(window, "ScenarioEditorContinueButton").EmitSignal(Button.SignalName.Pressed);
             Find<Button>(window, "ScenarioStartButton").EmitSignal(Button.SignalName.Pressed);
+            await window.PreparationTask;
             string output = Find<Label>(window, "ScenarioReportPathLabel").Text[7..];
             if (!independent)
             {

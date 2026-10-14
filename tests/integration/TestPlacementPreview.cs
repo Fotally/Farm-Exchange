@@ -15,7 +15,7 @@ public partial class TestPlacementPreview : Node
 
     public static async Task<bool> RunChecksAsync(Node parent)
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (BuildingSpaceSnapshot space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         var scope = new Node2D();

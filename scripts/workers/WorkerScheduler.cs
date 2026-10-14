@@ -6,18 +6,21 @@ using FarmExchange.Gameplay;
 using FarmExchange.Land;
 using FarmExchange.Logging;
 using FarmExchange.Time;
+using FarmExchange.Terrain;
 
 namespace FarmExchange.Workers;
 
 internal sealed class WorkerScheduler
 {
-    private const float CellsPerSecond = 3f;
+    private const int CellsPerSecond = 3;
+    private readonly TerrainMap _terrain;
     private readonly WorkerState[] _workers;
     private readonly HashSet<int> _claimedCells = new();
     private int _nextFarmIndex;
 
-    internal WorkerScheduler(params Vector2I[] startingCells)
+    internal WorkerScheduler(TerrainMap terrain, params Vector2I[] startingCells)
     {
+        _terrain = terrain;
         if (startingCells.Length == 0)
             throw new ArgumentException("至少需要一名工人", nameof(startingCells));
         _workers = new WorkerState[startingCells.Length];
@@ -36,6 +39,7 @@ internal sealed class WorkerScheduler
         for (int workerIndex = 0; workerIndex < _workers.Length; workerIndex++)
         {
             WorkerState worker = _workers[workerIndex];
+            worker.Movement = null;
             if (worker.Work is FarmWorkRequest work &&
                 farming.GetWorkNeed(work.CellIndex, calendar) != work)
                 ReleaseWork(worker, workerIndex + 1);
@@ -47,15 +51,15 @@ internal sealed class WorkerScheduler
             WorkerState worker = _workers[workerIndex];
             if (worker.Work == null)
             {
-                FarmWorkRequest? selected = SelectNextWork(farming, calendar);
+                FarmWorkRequest? selected = SelectNextWork(worker, farming, calendar, out LandPath? path);
                 if (selected == null)
                     continue;
-                BeginWork(worker, selected.Value, workerIndex + 1);
+                BeginWork(worker, selected.Value, path!, workerIndex + 1);
             }
 
             if (worker.RemainingTravelSeconds > 0)
             {
-                AdvanceTravel(worker, workerIndex + 1);
+                AdvanceTravel(worker, workerIndex + 1, checked(calendar.ElapsedSeconds + 1));
                 continue;
             }
 
@@ -89,8 +93,14 @@ internal sealed class WorkerScheduler
             WorkerActivity activity = worker.Work == null ? WorkerActivity.Idle :
                 worker.RemainingTravelSeconds > 0 ? WorkerActivity.Moving :
                 worker.Work.Value.Kind == FarmWorkKind.Sow ? WorkerActivity.Sowing : WorkerActivity.Watering;
-            snapshots[i] = new WorkerSnapshot(i + 1, worker.GridPosition,
-                worker.Work is FarmWorkRequest work ? CellOf(work.CellIndex) : null, activity);
+            snapshots[i] = new WorkerSnapshot(i + 1, worker.Position.ToVector2(),
+                worker.Work is FarmWorkRequest work ? CellOf(work.CellIndex) : null, activity)
+            {
+                ExactPosition = worker.Position,
+                Path = worker.Path,
+                TravelTicks = worker.TravelTicks,
+                Movement = worker.Movement,
+            };
         }
         return Array.AsReadOnly(snapshots);
     }
@@ -126,19 +136,23 @@ internal sealed class WorkerScheduler
     /**
      * <summary>累计无任务边界的行程，沿用单秒推进的位置公式。</summary>
      * <param name="seconds">严格位于下一工人事件之前的完整经营秒数。</param>
+     * <param name="elapsedSeconds">本区间开始前的累计完整经营秒。</param>
      */
-    internal void AdvanceQuietSeconds(uint seconds)
+    internal void AdvanceQuietSeconds(uint seconds, uint elapsedSeconds)
     {
         for (int workerIndex = 0; workerIndex < _workers.Length; workerIndex++)
         {
             WorkerState worker = _workers[workerIndex];
+            worker.Movement = null;
             if (worker.Work != null && worker.RemainingTravelSeconds > 0)
-                AdvanceTravel(worker, workerIndex + 1, checked((int)seconds));
+                AdvanceTravel(worker, workerIndex + 1, checked(elapsedSeconds + seconds), checked((int)seconds));
         }
     }
 
-    private FarmWorkRequest? SelectNextWork(FarmingSystem farming, CalendarSnapshot calendar)
+    private FarmWorkRequest? SelectNextWork(WorkerState worker, FarmingSystem farming,
+        CalendarSnapshot calendar, out LandPath? path)
     {
+        path = null;
         IReadOnlyList<int> indices = farming.Indices;
         int start = 0;
         while (start < indices.Count && indices[start] < _nextFarmIndex)
@@ -148,6 +162,10 @@ internal sealed class WorkerScheduler
             int index = indices[(start + offset) % indices.Count];
             if (_claimedCells.Contains(index) || farming.GetWorkNeed(index, calendar) is not FarmWorkRequest work)
                 continue;
+            LandPathResult result = _terrain.FindLandPath(worker.Position, LandPosition.FromCell(CellOf(index)));
+            if (result.Status != LandPathStatus.Success)
+                continue;
+            path = result.Path;
             _nextFarmIndex = (index + 1) % farming.CellCount;
             _claimedCells.Add(index);
             return work;
@@ -155,29 +173,34 @@ internal sealed class WorkerScheduler
         return null;
     }
 
-    private void BeginWork(WorkerState worker, FarmWorkRequest work, int number)
+    private void BeginWork(WorkerState worker, FarmWorkRequest work, LandPath path, int number)
     {
         WorkerTaskDiagnosticState? before = TaskBefore(worker, number);
         worker.Work = work;
-        Vector2 distance = (Vector2)CellOf(work.CellIndex) - worker.GridPosition;
-        float gridDistance = Mathf.Max(Mathf.Abs(distance.X), Mathf.Abs(distance.Y));
-        worker.RemainingTravelSeconds = Mathf.CeilToInt(gridDistance / CellsPerSecond);
-        worker.TravelStart = worker.GridPosition;
+        worker.Path = path;
+        worker.RemainingTravelSeconds = path.GetTravelTicks(CellsPerSecond);
         worker.TravelTicks = 0;
-        worker.TravelPerSecond = gridDistance == 0f ? Vector2.Zero : distance * (CellsPerSecond / gridDistance);
         TaskAfter(worker, number, before);
     }
 
-    private void AdvanceTravel(WorkerState worker, int number, int seconds = 1)
+    private void AdvanceTravel(WorkerState worker, int number, uint elapsedSeconds, int seconds = 1)
     {
         WorkerTaskDiagnosticState? taskBefore = TaskBefore(worker, number);
-        Vector2? before = Diagnostics?.CanObserveMove(number) == true ? worker.GridPosition : null;
+        LandPosition? before = Diagnostics?.CanObserveMove(number) == true ? worker.Position : null;
         worker.RemainingTravelSeconds -= seconds;
-        worker.TravelTicks += seconds;
-        worker.GridPosition = worker.TravelStart + worker.TravelPerSecond * worker.TravelTicks;
-        if (worker.RemainingTravelSeconds == 0)
-            worker.GridPosition = CellOf(worker.Work!.Value.CellIndex);
-        if (before.HasValue) Diagnostics?.Moved(number, before.Value, worker.GridPosition);
+        worker.TravelTicks = checked(worker.TravelTicks + seconds);
+        LandPath path = worker.Path!;
+        int distance = checked(worker.TravelTicks * CellsPerSecond);
+        worker.Position = path.GetPositionAtDistance(distance);
+        FarmWorkRequest work = worker.Work!.Value;
+        worker.Movement = new WorkerMovementSnapshot(path, elapsedSeconds,
+            Math.Min(distance - CellsPerSecond, path.TotalLength), Math.Min(distance, path.TotalLength),
+            CellOf(work.CellIndex),
+            work.Kind == FarmWorkKind.Sow ? WorkerActivity.Sowing : WorkerActivity.Watering)
+        {
+            Work = work,
+        };
+        if (before.HasValue) Diagnostics?.Moved(number, before.Value, worker.Position);
         TaskAfter(worker, number, taskBefore);
     }
 
@@ -187,7 +210,8 @@ internal sealed class WorkerScheduler
         _claimedCells.Remove(worker.Work!.Value.CellIndex);
         worker.Work = null;
         worker.RemainingTravelSeconds = 0;
-        worker.TravelPerSecond = Vector2.Zero;
+        worker.Path = null;
+        worker.TravelTicks = 0;
         TaskAfter(worker, number, before);
     }
 
@@ -209,13 +233,13 @@ internal sealed class WorkerScheduler
 
     private sealed class WorkerState
     {
-        internal Vector2 GridPosition;
+        internal LandPosition Position;
         internal FarmWorkRequest? Work;
         internal int RemainingTravelSeconds;
-        internal Vector2 TravelPerSecond;
-        internal Vector2 TravelStart;
+        internal LandPath? Path;
         internal int TravelTicks;
+        internal WorkerMovementSnapshot? Movement;
 
-        internal WorkerState(Vector2I startingCell) => GridPosition = startingCell;
+        internal WorkerState(Vector2I startingCell) => Position = LandPosition.FromCell(startingCell);
     }
 }

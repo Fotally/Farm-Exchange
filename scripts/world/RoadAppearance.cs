@@ -57,7 +57,7 @@ internal sealed class RoadAppearance
             }
             else
             {
-                bool blocked = !inMap || space != null;
+                bool blocked = !inMap || !game.Terrain.IsFullLand(cell) || space != null;
                 if (!blocked) added.Add(cell);
                 preview.Add(new RoadPreviewCell(cell, blocked));
             }

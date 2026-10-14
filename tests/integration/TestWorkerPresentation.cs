@@ -22,6 +22,7 @@ public partial class TestWorkerPresentation : Node
         if (!passed) return false;
         if (!await CheckCompleteActionClips(parent)) return false;
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.SetProcess(false);
         main.Game.SetPaused(true);
@@ -43,7 +44,7 @@ public partial class TestWorkerPresentation : Node
 
     private static FarmGame CreateGame()
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         Vector2I[] farms = { new(192, 192), new(201, 192), new(186, 195) };
         foreach (Vector2I farm in farms) game.BuildFarm(farm);
@@ -213,7 +214,7 @@ public partial class TestWorkerPresentation : Node
 
     private static bool CheckSuccessfulActions(Node parent)
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
         game.TryPlace(farm, BuildingKind.Farm, CropKind.Radish);
@@ -272,7 +273,7 @@ public partial class TestWorkerPresentation : Node
     {
         foreach (bool sow in new[] { true, false })
         {
-            var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+            var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
             Vector2I farm = new(189, 189);
             game.TryPlace(farm, BuildingKind.Farm, CropKind.Radish);

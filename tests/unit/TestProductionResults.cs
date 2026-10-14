@@ -22,7 +22,7 @@ public partial class TestProductionResults : Node
         foreach (int farmCount in new[] { 3, 4 })
             foreach (CultivationMode? mode in new CultivationMode?[] { null, CultivationMode.Immediate, CultivationMode.PrepareNext })
             {
-                var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+                var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
                 Vector2I[] farms = new[] { new Vector2I(189, 189), new(192, 189), new(195, 189), new(198, 189) }
                     .Take(farmCount).ToArray();
                 if (farmCount == 4 && !game.TryPlace(farms[3], BuildingKind.Farm, CropKind.Radish).Success)
@@ -75,8 +75,8 @@ public partial class TestProductionResults : Node
     {
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
         {
-            var single = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
-            var batch = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+            var single = new FarmGame(12345, weatherMode: WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+            var batch = new FarmGame(12345, weatherMode: WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             Vector2I[] farms = { new(189, 189), new(192, 189), new(195, 189), new(198, 189) };
             foreach (FarmGame game in new[] { single, batch })
             {
@@ -119,7 +119,7 @@ public partial class TestProductionResults : Node
 
     private static FarmGame Empty(uint second = 0)
     {
-        var game = new FarmGame(12345, second, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, second, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         return game;
     }

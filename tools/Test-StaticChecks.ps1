@@ -53,7 +53,7 @@ foreach ($document in $documents) {
     }
 }
 
-$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; cultivation = 'FarmExchange.Cultivation'; farming = 'FarmExchange.Farming'; land = 'FarmExchange.Land'; processing = 'FarmExchange.Processing'; workers = 'FarmExchange.Workers'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; characters = 'FarmExchange.Characters'; market = 'FarmExchange.Market'; trading = 'FarmExchange.Trading'; time = 'FarmExchange.Time'; weather = 'FarmExchange.Weather'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI'; development = 'FarmExchange.Development'; logging = 'FarmExchange.Logging' }
+$namespaces = @{ gameplay = 'FarmExchange.Gameplay'; cultivation = 'FarmExchange.Cultivation'; farming = 'FarmExchange.Farming'; land = 'FarmExchange.Land'; processing = 'FarmExchange.Processing'; workers = 'FarmExchange.Workers'; inventory = 'FarmExchange.Inventory'; economy = 'FarmExchange.Economy'; characters = 'FarmExchange.Characters'; market = 'FarmExchange.Market'; trading = 'FarmExchange.Trading'; time = 'FarmExchange.Time'; weather = 'FarmExchange.Weather'; terrain = 'FarmExchange.Terrain'; world = 'FarmExchange.World'; ui = 'FarmExchange.UI'; development = 'FarmExchange.Development'; logging = 'FarmExchange.Logging' }
 foreach ($group in $namespaces.Keys) {
     $directory = Join-Path $repoRoot "scripts/$group"
     if (-not (Test-Path -LiteralPath $directory)) { continue }

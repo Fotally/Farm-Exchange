@@ -27,7 +27,7 @@ public static class TestDiagnosticCapture
         long now = 0;
         using var text = new StringWriter();
         using var runtime = RuntimeLog.CaptureDiagnostics(text, () => now);
-        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var capture = game.Log!.Diagnostics;
         Require(!capture.IsActive, "默认不得采集详细事件");
         Invalid(() => capture.Start(new(new[] { "ViewChanged" }, IncludeGameEvents: true, EventLimit: 5001)));
@@ -57,7 +57,7 @@ public static class TestDiagnosticCapture
         Require(Lines(text, "DiagnosticCaptureEnded").Length == 3 && Lines(text, "DiagnosticCaptureEnded").Last().Contains("StopReason: \"GameEnded\""), "局结束未一次结束诊断");
         Require(!capture.Start(new(new[] { "ViewChanged" }, IncludeGameEvents: true)), "已结束局不能重启诊断");
         using var disabled = RuntimeLog.Disabled();
-        using var off = new FarmGame(12345, disabled, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var off = new FarmGame(12345, disabled, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         Require(off.Log == null, "关闭采集分配了局上下文");
     }
 
@@ -65,7 +65,7 @@ public static class TestDiagnosticCapture
     {
         using var text = new StringWriter();
         using var runtime = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var anchor = game.GetBuildingSpaces().First(space => space.Building == BuildingKind.Farm).AnchorCell;
         var capture = game.Log!.Diagnostics;
         Require(capture.Start(new(new[] { "ProductionStateChanged" }, Anchors: new[] { anchor })), "实例采集开始失败");
@@ -85,7 +85,7 @@ public static class TestDiagnosticCapture
     {
         using var text = new StringWriter();
         using var runtime = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var cell = new Vector2I(10, 10);
         var farm = game.GetBuildingSpaces().First(space => space.Building == BuildingKind.Farm).AnchorCell;
         var capture = game.Log!.Diagnostics;
@@ -138,7 +138,7 @@ public static class TestDiagnosticCapture
     {
         using var text = new StringWriter();
         using var runtime = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var view = game.Log!.View;
         CheckUnallocatedViewChanges(view, "未开启采集");
         game.Log.Diagnostics.Start(new(new[] { "RuleChecked" }, IncludeGameEvents: true));
@@ -171,7 +171,7 @@ public static class TestDiagnosticCapture
         long now = 0;
         using var text = new StringWriter();
         using var runtime = RuntimeLog.CaptureDiagnostics(text, () => now);
-        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, runtime, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var capture = game.Log!.Diagnostics;
         capture.Start(new(new[] { "ObservedFact" }, IncludeGameEvents: true, DurationLimitMs: 10));
         Require(capture.ShouldCapture("ObservedFact"), "真实候选门禁失败");

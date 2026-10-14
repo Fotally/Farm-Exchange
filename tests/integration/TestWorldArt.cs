@@ -27,7 +27,7 @@ public partial class TestWorldArt : Node
         bool graphical = DisplayServer.GetName() != "headless";
         for (int crop = 0; crop < CropNames.Length; crop++)
         {
-            var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+            var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
             if (crop == (int)CropKind.Sugarcane) game.AdvanceTicks(4320); // 夏初，真实适季播种。
             if (!game.TryPlace(Farm, BuildingKind.Farm, (CropKind)crop).Success ||

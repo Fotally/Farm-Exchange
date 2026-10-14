@@ -38,7 +38,7 @@ public static class TestCultivationLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var request = Request("  原表  ") with { Entries = Request().Entries.Reverse().ToArray() };
         int id = game.CreateCultivationPlan(request, CommandOrigin.Scenario).Id;
         string created = Last(text, "CultivationPlanCreated");
@@ -82,7 +82,7 @@ public static class TestCultivationLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         int id = game.CreateCultivationPlan(Request()).Id;
         Require(game.ApplyCultivationPlan(id, new[] { Farm, Farm + Vector2I.One, Other }) == null, "重复子格应用失败");
         string applied = Last(text, "CultivationPlanApplied");
@@ -130,7 +130,7 @@ public static class TestCultivationLogging
         {
             using var text = new StringWriter();
             using var log = RuntimeLog.Capture(text);
-            using var game = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+            using var game = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             game.SetFarmCrop(Farm, CropKind.Radish);
             int id = game.CreateCultivationPlan(Request()).Id;
             game.ApplyCultivationPlan(id, new[] { Farm, Other });
@@ -163,7 +163,7 @@ public static class TestCultivationLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var entries = Enumerable.Range(0, 40).Select(i => new CultivationEntry(i + 1, CropKind.Radish, i < 21 ? i * 4 : 168 + (i - 21) * 4)).ToArray();
         int id = game.CreateCultivationPlan(Request(new string('名', 550)) with { Entries = entries }).Id;
         Require(id > 0, "大合法计划夹具未保存");
@@ -195,13 +195,13 @@ public static class TestCultivationLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var traced = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var traced = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         using var disabledLog = RuntimeLog.Disabled();
-        using var disabled = new FarmGame(12345, disabledLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var plain = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var disabled = new FarmGame(12345, disabledLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var plain = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         using var brokenText = new BrokenWriter();
         using var brokenLog = RuntimeLog.Capture(brokenText, diagnostic: _ => { });
-        using var broken = new FarmGame(12345, brokenLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var broken = new FarmGame(12345, brokenLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var game in new[] { traced, disabled, plain, broken })
         {
             int id = game.CreateCultivationPlan(Request(), CommandOrigin.Scenario).Id;
@@ -226,7 +226,7 @@ public static class TestCultivationLogging
         Require(brokenLog.Health.FailureCount > 0, "输出故障未被记录");
         using var lifecycleText = new StringWriter();
         using var lifecycleLog = RuntimeLog.Capture(lifecycleText);
-        using var gameForObservation = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var gameForObservation = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         using var context = lifecycleLog.BindGame(gameForObservation, 12345)!;
         var create = context.Cultivation.BeginCreate(Request())!;
         var result = gameForObservation.CreateCultivationPlan(Request());

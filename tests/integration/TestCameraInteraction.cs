@@ -14,6 +14,7 @@ public partial class TestCameraInteraction : Node
     public static bool RunChecks(Node parent)
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         bool passed = Check(main);
         main.Free();
@@ -29,6 +30,7 @@ public partial class TestCameraInteraction : Node
         window.Mode = Window.ModeEnum.Windowed;
         window.Size = new Vector2I(1280, 720);
         await Frames(parent);
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.Game.SetPaused(true);
         main.SetProcess(false);
@@ -89,6 +91,7 @@ public partial class TestCameraInteraction : Node
             window.Size = new Vector2I(1920, 1080);
             await Frames(parent);
             main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
             parent.AddChild(main);
             main.Game.SetPaused(true);
             main.SetProcess(false);

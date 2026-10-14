@@ -19,7 +19,7 @@ public partial class TestEnvironmentDecorations : Node
 
     public static async Task<bool> RunChecksAsync(Node parent)
     {
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, terrainRules: TerrainTestFixtures.AllLandRules);
         var scope = new Node2D();
         parent.AddChild(scope);
         var map = new WorldMap();
@@ -44,7 +44,7 @@ public partial class TestEnvironmentDecorations : Node
             var initialPaths = initial.ToDictionary(pair => pair.Key, pair => pair.Value.Texture.ResourcePath);
             var repeatedMap = new WorldMap();
             scope.AddChild(repeatedMap);
-            repeatedMap.SetGame(new FarmGame(98765));
+            repeatedMap.SetGame(new FarmGame(98765, terrainRules: TerrainTestFixtures.AllLandRules));
             await Frames(parent);
             var repeated = VisibleDecorations(repeatedMap);
             bool stable = initialPaths.Count == repeated.Count && initialPaths.All(pair =>

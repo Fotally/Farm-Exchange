@@ -1,6 +1,7 @@
 using Godot;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
+using FarmExchange.Terrain;
 
 namespace FarmExchange.Land;
 
@@ -16,6 +17,7 @@ public enum LandFailure
     InvalidRoadMaterial,
     InvalidRoadRange,
     NoRoads,
+    Water,
 }
 
 public readonly record struct PlacementCheck(LandFailure Failure, int CostCents)
@@ -39,7 +41,7 @@ internal static class PlacementRules
     internal static bool IsValidRoadMaterial(RoadMaterial material) => System.Enum.IsDefined(material);
 
     internal static PlacementCheck Check(Vector2I cell, BuildingKind building, CropKind crop,
-        LandOccupancy occupancy, int balanceCents, int costCents,
+        LandOccupancy occupancy, TerrainMap terrain, int balanceCents, int costCents,
         BuildingOrientation orientation = BuildingOrientation.Q0)
     {
         if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
@@ -49,6 +51,9 @@ internal static class PlacementRules
         LandFailure geometryFailure = occupancy.CheckFootprint(cell, building, orientation);
         if (geometryFailure != LandFailure.None)
             return new PlacementCheck(geometryFailure, 0);
+        foreach (Vector2I offset in BuildingFootprint.Get(building).Offsets)
+            if (!terrain.IsFullLand(cell + offset))
+                return new PlacementCheck(LandFailure.Water, 0);
         if (balanceCents < costCents)
             return new PlacementCheck(LandFailure.InsufficientFunds, 0);
         return new PlacementCheck(LandFailure.None, costCents);
@@ -64,6 +69,7 @@ internal static class PlacementRules
         LandFailure.NoRoads => "没有可拆除的道路",
         LandFailure.OutOfBounds => "地图外地块",
         LandFailure.Occupied => "该土地已有建筑",
+        LandFailure.Water => "水域或含水岸格不能建造",
         LandFailure.InsufficientFunds => "金币不足，无法建造建筑",
         _ => throw new System.ArgumentOutOfRangeException(nameof(failure)),
     };

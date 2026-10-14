@@ -9,6 +9,7 @@ using FarmExchange.Inventory;
 using FarmExchange.Logging;
 using FarmExchange.Processing;
 using FarmExchange.Time;
+using FarmExchange.Terrain;
 using FarmExchange.Workers;
 
 public static class TestProductionDiagnostics
@@ -34,7 +35,7 @@ public static class TestProductionDiagnostics
 
     private static FarmGame Empty(RuntimeLog? log = null, uint seconds = 0)
     {
-        var game = new FarmGame(12345, seconds, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, seconds, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         return game;
     }
@@ -133,7 +134,7 @@ public static class TestProductionDiagnostics
             int index = Farm.Y * FarmGame.MapSize + Farm.X;
             var farming = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize) { Diagnostics = game.Log.ProductionDiagnostics };
             farming.Place(index, CropKind.Radish);
-            var workers = new WorkerScheduler(new Vector2I(190, 190));
+            var workers = new WorkerScheduler(TerrainTestFixtures.AllLandTerrain, new Vector2I(190, 190));
             CalendarSnapshot spring = new GameCalendar(4319).Snapshot;
             FarmWorkRequest request = farming.GetWorkNeed(index, spring)!.Value;
             for (int read = 0; read < 20; read++)
@@ -252,6 +253,8 @@ public static class TestProductionDiagnostics
         var processorBefore = new ProcessorDiagnosticState(CropKind.Radish, ProcessorStatus.Processing, 1, 1);
         var idle = new WorkerTaskDiagnosticState(WorkerActivity.Idle, null);
         var moving = new WorkerTaskDiagnosticState(WorkerActivity.Moving, 0);
+        LandPosition moveStart = LandPosition.FromCell(Vector2I.Zero);
+        LandPosition moveEnd = LandPosition.FromCell(Vector2I.One);
         for (int i = 0; i < count; i++)
         {
             production.BeginFarm(0, farming);
@@ -260,7 +263,7 @@ public static class TestProductionDiagnostics
             production.Processed(0, processorBefore, processing, inventory, 1);
             production.PlantingChecked(0, CropKind.Radish, PlantingFailure.None);
             workers.TaskChanged(2, idle, moving);
-            workers.Moved(2, Vector2.Zero, Vector2.One);
+            workers.Moved(2, moveStart, moveEnd);
         }
     }
 

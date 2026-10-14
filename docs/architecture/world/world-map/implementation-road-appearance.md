@@ -37,3 +37,5 @@ Main传入完整道路候选或拆除投影路径，RoadAppearance只读查询�
 性能夹具完成实际道路建造后，通过真实PauseButton的Pressed信号一次暂停，由Main原有TogglePause同步刷新全部UI，再停止Main自动候选刷新并交由性能场景提供移动预览。不直接修改模型暂停后保留旧UI。采样开始/结束前同时断言实际可见金币文本/总余额冻结提示、0农田/0加工/45道路近况、日期及暂停状态文字、按钮“继续经营”提示；报告记录UiAtSampleStart/UiAtSampleEnd与UiConsistent。模型、界面与截图一致才满足性能验收，只有FPS达标不能记为通过。
 
 该场景是暂停道路绘制专项：Main帧刷新关闭，地图、镜头、实际控件和当前道路预览继续渲染。报告明确记录MainProcessEnabled=false与IsPaused=true，不能将其FPS解释为活动经营含完整Main帧更新的性能；后者由原满地图FPS场景单独验收。
+
+#110 新建预览在范围和占用检查之外读取 `game.Terrain.IsFullLand`，含水岸格与水格显示冲突，不加入临时道路连接。拆路仍只筛选真实道路，不把水域视作可拆对象；正式判断由经营入口再次完整校验。

@@ -69,6 +69,7 @@ public partial class TestWeatherFps : Node
         try
         {
             _main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            _main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
             AddChild(_main);
         }
         finally { Main.InitialWeatherMode = previousMode; Main.InitialSeed = previousSeed; }

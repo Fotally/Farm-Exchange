@@ -84,3 +84,5 @@
 孤立橡树根点(89,94)用于真实NpcCharacter在树前/树后不透明像素交叠比较，并验证根点离屏而树冠仍可见的原图像素。截图保存`coverage/environment-center.png`、`environment-before-build.png`、`environment-after-build.png`、`environment-tree-behind.png`、`environment-tree-front.png`、`environment-tree-edge.png`。2026-10-07独立场景通过，记录位于本地`build/issue105-validation/environment-motion.log`；满地图FPS、综合覆盖率与导出验收另列最终交付记录。
 
 #111环境回归还验证中心可见装饰实际包含q0～q3，不同开局作物种子的新局保持相同根点和纹理路径；镜头往返恢复的剩余装饰保持原方向。四向静态图原字节与manifest哈希一致，pivot/画布均保持来源契约。
+
+#110 初始化同时接收本局只读 `TerrainMap`。自然与人工陈设统一在完整陆地格落根；岸格或水格不生成装饰。稳定视觉种子不变，因此纯陆地基准的落点、种类与四向仍不变；含水局仅剔除地形不合适的落点，不维护第二份水域或通行状态。

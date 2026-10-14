@@ -127,7 +127,7 @@ public partial class TestWeatherYield : Node
 
     private static FarmGame Empty(int seed, WeatherMode mode)
     {
-        var game = new FarmGame(seed, weatherMode: mode);
+        var game = new FarmGame(seed, weatherMode: mode, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         return game;
     }
@@ -155,9 +155,9 @@ public partial class TestWeatherYield : Node
     {
         foreach (WeatherMode mode in Enum.GetValues<WeatherMode>())
         {
-            using FarmGame one = new(973, weatherMode: mode);
-            using FarmGame batch = new(973, weatherMode: mode);
-            using FarmGame split = new(973, weatherMode: mode);
+            using FarmGame one = new(973, weatherMode: mode, terrainRules: TerrainTestFixtures.AllLandRules);
+            using FarmGame batch = new(973, weatherMode: mode, terrainRules: TerrainTestFixtures.AllLandRules);
+            using FarmGame split = new(973, weatherMode: mode, terrainRules: TerrainTestFixtures.AllLandRules);
             if (mode == WeatherMode.Explicit)
                 foreach (FarmGame game in new[] { one, batch, split })
                     Require(game.TrySetWeatherRegion(new(189, 189, 1, 1), WeatherKind.Rain, out _), "雨区设置失败");
@@ -221,8 +221,8 @@ public partial class TestWeatherYield : Node
         }
         Require(WeatherRules.Parse(originalJson).CycleSeconds == WeatherRules.Default.CycleSeconds,
             "合法配置变体污染了正式配置");
-        using FarmGame one = new(973, weatherRules: rules);
-        using FarmGame batch = new(973, weatherRules: rules);
+        using FarmGame one = new(973, weatherRules: rules, terrainRules: TerrainTestFixtures.AllLandRules);
+        using FarmGame batch = new(973, weatherRules: rules, terrainRules: TerrainTestFixtures.AllLandRules);
         var expectedWeather = new WeatherSystem(973, rules);
         long harvested = 0;
         foreach (uint count in new[] { 51u, 1u, 103u, 206u, 1440u, 15520u })

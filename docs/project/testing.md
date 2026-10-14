@@ -6,6 +6,14 @@
 
 #35 批量加工由 `TestBatchProcessing` 经真实库存、加工与经营入口验证每批最多9份、少量批次完整周期、零原料、底线与冻结、稳定竞争领取、锁量不追加、拆除损失及实际入库守恒；单秒与批量推进必须一致，七作物产能检查使用明确数量和天气输入。`TestBatchProcessingUi.RunChecksAsync` 接入 `TestSuite`，使用真实主场景验证满批、少批、等待状态、暂停补料与拆除；有窗口独立运行 `tests/e2e/test_batch_processing_ui.tscn`，在1920×1080保存截图到 `build/issue35-ui-validation/`，检查批量、周期、损失说明和操作按钮完整可见。headless 检查行为和排版，不代替截图验收。
 
+批量加工单元及1080P详情夹具显式使用合法纯陆地配置；主场景夹具等待 `ReadyTask` 完成后读取经营状态，原九份批量及满批／少批断言保持。
+
+水域与道路导航由同一 TestSuite 验证：`TestTerrainRules` 检查严格配置，`TestTerrainMap` 覆盖正式多种子、全量工作中心、真实端点与连续取消，`TestLandPath` 检查累计距离和采样；`TestRoadNavigation` 使用真实原生区域成本、跨块复建、清空道路与取消释放，并通过 Godot Logger 将原生完整边冲突警告判为失败。`TestFarmGame` 和 `TestCoreLoop` 验证道路准备期间不消费经营时间、当前行程保持、最新道路重选以及主驱动检查点内建拆后的剩余 tick 停止；同步开发流程入口也不能绕过准备。
+
+`TestFarmGame` 独立入口和 `TestSuite` 完整入口都捕获异步测试异常，记录完整堆栈并以退出码 1 结束。测试进程仍须实际退出；仅有最后一条输出或未退出的进程不能作为通过证据。
+
+`tests/performance/test_water_fps.tscn` 必须使用真实 1920×1080 图形窗口运行，覆盖默认含水局、三类水纹逐像素、干地不变、暂停、有路／拆路真实工人对照及 0.5×／1×／2×／16×三工人跨图负载。筹资只使用真实收获出售。`test_road_fps.tscn` 保留45格道路和原采样窗口，在导航就绪后测量；两者继续采用平均至少60 FPS、P95不超过16.67 ms的门槛。报告和截图位于对应场景声明的 build 目录，不纳入 Git。
+
 计划供水修复的回归继续由 `TestProductionState`、`TestProductionResults`、`TestCultivationPlanBook` 和 `TestWorkerScheduler` 的既有 TestSuite 入口运行。通过真实 FarmGame 的三田／四田、两种计划、手动预备、首次应用与重应用、雨水取消及单秒／批量对照，验证当前 Water 认领和成功 Sow 保持；旧待执行 Sow 禁播再启用不复活，真正重启、拆建、收获及禁生清理继续失效。实现见[农田工作身份](../architecture/farming/farming-system/implementation-work-identity-proposal.md)。
 
 `TestCameraInteraction.RunResizeChecksAsync` 在真实 Main 中使用 GUI 焦点、公开 Input 事件和场景树自动处理帧，验证名称与原料保留数字编辑时镜头不动、释放／隐藏编辑后持键平移恢复及松键停止；受控 0.1 秒回调仅补充速度与焦点类型检查。另覆盖 WASD、Ctrl+A、多窗口、TextEdit、SpinBox、只读和按钮焦点、鼠标释放、尺寸往返及真实全屏。有窗口时等待实际绘制完成并保存 1920×1080 编辑截图；headless 输入注入不替代操作系统中文 IME 组合窗口验收。实现见[镜头输入](../architecture/world/camera-controller/implementation-editing-input-proposal.md)。

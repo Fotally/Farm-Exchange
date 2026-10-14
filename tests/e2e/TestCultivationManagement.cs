@@ -35,6 +35,7 @@ public partial class TestCultivationManagement : Node
             window.Size = new Vector2I(1920, 1080);
             await Frames(parent);
             main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
             parent.AddChild(main);
             main.SetProcess(false);
             Click(main, "PauseButton");

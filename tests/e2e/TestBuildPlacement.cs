@@ -48,6 +48,7 @@ public partial class TestBuildPlacement : Node
     private static Main CreateMain(Node parent)
     {
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.SetProcess(false);
         return main;
@@ -283,6 +284,7 @@ public partial class TestBuildPlacement : Node
             main.Game.MoneyCents, main.Game.GetPlot(cell).Building));
         // 挂树前订阅真实选择信号，保证观察先于 Main._Ready 注册的经营提交回调。
         map.SelectionChanged += BeforePlacement;
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.SetProcess(false);
         main.Game.SetPaused(true);

@@ -9,7 +9,7 @@ public partial class TestSimulationDriver : Node
 
     public static bool RunChecks()
     {
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var driver = new SimulationDriver();
         if (driver.Advance(0.5, game) != 0 || driver.Progress != 0.5) return Fail("未保存半tick");
         game.SetPaused(true);
@@ -46,7 +46,7 @@ public partial class TestSimulationDriver : Node
         catch (InvalidOperationException) { }
         if (game.Calendar.ElapsedSeconds != 3) return Fail("溢出拒绝修改了经营对象");
 
-        var switched = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var switched = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var switchingDriver = new SimulationDriver();
         uint boundary = 1;
         uint advanced = switchingDriver.Advance(2, switched, point =>
@@ -68,7 +68,7 @@ public partial class TestSimulationDriver : Node
 
     private static bool CheckCheckpointRecovery()
     {
-        using var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var driver = new SimulationDriver();
         driver.Advance(0.5, game);
         var original = new InvalidOperationException("半 tick 检查点异常");
@@ -93,7 +93,7 @@ public partial class TestSimulationDriver : Node
 
     private static bool CheckQuietRecovery()
     {
-        using var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces())
             if (game.RemoveBuilding(space.AnchorCell) != null) return Fail("平静推进夹具未能清空设施");
         var driver = new SimulationDriver();
@@ -118,7 +118,7 @@ public partial class TestSimulationDriver : Node
 
     private static bool CheckRejectedProgress()
     {
-        using var game = new FarmGame(12345, uint.MaxValue, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, uint.MaxValue, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var driver = new SimulationDriver();
         driver.Advance(0.5, game);
         int money = game.MoneyCents;
@@ -140,7 +140,7 @@ public partial class TestSimulationDriver : Node
             if (!ReferenceEquals(original, received) || driver.Progress != 0.5 || driver.LastAdvanceTicks != 0)
                 return Fail("宿主预算前置拒绝修改了已有小数");
         }
-        using var resumed = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var resumed = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var resumedDriver = new SimulationDriver();
         resumedDriver.Advance(0.5, resumed);
         int budgets = 0;

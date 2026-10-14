@@ -34,7 +34,7 @@ public static class TestProductionLogging
 
     private static FarmGame Empty(RuntimeLog? logging = null, uint second = 0)
     {
-        var game = new FarmGame(12345, second, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, second, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         return game;
     }
@@ -231,7 +231,7 @@ public static class TestProductionLogging
         long now = 0;
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text, () => clockFails ? throw new IOException("首次窗口时钟故障") : now, _ => { });
-        using var game = new FarmGame(12345, 4120, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, 4120, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         clockFails = false;
         Require(game.Buy(Raw, 1).Success, "首次时钟失败影响真实业务");
         string first = Events(text).Single();

@@ -45,7 +45,7 @@ public static class TestTradeLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         Require(game.Buy(Raw, 4).Success, "准备原料失败");
         int price = game.GetQuote(Raw).PriceCents;
         TradeResult fixedSale = game.Sell(Raw, 1, CommandOrigin.Scenario);
@@ -77,7 +77,7 @@ public static class TestTradeLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         long total = 0;
         foreach (var definition in CommodityCatalog.All.Where(item => item.Id.Kind == CommodityKind.Product))
         {
@@ -133,8 +133,8 @@ public static class TestTradeLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var traced = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var plain = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var traced = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var plain = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (FarmGame game in new[] { traced, plain })
         {
             game.Buy(Raw, 4);
@@ -189,7 +189,7 @@ public static class TestTradeLogging
     {
         string root = ProjectSettings.GlobalizePath("res://build/test-results/logging/trading-" + Guid.NewGuid().ToString("N"));
         using (var log = RuntimeLog.OpenFile(root, true, new LogEnvironment(BuildKind: "Debug")))
-        using (var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit))
+        using (var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules))
         {
             foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
             Require(game.Buy(Raw, 4).Success && game.Sell(Raw, 1).Success && game.SellAll().Success, "文件夹具主动交易失败");

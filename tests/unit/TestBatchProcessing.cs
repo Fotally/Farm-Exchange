@@ -38,7 +38,8 @@ public partial class TestBatchProcessing : Node
 
     private static FarmGame Empty(int seed = 12345, uint seconds = 0)
     {
-        var game = new FarmGame(seed, seconds, weatherMode: WeatherMode.Explicit);
+        var game = new FarmGame(seed, seconds, weatherMode: WeatherMode.Explicit,
+            terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         return game;
     }

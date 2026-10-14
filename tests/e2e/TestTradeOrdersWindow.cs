@@ -34,6 +34,7 @@ public partial class TestTradeOrdersWindow : Node
     private static Main OpenMain(Node parent)
     {
         Main main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         Click(main, "PauseButton");
         Click(main, "MarketButton");

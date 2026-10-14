@@ -17,6 +17,7 @@ public partial class TestSimulationRateButton : Node
         Vector2I originalSize = parent.GetWindow().Size;
         parent.GetWindow().Size = new Vector2I(1920, 1080);
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+        main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.SetProcess(false);
         try

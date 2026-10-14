@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Godot;
 using FarmExchange.Gameplay;
 using FarmExchange.Land;
@@ -34,7 +35,13 @@ public partial class TestRoadFps : Node
     private string _expectedDate = null!;
     private string _uiAtSampleStart = null!;
 
-    public override void _Ready()
+    public override async void _Ready()
+    {
+        try { await Prepare(); }
+        catch (Exception error) { Fail(error.ToString()); }
+    }
+
+    private async Task Prepare()
     {
         if (DisplayServer.GetName() == "headless") { Fail("道路FPS场景需要真实图形窗口"); return; }
         GetWindow().Size = new Vector2I(1920, 1080);
@@ -43,9 +50,13 @@ public partial class TestRoadFps : Node
         try
         {
             _main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
+            _main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
             AddChild(_main);
         }
         finally { Main.InitialSeed = previousSeed; }
+        await _main.ReadyTask;
+        // 先冻结宿主推进，再真实提交道路并等待正常同步，不把准备帧算入性能采样。
+        _main.SetProcess(false);
         foreach (var space in _main.Game.GetBuildingSpaces()) _main.Game.RemoveBuilding(space.AnchorCell);
         var cross = new List<Vector2I>();
         for (int x = 175; x <= 189; x++) cross.Add(new Vector2I(x, 183));
@@ -58,6 +69,8 @@ public partial class TestRoadFps : Node
             if (!_main.Game.TryPlaceRoads(column, (RoadMaterial)material).Success)
             { Fail("道路FPS五材质纵路夹具失败"); return; }
         }
+        await _main.Game.WaitForNavigationAsync(GetTree());
+        if (!_main.Game.IsNavigationReady) { Fail("道路FPS导航准备未完成"); return; }
         _pause = Find<Button>("PauseButton");
         _pause.EmitSignal(Button.SignalName.Pressed);
         _money = Find<Control>("ResourcesPanel").FindChildren("*", "Label", true, false)
@@ -70,7 +83,6 @@ public partial class TestRoadFps : Node
         var date = _main.Game.Calendar;
         _expectedDate = $"春 · 第 {date.Year} 年 · {date.Month} 月 · {date.Day} 日";
         // 真实Main/UI仍显示；停止其鼠标候选刷新，由本场景提供连续道路操作快照。
-        _main.SetProcess(false);
         _map = _main.GetNode<WorldMap>("WorldMap");
         _map.SyncFromGame();
         _camera = _main.GetNode<Camera2D>("Camera2D");

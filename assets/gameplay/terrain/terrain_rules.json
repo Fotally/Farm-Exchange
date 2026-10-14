@@ -1,0 +1,14 @@
+{
+  "SchemaVersion": 1,
+  "GenerationVersion": 1,
+  "Small": { "Count": 16, "LongAxis": { "Min": 8, "Max": 14 }, "ShortAxis": { "Min": 6, "Max": 10 } },
+  "Medium": { "Count": 24, "LongAxis": { "Min": 18, "Max": 26 }, "ShortAxis": { "Min": 12, "Max": 18 } },
+  "Large": { "Count": 8, "LongAxis": { "Min": 28, "Max": 36 }, "ShortAxis": { "Min": 18, "Max": 24 } },
+  "WaterCoverage": { "Target": 0.08, "Min": 0.06, "Max": 0.10 },
+  "MinimumPondSeparation": 8,
+  "MapEdgeLandWidth": 8,
+  "MaximumOutlinePerturbation": 0.15,
+  "CenterProtection": { "Width": 24, "Height": 24, "ShoreClearance": 2 },
+  "NearPond": { "LongAxis": 10, "ShortAxis": 7, "CenterDistance": { "Min": 14, "Max": 18 } },
+  "WorkerFootRadius": 0.125
+}

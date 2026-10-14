@@ -33,3 +33,5 @@ godot --headless --path . --export-debug 'macOS Dev' build/dev/macos/FarmExchang
 开发窗口入口与使用见[开发窗口接口](../architecture/ui/developer-tools-window/interface-developer-tools-window.md)。编辑器/仓库运行报告写入 `build/test-runs/<run-id>/report.json`；dev 包写入包外 `reports/test-runs/<run-id>/report.json`。Windows 根目录来自 exe，macOS 来自 `.app` 父目录；路径不可写即明确拒绝，不转移到其他位置。
 
 构建验收需核对不同配置实际编译输入和程序集类型、正式包资源排除、dev 包开发脚本存在、真实窗口与流程报告。导出必须等待引擎实际 Exit 0；`savepack` 的完成日志不代表进程已正常结束。Windows 原生窗口探针按物理像素验证1080P时须使用 DPI 感知线程，避免系统缩放将1920×1080虚拟为1280×720。本文描述实际配置和验收方法，最终通过证据由任务计划记录。
+
+#110 四个正式／开发导出预设均在 `include_filter` 显式包含 `assets/gameplay/terrain/terrain_rules.json` 和 `assets/gameplay/terrain/shoreline_templates.json`。它们是地形正式运行资源，不能只依赖编辑器中的文件；PNG 与 shader 沿正常资源依赖导出。导出启动须用默认含水局验证资源完整，不通过开发纯陆地输入绕过生成。

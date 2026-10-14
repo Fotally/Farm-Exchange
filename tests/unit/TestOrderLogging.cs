@@ -48,7 +48,7 @@ public static class TestOrderLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         RemoveFacilities(game);
         Require(game.CreateTradeOrder(Request()).Success, "限价单创建失败");
         Require(Events(text, "OrderWaitChanged").Length == 0, "创建伪造实际等待");
@@ -96,7 +96,7 @@ public static class TestOrderLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         RemoveFacilities(game);
         var conditions = new IReadOnlyList<TradeOrderCondition>[]
         {
@@ -165,7 +165,7 @@ public static class TestOrderLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(3, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(3, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         GameLog context = logging.BindGame(game, 3)!;
         long uptime = 0;
         var orders = new TradeOrderLog(context, game, () => uptime);
@@ -202,7 +202,7 @@ public static class TestOrderLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var groups = Enumerable.Range(0, 20).Select(_ => (IReadOnlyList<TradeOrderCondition>)Enumerable.Range(0, 100)
             .Select(_ => new TradeOrderCondition(TradeConditionFactor.Price, TradeConditionComparison.GreaterOrEqual, 0)).ToArray()).ToArray();
         Require(game.CreateTradeOrder(Request() with { ConditionGroups = groups }).Success, "日志限额拒绝了合法大配置");
@@ -235,7 +235,7 @@ public static class TestOrderLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         RemoveFacilities(game);
         Require(game.CreateTradeOrder(ChangingWaitRequest()).Success, "尾段策略创建失败");
         DriveWaitingChanges(game);
@@ -266,7 +266,7 @@ public static class TestOrderLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(12345, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         RemoveFacilities(game);
         Require(game.CreateTradeOrder(ChangingWaitRequest()).Success, "编辑观察策略创建失败");
         DriveWaitingChanges(game);
@@ -318,9 +318,9 @@ public static class TestOrderLogging
     {
         using var text = new StringWriter();
         using var logging = RuntimeLog.Capture(text);
-        using var first = new FarmGame(31, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var second = new FarmGame(31, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var plain = new FarmGame(31, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var first = new FarmGame(31, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var second = new FarmGame(31, logging, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var plain = new FarmGame(31, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (FarmGame game in new[] { first, second, plain })
         {
             RemoveFacilities(game);
@@ -333,11 +333,11 @@ public static class TestOrderLogging
             Regex.Match(waiting[1], "GameInstanceId: \"([^\"]+)\"").Value, "两局同号订单互相去重");
         Require(first.MoneyCents == plain.MoneyCents && first.FrozenMoneyCents == plain.FrozenMoneyCents &&
             first.GetTradeOrders()[0].WaitingReason == plain.GetTradeOrders()[0].WaitingReason, "日志改变资源或等待业务状态");
-        first.Dispose();
+        first.Log!.Dispose();
         int length = text.ToString().Length;
         first.AdvanceTick();
         first.CreateTradeOrder(Request());
-        Require(text.ToString().Length == length, "局结束后仍输出订单事件");
+        Require(text.ToString().Length == length, "日志观察结束后仍输出订单事件");
     }
 
     private static string[] Lines(StringWriter text) => text.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);

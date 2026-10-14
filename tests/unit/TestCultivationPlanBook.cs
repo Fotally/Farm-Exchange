@@ -27,7 +27,7 @@ public partial class TestCultivationPlanBook : Node
     {
         foreach (CultivationMode? mode in new CultivationMode?[] { null, CultivationMode.Immediate, CultivationMode.PrepareNext })
         {
-            var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit);
+            var game = new FarmGame(12345, weatherMode: WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             Vector2I[] farms = { new(189, 189), new(192, 189), new(195, 189), new(198, 189) };
             if (!game.TryPlace(farms[3], BuildingKind.Farm, CropKind.Radish).Success)
                 return Fail("保留当前轮回归未能建立第四田");
@@ -76,7 +76,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckDraftSchedule()
     {
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var request = Request() with { Name = " " };
         PlotSnapshot plot = game.GetPlot(new Vector2I(189, 189));
         CultivationValidation check = game.CheckCultivationEntries(request.Entries);
@@ -113,7 +113,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckEntryIdentityLifetime()
     {
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
@@ -247,7 +247,7 @@ public partial class TestCultivationPlanBook : Node
                     (check.Error == null || !check.Error.Contains(crop.CropName) || !check.Error.Contains("不适宜季节"))))
                     return Fail("作物条起点未按作物适季定义校验或未说明禁止原因");
             }
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         Vector2I farm = new(189, 189);
         int id = game.CreateCultivationPlan(Request()).Id;
         game.ApplyCultivationPlan(id, new[] { farm });
@@ -366,7 +366,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckManualAndFacade()
     {
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         Vector2I farm = new(189, 189);
         Vector2I other = new(192, 189);
         game.SetFarmCrop(farm, CropKind.Radish);
@@ -412,7 +412,7 @@ public partial class TestCultivationPlanBook : Node
     private static bool CheckSeasonRescue()
     {
         // 春末供水后恰剩约5%的生长周期，换季补救沿用经营收获入库且只收一次。
-        var game = new FarmGame(12345, 4123, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, 4123, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
@@ -441,7 +441,7 @@ public partial class TestCultivationPlanBook : Node
                 if (target == CropKind.Wheat && mode == CultivationMode.Immediate)
                     continue;
                 // 旧轮干田萝卜恰在春夏边界成熟；目标为春末风险条或夏季适宜条。
-                var game = new FarmGame(12345, 4112, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+                var game = new FarmGame(12345, 4112, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
                 foreach (var space in game.GetBuildingSpaces())
                     game.RemoveBuilding(space.AnchorCell);
                 Vector2I farm = new(189, 189);
@@ -492,7 +492,7 @@ public partial class TestCultivationPlanBook : Node
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
         {
             // 第69天的小麦条延伸至第85天；第84天换季促熟时仍在原条内。
-            var game = new FarmGame(12345, 3550, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+            var game = new FarmGame(12345, 3550, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             foreach (var space in game.GetBuildingSpaces())
                 game.RemoveBuilding(space.AnchorCell);
             Vector2I farm = new(189, 189);
@@ -521,7 +521,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckExecutedEntriesAfterEdit()
     {
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
@@ -565,7 +565,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckPreservedRoundDoesNotConsumeEntry()
     {
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces())
             game.RemoveBuilding(space.AnchorCell);
         Vector2I farm = new(189, 189);
@@ -591,7 +591,7 @@ public partial class TestCultivationPlanBook : Node
     {
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
         {
-            var game = new FarmGame(12345, 4319, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+            var game = new FarmGame(12345, 4319, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             foreach (var space in game.GetBuildingSpaces())
                 game.RemoveBuilding(space.AnchorCell);
             Vector2I farm = new(189, 189);
@@ -632,7 +632,7 @@ public partial class TestCultivationPlanBook : Node
         Vector2I farm = new(189, 189);
         foreach (uint start in new[] { 11006u, 6686u, 12000u })
         {
-            var game = new FarmGame(12345, start, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+            var game = new FarmGame(12345, start, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             foreach (var space in game.GetBuildingSpaces())
                 game.RemoveBuilding(space.AnchorCell);
             game.BuildFarm(farm);
@@ -686,7 +686,7 @@ public partial class TestCultivationPlanBook : Node
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
             foreach (int rounds in new[] { 1, 3 })
             {
-                var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+                var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
                 foreach (var space in game.GetBuildingSpaces())
                     game.RemoveBuilding(space.AnchorCell);
                 Vector2I farm = new(189, 189);
@@ -720,7 +720,7 @@ public partial class TestCultivationPlanBook : Node
     {
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
         {
-            var game = new FarmGame(12345, 155, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+            var game = new FarmGame(12345, 155, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             foreach (var space in game.GetBuildingSpaces())
                 game.RemoveBuilding(space.AnchorCell);
             Vector2I farm = new(189, 189);

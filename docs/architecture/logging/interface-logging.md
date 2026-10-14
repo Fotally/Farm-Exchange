@@ -118,7 +118,7 @@
 
 `RuntimeLog.InitializationFailed(error)` 供实际不能初始化的接收点记录 `FatalException`，调用方继续传播原异常。异常文本作为数据转义并有明确预算，不允许注入事件头。
 
-`game.Dispose()` 先封存本局订单等待尾段，再幂等结束局关联，`EndReason=Released`，不会修改经营资源。宿主直接关闭会话时，会话先结束所有仍绑定局（`Shutdown`），再提交 `SessionEnded` 并释放目标。`RuntimeLog.Dispose()` 同样幂等；正常 flush 不保证强杀或断电末条必达。调用示例：
+`game.Log?.Dispose()` 只结束本局日志观察：先封存订单等待、生产与性能尾段，再幂等结束局关联，`EndReason=Released`；不释放经营资源，局仍可正常推进，后续操作不再记录本局事件。`game.Dispose()` 先完成同样的日志关闭，再释放本局地形导航资源；完整局释放后不得继续推进经营或求路，重复释放不会新增结束事件。宿主直接关闭会话时，会话先结束所有仍绑定局的日志观察（`Shutdown`），再提交 `SessionEnded` 并释放输出目标；局拥有者仍负责完整局的释放。`RuntimeLog.Dispose()` 同样幂等；正常 flush 不保证强杀或断电末条必达。调用示例：
 
 ```csharp
 using var log = RuntimeLog.OpenFile(logDirectory, development, environment);

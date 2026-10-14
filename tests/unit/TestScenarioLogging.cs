@@ -56,7 +56,7 @@ public partial class TestScenarioLogging : Node
 
     private static BuyProcessSellScenario Start(string directory, ScenarioConfiguration config, RuntimeLog? log,
         FarmGame? current = null) => BuyProcessSellScenario.Start(config,
-            ScenarioReport.CreateRunDirectory(Path.Combine(directory, "runs")), current, logging: log);
+            ScenarioReport.CreateRunDirectory(Path.Combine(directory, "runs")), current, logging: log, terrainRules: TerrainTestFixtures.AllLandRules);
 
     private static void Advance(BuyProcessSellScenario scenario)
     {
@@ -67,7 +67,7 @@ public partial class TestScenarioLogging : Node
 
     private static FarmGame Current(RuntimeLog log, uint seconds = 0)
     {
-        var game = new FarmGame(12345, seconds, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, seconds, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         Require(game.BuildProcessor(Vector2I.Zero, CropKind.Radish) == null, "现场场地准备失败");
         return game;
@@ -77,20 +77,20 @@ public partial class TestScenarioLogging : Node
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var main = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var main = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         ScenarioConfiguration config = Load(directory);
         string hash = config.Sha256;
         File.WriteAllText(config.SourcePath, "之后的外部修改，不是本次配置");
         try
         {
-            BuyProcessSellScenario.Start(config, Path.Combine(directory, "not-created"), logging: log);
+            BuyProcessSellScenario.Start(config, Path.Combine(directory, "not-created"), logging: log, terrainRules: TerrainTestFixtures.AllLandRules);
             throw new Exception("没有预建目录仍启动了流程");
         }
         catch (DirectoryNotFoundException) { }
         Require(Events(text, "ScenarioStarted").Length == 0 && Events(text, "GameInitialized").Length == 1,
             "目录准备失败后创建流程/独立局");
         string runDirectory = ScenarioReport.CreateRunDirectory(Path.Combine(directory, "runs"));
-        var scenario = BuyProcessSellScenario.Start(config, runDirectory, logging: log);
+        var scenario = BuyProcessSellScenario.Start(config, runDirectory, logging: log, terrainRules: TerrainTestFixtures.AllLandRules);
         using var game = scenario.Game;
         string runId = Path.GetFileName(runDirectory);
         Require(scenario.Report.RunId == runId && !File.Exists(Path.Combine(runDirectory, "report.json")), "RunId未在命令前固定");
@@ -233,11 +233,11 @@ public partial class TestScenarioLogging : Node
         using var log = RuntimeLog.Capture(text);
         foreach (RuntimeLog? observer in new RuntimeLog?[] { log, null })
         {
-            try { using var invalid = new FarmGame(17, observer, (GamePurpose)99, weatherMode: FarmExchange.Weather.WeatherMode.Explicit); throw new Exception("非法用途未拒绝"); }
+            try { using var invalid = new FarmGame(17, observer, (GamePurpose)99, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules); throw new Exception("非法用途未拒绝"); }
             catch (ArgumentOutOfRangeException) { }
         }
         Require(Events(text, "GameInitialized").Length == 0, "非法用途创建了日志局");
-        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var run = game.Log!.Scenario.Begin("adapter-run", "Current", 1, "hash")!;
         run.Finish("Aborted", null);
         run.Finish("Passed", "不得覆盖");
@@ -253,7 +253,7 @@ public partial class TestScenarioLogging : Node
         Directory.CreateDirectory(output);
         using (var log = RuntimeLog.OpenFile(output, true, new LogEnvironment()))
         {
-            using var main = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+            using var main = new FarmGame(12345, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
             var passed = Start(output, Load(directory), log);
             using (passed.Game)
             {

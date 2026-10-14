@@ -41,6 +41,7 @@ public partial class TestLoggingPerformance : Node
 
     public override void _EnterTree()
     {
+        GetNode<Main>("Main").InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         string[] args = OS.GetCmdlineUserArgs();
         _profile = Argument(args, "--profile");
         _workload = Argument(args, "--workload");
@@ -74,7 +75,7 @@ public partial class TestLoggingPerformance : Node
         _main.Driver.SetDevelopmentRate(_requestedRate);
         if (_workload == "trades-multigame")
         {
-            _second = new FarmGame(Seed, _logging, GamePurpose.ScenarioIndependent);
+            _second = new FarmGame(Seed, _logging, GamePurpose.ScenarioIndependent, terrainRules: TerrainTestFixtures.AllLandRules);
             _secondDriver = new(_second.Log?.Time);
         }
         if (_workload == "bounded")

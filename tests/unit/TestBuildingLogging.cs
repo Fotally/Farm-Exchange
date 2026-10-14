@@ -35,7 +35,7 @@ public static class TestBuildingLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         Vector2I[] cells = Enumerable.Range(0, 33).Select(x => new Vector2I(x, 0)).ToArray();
         int length = text.ToString().Length;
         Require(game.CheckRoadPlacement(cells, RoadMaterial.Brick).Allowed && text.ToString().Length == length,
@@ -79,7 +79,7 @@ public static class TestBuildingLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         using var context = log.BindGame(game, 17)!;
         Vector2I[] cells = { new(0, 0) };
         RoadLogOperation place = context.Gameplay.BeginPlaceRoads(cells, RoadMaterial.Gravel)!;
@@ -119,7 +119,7 @@ public static class TestBuildingLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         Vector2I cell = new(10, 10);
         int before = text.ToString().Length;
         Require(game.CheckPlacement(cell, BuildingKind.Farm, CropKind.Wheat, (BuildingOrientation)99).Failure ==
@@ -146,7 +146,7 @@ public static class TestBuildingLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         int originalLength = text.ToString().Length;
         Require(game.CheckPlacement(new(0, 0), BuildingKind.Farm, CropKind.Wheat).Allowed, "合法预览失败");
         Require(text.ToString().Length == originalLength, "预览被记录成提交命令");
@@ -192,7 +192,7 @@ public static class TestBuildingLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var request = new TradeOrderRequest(new(CropKind.Radish, CommodityKind.Raw), TradeOrderSide.Buy,
             TradeOrderFrequency.Once, TradeOrderQuantityMode.Fixed, 0, TradeOrderBudgetMode.FixedBudget,
             4500, 1, CashReserveMode.Amount, 0, new IReadOnlyList<TradeOrderCondition>[]
@@ -224,7 +224,7 @@ public static class TestBuildingLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         game.SetPaused(true);
         Require(game.BuildProcessor(new(0, 0), CropKind.Radish) == null, "旧加工场地创建失败");
@@ -256,13 +256,13 @@ public static class TestBuildingLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var traced = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var traced = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         using var disabledLog = RuntimeLog.Disabled();
-        using var disabled = new FarmGame(17, disabledLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var disabled = new FarmGame(17, disabledLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         using var brokenWriter = new BrokenWriter();
         using var brokenLog = RuntimeLog.Capture(brokenWriter, diagnostic: _ => { });
-        using var broken = new FarmGame(17, brokenLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var plain = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var broken = new FarmGame(17, brokenLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var plain = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var game in new[] { traced, disabled, broken, plain })
         {
             int before = text.ToString().Length;
@@ -297,7 +297,7 @@ public static class TestBuildingLogging
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         using var context = log.BindGame(game, 17)!;
         var building = context.Gameplay.BeginPlace(new(0, 0), BuildingKind.Farm, CropKind.Wheat)!;
         building.Complete(game.TryPlace(new(0, 0), BuildingKind.Farm, CropKind.Wheat));

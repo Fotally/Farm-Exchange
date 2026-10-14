@@ -3,22 +3,39 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text;
 using FarmExchange.Gameplay;
 using FarmExchange.Inventory;
 using FarmExchange.Logging;
 using FarmExchange.Time;
 using FarmExchange.Weather;
+using FarmExchange.Terrain;
 
 string output = Path.GetFullPath(args[0]);
 string weatherRulesPath = Path.GetFullPath(args[1]);
 byte[] weatherRulesBytes = File.ReadAllBytes(weatherRulesPath);
 using var weatherRulesReader = new StreamReader(new MemoryStream(weatherRulesBytes));
 WeatherRules weatherRules = WeatherRules.Parse(weatherRulesReader.ReadToEnd());
+string terrainRulesPath = Path.GetFullPath(args[2]);
+byte[] terrainRulesBytes = File.ReadAllBytes(terrainRulesPath);
+using var terrainRulesReader = new StreamReader(new MemoryStream(terrainRulesBytes));
+JsonObject terrainJson = JsonNode.Parse(terrainRulesReader.ReadToEnd())!.AsObject();
+terrainJson["Small"]!["Count"] = 0;
+terrainJson["Medium"]!["Count"] = 0;
+terrainJson["Large"]!["Count"] = 0;
+terrainJson["WaterCoverage"]!["Target"] = 0;
+terrainJson["WaterCoverage"]!["Min"] = 0;
+terrainJson["WaterCoverage"]!["Max"] = 0;
+byte[] effectiveTerrainBytes = Encoding.UTF8.GetBytes(terrainJson.ToJsonString());
+TerrainRules terrainRules = FarmGame.ParseTerrainRules(Encoding.UTF8.GetString(effectiveTerrainBytes),
+    terrainRulesPath + "（日志门禁显式纯陆地六字段变体）");
 Directory.CreateDirectory(output);
+File.WriteAllBytes(Path.Combine(output, "terrain-all-land.json"), effectiveTerrainBytes);
 using var text = new StringWriter();
-using (var captured = RuntimeLog.Capture(text)) { VerifyGate(captured, weatherRules); VerifyExceptions(captured, weatherRules); }
+using (var captured = RuntimeLog.Capture(text)) { VerifyGate(captured, weatherRules, terrainRules); VerifyExceptions(captured, weatherRules, terrainRules); }
 using (var file = RuntimeLog.OpenFile(Path.Combine(output, "logs"), true, new(BuildKind: "ReleaseProbe")))
-{ VerifyGate(file, weatherRules); VerifyExceptions(file, weatherRules); }
+{ VerifyGate(file, weatherRules, terrainRules); VerifyExceptions(file, weatherRules, terrainRules); }
 File.WriteAllText(Path.Combine(output, "capture.log"), text.ToString());
 if (Directory.Exists(Path.Combine(output, "logs", "debug"))) throw new Exception("真实 Release 允许创建 debug 目标");
 string[] lines = Directory.GetFiles(Path.Combine(output, "logs"), "*.log", SearchOption.AllDirectories)
@@ -36,15 +53,20 @@ File.WriteAllText(Path.Combine(output, "report.json"), JsonSerializer.Serialize(
     Mvid = typeof(RuntimeLog).Module.ModuleVersionId,
     WeatherRulesPath = weatherRulesPath,
     WeatherRulesSha256 = Convert.ToHexString(SHA256.HashData(weatherRulesBytes)),
+    TerrainRulesPath = terrainRulesPath,
+    TerrainRulesSourceSha256 = Convert.ToHexString(SHA256.HashData(terrainRulesBytes)),
+    TerrainRulesEffectiveSha256 = Convert.ToHexString(SHA256.HashData(effectiveTerrainBytes)),
+    TerrainRulesModifiedFields = new[] { "Small.Count=0", "Medium.Count=0", "Large.Count=0",
+        "WaterCoverage.Target=0", "WaterCoverage.Min=0", "WaterCoverage.Max=0" },
     Passed = true,
     Checks = new[] { "实际程序集 Capture 和 OpenFile(true) 强制 Runtime", "开始前不读取有毒范围集合", "生产/加工明细门禁先于状态读取", "真实交易及批量推进正常", "无 debug 文件",
         "真实批量容量/检查点及驱动容量/预算异常保留类型消息堆栈和阶段", "命令传播只记录一次且后续独立操作重新记录", "异常对象原样传播及独立命令终结保留" }
 }, new JsonSerializerOptions { WriteIndented = true }));
 Console.WriteLine("实际 Release 日志门禁通过：" + assembly);
 
-static void VerifyGate(RuntimeLog logging, WeatherRules weatherRules)
+static void VerifyGate(RuntimeLog logging, WeatherRules weatherRules, TerrainRules terrainRules)
 {
-    using var game = new FarmGame(130, logging, weatherRules: weatherRules);
+    using var game = new FarmGame(130, logging, weatherRules: weatherRules, terrainRules: terrainRules);
     if (game.Log!.Diagnostics.Start(new(new PoisonList(), IncludeGameEvents: true)))
         throw new Exception("Release 允许开始专项诊断");
     // 用真正 Release 类型调用快照入口，null 依赖只要被读取即失败；不是 Debug runtime 模式替身。
@@ -59,9 +81,9 @@ static void VerifyGate(RuntimeLog logging, WeatherRules weatherRules)
     if (!result.Success || game.AdvanceTicks(120).AdvancedTicks != 120) throw new Exception("Release 经营执行失败");
 }
 
-static void VerifyExceptions(RuntimeLog logging, WeatherRules weatherRules)
+static void VerifyExceptions(RuntimeLog logging, WeatherRules weatherRules, TerrainRules terrainRules)
 {
-    using var game = new FarmGame(130, logging, weatherRules: weatherRules);
+    using var game = new FarmGame(130, logging, weatherRules: weatherRules, terrainRules: terrainRules);
     var driver = new SimulationDriver(game.Log!.Time);
     game.AdvanceTick();
     Exception capacity = CaptureError(() => game.AdvanceTicks(uint.MaxValue));

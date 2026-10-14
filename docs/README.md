@@ -13,7 +13,7 @@
 - [即时买卖与出售](gameplay/trading/sales.md)：同价买卖、公共库存、完整结算与失败原因。
 - [委托与自动交易](gameplay/trading/orders.md)：多因素条件、两种一次买单、资源冻结、原现金基准保留和 1% 成交费用。
 - [开局与建造](gameplay/land/opening-and-building.md)：预置建筑、建造收费与扩张。
-- [道路铺设与移除](gameplay/land/roads.md)：五材质、两次点击直线／L 形铺设、投影直线拆除、整段提交及连接预览；道路不影响生产和移动。
+- [道路铺设与移除](gameplay/land/roads.md)：五材质、两次点击直线／L 形铺设、投影直线拆除、整段提交及连接预览；工人优先道路选路，速度不变。
 - [地图与操作](gameplay/world/map-and-camera.md)：坐标、选择、镜头与画面含义；窗口和全屏扩大时增加地图视野，保持农田大小。
 - [经营速率与暂停](gameplay/world/simulation-rate.md)：发布0.5×/1×/2×、暂停保留未完成tick进度与工人动画；开发倍率最高16×及现场流程中断语义。
 
@@ -22,6 +22,8 @@
 - [当前系统组织与状态归属](architecture/implementation-system-organization.md)：已落地模块关系和修改入口。
 - [共享 UI 工具](architecture/ui/ui-elements/interface-ui-elements.md)：统一主题、控件构造、金额格式与道路材质中文名称。
 - [天气接口](architecture/weather/interface-weather-system.md)及[预排与循环实现](architecture/weather/implementation-weather-schedule.md)：具名不可变配置、每局组装、自然／显式模式、当前状态、事件距离与快照引用契约，以及配置字段扩展和预排规模调整的维护要求。
+- [地形配置接口](architecture/terrain/interface-terrain-rules.md)：严格 JSON、不可变配置、真实开局保护与纯陆地组合；配置校验不代替地形生成和导航验收。
+- [地形与路线接口](architecture/terrain/interface-terrain-map.md)及[静态地形实现](architecture/terrain/implementation-static-terrain.md)：保守离岸、原生导航与道路区域成本、异步准备、连续路线及资源生命周期。
 - [FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)、[推进顺序](architecture/game-state/farm-game/implementation-tick-order.md)及[等价批量实现](architecture/game-state/farm-game/implementation-batched-simulation.md)：单tick和批量共用相位，平静区间直接累计，真实事件提供稳定检查点。
 - [CropCatalog 接口](architecture/farming/crop-catalog/interface-crop-catalog.md)、[Inventory 接口](architecture/inventory/inventory/interface-inventory.md)与[Wallet 接口](architecture/economy/wallet/interface-wallet.md)：作物定义、分类库存和余额的唯一拥有者。
 - [LandOccupancy 接口](architecture/land/land-occupancy/interface-land-occupancy.md)、[PlacementRules 接口](architecture/land/placement-rules/interface-placement-rules.md)、[FarmingSystem 接口](architecture/farming/farming-system/interface-farming-system.md)、[播种与适季时间规则接口](architecture/farming/planting-rules/interface-planting-rules.md)、[ProcessingSystem 接口](architecture/processing/processing-system/interface-processing-system.md)和[WorkerScheduler 接口](architecture/workers/worker-scheduler/interface-worker-scheduler.md)：地块占用、放置与播种检查、生产状态和三人工人调度。
@@ -66,8 +68,11 @@
 - [Windows 分发与性能证据实现](project/validation-artifacts-proposal.md)：CI／发布共用启动及干净 ZIP 检查，性能失败后保留本次已生成的报告和截图。
 - [GitHub协作](project/contribution-workflow.md)、[PR独立审查skill](../.codex/skills/farm-exchange-review-pr/SKILL.md)、[议题模板](../.github/ISSUE_TEMPLATE/)及[模板来源](research/issue-template-sources.md)：提交PR后先询问是否审查，明确同意才委派。
 - [素材管理](project/asset-organization.md)、[素材来源](project/asset-sources.md)、[清亮v2基准](research/bright-complete-v2.md)。
+- [水域导航的行业实践](research/water-navigation-game-practices.md)：经典游戏的一手资料、成熟导航实现的接入与精度限制；#110 选型依据，尚非功能验收记录。
+- [Godot 原生导航核验](research/godot-water-navigation.md)：净空、保守简化、道路区域成本与原生同步的源码和实验依据；现行调用约定见地形接口。
 - [设施朝向实施范围](project/facility-orientation-proposal.md)：仅建前旋转、每座q0起始、四向资源与随机装饰；道路连接规则由 [#143](https://github.com/Fotally/Farm-Exchange/issues/143) 跟踪。
-- 后续素材与玩法提案：[水域](project/water-terrain-proposal.md)、[采收搬运](project/worker-harvest-transport-proposal.md)、[工人加工](project/worker-processing-proposal.md)。
+- [水域实现与验收](project/water-terrain-proposal.md)：Godot 原生导航、保守简化与道路优先，保留素材核验与历史原型证据。
+- 后续素材与玩法规划：[采收搬运](project/worker-harvest-transport-proposal.md)、[工人加工](project/worker-processing-proposal.md)。
 - [macOS构建](project/macos-build.md)、[本地开发构建](project/development-build.md)、[双平台正式发布](project/release.md)。
 - [参数化开发测试使用说明](project/parameterized-tests-usage.md)：三步操作、配置管理、长期用例、运行结果及报告；协议见[固定流程接口](architecture/development/interface-parameterized-scenario.md)。
 - [运行时日志设计](research/runtime-logging.md)及[schema v1](project/runtime-log-schema-v1.md)：设计依据、模块职责与字段释义；实际采集入口及覆盖范围见[日志接口](architecture/logging/interface-logging.md)，验收步骤见[日志专项验收](architecture/logging/implementation-validation.md)。

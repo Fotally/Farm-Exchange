@@ -25,7 +25,8 @@ public partial class TestParameterizedScenario : Node
         try
         {
             return CheckConfiguration(directory) && CheckIndependent(directory) && CheckCurrent(directory) &&
-                CheckBoundaries(directory) && CheckFailures(directory) && CheckReports(directory);
+                CheckBoundaries(directory) && CheckFailures(directory) && CheckReports(directory) &&
+                CheckNavigationPrecondition(directory);
         }
         catch (Exception error)
         {
@@ -43,6 +44,30 @@ public partial class TestParameterizedScenario : Node
     }
 
 #if DEBUG
+    private static bool CheckNavigationPrecondition(string directory)
+    {
+        using FarmGame game = Current();
+        if (!game.TryPlace(new(10, 10), BuildingKind.Road, default).Success || game.IsNavigationReady)
+            return Fail("当前局同步流程导航前置夹具建路失败");
+        ScenarioConfiguration config = Load(directory, Config("current"));
+        string output = ScenarioReport.CreateRunDirectory(Path.Combine(directory, "runs"));
+        int money = game.MoneyCents;
+        var calendar = game.Calendar;
+        var spaces = game.GetBuildingSpaces();
+        try
+        {
+            BuyProcessSellScenario.Start(config, output, game);
+            return Fail("当前局同步流程在道路准备前仍提交了业务命令");
+        }
+        catch (InvalidOperationException error) when (error.Message.Contains("StartAsync", StringComparison.Ordinal)) { }
+        if (game.MoneyCents != money || game.Calendar != calendar || !ReferenceEquals(spaces, game.GetBuildingSpaces()) ||
+            game.GetRawStock(CropKind.Radish) != 0 || game.GetProductStock(CropKind.Radish) != 0 ||
+            game.GetTradeOrders().Count != 0 || game.GetPlot(Vector2I.Zero).RemainingSeconds != 0 ||
+            game.IsNavigationReady || Directory.GetFileSystemEntries(output).Length != 0)
+            return Fail("同步流程导航前置拒绝改变了业务状态或写入执行结果");
+        return true;
+    }
+
     private static string Config(string target = "independent", int quantity = 1, int processingLimit = 27,
         string date = "01-02-01", string crop = "Radish.Raw", string anchor = "0") =>
         "{\"schemaVersion\":1,\"caseId\":\"test\",\"revision\":1,\"flow\":\"buy-process-sell\"," +
@@ -60,7 +85,7 @@ public partial class TestParameterizedScenario : Node
 
     private static BuyProcessSellScenario Start(string directory, ScenarioConfiguration configuration,
         FarmGame? current = null, int? actualSeed = null) => BuyProcessSellScenario.Start(configuration,
-            ScenarioReport.CreateRunDirectory(Path.Combine(directory, "runs")), current, actualSeed);
+            ScenarioReport.CreateRunDirectory(Path.Combine(directory, "runs")), current, actualSeed, terrainRules: TerrainTestFixtures.AllLandRules);
 
     private static bool CheckConfiguration(string directory)
     {
@@ -198,7 +223,7 @@ public partial class TestParameterizedScenario : Node
 
     private static FarmGame Current(uint ticks = 0)
     {
-        var game = new FarmGame(12345, ticks, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, ticks, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var cells = new List<Vector2I>();
         foreach (var space in game.GetBuildingSpaces()) cells.Add(space.AnchorCell);
         foreach (var cell in cells) game.RemoveBuilding(cell);
@@ -294,7 +319,7 @@ public partial class TestParameterizedScenario : Node
         if (scenario.Outcome != ScenarioOutcome.PreconditionsRejected || scenario.Report.Operations.Count != 0)
             return Fail("独立场地非法占地未正常拒绝");
         ScenarioConfiguration current = Load(directory, Config("current"));
-        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(12345, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         scenario = Start(directory, current, game);
         if (scenario.Outcome != ScenarioOutcome.PreconditionsRejected || scenario.Report.Operations.Count != 0)
             return Fail("现场目标不存在仍买入");
@@ -350,7 +375,7 @@ public partial class TestParameterizedScenario : Node
             ScenarioReport.ResolveRoot("ignored", Path.Combine(directory, "Game.app", "Contents", "MacOS", "FarmExchange"), true) != Path.Combine(directory, "reports", "test-runs"))
             return Fail("报告路径依赖工作目录或写进.app");
         string output = ScenarioReport.CreateRunDirectory(root);
-        var scenario = BuyProcessSellScenario.Start(Load(directory, Config()), output);
+        var scenario = BuyProcessSellScenario.Start(Load(directory, Config()), output, terrainRules: TerrainTestFixtures.AllLandRules);
         try { scenario.WriteReport(); return Fail("运行中写了最终报告"); }
         catch (InvalidOperationException) { }
         Advance(Driver(scenario), scenario);

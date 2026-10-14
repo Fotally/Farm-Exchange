@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Godot;
+using FarmExchange.Terrain;
 using FarmExchange.Gameplay;
 using FarmExchange.Workers;
 using Microsoft.Extensions.Logging;
@@ -39,13 +39,13 @@ internal sealed class WorkerDiagnostics
         });
     }
 
-    internal void Moved(int number, Vector2 before, Vector2 after)
+    internal void Moved(int number, LandPosition before, LandPosition after)
     {
         if (before == after || !CanObserveMove(number)) return;
         CaptureMoved(number, before, after);
     }
 
-    private void CaptureMoved(int number, Vector2 before, Vector2 after)
+    private void CaptureMoved(int number, LandPosition before, LandPosition after)
     {
         _context.Observe(() =>
         {
@@ -62,7 +62,7 @@ internal sealed class WorkerDiagnostics
         ["X"] = index.Value % FarmGame.MapSize,
         ["Y"] = index.Value / FarmGame.MapSize,
     } : null;
-    private static Dictionary<string, object?> Position(Vector2 position) => new() { ["X"] = position.X, ["Y"] = position.Y };
+    private static Dictionary<string, object?> Position(LandPosition position) => new() { ["X"] = position.X, ["Y"] = position.Y };
 }
 
 internal readonly record struct WorkerTaskDiagnosticState(WorkerActivity Activity, int? AnchorIndex);

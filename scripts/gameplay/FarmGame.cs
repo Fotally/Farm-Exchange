@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Threading;
 using Godot;
 using FarmExchange.Cultivation;
 using FarmExchange.Economy;
@@ -10,6 +12,7 @@ using FarmExchange.Logging;
 using FarmExchange.Market;
 using FarmExchange.Processing;
 using FarmExchange.Time;
+using FarmExchange.Terrain;
 using FarmExchange.Trading;
 using FarmExchange.Workers;
 using FarmExchange.Weather;
@@ -70,8 +73,12 @@ public sealed class FarmGame : IDisposable
     private readonly FarmingSystem _farming;
     private readonly WeatherSystem _weather;
     private readonly ProcessingSystem _processing = new(CellCount);
-    private readonly WorkerScheduler _workerScheduler = new(
-        Array.ConvertAll(InitialFarmCells, cell => BuildingFootprint.WorkCell(cell, BuildingKind.Farm)));
+    private readonly WorkerScheduler _workerScheduler;
+
+    /**
+     * <summary>本局创建时完整生成的不可变权威地形。</summary>
+     */
+    public TerrainMap Terrain { get; }
     private readonly GoodsInventory _inventory = new();
     private readonly Wallet _wallet = new(5000);
     private readonly MarketQuotes _market;
@@ -82,6 +89,11 @@ public sealed class FarmGame : IDisposable
     private readonly List<ProductionResult> _presentationResults = new();
     private IReadOnlyList<ProductionResult>? _presentationSnapshot;
     private readonly GameLog? _log;
+    private readonly CancellationTokenSource _navigationCancellation = new();
+    private Task? _navigationTask;
+    private ulong _roadVersion;
+    private ulong _preparedRoadVersion;
+    private bool _disposed;
 
     public int MoneyCents => _wallet.BalanceCents;
     public int AvailableMoneyCents => _wallet.AvailableCents;
@@ -89,6 +101,50 @@ public sealed class FarmGame : IDisposable
     public int CurrentDay => (int)_calendar.Snapshot.ElapsedDays + 1;
     public CalendarSnapshot Calendar => _calendar.Snapshot;
     public bool IsPaused => _calendar.IsPaused;
+
+    /**
+     * <summary>本局道路成本已与最新成功建拆同步，可推进经营。</summary>
+     */
+    public bool IsNavigationReady => !_disposed && _roadVersion == _preparedRoadVersion && Terrain.IsNavigationReady;
+
+    /**
+     * <summary>等待最新道路成本完成原生同步，合并同一局的并发等待。</summary>
+     * <param name="tree">接收原生导航同步的活动场景树。</param>
+     * <param name="cancellationToken">仅取消本调用的等待；释放局会取消实际准备。</param>
+     * <returns>最新已提交道路就绪的任务；失败原样传播，不回退旧地图。</returns>
+     * <remarks>准备期间可继续建拆，完成前会处理最新土地快照；不推进时间或重置已领取行程。</remarks>
+     */
+    public Task WaitForNavigationAsync(SceneTree tree, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(tree);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (IsNavigationReady) return Task.CompletedTask;
+        if (_navigationTask == null || _navigationTask.IsCompletedSuccessfully)
+            _navigationTask = PrepareRoadNavigationAsync(tree);
+        return cancellationToken.CanBeCanceled ? _navigationTask.WaitAsync(cancellationToken) : _navigationTask;
+    }
+
+    private async Task PrepareRoadNavigationAsync(SceneTree tree)
+    {
+        CancellationToken cancellationToken = _navigationCancellation.Token;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ulong version = _roadVersion;
+            await Terrain.UpdateRoadsAsync(_occupancy.Instances, tree, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _preparedRoadVersion = version;
+        }
+        while (_preparedRoadVersion != _roadVersion);
+    }
+
+    private void RequireNavigationReady()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!IsNavigationReady)
+            throw new InvalidOperationException("道路导航尚未准备完成，请先等待 WaitForNavigationAsync");
+    }
 
     /**
      * <summary>读取当前真实活动天气区域，不提供未来预排表。</summary>
@@ -131,36 +187,125 @@ public sealed class FarmGame : IDisposable
         (double)GetQuote(new CommodityId(CropKind.Wheat, CommodityKind.Product)).ChangePercent;
 
     /**
-     * <summary>创建真实中心设施与报价，并在日志启用时记录初始化基线。</summary>
+     * <summary>同步创建显式纯陆地局；含水局须使用 CreateAsync 等待原生导航就绪。</summary>
      * <param name="marketSeed">报价与初始设施随机种子；省略时沿用原随机来源。</param>
      * <param name="logging">组装点持有的采集会话；省略时不采集或写文件。</param>
      * <param name="purpose">本局的真实用途，默认玩家主局。</param>
      * <param name="weatherMode">默认自然预排；开发／测试可选显式区域模式，创建后不切换。</param>
      * <param name="weatherRules">本局已验证不可变天气配置；省略时在此组装点选择正式 Default，创建后不替换。</param>
+     * <param name="terrainRules">显式纯陆地有效配置；默认含水配置不能同步创建。</param>
      * <remarks>日志不拥有经营资源；调用方先释放局再关闭会话。</remarks>
      */
-    public FarmGame(int? marketSeed = null, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null) : this(marketSeed, 0, logging, purpose, weatherMode, weatherRules) { }
+    public FarmGame(int? marketSeed = null, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null, TerrainRules? terrainRules = null) : this(marketSeed, 0, logging, purpose, weatherMode, weatherRules, terrainRules) { }
 
-    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null)
+    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null, TerrainRules? terrainRules = null)
+        : this(CreateSynchronousTerrain(marketSeed, terrainRules, purpose), elapsedSeconds, logging, purpose, weatherMode, weatherRules) { }
+
+    /**
+     * <summary>完整生成地形并等待原生导航同步后创建经营局，不发布可提前推进的半成品。</summary>
+     * <param name="tree">接收原生导航同步帧的活动场景树。</param>
+     * <param name="marketSeed">报价与开局种子；省略时选择新的随机种子。</param>
+     * <param name="logging">组装点持有的日志会话。</param>
+     * <param name="purpose">本局用途。</param>
+     * <param name="weatherMode">本局固定天气模式。</param>
+     * <param name="weatherRules">显式天气配置；省略时选择正式配置。</param>
+     * <param name="terrainRules">显式地形配置；省略时重新读取正式含水配置。</param>
+     * <param name="cancellationToken">宿主退出时取消等待，不发布或绑定新的经营局。</param>
+     * <returns>地形、工人和开局设施完整就绪的局；失败直接传播且不替换地图。</returns>
+     */
+    public static async Task<FarmGame> CreateAsync(SceneTree tree, int? marketSeed = null,
+        RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main,
+        WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null, TerrainRules? terrainRules = null,
+        CancellationToken cancellationToken = default)
     {
         if (purpose is not (GamePurpose.Main or GamePurpose.ScenarioIndependent))
             throw new ArgumentOutOfRangeException(nameof(purpose));
-        _calendar = new GameCalendar(elapsedSeconds);
         int seed = marketSeed ?? Random.Shared.Next();
-        _farming = new FarmingSystem(CellCount, seed);
-        _weather = new WeatherSystem(seed, weatherRules ?? WeatherRules.Default, weatherMode, elapsedSeconds);
-        _cultivation = new CultivationPlanBook(_farming);
-        _market = new MarketQuotes(seed, _calendar.Snapshot.ElapsedDays);
-        _trading = new TradingService(_inventory, _wallet, _market);
-        _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
-        InitializeCenter(new Random(seed));
-        _log = logging?.BindGame(this, seed, collectProduction: true, purpose);
-        _tradeOrders.AttachLog(_log?.Orders);
-        _trading.SetLogging(_log?.Trading);
-        _farming.Diagnostics = _log?.ProductionDiagnostics;
-        _processing.Diagnostics = _log?.ProductionDiagnostics;
-        _workerScheduler.Diagnostics = _log?.WorkerDiagnostics;
+        TerrainRules rules = terrainRules ?? LoadTerrainRules(TerrainRules.ResourcePath);
+        rules.ValidateContext(MapSize, OpeningFootprintCells(), InitialWorkerPositions());
+        TerrainMap terrain = await TerrainMap.CreateAsync(seed, rules, tree, cancellationToken);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            terrain.Dispose();
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        return new FarmGame((seed, terrain), 0, logging, purpose, weatherMode, weatherRules);
     }
+
+    private static (int Seed, TerrainMap Map) CreateSynchronousTerrain(int? marketSeed, TerrainRules? terrainRules, GamePurpose purpose)
+    {
+        if (purpose is not (GamePurpose.Main or GamePurpose.ScenarioIndependent))
+            throw new ArgumentOutOfRangeException(nameof(purpose));
+        if (terrainRules == null || !terrainRules.IsAllLand)
+            throw new InvalidOperationException("同步建局必须显式提供纯陆地配置；默认含水局请使用 CreateAsync");
+        int seed = marketSeed ?? Random.Shared.Next();
+        TerrainRules rules = terrainRules;
+        rules.ValidateContext(MapSize, OpeningFootprintCells(), InitialWorkerPositions());
+        return (seed, TerrainMap.Create(seed, rules));
+    }
+
+    private FarmGame((int Seed, TerrainMap Map) prepared, uint elapsedSeconds, RuntimeLog? logging,
+        GamePurpose purpose, WeatherMode weatherMode, WeatherRules? weatherRules)
+    {
+        int seed = prepared.Seed;
+        Terrain = prepared.Map;
+        try
+        {
+            _calendar = new GameCalendar(elapsedSeconds);
+            _workerScheduler = new WorkerScheduler(Terrain,
+                Array.ConvertAll(InitialFarmCells, cell => BuildingFootprint.WorkCell(cell, BuildingKind.Farm)));
+            _farming = new FarmingSystem(CellCount, seed);
+            _weather = new WeatherSystem(seed, weatherRules ?? WeatherRules.Default, weatherMode, elapsedSeconds);
+            _cultivation = new CultivationPlanBook(_farming);
+            _market = new MarketQuotes(seed, _calendar.Snapshot.ElapsedDays);
+            _trading = new TradingService(_inventory, _wallet, _market);
+            _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
+            InitializeCenter(new Random(seed));
+            _log = logging?.BindGame(this, seed, collectProduction: true, purpose);
+            _tradeOrders.AttachLog(_log?.Orders);
+            _trading.SetLogging(_log?.Trading);
+            _farming.Diagnostics = _log?.ProductionDiagnostics;
+            _processing.Diagnostics = _log?.ProductionDiagnostics;
+            _workerScheduler.Diagnostics = _log?.WorkerDiagnostics;
+        }
+        catch
+        {
+            Terrain.Dispose();
+            throw;
+        }
+    }
+
+    /**
+     * <summary>使用真实地图、开局完整占地及工人起点读取并验证地形配置。</summary>
+     * <param name="source">Godot 可读取的完整 JSON 路径。</param>
+     * <returns>不可变有效配置；失败直接抛出带来源的配置错误。</returns>
+     */
+    public static TerrainRules LoadTerrainRules(string source) =>
+        TerrainRules.Load(source, MapSize, OpeningFootprintCells(), InitialWorkerPositions());
+
+    /**
+     * <summary>按正式建局相同约束解析显式地形 JSON。</summary>
+     * <param name="json">包含所有必填字段的完整 JSON。</param>
+     * <param name="source">错误定位用来源。</param>
+     * <returns>不可变有效配置；不补值或替换配置。</returns>
+     */
+    public static TerrainRules ParseTerrainRules(string json, string source) =>
+        TerrainRules.Parse(json, source, MapSize, OpeningFootprintCells(), InitialWorkerPositions());
+
+    private static IReadOnlyList<Vector2I> OpeningFootprintCells()
+    {
+        var cells = new List<Vector2I>();
+        foreach (Vector2I anchor in InitialFarmCells)
+            foreach (Vector2I offset in BuildingFootprint.Get(BuildingKind.Farm).Offsets)
+                cells.Add(anchor + offset);
+        foreach (Vector2I anchor in InitialProcessorCells)
+            foreach (Vector2I offset in BuildingFootprint.Get(BuildingKind.Processor).Offsets)
+                cells.Add(anchor + offset);
+        return cells;
+    }
+
+    private static Vector2[] InitialWorkerPositions() => Array.ConvertAll(InitialFarmCells,
+        cell => (Vector2)BuildingFootprint.WorkCell(cell, BuildingKind.Farm));
 
     private void InitializeCenter(Random random)
     {
@@ -196,6 +341,24 @@ public sealed class FarmGame : IDisposable
         _ => throw new ArgumentOutOfRangeException(nameof(building)),
     };
     public IReadOnlyList<WorkerSnapshot> GetWorkers() => _workerScheduler.GetSnapshots();
+
+    /**
+     * <summary>只读重验真实移动记录的目标和任务凭据，供表现立即停止已取消的路线。</summary>
+     * <param name="movement">经营工人快照提供的最近完整秒移动记录。</param>
+     * <returns>目标仍是原农田且原版本、原动作仍有效；到达秒不要求仍处于移动状态。</returns>
+     */
+    public bool IsWorkerMovementCurrent(WorkerMovementSnapshot movement)
+    {
+        Vector2I anchor = movement.TargetCell - BuildingFootprint.Get(BuildingKind.Farm).WorkOffset;
+        if (!MapCoordinates.ContainsCell(anchor) || movement.WorkActivity is not (WorkerActivity.Sowing or WorkerActivity.Watering))
+            return false;
+        int index = IndexOf(anchor);
+        if (_occupancy.Get(index) != BuildingKind.Farm || _occupancy.ResolveAnchorIndex(index) != index)
+            return false;
+        FarmWorkKind kind = movement.WorkActivity == WorkerActivity.Sowing ? FarmWorkKind.Sow : FarmWorkKind.Water;
+        return movement.Work.CellIndex == index && movement.Work.Kind == kind &&
+            _farming.GetWorkNeed(index, Calendar) == movement.Work;
+    }
     /**
      * <summary>读取按锚点升序排列的当前建筑空间快照。</summary>
      * <remarks>原样转发土地模块的不可变快照；占地未变复用引用，成功建拆后发布新快照，旧对象不变；生产和天气变化不使占地快照失效。</remarks>
@@ -334,6 +497,12 @@ public sealed class FarmGame : IDisposable
 
     internal void FillWorldForBenchmark()
     {
+        if (!Terrain.IsAllLand)
+            throw new InvalidOperationException("满图基准要求建局时显式选择纯陆地配置，不能替换当前地形");
+        RequireNavigationReady();
+        foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
+            if (space.Building == BuildingKind.Road)
+                throw new InvalidOperationException("满图基准要求先拆除全部道路并等待导航准备完成");
         _log?.Production?.UnregisteredMutation();
         _cultivation.Clear();
         _occupancy.Clear();
@@ -384,7 +553,7 @@ public sealed class FarmGame : IDisposable
             foreach (Vector2I offset in space.Footprint.Offsets)
             {
                 Vector2I cell = space.AnchorCell + offset;
-                if (!MapCoordinates.ContainsCell(cell) || _occupancy.GetSpace(IndexOf(cell)) != space)
+                if (!MapCoordinates.ContainsCell(cell) || !Terrain.IsFullLand(cell) || _occupancy.GetSpace(IndexOf(cell)) != space)
                     return false;
                 expectedOccupiedCells++;
             }
@@ -422,7 +591,7 @@ public sealed class FarmGame : IDisposable
     {
         if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
             return new PlacementCheck(LandFailure.InvalidBuilding, 0);
-        return PlacementRules.Check(cell, building, crop, _occupancy, _wallet.AvailableCents,
+        return PlacementRules.Check(cell, building, crop, _occupancy, Terrain, _wallet.AvailableCents,
             GetBuildingCostCents(building), orientation);
     }
 
@@ -494,6 +663,9 @@ public sealed class FarmGame : IDisposable
         foreach (Vector2I cell in cells)
             if (_occupancy.Get(IndexOf(cell)) != BuildingKind.None)
                 return new(LandFailure.Occupied, cells.Count, cost);
+        foreach (Vector2I cell in cells)
+            if (!Terrain.IsFullLand(cell))
+                return new(LandFailure.Water, cells.Count, cost);
         return new(_wallet.AvailableCents < cost ? LandFailure.InsufficientFunds : LandFailure.None,
             cells.Count, cost);
     }
@@ -524,6 +696,7 @@ public sealed class FarmGame : IDisposable
                     throw new InvalidOperationException("道路检查与扣费状态不一致");
                 foreach (Vector2I cell in cells)
                     _occupancy.Place(IndexOf(cell), BuildingKind.Road, roadMaterial: material);
+                _roadVersion++;
                 result = new(LandFailure.None, cells.Count, check.CostCents);
             }
         }
@@ -573,6 +746,7 @@ public sealed class FarmGame : IDisposable
                 {
                     foreach (BuildingSpaceSnapshot road in roads)
                         _occupancy.Remove(road.AnchorIndex);
+                    _roadVersion++;
                     result = new(LandFailure.None, roads.Count);
                 }
             }
@@ -858,6 +1032,7 @@ public sealed class FarmGame : IDisposable
                 break;
         }
         _occupancy.Remove(index);
+        if (building == BuildingKind.Road) _roadVersion++;
         _presentationResults.RemoveAll(result => IndexOf(result.AnchorCell) == index);
         _presentationSnapshot = null;
         return null;
@@ -865,6 +1040,7 @@ public sealed class FarmGame : IDisposable
 
     public TickResult AdvanceTick()
     {
+        RequireNavigationReady();
         using var observation = _log?.Simulation.BeginTick();
         _log?.Production?.BeginAdvance();
         bool completed = false;
@@ -904,6 +1080,7 @@ public sealed class FarmGame : IDisposable
      */
     public SimulationAdvanceResult AdvanceTicks(uint maxTicks, Func<SimulationCheckpoint, bool>? checkpoint = null)
     {
+        RequireNavigationReady();
         using var observation = _log?.Simulation.BeginBatch();
         long? started = _log?.Performance?.BeginBatch();
         _log?.Production?.BeginAdvance();
@@ -972,8 +1149,9 @@ public sealed class FarmGame : IDisposable
             if (checkpoint != null)
             {
                 observation?.EnterPhase(SimulationLogPhase.Checkpoint);
-                if (!checkpoint(new SimulationCheckpoint(
-                    advanced, interval, Calendar.ElapsedSeconds, result, isEvent)))
+                bool keepGoing = checkpoint(new SimulationCheckpoint(
+                    advanced, interval, Calendar.ElapsedSeconds, result, isEvent));
+                if (!keepGoing || !IsNavigationReady)
                     return new(advanced, harvested, produced, workerActed, dayAdvanced, true, quiet, events);
             }
             interval = 0;
@@ -1016,7 +1194,7 @@ public sealed class FarmGame : IDisposable
             else if (space.Building == BuildingKind.Processor)
                 _processing.AdvanceQuietSeconds(space.AnchorIndex, seconds);
         }
-        _workerScheduler.AdvanceQuietSeconds(seconds);
+        _workerScheduler.AdvanceQuietSeconds(seconds, _calendar.Snapshot.ElapsedSeconds);
         observation?.EnterPhase(SimulationLogPhase.Calendar);
         if (!_calendar.TryAdvanceSeconds(seconds))
             throw new InvalidOperationException("模拟时间已达到上限");
@@ -1203,10 +1381,18 @@ public sealed class FarmGame : IDisposable
     }
 
     /**
-     * <summary>结束本局日志关联；重复释放不产生第二条结束事件。</summary>
-     * <remarks>经营状态保持原有唯一拥有者，释放不修改资金、库存或生产。</remarks>
+     * <summary>结束本局日志关联并释放地形导航资源；可重复调用。</summary>
+     * <remarks>释放后不得继续推进经营或求路。仅结束日志观察时调用 Log.Dispose；资金、库存和生产数据不变。</remarks>
      */
-    public void Dispose() => _log?.Dispose();
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _navigationCancellation.Cancel();
+        _log?.Dispose();
+        Terrain.Dispose();
+        _navigationCancellation.Dispose();
+    }
 
     /**
      * <summary>按执行时报价完整卖出指定数量，观察真实提交结果。</summary>
@@ -1385,7 +1571,7 @@ public sealed class FarmGame : IDisposable
 
     private void PlaceInitial(Vector2I cell, BuildingKind building, CropKind crop)
     {
-        PlacementCheck check = PlacementRules.Check(cell, building, crop, _occupancy,
+        PlacementCheck check = PlacementRules.Check(cell, building, crop, _occupancy, Terrain,
             _wallet.BalanceCents, 0);
         if (!check.Allowed)
             throw new InvalidOperationException("开局建筑放置无效");
@@ -1428,6 +1614,7 @@ public sealed class FarmGame : IDisposable
                 break;
             case BuildingKind.Road:
                 _occupancy.Place(index, BuildingKind.Road, orientation);
+                _roadVersion++;
                 break;
         }
     }

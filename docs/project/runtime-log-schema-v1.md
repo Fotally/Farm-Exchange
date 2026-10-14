@@ -331,7 +331,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | 字段 | 类型/单位 | 含义 |
 | --- | --- | --- |
 | `RuleKind` | `Placement/Planting/Trade` | 所执行的规则检查类别 |
-| `CheckResults` | 字符串→布尔字典 | 稳定检查项是否通过；Placement 为 Building/Crop/Bounds/Occupancy/Funds，并可选新增 Orientation（在 Crop 后、Bounds 前），道路不执行 Crop；非法朝向后省略 Bounds/Occupancy/Funds。Planting 为 Season/Time，Trade 为 Commodity/Quantity/Funds/Stock/Capacity/Reserve；未执行项省略，不写 false 冒充检查失败 |
+| `CheckResults` | 字符串→布尔字典 | 稳定检查项是否通过；Placement 为 Building/Crop/Orientation/Bounds/Occupancy/Terrain/Funds，道路不执行 Crop；朝向拒绝后省略后续项，占用拒绝不检查 Terrain，含水拒绝为 Terrain=false 且省略 Funds。Planting 为 Season/Time，Trade 为 Commodity/Quantity/Funds/Stock/Capacity/Reserve；未执行项省略，不写 false 冒充检查失败 |
 | `ProductionKind` | `Farm/Processor` | 状态来自农田还是加工场地 |
 | `StateBefore`、`StateAfter` | 状态字符串 | Farm 使用 CropStage 的 `None/Seeded/Growing`；Processor 使用详情状态 `WaitingForRaw/Processing/WaitingForReserve/ReadyToProcess`，分别为待原料/加工中/因底线等待/具备领取条件 |
 | `HasWaterBefore`、`HasWaterAfter` | 布尔 | 农田本轮供水状态；加工场地省略 |
@@ -341,7 +341,7 @@ Debug 的上下文、资金和库存字段仍遵循上面的定义。尚未逐�
 | `WorkerNumber` | 正整数 | 现有工人编号，见上文 |
 | `ActivityBefore`、`ActivityAfter` | 工人活动枚举 | `Idle/Moving/Sowing/Watering`＝空闲/移动/播种/浇水；不是任务成功/失败结果 |
 | `TargetAnchorBefore`、`TargetAnchorAfter` | 锚点或 null | 认领的农田实例锚点，不是实际工作中心格；输入 WorkerSnapshot.TargetCell 须先按实际含义核对转换 |
-| `PositionBefore`、`PositionAfter` | `{ X, Y }` 小数对象，基础格单位 | 工人经营快照格位置，不是屏幕像素、地图本地像素或视觉插值位置 |
+| `PositionBefore`、`PositionAfter` | `{ X, Y }` 小数对象，基础格单位 | 权威 double 连续经营位置，变化判断使用该坐标而非 Vector2 显示投影；不是屏幕像素、地图本地像素或视觉插值位置 |
 | `Conditions` | 评估对象二维数组 | 对应原 ConditionGroups，每项 Factor/Comparison/Value 含义同配置，额外 `Actual` 是本次实际数值（同 Value 单位）、`Satisfied` 是布尔；按原组/项顺序对应 |
 | `ConfiguredConditionGroupCount` | 非负 int32 | 原订单配置的条件组总数，不把未访问组当成已执行 |
 | `EvaluatedConditionGroupCount`、`EvaluatedConditionCount` | 非负 int32、非负 int64 | 原短路路径实际访问的组数及实际求值条件总数；后续未访问 OR 组不属于日志截断 |

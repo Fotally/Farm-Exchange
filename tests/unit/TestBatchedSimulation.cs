@@ -364,8 +364,8 @@ public partial class TestBatchedSimulation : Node
         timer.Stop();
         Compare(measuredReference, measuredBatch);
         GD.Print($"空局整年纯数据耗时：逐秒 {referenceMs:F3} ms，批量 {batchMs:F3} ms");
-        FarmGame fullReference = new(112);
-        FarmGame fullBatched = new(112);
+        FarmGame fullReference = new(112, terrainRules: TerrainTestFixtures.AllLandRules);
+        FarmGame fullBatched = new(112, terrainRules: TerrainTestFixtures.AllLandRules);
         fullReference.FillWorldForBenchmark();
         fullBatched.FillWorldForBenchmark();
         SimulationAdvanceResult full = CompareAdvance(fullReference, fullBatched, 50);
@@ -462,7 +462,7 @@ public partial class TestBatchedSimulation : Node
 
     private static FarmGame EmptyGame(int seed, uint seconds = 0)
     {
-        var game = new FarmGame(seed, seconds, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        var game = new FarmGame(seed, seconds, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces().ToArray())
             game.RemoveBuilding(space.AnchorCell);
         return game;

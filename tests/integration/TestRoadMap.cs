@@ -17,7 +17,7 @@ public partial class TestRoadMap : Node
     public static async Task<bool> RunChecksAsync(Node parent)
     {
         if (!TestRoadAppearance.CheckAllMasks()) return false;
-        var game = new FarmGame(12345);
+        var game = new FarmGame(12345, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
         var scope = new Node2D();
         parent.AddChild(scope);

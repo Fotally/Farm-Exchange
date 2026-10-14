@@ -28,8 +28,8 @@ public static class TestMarketLogging
     {
         using var output = new StringWriter();
         using var log = RuntimeLog.Capture(output);
-        using var traced = new FarmGame(24680, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var plain = new FarmGame(24680, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var traced = new FarmGame(24680, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var plain = new FarmGame(24680, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         bool delayed = false, early = false, crossedYear = false;
         for (int period = 0; period < 26; period++)
         {
@@ -100,8 +100,8 @@ public static class TestMarketLogging
     {
         using var output = new StringWriter();
         using var log = RuntimeLog.Capture(output);
-        using var first = new FarmGame(17, SecondsAtDay(100), log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var second = new FarmGame(17, SecondsAtDay(100), log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var first = new FarmGame(17, SecondsAtDay(100), log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var second = new FarmGame(17, SecondsAtDay(100), log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         Require(MarketLines(output.ToString()).Length == 0, "初始化补造历史行情事件");
         first.SetPaused(true);
         first.AdvanceTicks(1000);
@@ -118,11 +118,11 @@ public static class TestMarketLogging
         first.SetPaused(false);
         AdvanceToDay(first, 112);
         Require(MarketLines(output.ToString()).Length == 16, "恢复后行情没有只提交一次");
-        first.Dispose();
+        first.Log!.Dispose();
         int count = MarketLines(output.ToString()).Length;
         AdvanceToDay(first, 140);
-        Require(MarketLines(output.ToString()).Length == count, "已结束局仍记录行情");
-        using var prepared = new FarmGame(17, SecondsAtDay(111), log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        Require(MarketLines(output.ToString()).Length == count, "日志观察结束后仍记录行情");
+        using var prepared = new FarmGame(17, SecondsAtDay(111), log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         Require(MarketLines(output.ToString()).Length == count, "初始化公告中间态补发过去公告");
         AdvanceToDay(prepared, 112);
         string[] preparedUpdates = MarketLines(output.ToString()).Skip(count).ToArray();
@@ -138,9 +138,9 @@ public static class TestMarketLogging
         using var batchLog = RuntimeLog.Capture(batchText);
         using var steppedLog = RuntimeLog.Capture(steppedText);
         using var failedLog = RuntimeLog.Capture(failedText, diagnostic: _ => { });
-        using var batch = new FarmGame(29, batchLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var stepped = new FarmGame(29, steppedLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var failed = new FarmGame(29, failedLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var batch = new FarmGame(29, batchLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var stepped = new FarmGame(29, steppedLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var failed = new FarmGame(29, failedLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         uint ticks = SecondsAtDay(28);
         batch.AdvanceTicks(ticks);
         failed.AdvanceTicks(ticks);

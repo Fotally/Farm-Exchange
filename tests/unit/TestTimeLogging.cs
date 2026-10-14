@@ -27,7 +27,7 @@ public partial class TestTimeLogging : Node
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         game.SetPaused(false);
         game.SetPaused(true);
         game.SetPaused(true);
@@ -49,7 +49,7 @@ public partial class TestTimeLogging : Node
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var driver = new SimulationDriver(game.Log!.Time);
         driver.Advance(0.25, game);
         game.SetPaused(true);
@@ -95,7 +95,7 @@ public partial class TestTimeLogging : Node
     {
         using var text = new StringWriter();
         using var log = RuntimeLog.Capture(text);
-        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var game = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         var pause = game.Log!.Time.BeginPause(true)!;
         pause.Faulted(new InvalidOperationException("原暂停异常"));
         pause.Complete(true);
@@ -122,10 +122,10 @@ public partial class TestTimeLogging : Node
         using var disabled = RuntimeLog.Disabled();
         using var brokenWriter = new BrokenWriter();
         using var brokenLog = RuntimeLog.Capture(brokenWriter, diagnostic: _ => { });
-        using var traced = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var muted = new FarmGame(17, disabled, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var broken = new FarmGame(17, brokenLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
-        using var plain = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit);
+        using var traced = new FarmGame(17, log, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var muted = new FarmGame(17, disabled, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var broken = new FarmGame(17, brokenLog, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
+        using var plain = new FarmGame(17, weatherMode: FarmExchange.Weather.WeatherMode.Explicit, terrainRules: TerrainTestFixtures.AllLandRules);
         foreach (var game in new[] { traced, muted, broken, plain })
         {
             var driver = new SimulationDriver(game.Log?.Time);
