@@ -16,7 +16,7 @@ public partial class RoadDetailsPanel : VBoxContainer
     {
         Name = "RoadDetailsPanel";
         AddThemeConstantOverride("separation", 11);
-        _preview = new FacilityPreview { Name = "RoadFacilityPreview" };
+        _preview = new FacilityPreview(BuildingKind.Road) { Name = "RoadFacilityPreview" };
         AddChild(_preview);
         var heading = new HBoxContainer();
         var title = _title = MakeLabel("乡间道路", 27, Ink);

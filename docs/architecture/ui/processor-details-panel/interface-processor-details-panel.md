@@ -18,15 +18,17 @@
 
 ## 原型比例复刻
 
-`RefreshPlacement(BuildingSpaceSnapshot, CropKind)` 把同一实例的空间与匹配作物传给 [FacilityPreview](../facility-preview/interface-facility-preview.md)，显示 UI 工坊图、实际占地与锚点；该调用与 `Refresh`、`RefreshProgress` 使用同一已选实例。标题与 `ProcessorCurrentStatus` 短状态徽标并排，下一步说明保留等待原料、保留底线或待领取的完整语义；进度条基准高度 6，原料到产物关系旁使用库存箱线条图标。
+`RefreshPlacement(BuildingSpaceSnapshot, CropKind)` 把同一实例的空间与匹配作物传给 [FacilityPreview](../facility-preview/interface-facility-preview.md)，显示与目录相同的对应正式完整 q0 建筑 PNG、实际占地与锚点；该调用与 `Refresh`、`RefreshProgress` 使用同一已选实例。七加工各用自己的图，不共用工坊外形，不播放生产动画或增加旋转入口。标题与 `ProcessorCurrentStatus` 短状态徽标并排，下一步说明保留等待原料、保留底线或待领取的完整语义；进度条基准高度 6，原料到产物关系旁使用库存箱线条图标。
 
 `ProcessorProductStock` 和 `ProcessorProductPrice` 分别显示纯整数库存、两位小数价格，单位单独显示，左右并排指标保持真实加工品口径。商品名从匹配作物与产物关系确定，悬停数字还可查看具体加工品名称。`ProcessorInventoryButton` 发出新增 `InventoryRequested` 意图，`Main` 使用既有库存入口打开管理窗口，面板不持有窗口或修改库存。
 
-按主稿的 1080 像素高度归一，默认标题 27、状态及普通说明 14、周期和损失弱说明 12、指标数字 27、指标标题及单位 13、主要动作文字 16／高度 56；行间距和指标横向间距 11，指标内边距横向 12／纵向 11。低强调移除高度 35、文字 13，缩略高度仍为 107。图标和插画由整体 UI 倍率控制，文字通过独立字体倍率调整；共享 `UiScaling` 完成真实排版，窗口扩大或全屏不会放大默认控件。字体增大后的长内容继续通过外层滚动到达。
+按主稿的 1080 像素高度归一，默认标题 27、状态及普通说明 14、周期和损失弱说明 12、指标数字 27、指标标题及单位 13、主要动作文字 16／高度 56；行间距和指标横向间距 11，指标内边距横向 12／纵向 11。低强调移除高度 35、文字 13，缩略最低高度仍为 107；其中至少 64 像素独立图片区与真实占地标签由纵向容器分区，字体增大时标签区自然扩高。新 PNG 最近邻、等比居中底对齐，不把建筑图挤到标签下方。图标和插画由整体 UI 倍率控制，文字通过独立字体倍率调整；共享 `UiScaling` 完成真实排版，窗口扩大或全屏不会放大默认控件。字体增大后的长内容继续通过外层滚动到达。
 
 标题、`ProcessorCurrentStatus`、`ProcessorProductStock`、`ProcessorProductPrice` 与各自 `Unit` 标签保持单行，数字使用指标内实际剩余宽度，单位保留自身最小宽。库存箱后的 `ProcessorRelation` 则扩展到实际行剩余宽度，可按真实宽度折行。验收检查状态、数字和单位实际只有一行，以及关系说明的宽度和行数，避免窗口边界正常但内容逐字竖排并挤出操作按钮。
 
 标题节点为 `ProcessorBuildingTitle`，纳入实际单行排版检查。指标内边距的父节点是 `PanelContainer`，由容器直接提供完整可用区域；没有依赖非容器按钮自行布局的说明卡。
+
+`TestFacilityThumbnails` 在真实主场景分别建造七类加工实例，选择其子格检查对应正式 q0 纹理、同一真实锚点及图片区与标签无重叠，并覆盖独立整体／字体倍率。有窗口 1920×1080 截图输出 `build/issue149-validation/processor-{crop}-1920.png`；测试入口及文件命名不替代实际运行验收。
 
 ## 批量加工1080P验收示例
 
