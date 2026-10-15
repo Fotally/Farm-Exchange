@@ -48,6 +48,11 @@ public partial class DeveloperToolsWindow : DraggableWindow
     internal Task PreparationTask { get; private set; } = Task.CompletedTask;
 
     /**
+     * <summary>查询当前是否有可见的确认面板，供主场景阻止打开大地图。</summary>
+     */
+    public bool HasVisibleConfirmation => _confirmation.IsVisibleInTree();
+
+    /**
      * <summary>组装绑定当前局、唯一驱动和配置库的开发窗口。</summary>
      * <param name="currentGame">当前地图使用的经营对象。</param>
      * <param name="currentDriver">当前局唯一时间驱动。</param>

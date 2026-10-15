@@ -124,6 +124,8 @@ public partial class TestSuite : Node
             bool buildPlacementPassed = await TestBuildPlacement.RunChecksAsync(this);
             GD.Print("端到端测试：道路轨迹成段建造、直线范围拆除与输入生命周期");
             bool roadPlacementPassed = await TestRoadPlacement.RunChecksAsync(this);
+            GD.Print("端到端测试：大小地图真实输入、视野框、同局记忆与新局重置");
+            bool mapNavigationPassed = await TestMapNavigation.RunChecksAsync(this);
             GD.Print("端到端测试：像素田园主界面、主题与窗口边界");
             bool visualLayoutPassed = await TestUiVisualLayout.RunChecksAsync(this);
             GD.Print("端到端测试：整体与字体倍率、动态控件、原生拖放与分辨率像素稳定");
@@ -131,7 +133,7 @@ public partial class TestSuite : Node
             GD.Print("端到端测试：共享年度表列表可读性、整表删除与引用解除");
             bool cultivationManagementPassed = await TestCultivationManagement.RunChecksAsync(this);
             bool passed = loggingPassed && productionResultsPassed && driverPassed && batchPassed && scenarioPassed && scenarioSchemaPassed && scenarioLibraryPassed && rateButtonPassed && developerWindowPassed && developerEditorPassed && farmGamePassed && resourcesPassed && productionStatePassed && landPassed && marketPassed && marketQuotesPassed && tradingPassed && calendarPassed && worldMapPassed && cameraPassed && npcPassed &&
-                coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationDeletionPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && roadPlacementPassed && visualLayoutPassed && uiScalingPassed && cultivationManagementPassed;
+                coreLoopPassed && facilitiesPassed && loadPassed && inventoryLayoutPassed && workersPassed && workerPresentationPassed && roadMapPassed && tradeOrdersPassed && tradeOrdersUiPassed && cultivationPassed && cultivationDeletionPassed && cultivationUiPassed && placementPreviewPassed && buildPlacementPassed && roadPlacementPassed && mapNavigationPassed && visualLayoutPassed && uiScalingPassed && cultivationManagementPassed;
 
             if (passed)
                 GD.Print("全部自动化测试通过");

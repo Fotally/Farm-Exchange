@@ -16,6 +16,7 @@ public partial class CameraController : Camera2D
     private bool _leftPressed;
     private bool _leftDragging;
     private Vector2 _leftPressPosition;
+    private bool _inputEnabled = true;
 
     internal float PlayerZoom => _viewZoom;
 
@@ -48,6 +49,7 @@ public partial class CameraController : Camera2D
         GetViewport().SizeChanged += ApplyViewportScale;
         GetWindow().MouseEntered += OnMouseEntered;
         GetWindow().MouseExited += OnMouseExited;
+        GetWindow().FocusExited += EndPointerGesture;
         ApplyViewportScale();
     }
 
@@ -56,10 +58,12 @@ public partial class CameraController : Camera2D
         GetViewport().SizeChanged -= ApplyViewportScale;
         GetWindow().MouseEntered -= OnMouseEntered;
         GetWindow().MouseExited -= OnMouseExited;
+        GetWindow().FocusExited -= EndPointerGesture;
     }
 
     public override void _Process(double delta)
     {
+        if (!_inputEnabled) return;
         if (_leftPressed && !Input.IsMouseButtonPressed(MouseButton.Left))
         {
             _leftPressed = false;
@@ -112,6 +116,11 @@ public partial class CameraController : Camera2D
     private void OnMouseExited()
     {
         IsMouseInsideWindow = false;
+        EndPointerGesture();
+    }
+
+    private void EndPointerGesture()
+    {
         _leftPressed = false;
         _leftDragging = false;
         _middleDragging = false;
@@ -119,6 +128,7 @@ public partial class CameraController : Camera2D
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        if (!_inputEnabled) return;
         if (inputEvent is InputEventMouseButton mouse)
         {
             if (mouse.ButtonIndex == MouseButton.Left)
@@ -170,6 +180,30 @@ public partial class CameraController : Camera2D
             else if (!_leftPressed)
                 MapPointerMoved?.Invoke(motion.Position);
         }
+    }
+
+    /**
+     * <summary>启停主镜头键鼠输入，并结束之前的指针手势。</summary>
+     * <param name="enabled">是否允许主地图平移、缩放与短按选择。</param>
+     * <remarks>不修改镜头位置、玩家倍率或经营时间；关闭输入时仍允许显式导航定位。</remarks>
+     */
+    public void SetInputEnabled(bool enabled)
+    {
+        _inputEnabled = enabled;
+        EndPointerGesture();
+    }
+
+    /**
+     * <summary>将主镜头定位到地图本地位置，并沿用地图边界限制。</summary>
+     * <param name="mapLocalPosition">WorldMap 本地坐标，单位为世界像素。</param>
+     * <remarks>保留玩家倍率，不选择地块或执行经营命令。</remarks>
+     */
+    public void NavigateTo(Vector2 mapLocalPosition)
+    {
+        EndPointerGesture();
+        GlobalPosition = _worldMap.ToGlobal(mapLocalPosition);
+        ClampPosition();
+        ForceUpdateScroll();
     }
 
     private void SetZoom(float value)

@@ -48,7 +48,7 @@ internal sealed class RoadSegmentGesture
     internal Candidate GetCandidate()
     {
         if (StartCell == null)
-            return new(false, false, !IsRemoving && _hoverCell is Vector2I cell
+            return new(false, false, _hoverCell is Vector2I cell
                 ? new[] { cell } : Array.Empty<Vector2I>());
         return new(true, CanSubmit, GetCells());
     }

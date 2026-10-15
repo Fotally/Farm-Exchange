@@ -54,6 +54,7 @@
 - [主界面接口](architecture/ui/main/interface-main.md)、[可拖动窗口](architecture/ui/draggable-window/interface-draggable-window.md)、[建造目录](architecture/ui/build-catalog-window/interface-build-catalog-window.md)、[库存窗口](architecture/ui/inventory-window/interface-inventory-window.md)、[市场窗口](architecture/ui/market-window/interface-market-window.md)与[可点击 HTML 原型](architecture/ui/main/prototype-main.html)：场景命令分发、异常后的实际状态刷新、空地与水域详情、目录详情互斥、共同道路候选、建造摆放及窗口位置记忆。选种及两类详情的接口由主界面文档继续导航。
 - [道路详情接口](architecture/ui/road-details-panel/interface-road-details-panel.md)：固定用途说明与移除意图，不读取作物或加工状态。
 - [统一 UI 倍率接口](architecture/ui/ui-scaling/interface-ui-scaling.md)：按原始排版独立设置整体与字体倍率、动态继承及1080P固定像素策略。
+- [大小地图接口](architecture/ui/map-navigation/interface-map-navigation.md)：真实地形与设施缓存、完整视野框、独立缩放与手势、同局浏览记忆；主场景负责输入优先级和镜头导航。
 - [原型图标](architecture/ui/ui-icons/interface-ui-icons.md)与[设施缩略图](architecture/ui/facility-preview/interface-facility-preview.md)：图标、农田与选种沿用主稿SVG；加工和道路缩略复用正式PNG，目录与详情共用取图并显示真实锚点及道路材质。
 - [镜头编辑输入实现](architecture/world/camera-controller/implementation-editing-input-proposal.md)：真实编辑焦点集中阻断键盘平移，场景树处理帧回归及退出编辑后的恢复。
 - [NPC 角色场景接口](architecture/characters/npc-character/interface-npc-character.md)及[独立预览操作](architecture/ui/npc-preview/interface-npc-preview.md)：角色动画、移动和切换图集。
@@ -70,6 +71,10 @@
 - [素材管理](project/asset-organization.md)、[素材来源](project/asset-sources.md)、[清亮v2基准](research/bright-complete-v2.md)。
 - [水域导航的行业实践](research/water-navigation-game-practices.md)：经典游戏的一手资料、成熟导航实现的接入与精度限制；#110 选型依据，尚非功能验收记录。
 - [Godot 原生导航核验](research/godot-water-navigation.md)：净空、保守简化、道路区域成本与原生同步的源码和实验依据；现行调用约定见地形接口。
+- [大小地图导航调研](research/minimap-navigation.md)：开源与经典游戏依据、左下角全图概览与 M 键大地图设计，以及同次游戏内倍率记忆。
+- [键鼠操作登记](project/input-bindings.md)：现有及计划键位、生效上下文、输入冲突与维护入口。
+- [大小地图规划](project/map-navigation-proposal.md)：已确认的全屏方向、小地图导航、图层、输入隔离、独立缩放与同局记忆；正式开发与验收进度。
+- [大小地图 1080P 原型](architecture/ui/main/prototype-maps.md)：独立浏览器演示，比较居中图册、全屏地图、侧边展开与导航缩放。
 - [设施朝向实施范围](project/facility-orientation-proposal.md)：仅建前旋转、每座q0起始、四向资源与随机装饰；道路连接规则由 [#143](https://github.com/Fotally/Farm-Exchange/issues/143) 跟踪。
 - [水域实现与验收](project/water-terrain-proposal.md)：Godot 原生导航、保守简化与道路优先，保留素材核验与历史原型证据。
 - 后续素材与玩法规划：[采收搬运](project/worker-harvest-transport-proposal.md)、[工人加工](project/worker-processing-proposal.md)。
