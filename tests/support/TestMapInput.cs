@@ -30,10 +30,27 @@ internal static class TestMapInput
     internal static void Key(Node owner, Godot.Key key, bool echo = false, bool control = false,
         bool shift = false, bool alt = false, bool meta = false)
     {
-        Send(owner, new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = true,
-            Echo = echo, CtrlPressed = control, ShiftPressed = shift, AltPressed = alt, MetaPressed = meta });
-        Send(owner, new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = false,
-            CtrlPressed = control, ShiftPressed = shift, AltPressed = alt, MetaPressed = meta });
+        Send(owner, new InputEventKey
+        {
+            Keycode = key,
+            PhysicalKeycode = key,
+            Pressed = true,
+            Echo = echo,
+            CtrlPressed = control,
+            ShiftPressed = shift,
+            AltPressed = alt,
+            MetaPressed = meta
+        });
+        Send(owner, new InputEventKey
+        {
+            Keycode = key,
+            PhysicalKeycode = key,
+            Pressed = false,
+            CtrlPressed = control,
+            ShiftPressed = shift,
+            AltPressed = alt,
+            MetaPressed = meta
+        });
     }
 
     internal static void Move(Node owner, Vector2 position, MouseButtonMask buttons = (MouseButtonMask)0) =>

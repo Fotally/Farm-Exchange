@@ -316,10 +316,10 @@ public partial class Main : Node2D
     {
         if (!_sceneReady) return;
         if (inputEvent is InputEventKey
-        {
-            Pressed: true, Echo: false, Keycode: Key.M,
-            CtrlPressed: false, AltPressed: false, ShiftPressed: false, MetaPressed: false
-        } && !HasEditableKeyboardFocus())
+            {
+                Pressed: true, Echo: false, Keycode: Key.M,
+                CtrlPressed: false, AltPressed: false, ShiftPressed: false, MetaPressed: false
+            } && !HasEditableKeyboardFocus())
         {
             SetMapExpanded(!_mapNavigation.IsExpanded);
             GetViewport().SetInputAsHandled();

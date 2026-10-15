@@ -60,7 +60,7 @@
 - `tools/Run-Tests.ps1` 与 `coverage.settings`：编译 Debug、导入 Godot 图片资源、运行必需的 headless 测试套件、生成 Cobertura 报告，由 `tools/Test-Coverage.ps1` 按文件与行号去重，动态检查业务脚本总体及每个一级模块行覆盖率不低于 80%；`tools/Test-CoverageGate.ps1` 验证门禁夹具；`-Performance` 追加图形性能测试和 JSON 报告。
 - `tools/Invoke-WindowsDistribution.ps1`：CI 与发布共用的完整分发命令，真实启动并保存退出事实，先保全再移出 runtime/debug 日志、保留同版本 schema 与全部运行依赖，发布 ZIP 复验通过后才交付。`Run-PerformanceTests.ps1` 与 `Save-PerformanceEvidence.ps1` 分别维护测量失败和实际文件清单；`Test-ValidationArtifacts.ps1` 以真实进程及文件夹具约束 Windows 构建、发布及本地性能证据。修改分发内容或失败证据路径时读取 `docs/project/validation-artifacts-proposal.md`。
 - `tools/Run-LoggingPerformance.ps1`、`Test-LoggingLifecycle.ps1` 与 `Test-LoggingRelease.ps1`：日志专项1080P、1×/16×矩阵，独立进程退出及实际Release程序集前置门禁，门禁探针同样以 `net10.0` 为目标；独立控制台通过现有配置接口显式加载正式天气 JSON，记录配置来源与哈希。测试场景与探针只生成本地证据，不更改正式采集策略。执行及故障边界见 `docs/architecture/logging/implementation-validation.md`。
-- `tools/Repair-RuleLinks.ps1` 与 `tools/Test-StaticChecks.ps1`：按 `.codex/rule-links.json` 修复及检查目录指令符号链接，并检查文档路径、内部链接和脚本命名空间。
+- `tools/Repair-RuleLinks.ps1` 与 `tools/Test-StaticChecks.ps1`：按 `.codex/rule-links.json` 修复及检查目录指令符号链接，并检查文档路径、内部链接和脚本命名空间。提交前另按 [EditorConfig 格式验收](docs/static-checks/editorconfig.md)运行完整 C# 格式检查。
 - `global.json` 与 `FarmExchange.csproj`：前者唯一固定开发与双平台 CI 的 SDK 10.0.401，禁止前滚和预览版；后者将项目目标框架设为 `net10.0`。工作流按 `global.json` 选用 .NET 10 SDK，另保留 `8.0.x` 安装供覆盖率工具运行，版本维护与本地检查见 `docs/project/continuous-integration.md`。
 - `.github/workflows/ci.yml`：独立测试 CI，保留静态检查、headless 测试及总体和逐模块 80% 覆盖率；不运行有窗口 FPS，不导出 Windows。与两平台构建在 dev/main 推送时并行运行，并保留手动入口。
 - `.github/workflows/windows.yml`：独立 Windows Release 编译、资源导入、导出及启动验收，dev/main 推送和手动触发；共用分发命令保全日志并上传干净提交级构建与独立证据。
