@@ -74,8 +74,8 @@ public partial class TestWorkerScheduler : Node
             farms.Place(blockedIndex, CropKind.Radish);
             farms.Place(targetIndex, CropKind.Radish);
         }
-        var first = new WorkerScheduler(terrain, start);
-        var batch = new WorkerScheduler(terrain, start);
+        var first = new WorkerScheduler(terrain.ReadOnly, start);
+        var batch = new WorkerScheduler(terrain.ReadOnly, start);
         var firstCalendar = new GameCalendar();
         var batchCalendar = new GameCalendar();
         first.AdvanceOneSecond(firstFarms, firstCalendar.Snapshot);
@@ -117,7 +117,7 @@ public partial class TestWorkerScheduler : Node
 
         var cancelFarms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
         cancelFarms.Place(targetIndex, CropKind.Radish);
-        var cancel = new WorkerScheduler(terrain, start);
+        var cancel = new WorkerScheduler(terrain.ReadOnly, start);
         cancel.AdvanceOneSecond(cancelFarms, new GameCalendar().Snapshot);
         WorkerSnapshot moving = cancel.GetSnapshots()[0];
         cancelFarms.Remove(targetIndex);

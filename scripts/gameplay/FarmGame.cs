@@ -76,9 +76,11 @@ public sealed class FarmGame : IDisposable
     private readonly WorkerScheduler _workerScheduler;
 
     /**
-     * <summary>本局创建时完整生成的不可变权威地形。</summary>
+     * <summary>本局权威地形的稳定读取视图，不提供导航维护和释放能力。</summary>
+     * <remarks>新路线须在本局导航就绪后查询；地形资源由本局唯一维护和释放。</remarks>
      */
-    public TerrainMap Terrain { get; }
+    public TerrainReadView Terrain => _terrain.ReadOnly;
+    private readonly TerrainMap _terrain;
     private readonly GoodsInventory _inventory = new();
     private readonly Wallet _wallet = new(5000);
     private readonly MarketQuotes _market;
@@ -104,8 +106,16 @@ public sealed class FarmGame : IDisposable
 
     /**
      * <summary>本局道路成本已与最新成功建拆同步，可推进经营。</summary>
+     * <remarks>活局尚未同步时为 false；完整释放后抛 ObjectDisposedException。</remarks>
      */
-    public bool IsNavigationReady => !_disposed && _roadVersion == _preparedRoadVersion && Terrain.IsNavigationReady;
+    public bool IsNavigationReady
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _roadVersion == _preparedRoadVersion && _terrain.IsNavigationReady;
+        }
+    }
 
     /**
      * <summary>等待最新道路成本完成原生同步，合并同一局的并发等待。</summary>
@@ -132,7 +142,7 @@ public sealed class FarmGame : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
             ulong version = _roadVersion;
-            await Terrain.UpdateRoadsAsync(_occupancy.Instances, tree, cancellationToken);
+            await _terrain.UpdateRoadsAsync(_occupancy.Instances, tree, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             _preparedRoadVersion = version;
         }
@@ -248,7 +258,7 @@ public sealed class FarmGame : IDisposable
         GamePurpose purpose, WeatherMode weatherMode, WeatherRules? weatherRules)
     {
         int seed = prepared.Seed;
-        Terrain = prepared.Map;
+        _terrain = prepared.Map;
         try
         {
             _calendar = new GameCalendar(elapsedSeconds);
@@ -270,7 +280,7 @@ public sealed class FarmGame : IDisposable
         }
         catch
         {
-            Terrain.Dispose();
+            _terrain.Dispose();
             throw;
         }
     }
@@ -1390,7 +1400,7 @@ public sealed class FarmGame : IDisposable
         _disposed = true;
         _navigationCancellation.Cancel();
         _log?.Dispose();
-        Terrain.Dispose();
+        _terrain.Dispose();
         _navigationCancellation.Dispose();
     }
 

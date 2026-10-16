@@ -6,7 +6,7 @@ namespace FarmExchange.Time;
 
 /**
  * <summary>把现实帧时间按倍率转换为同一经营对象的完整批量 tick。</summary>
- * <remarks>每局由宿主保存唯一实例；暂停与改速保留未完成 tick，暂停期间不累计。</remarks>
+ * <remarks>每局由宿主保存唯一实例；暂停、导航等待与改速保留未完成 tick，等待期间不累计。</remarks>
  */
 public sealed class SimulationDriver
 {
@@ -91,6 +91,7 @@ public sealed class SimulationDriver
      * <param name="checkpoint">稳定检查点；返回 false 结束本段，随后重新读取限额与倍率。</param>
      * <param name="maxTicks">宿主允许的下一段完整 tick 数；用于日期与流程预算。</param>
      * <returns>本帧实际完成 tick 数。</returns>
+     * <remarks>导航未就绪时不接纳现实时间；检查点建拆路后保留已完成秒并停止本帧，宿主负责异步等待导航。</remarks>
      */
     public uint Advance(double delta, FarmGame game, Func<SimulationCheckpoint, bool>? checkpoint = null,
         Func<uint>? maxTicks = null)
@@ -112,9 +113,8 @@ public sealed class SimulationDriver
         Func<uint>? maxTicks, SimulationLogOperation? observation)
     {
         if (!double.IsFinite(delta) || delta < 0) throw new ArgumentOutOfRangeException(nameof(delta));
-        if (game.IsPaused) return 0;
         double remainingSeconds = delta;
-        while (!game.IsPaused)
+        while (game.IsNavigationReady && !game.IsPaused)
         {
             observation?.EnterPhase(SimulationLogPhase.DriverValidation);
             double startRate = Rate;
