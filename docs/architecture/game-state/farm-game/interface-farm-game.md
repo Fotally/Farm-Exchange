@@ -2,9 +2,9 @@
 
 ## 不可变地形与建局
 
-默认含水局使用 `await FarmGame.CreateAsync(tree, ..., terrainRules=null, cancellationToken=default)`。工厂每次重新读取正式 JSON，完整生成地形并等待 Godot 原生导航同步后，才组装工人、开局设施与日志身份。同步构造器仅接受显式纯陆地配置，调用同一地形 Module 的立即完成分支；不能同步阻塞含水准备。`LoadTerrainRules(source)` 与 `ParseTerrainRules(json, source)` 共用真实 384×384 地图、开局设施完整占地和三名工人起点验证。外部解析配置仍重验尺寸和真实上下文，失败或取消不发布半成品局，不替换地图。宿主退出取消等待；组装前再次检查取消，已准备的地形立即释放。`Dispose()` 关闭本局日志并释放本局地形的原生导航资源。`Terrain` 原样提供不可变权威地形；独立地形随机不消耗开局作物序列。
+默认含水局使用 `await FarmGame.CreateAsync(tree, ..., terrainRules=null, cancellationToken=default)`。工厂每次重新读取正式 JSON，完整生成地形并等待 Godot 原生导航同步后，才组装工人、开局设施与日志身份。同步构造器仅接受显式纯陆地配置，调用同一地形 Module 的立即完成分支；不能同步阻塞含水准备。`LoadTerrainRules(source)` 与 `ParseTerrainRules(json, source)` 共用真实 384×384 地图、开局设施完整占地和三名工人起点验证。外部解析配置仍重验尺寸和真实上下文，失败或取消不发布半成品局，不替换地图。宿主退出取消等待；组装前再次检查取消，已准备的地形立即释放。`Dispose()` 关闭本局日志并释放本局地形的原生导航资源。`Terrain` 提供本局稳定的 `TerrainReadView`，只含种子、纯陆地、四角、完整陆地及完整路线查询；地图、装饰、预览、放置规则和工人均不取得道路维护或释放能力。`FarmGame` 私有持有唯一 `TerrainMap` 并协调真实土地快照同步及释放；读取视图不复制地形或道路状态，不可转回拥有者。独立地形随机不消耗开局作物序列，完整约定见[地形 Interface](../../terrain/interface-terrain-map.md)。
 
-`IsNavigationReady` 表示本局最新成功建拆的道路成本已完成原生同步。成功单格道路放置、整段放置、通用单格移除道路或整段拆路都会立即使其为 `false`；生产设施变化、只读预检及失败道路命令不改变它。`await WaitForNavigationAsync(tree, cancellationToken)` 使用土地唯一拥有的稳定只读快照，合并同一局实际准备任务；准备期间新增建拆会在旧轮完成后继续处理最新快照，直到提交版本追平才发布就绪。五材质成本相同，道路 1、普通陆地 2；不修改工人速度、既有不可变路线或认领。
+`IsNavigationReady` 表示活局最新成功建拆的道路成本已完成原生同步；尚未同步返回 false，已释放局抛 `ObjectDisposedException`，不能将失效局视为可继续等待。成功单格道路放置、整段放置、通用单格移除道路或整段拆路都会立即使其为 `false`；生产设施变化、只读预检及失败道路命令不改变它。`await WaitForNavigationAsync(tree, cancellationToken)` 使用土地唯一拥有的稳定只读快照，合并同一局实际准备任务；准备期间新增建拆会在旧轮完成后继续处理最新快照，直到提交版本追平才发布就绪。五材质成本相同，道路 1、普通陆地 2；不修改工人速度、既有不可变路线或认领。
 
 `AdvanceTick`／`AdvanceTicks` 要求导航已就绪，未准备时在推进、日志相位和资源修改前抛出 `InvalidOperationException`，同步入口不会阻塞等物理帧。若完整经营检查点内成功建拆道路，即使回调要求继续，也在该已完成检查点返回停止，由宿主先等待准备。`WaitForNavigationAsync` 的调用令牌只取消该等待者，不中断其他宿主正在共用的局准备；`Dispose` 取消本局实际准备，再释放地形。准备失败持续传播该任务异常，由拥有者结束局，不回退旧地图或直线路线。首次铺路的显式纯陆地局同样需要真实 SceneTree 和原生准备；尚无道路且没有导航资源的纯陆地局仍可同步创建。
 

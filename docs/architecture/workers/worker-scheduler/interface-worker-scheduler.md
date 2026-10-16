@@ -6,7 +6,7 @@
 
 | 成员 | 约定 |
 | --- | --- |
-| `WorkerScheduler(TerrainMap terrain, params Vector2I[] startingCells)` | 接收完整就绪的本局不可变地形，根据起始格坐标创建工人，编号从 1 开始，初始空闲、无目标。生产传入工作中心 (190,190)、(193,190)、(196,190)；不保留调用方的可变数组，至少需要一名工人。 |
+| `WorkerScheduler(TerrainReadView terrain, params Vector2I[] startingCells)` | 接收完整就绪的本局不可变地形，根据起始格坐标创建工人，编号从 1 开始，初始空闲、无目标。生产传入工作中心 (190,190)、(193,190)、(196,190)；不保留调用方的可变数组，至少需要一名工人。 |
 | `AdvanceOneSecond(FarmingSystem farming, CalendarSnapshot calendar)` | 在 `FarmGame` 的既有工人相位调用一次，所有工人各推进完整 1 秒；先统一清理失效认领，再按编号推进。至少一人完成播种或浇水时返回 `true`，单纯移动返回 `false`。暂停快照使本次调用零修改并返回 `false`。 |
 | `GetSnapshots()` | 返回按编号排列的独立只读 `IReadOnlyList<WorkerSnapshot>`，不推进经营，也不暴露可变工人状态。旧快照不随后续推进改变。 |
 

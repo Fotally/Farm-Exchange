@@ -23,7 +23,7 @@
 - [共享 UI 工具](architecture/ui/ui-elements/interface-ui-elements.md)：统一主题、控件构造、金额格式与道路材质中文名称。
 - [天气接口](architecture/weather/interface-weather-system.md)及[预排与循环实现](architecture/weather/implementation-weather-schedule.md)：具名不可变配置、每局组装、自然／显式模式、当前状态、事件距离与快照引用契约，以及配置字段扩展和预排规模调整的维护要求。
 - [地形配置接口](architecture/terrain/interface-terrain-rules.md)：严格 JSON、不可变配置、真实开局保护与纯陆地组合；配置校验不代替地形生成和导航验收。
-- [地形与路线接口](architecture/terrain/interface-terrain-map.md)及[静态地形实现](architecture/terrain/implementation-static-terrain.md)：保守离岸、原生导航与道路区域成本、异步准备、连续路线及资源生命周期。
+- [地形与路线接口](architecture/terrain/interface-terrain-map.md)及[静态地形实现](architecture/terrain/implementation-static-terrain.md)：地形读取视图与拥有者能力、保守离岸、原生导航与道路区域成本、异步准备、连续路线及资源生命周期。
 - [FarmGame 接口](architecture/game-state/farm-game/interface-farm-game.md)、[推进顺序](architecture/game-state/farm-game/implementation-tick-order.md)及[等价批量实现](architecture/game-state/farm-game/implementation-batched-simulation.md)：单tick和批量共用相位，平静区间直接累计，真实事件提供稳定检查点。
 - [CropCatalog 接口](architecture/farming/crop-catalog/interface-crop-catalog.md)、[Inventory 接口](architecture/inventory/inventory/interface-inventory.md)与[Wallet 接口](architecture/economy/wallet/interface-wallet.md)：作物定义、分类库存和余额的唯一拥有者。
 - [LandOccupancy 接口](architecture/land/land-occupancy/interface-land-occupancy.md)、[PlacementRules 接口](architecture/land/placement-rules/interface-placement-rules.md)、[FarmingSystem 接口](architecture/farming/farming-system/interface-farming-system.md)、[播种与适季时间规则接口](architecture/farming/planting-rules/interface-planting-rules.md)、[ProcessingSystem 接口](architecture/processing/processing-system/interface-processing-system.md)和[WorkerScheduler 接口](architecture/workers/worker-scheduler/interface-worker-scheduler.md)：地块占用、放置与播种检查、生产状态和三人工人调度。
@@ -40,7 +40,7 @@
 - [历史市场曲线接口](architecture/market/market-price-curve/interface-market-price-curve.md)及[曲线实现](architecture/market/market-price-curve/implementation-bounded-curve.md)：保留独立曲线测试，正式经营改走报价模块。
 - [GameCalendar 接口](architecture/time/game-calendar/interface-game-calendar.md)和[GameTimeUnits 接口](architecture/time/game-time-units/interface-game-time-units.md)：经营日历、暂停与生产共用的精确时间比例。
 - [日志专项验收](architecture/logging/implementation-validation.md)：真实provider故障、1080P满图1×/16×负载与分配矩阵、进程退出与实际Release程序集门禁；运行命令见测试说明。
-- [SimulationDriver 接口](architecture/time/simulation-driver/interface-simulation-driver.md)：唯一倍率与未完成tick进度、完整秒异常提交凭据、稳定检查点、预算限额和玩家/流程改速来源。
+- [SimulationDriver 接口](architecture/time/simulation-driver/interface-simulation-driver.md)：唯一倍率与未完成tick进度、导航等待门禁、完整秒异常提交凭据、稳定检查点、预算限额和玩家/流程改速来源。
 - [参数化流程接口](architecture/development/interface-parameterized-scenario.md)与[固定流程实现](architecture/development/implementation-buy-process-sell.md)：严格配置、两种运行对象、日期及等待预算、同步结算和证据检查、只输出JSON报告。
 - [配置编辑接口](architecture/development/interface-scenario-configuration-editor.md)与[配置库实现](architecture/development/implementation-scenario-configuration-library.md)：可编辑字段元数据、严格扫描与草稿、Git持久配置、另存覆盖及两种删除的文件归属。
 - [开发窗口接口](architecture/ui/developer-tools-window/interface-developer-tools-window.md)：文件选择、显式重选恢复与草稿冲突保护、启动/中止、当前局与独立数据局接入、真实进度及报告保存结果。

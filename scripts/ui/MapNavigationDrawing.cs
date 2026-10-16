@@ -26,7 +26,7 @@ internal sealed class MapNavigationDrawing : IDisposable
     internal ImageTexture? TerrainTexture { get; private set; }
     private IReadOnlyList<BuildingSpaceSnapshot>? _spaces;
 
-    internal void Initialize(TerrainMap terrain)
+    internal void Initialize(TerrainReadView terrain)
     {
         TerrainTexture?.Dispose();
         _spaces = null;

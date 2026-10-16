@@ -36,7 +36,7 @@ public partial class TestFarmGame : Node
         CheckInitialCenter() && CheckInitialOtherSeasons() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
         CheckWorkerParticipation() && CheckContinuousProduction() && CheckRainSupply() && CheckSeasonalSowing() &&
         CheckSeasonFailure() && CheckSeasonBoundaries() && CheckRawSales() &&
-        CheckInvalidCrops() && CheckStateOwnership() &&
+        CheckInvalidCrops() && CheckStateOwnership() && CheckTerrainReadCapability() &&
         CheckPlacementRules() && CheckRawReservePhases() && CheckRawReserveConstruction() &&
         CheckMultiCellFacilities() && CheckBuildingOrientations() && CheckOrientationFailures() &&
         CheckStableSnapshotForwarding() && CheckBatchRoadPlacement() && CheckBatchRoadFailures() &&
@@ -135,7 +135,38 @@ public partial class TestFarmGame : Node
         disposed.Dispose();
         try { await pending; return Fail("完整释放局没有取消实际道路准备"); }
         catch (System.OperationCanceledException) { }
-        return !disposed.IsNavigationReady || Fail("完整释放后仍发布导航就绪");
+        try { _ = disposed.IsNavigationReady; return Fail("完整释放后的导航查询没有明确拒绝"); }
+        catch (ObjectDisposedException) { }
+        try
+        {
+            disposed.Terrain.FindLandPath(LandPosition.FromCell(new(10, 10)), LandPosition.FromCell(new(11, 10)));
+            return Fail("局释放后读取视图仍能返回路线");
+        }
+        catch (ObjectDisposedException) { }
+        return true;
+    }
+
+    private static bool CheckTerrainReadCapability()
+    {
+        using var game = new FarmGame(12345, terrainRules: TerrainTestFixtures.AllLandRules);
+        TerrainReadView terrain = game.Terrain;
+        Type exposed = typeof(FarmGame).GetProperty(nameof(FarmGame.Terrain))!.PropertyType;
+        if (exposed != terrain.GetType() || !exposed.IsSealed || typeof(IDisposable).IsAssignableFrom(exposed) ||
+            exposed.GetConstructors().Length != 0 || exposed.GetFields().Length != 0 ||
+            exposed.GetProperties().Any(property => property.CanWrite || property.PropertyType == typeof(TerrainMap)))
+            return Fail("公开地形读取能力泄露拥有者、可变成员或资源释放能力");
+        string[] queries = { "get_Seed", "get_IsAllLand", "GetCell", "IsFullLand", "FindLandPath" };
+        if (exposed.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.DeclaredOnly)
+            .Any(method => !queries.Contains(method.Name)))
+            return Fail("公开地形读取能力含有查询以外的操作");
+        if (!ReferenceEquals(terrain, game.Terrain) || terrain.Seed != 12345 || !terrain.IsAllLand ||
+            !terrain.GetCell(Vector2I.Zero).IsFullLand || !terrain.IsFullLand(Vector2I.Zero) ||
+            terrain.IsFullLand(new(-1, 0)))
+            return Fail("本局稳定读取视图未保留种子和完整陆地语义");
+        try { terrain.GetCell(new(-1, 0)); return Fail("读取视图将越界地形查询吞成正常结果"); }
+        catch (ArgumentOutOfRangeException) { }
+        return true;
     }
 
     private static bool CheckMovementSowingPermission()
@@ -167,7 +198,7 @@ public partial class TestFarmGame : Node
     public static async Task<bool> RunWaterChecksAsync(SceneTree tree)
     {
         using var game = await FarmGame.CreateAsync(tree, 12345, weatherMode: WeatherMode.Explicit);
-        TerrainMap terrain = game.Terrain;
+        TerrainReadView terrain = game.Terrain;
         Vector2I water = default;
         bool found = false;
         for (int y = 1; y < FarmGame.MapSize - 2 && !found; y++)

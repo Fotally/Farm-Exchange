@@ -13,12 +13,12 @@ namespace FarmExchange.Workers;
 internal sealed class WorkerScheduler
 {
     private const int CellsPerSecond = 3;
-    private readonly TerrainMap _terrain;
+    private readonly TerrainReadView _terrain;
     private readonly WorkerState[] _workers;
     private readonly HashSet<int> _claimedCells = new();
     private int _nextFarmIndex;
 
-    internal WorkerScheduler(TerrainMap terrain, params Vector2I[] startingCells)
+    internal WorkerScheduler(TerrainReadView terrain, params Vector2I[] startingCells)
     {
         _terrain = terrain;
         if (startingCells.Length == 0)

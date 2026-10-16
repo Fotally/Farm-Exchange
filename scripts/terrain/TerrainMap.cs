@@ -49,6 +49,11 @@ public sealed class TerrainMap : IDisposable
     private readonly List<Rid> _navigationRegions = new();
     private readonly List<NavigationPolygon> _polygons = new();
     private bool _disposed;
+    /**
+     * <summary>本地形稳定的只读视图，供非拥有者共享查询。</summary>
+     * <remarks>没有维护或释放入口，不复制地形和原生导航状态。</remarks>
+     */
+    public TerrainReadView ReadOnly { get; }
     public TerrainRules Rules { get; }
     public int Seed { get; }
     public int MapSize => Rules.MapSize;
@@ -59,6 +64,7 @@ public sealed class TerrainMap : IDisposable
 
     private TerrainMap(int seed, TerrainRules rules, TerrainPond[] ponds, int candidates)
     {
+        ReadOnly = new TerrainReadView(this);
         Seed = seed; Rules = rules; _ponds = ponds; CandidateCount = candidates;
         _radius = (double)rules.WorkerFootRadius;
         _waterVertices = new bool[checked((MapSize + 1) * (MapSize + 1))];

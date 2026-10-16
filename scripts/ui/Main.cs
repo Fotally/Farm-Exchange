@@ -230,11 +230,8 @@ public partial class Main : Node2D
     internal uint AdvanceSimulation(double delta, System.Func<SimulationCheckpoint, bool>? checkpoint = null)
     {
         if (!_sceneReady) return 0;
-        if (!GameState.IsNavigationReady)
-        {
-            EnsureNavigationPreparation();
-            return 0;
-        }
+        EnsureNavigationPreparation();
+        if (!_sceneReady) return 0;
         _tickHarvested = _tickProduced = 0;
         System.Func<SimulationCheckpoint, bool> observe = checkpoint == null ? ObserveSimulationCheckpoint :
             point => ObserveSimulationCheckpoint(point) && checkpoint(point);
@@ -262,7 +259,6 @@ public partial class Main : Node2D
 
     private uint GetMaxAdvanceTicks()
     {
-        if (!GameState.IsNavigationReady) return 0;
 #if DEBUG
         return _developerWindow.GetCurrentMaxTicks();
 #else

@@ -67,6 +67,7 @@ public partial class TestSuite : Node
             bool calendarPassed = TestGameCalendar.RunChecks();
             GD.Print("单元测试：经营倍率、暂停半tick与稳定检查点换速");
             bool driverPassed = TestSimulationDriver.RunChecks();
+            driverPassed = await TestSimulationDriver.RunNavigationChecks(GetTree()) && driverPassed;
             GD.Print("单元测试：等价批量经营推进");
             bool batchPassed = TestBatchedSimulation.RunChecks();
             GD.Print("单元测试：严格参数化买入加工卖出流程");

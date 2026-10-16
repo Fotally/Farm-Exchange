@@ -48,10 +48,10 @@ internal sealed class EnvironmentDecorations
         { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 29, 30, 31 };
     private readonly Dictionary<int, Decoration> _remaining = new();
     private readonly Node2D _depthLayer;
-    private readonly TerrainMap _terrain;
+    private readonly TerrainReadView _terrain;
     private readonly Texture2D?[,] _textures = new Texture2D?[Definitions.Length, 4];
 
-    internal EnvironmentDecorations(Node2D depthLayer, TerrainMap terrain)
+    internal EnvironmentDecorations(Node2D depthLayer, TerrainReadView terrain)
     {
         _depthLayer = depthLayer;
         _terrain = terrain;

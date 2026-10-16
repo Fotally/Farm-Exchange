@@ -13,7 +13,7 @@ internal static class TerrainTestFixtures
     private static readonly Lazy<TerrainMap> AllLandMap = new(() => TerrainMap.Create(12345, AllLandRules));
 
     internal static TerrainRules AllLandRules => AllLandInput.Value;
-    internal static TerrainMap AllLandTerrain => AllLandMap.Value;
+    internal static TerrainReadView AllLandTerrain => AllLandMap.Value.ReadOnly;
 
     private static TerrainRules CreateAllLandRules()
     {

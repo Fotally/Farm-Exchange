@@ -78,7 +78,7 @@ WorldMap只为视口与完整画布相交的实例创建FacilityMotion，离屏�
 
 ## 静态水域与共享水纹
 
-每块 mesh 的 UV 从本局不可变 `TerrainMap` 四角编码及稳定三变体生成。地表使用块内 `MeshInstance2D`，独立挂共享水纹材质并在父块后方绘制；道路仍由父块绘制，避免道路 UV 被错误解释为地形 mask。所有块共享 `WaterAnimationSeconds`，每帧只更新一个 shader uniform，不因水纹变化重建 mesh 或请求块重绘。纹理选择和水纹相位使用世界局部坐标，跨块无时间相位重置。水 mask 仅裁剪波光，与逻辑通行完全独立。
+每块 mesh 的 UV 从本局 `TerrainReadView` 的权威四角编码及稳定三变体生成。地表使用块内 `MeshInstance2D`，独立挂共享水纹材质并在父块后方绘制；道路仍由父块绘制，避免道路 UV 被错误解释为地形 mask。所有块共享 `WaterAnimationSeconds`，每帧只更新一个 shader uniform，不因水纹变化重建 mesh 或请求块重绘。纹理选择和水纹相位使用世界局部坐标，跨块无时间相位重置。水 mask 仅裁剪波光，与逻辑通行完全独立。
 
 水 mask 的透明度才是水面裁剪依据；PNG 导入的透明边颜色修复可能扩散 RGB，因此 shader 读取 alpha，不读取透明像素的红通道。`TestWaterRippleRendering` 在真实 SubViewport 中直接对比四倍率与暂停前后的像素，分别要求三种纹理变体水面变化、岸格干地和完整陆地不变，避免只验证 CPU 时间变量而漏掉 shader 或 UV 错误。
 

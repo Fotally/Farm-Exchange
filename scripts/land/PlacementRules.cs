@@ -41,7 +41,7 @@ internal static class PlacementRules
     internal static bool IsValidRoadMaterial(RoadMaterial material) => System.Enum.IsDefined(material);
 
     internal static PlacementCheck Check(Vector2I cell, BuildingKind building, CropKind crop,
-        LandOccupancy occupancy, TerrainMap terrain, int balanceCents, int costCents,
+        LandOccupancy occupancy, TerrainReadView terrain, int balanceCents, int costCents,
         BuildingOrientation orientation = BuildingOrientation.Q0)
     {
         if (building is not (BuildingKind.Farm or BuildingKind.Processor or BuildingKind.Road))
