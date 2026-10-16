@@ -44,6 +44,9 @@ public partial class Main : Node2D
     private WorldMap _worldMap = null!;
     private CameraController _camera = null!;
     private Control _uiRoot = null!;
+    private MapNavigation _mapNavigation = null!;
+    private readonly Vector2[] _mapViewportCorners = new Vector2[4];
+    private Control? _mapPreviousFocus;
     private Label _moneyLabel = null!;
     private Label _workerLabel = null!;
     private Label _calendarLabel = null!;
@@ -188,6 +191,7 @@ public partial class Main : Node2D
         _preparationLabel.QueueFree();
         _sceneReady = true;
         _camera.ProcessMode = ProcessModeEnum.Inherit;
+        RefreshMapCameraView();
     }
 
     public override void _ExitTree()
@@ -218,6 +222,7 @@ public partial class Main : Node2D
         _developerWindow.AdvanceIndependent(delta);
 #endif
         RefreshPlacementPreview();
+        RefreshMapCameraView();
         _currentGame?.Log?.View.Observe(DisplayServer.WindowGetSize(), GetViewportRect().Size,
             _camera.PlayerZoom, _worldMap.ToLocal(_camera.GlobalPosition), _worldMap.ChunkRedrawCount);
     }
@@ -309,6 +314,25 @@ public partial class Main : Node2D
 
     public override void _Input(InputEvent inputEvent)
     {
+        if (!_sceneReady) return;
+        if (inputEvent is InputEventKey
+            {
+                Pressed: true, Echo: false, Keycode: Key.M,
+                CtrlPressed: false, AltPressed: false, ShiftPressed: false, MetaPressed: false
+            } && !HasEditableKeyboardFocus())
+        {
+            SetMapExpanded(!_mapNavigation.IsExpanded);
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (_mapNavigation.IsExpanded)
+        {
+            if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+                SetMapExpanded(false);
+            if (inputEvent is InputEventKey)
+                GetViewport().SetInputAsHandled();
+            return;
+        }
         if (_placement == null) return;
         if (inputEvent is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } ||
             inputEvent is InputEventKey { Pressed: true, Keycode: Key.Escape })
@@ -393,6 +417,7 @@ public partial class Main : Node2D
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        if (!_sceneReady || _mapNavigation.IsExpanded) return;
         if (inputEvent is not InputEventKey { Pressed: true, Keycode: Key.Escape })
             return;
         if (_placement != null) CancelCurrentSegmentOrPlacement();
@@ -513,6 +538,73 @@ public partial class Main : Node2D
         developerButton.Pressed += _developerWindow.ShowRaised;
         _uiRoot.GetNode<VBoxContainer>("ActivityLayout").AddChild(developerButton);
 #endif
+        _mapNavigation = new MapNavigation { Name = "MapNavigation" };
+        _uiRoot.AddChild(_mapNavigation);
+        _mapNavigation.Initialize(GameState);
+        _mapNavigation.OpenRequested += () => SetMapExpanded(true);
+        _mapNavigation.CloseRequested += () => SetMapExpanded(false);
+        _mapNavigation.NavigateRequested += position =>
+        {
+            if (!_sceneReady) return;
+            _camera.NavigateTo(position);
+            RefreshMapCameraView();
+        };
+    }
+
+    private bool HasEditableKeyboardFocus() => GetViewport().GuiGetFocusOwner() switch
+    {
+        LineEdit lineEdit => lineEdit.Editable,
+        TextEdit textEdit => textEdit.Editable,
+        _ => false,
+    };
+
+    private void SetMapExpanded(bool expanded)
+    {
+        if (!_sceneReady || _mapNavigation.IsExpanded == expanded) return;
+#if DEBUG
+        if (expanded && _developerWindow.HasVisibleConfirmation) return;
+#endif
+        if (expanded)
+        {
+            if (_placement != null) CancelPlacement();
+            _mapPreviousFocus = GetViewport().GuiGetFocusOwner();
+            _mapPreviousFocus?.ReleaseFocus();
+            CancelBackgroundGuiGesture();
+            foreach (Node child in _uiRoot.GetChildren())
+                if (child is DraggableWindow window) window.CancelDrag();
+            _uiRoot.MoveChild(_mapNavigation, _uiRoot.GetChildCount() - 1);
+            RefreshMapCameraView();
+        }
+        _camera.SetInputEnabled(!expanded);
+        _mapNavigation.SetExpanded(expanded);
+        if (!expanded)
+        {
+            if (GodotObject.IsInstanceValid(_mapPreviousFocus) && _mapPreviousFocus!.IsVisibleInTree())
+                _mapPreviousFocus.GrabFocus();
+            _mapPreviousFocus = null;
+        }
+    }
+
+    private void CancelBackgroundGuiGesture()
+    {
+        // 先消费当前事件，阻止隐藏控件时的引擎内部释放触发背景按钮。
+        GetViewport().SetInputAsHandled();
+        GetViewport().GuiCancelDrag();
+        // GuiCancelDrag 只清已启动拖放；同帧隐藏父节点还会清除未启动的鼠标捕获。
+        // 子窗口自身 Visible、草稿及位置保持，不跨帧隐藏，也不修改窗口鼠标进出状态。
+        _uiRoot.Hide();
+        _uiRoot.Show();
+    }
+
+    private void RefreshMapCameraView()
+    {
+        Transform2D screenToMap = _worldMap.GetGlobalTransformWithCanvas().AffineInverse();
+        Rect2 viewport = GetViewport().GetVisibleRect();
+        _mapViewportCorners[0] = screenToMap * viewport.Position;
+        _mapViewportCorners[1] = screenToMap * new Vector2(viewport.End.X, viewport.Position.Y);
+        _mapViewportCorners[2] = screenToMap * viewport.End;
+        _mapViewportCorners[3] = screenToMap * new Vector2(viewport.Position.X, viewport.End.Y);
+        _mapNavigation.UpdateCameraView(screenToMap * viewport.GetCenter(), _mapViewportCorners);
     }
 
     private void AddWindow(DraggableWindow window, bool right = false)
@@ -1071,7 +1163,10 @@ public partial class Main : Node2D
     {
         EnsureNavigationPreparation();
         if (worldChanged)
+        {
             _worldMap.SyncFromGame();
+            _mapNavigation.RefreshMap();
+        }
         RefreshUi();
     }
 

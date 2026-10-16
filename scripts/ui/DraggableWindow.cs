@@ -141,6 +141,11 @@ public partial class DraggableWindow : PanelContainer
         }
     }
 
+    /**
+     * <summary>结束尚未释放的标题栏拖动，保留窗口位置与可见性。</summary>
+     */
+    public void CancelDrag() => _dragging = false;
+
     public void ShowRaised()
     {
         Show();

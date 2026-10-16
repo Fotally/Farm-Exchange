@@ -32,7 +32,8 @@ public partial class TestRoadPlacement : Node
         Find<Button>(main, "PauseButton").EmitSignal(Button.SignalName.Pressed);
         try
         {
-            return await CheckStartPreview(parent, main) && await CheckTools(parent, main) && await CheckInput(parent, main);
+            return await CheckStartPreview(parent, main) && await CheckRemovalStartPreview(parent, main) &&
+                await CheckTools(parent, main) && await CheckInput(parent, main);
         }
         catch (InvalidOperationException error)
         {
@@ -190,6 +191,81 @@ public partial class TestRoadPlacement : Node
         return true;
     }
 
+    private static async Task<bool> CheckRemovalStartPreview(Node parent, Main main)
+    {
+        WorldMap map = main.GetNode<WorldMap>("WorldMap");
+        Vector2I left = new(201, 189), middle = new(202, 189), right = new(203, 189);
+        Start(main, RoadMaterial.Brick);
+        await NativeClick(parent, main, Screen(map, left));
+        await NativeClick(parent, main, Screen(map, right));
+        StartRemoval(main);
+        var spaces = main.Game.GetBuildingSpaces();
+        int money = main.Game.MoneyCents;
+        uint seconds = main.Game.Calendar.ElapsedSeconds;
+        int[] stocks = FarmGame.Crops.SelectMany(crop => new[]
+            { main.Game.GetRawStock(crop.Kind), main.Game.GetProductStock(crop.Kind) }).ToArray();
+        await MoveIntoWindow(parent, main, Screen(map, middle));
+        if (map.GetDisplayedRoadAppearance(middle) is not { Removed: true, Material: RoadMaterial.Brick } ||
+            map.GetDisplayedRoadAppearance(left) is not { Removed: false, Mask: 0 } ||
+            map.GetDisplayedRoadAppearance(right) is not { Removed: false, Mask: 0 } ||
+            !Find<Label>(main, "BuildHint").Text.Contains("短按选择起点"))
+            return Fail("拆路首次单格预览没有标记真实道路并预览两侧断开");
+        await Capture(parent, main, "removal-start-preview.png");
+        foreach (Vector2I cell in new[] { middle + Vector2I.Down,
+            spaces.First(space => space.Building == BuildingKind.Farm).WorkCell,
+            spaces.First(space => space.Building == BuildingKind.Processor).WorkCell })
+        {
+            await MoveIntoWindow(parent, main, Screen(map, cell));
+            if (map.GetDisplayedRoadAppearance(cell) != null ||
+                map.GetDisplayedRoadAppearance(middle) is not { Removed: false, Mask: 10 })
+                return Fail("空格或生产设施被拆路预览误标，或移动后旧路未恢复连接");
+        }
+        await MoveIntoWindow(parent, main, Screen(map, middle));
+        Send(main, new InputEventMouseMotion { Position = Find<Button>(main, "BuildButton").GetGlobalRect().GetCenter() });
+        await Frames(parent);
+        if (map.GetDisplayedRoadAppearance(middle) is not { Removed: false, Mask: 10 })
+            return Fail("界面遮挡没有清除拆路首次预览");
+        await MoveIntoWindow(parent, main, Screen(map, middle));
+        main.GetWindow().EmitSignal(Window.SignalName.MouseExited);
+        await Frames(parent);
+        if (map.GetDisplayedRoadAppearance(middle) is not { Removed: false, Mask: 10 })
+            return Fail("离窗没有清除拆路首次预览");
+        main.GetWindow().EmitSignal(Window.SignalName.MouseEntered);
+        await MoveIntoWindow(parent, main, Screen(map, middle));
+        if (map.GetDisplayedRoadAppearance(middle) is not { Removed: true })
+            return Fail("返回窗口没有恢复拆路单格预览");
+        Vector2 point = Screen(map, middle);
+        Send(main, new InputEventMouseButton { Position = point, ButtonIndex = MouseButton.Middle, Pressed = true });
+        Send(main, new InputEventMouseMotion { Position = point + new Vector2(60, 0), Relative = new Vector2(60, 0), ButtonMask = MouseButtonMask.Middle });
+        await Frames(parent);
+        if (map.GetDisplayedRoadAppearance(middle) is not { Removed: false }) return Fail("拖镜头未隐藏拆路单格预览");
+        Send(main, new InputEventMouseButton { Position = point + new Vector2(60, 0), ButtonIndex = MouseButton.Middle, Pressed = false });
+        await MoveIntoWindow(parent, main, Screen(map, middle));
+        if (!ReferenceEquals(spaces, main.Game.GetBuildingSpaces()) || main.Game.MoneyCents != money ||
+            !stocks.SequenceEqual(FarmGame.Crops.SelectMany(crop => new[]
+                { main.Game.GetRawStock(crop.Kind), main.Game.GetProductStock(crop.Kind) })) ||
+            !main.Game.IsPaused || main.Game.Calendar.ElapsedSeconds != seconds)
+            return Fail("拆路首次预览修改正式占用、金币、库存或暂停经营状态");
+        await NativeClick(parent, main, Screen(map, middle));
+        if (!ReferenceEquals(spaces, main.Game.GetBuildingSpaces())) return Fail("拆路第一次短按直接提交");
+        main._Input(new InputEventKey { Pressed = true, Keycode = Key.Escape });
+        await Frames(parent);
+        if (!Find<Button>(main, "CancelPlacementButton").Visible || map.GetDisplayedRoadAppearance(middle) is not { Removed: true } ||
+            !Find<Label>(main, "BuildHint").Text.Contains("短按选择起点"))
+            return Fail("取消拆路段没有恢复单格预览");
+        await NativeClick(parent, main, Screen(map, middle));
+        await NativeClick(parent, main, Screen(map, middle));
+        await MoveIntoWindow(parent, main, Screen(map, right));
+        if (main.Game.GetPlot(middle).Building != BuildingKind.None ||
+            map.GetDisplayedRoadAppearance(right) is not { Removed: true } ||
+            !Find<Label>(main, "BuildHint").Text.Contains("短按选择起点") || main.Game.MoneyCents != money)
+            return Fail("拆路成功后没有恢复单格预览或发生退款");
+        await NativeClick(parent, main, Screen(map, left));
+        await NativeClick(parent, main, Screen(map, right));
+        Find<Button>(main, "CancelPlacementButton").EmitSignal(Button.SignalName.Pressed);
+        return true;
+    }
+
     private static bool CheckGesture()
     {
         var gesture = new RoadSegmentGesture();
@@ -222,8 +298,9 @@ public partial class TestRoadPlacement : Node
         if (gesture.HasTurnOrder || gesture.GetCandidate().CanSubmit) return Fail("等量对角移动擅自锁定轴");
         var removal = new RoadSegmentGesture(removing: true);
         removal.UpdateEndpoint(start);
-        if (removal.GetCandidate().Started || removal.GetCandidate().CanSubmit || removal.GetCandidate().Cells.Count != 0)
-            return Fail("拆路工具无起点时扩展了首次单格行为");
+        if (removal.GetCandidate().Started || removal.GetCandidate().CanSubmit ||
+            removal.GetCandidate().Cells.Count != 1 || removal.GetCandidate().Cells[0] != start || removal.HasTurnOrder)
+            return Fail("拆路首次单格预览提前设置起点或拆除轴");
         removal.Begin(start);
         removal.TrackPointer(new Vector2I(22, 25));
         if (removal.GetCandidate().Cells.Count != 6 || removal.GetCandidate().Cells[5] != new Vector2I(20, 25))
@@ -233,8 +310,9 @@ public partial class TestRoadPlacement : Node
             return Fail("拆除轴没有随真实主要移动方向更新");
         removal.Reset();
         removal.UpdateEndpoint(start);
-        if (!removal.IsRemoving || removal.GetCandidate().Started || removal.GetCandidate().Cells.Count != 0)
-            return Fail("拆路清段丢失工具模式或恢复了未实现的单格候选");
+        if (!removal.IsRemoving || removal.GetCandidate().Started || removal.GetCandidate().CanSubmit ||
+            removal.GetCandidate().Cells.Count != 1 || removal.HasTurnOrder)
+            return Fail("拆路清段没有恢复独立的单格候选");
         gesture.Begin(start);
         gesture.UpdateEndpoint(new Vector2I(18, 20));
         if (!gesture.GetCandidate().CanSubmit || gesture.GetCandidate().Cells.Count != 3)
@@ -371,9 +449,14 @@ public partial class TestRoadPlacement : Node
         var camera = main.GetNode<CameraController>("Camera2D");
         Start(main, RoadMaterial.Cobble);
         Vector2I start = new(205, 191);
+        // 前面的预览验收会真实拖动镜头；本用例重新定位，避免继承位移把100像素拖动终点推到窗口外。
+        camera.NavigateTo(MapCoordinates.CellToLocalCenter(start));
+        await Frames(parent);
         await NativeClick(parent, main, Screen(map, start));
         int money = main.Game.MoneyCents;
         Vector2 point = Screen(map, start);
+        RequireMapPoint(main, point);
+        RequireMapPoint(main, point + new Vector2(100, 0));
         Send(main, new InputEventMouseButton { Position = point, ButtonIndex = MouseButton.Left, Pressed = true, ButtonMask = MouseButtonMask.Left });
         Send(main, new InputEventMouseMotion { Position = point + new Vector2(100, 0), Relative = new Vector2(100, 0), ButtonMask = MouseButtonMask.Left });
         await Frames(parent);
@@ -394,9 +477,15 @@ public partial class TestRoadPlacement : Node
         if (Find<Button>(main, "CancelPlacementButton").Visible || main.Game.MoneyCents != money)
             return Fail("取消按钮未直接退出工具或修改资源");
         Start(main, RoadMaterial.Cobble);
-        // 界面上按下、地图上松开不得选择起点。
-        Vector2 ui = Find<Button>(main, "InventoryButton").GetGlobalRect().GetCenter();
+        // 使用没有打开窗口副作用的常驻资源面板，单独验证界面按下、地图松开的归属。
+        Control resources = Find<Control>(main, "ResourcesPanel");
+        if (!resources.IsVisibleInTree() || resources.MouseFilter == Control.MouseFilterEnum.Ignore)
+            return Fail("跨界面输入夹具没有可接收鼠标的资源面板");
+        Vector2 ui = resources.GetGlobalRect().GetCenter();
+        RequireMapPoint(main, Screen(map, start));
+        Send(main, new InputEventMouseMotion { Position = ui });
         Send(main, new InputEventMouseButton { Position = ui, ButtonIndex = MouseButton.Left, Pressed = true, ButtonMask = MouseButtonMask.Left });
+        Send(main, new InputEventMouseMotion { Position = Screen(map, start), ButtonMask = MouseButtonMask.Left });
         Send(main, new InputEventMouseButton { Position = Screen(map, start), ButtonIndex = MouseButton.Left, Pressed = false });
         await Frames(parent);
         if (!Find<Label>(main, "BuildHint").Text.Contains("短按选择起点")) return Fail("跨界面输入选择了道路起点");
@@ -479,16 +568,25 @@ public partial class TestRoadPlacement : Node
 
     private static void RequireMapPoint(Main main, Vector2 position)
     {
-        if (!main.GetViewport().GetVisibleRect().HasPoint(position) ||
-            IsBlockedByUi(main.GetNode<Control>("CanvasLayer/UiRoot"), position))
-            throw new InvalidOperationException($"道路地图输入夹具位于窗口外或界面内：{position}");
+        Rect2 viewport = main.GetViewport().GetVisibleRect();
+        if (!viewport.HasPoint(position))
+            throw new InvalidOperationException($"道路地图输入夹具位于窗口外：位置{position}，视口{viewport}");
+        Control? blocker = FindBlockingUi(main.GetNode<Control>("CanvasLayer/UiRoot"), position);
+        if (blocker != null)
+            throw new InvalidOperationException($"道路地图输入夹具被界面遮挡：位置{position}，控件{blocker.GetPath()}，范围{blocker.GetGlobalRect()}");
     }
 
-    private static bool IsBlockedByUi(Control control, Vector2 position)
+    private static Control? FindBlockingUi(Control control, Vector2 position)
     {
-        if (!control.IsVisibleInTree()) return false;
-        if (control.MouseFilter != Control.MouseFilterEnum.Ignore) return control.GetGlobalRect().HasPoint(position);
-        return control.GetChildren().OfType<Control>().Any(child => IsBlockedByUi(child, position));
+        if (!control.IsVisibleInTree()) return null;
+        if (control.MouseFilter != Control.MouseFilterEnum.Ignore)
+            return control.GetGlobalRect().HasPoint(position) ? control : null;
+        foreach (Control child in control.GetChildren().OfType<Control>().Reverse())
+        {
+            Control? blocker = FindBlockingUi(child, position);
+            if (blocker != null) return blocker;
+        }
+        return null;
     }
 
     private static void AssertVisibleResources(Main main, string evidence)
