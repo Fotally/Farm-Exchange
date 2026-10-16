@@ -30,7 +30,7 @@ public partial class TestWeatherYield : Node
 
     private static FarmingSystem Growing(int seed, CropKind crop, int delay = 0)
     {
-        var farms = new FarmingSystem(1, seed);
+        var farms = ProductionTestClock.CreateFarms(1, seed);
         farms.Place(0, crop);
         var calendar = new GameCalendar(crop == CropKind.Sugarcane ? 4320u : 0u).Snapshot;
         Require(farms.TryWork(0, calendar), "播种失败");
@@ -116,7 +116,7 @@ public partial class TestWeatherYield : Node
             Require(one == two && first == second, "等待供水、读取详情或重复供水重新抽取基础量");
         }
         // 已留水田直接播种开始生长，仍只锁定一次相同随机量。
-        var retained = new FarmingSystem(1, 67);
+        var retained = ProductionTestClock.CreateFarms(1, 67);
         retained.Place(0, CropKind.Radish);
         retained.SupplyWater(0);
         Require(retained.TryWork(0, new GameCalendar().Snapshot), "留水播种失败");

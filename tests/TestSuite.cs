@@ -65,6 +65,7 @@ public partial class TestSuite : Node
             bool cultivationUiPassed = TestCultivationWindow.RunChecks(this);
             GD.Print("单元测试：独立日历换算");
             bool calendarPassed = TestGameCalendar.RunChecks();
+            calendarPassed = TestSimulationDueIndex.RunChecks() && calendarPassed;
             GD.Print("单元测试：经营倍率、暂停半tick与稳定检查点换速");
             bool driverPassed = TestSimulationDriver.RunChecks();
             driverPassed = await TestSimulationDriver.RunNavigationChecks(GetTree()) && driverPassed;
@@ -108,6 +109,7 @@ public partial class TestSuite : Node
             facilitiesPassed = await TestFacilityThumbnails.RunChecksAsync(this) && facilitiesPassed;
             GD.Print("性能测试：满地图 headless 负载");
             bool loadPassed = TestFullWorldLoad.RunChecks();
+            loadPassed = TestProductionDueLoad.RunChecks() && loadPassed;
             GD.Print("端到端测试：库存编辑真实布局与滚动");
             bool inventoryLayoutPassed = await TestCoreLoop.RunLayoutChecks(this);
             GD.Print("端到端测试：委托窗口长列表、条件滚动与布局");
