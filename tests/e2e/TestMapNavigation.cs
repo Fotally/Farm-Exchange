@@ -346,6 +346,54 @@ public partial class TestMapNavigation : Node
         Click(main, Point(atlas, destination));
         Require(maps.IsExpanded && navigations == before + 1, "大图短按未唯一定位或关闭大图");
         RequireCamera(main, destination);
+        foreach (MouseButton primary in new[] { MouseButton.Right, MouseButton.Left })
+        {
+            MouseButton secondary = primary == MouseButton.Right ? MouseButton.Left : MouseButton.Right;
+            MouseButtonMask primaryMask = primary == MouseButton.Right ? MouseButtonMask.Right : MouseButtonMask.Left;
+            void ChordButton(Vector2 position, MouseButton button, bool pressed, MouseButtonMask held) =>
+                Send(main, new InputEventMouseButton
+                {
+                    Position = position,
+                    ButtonIndex = button,
+                    Pressed = pressed,
+                    ButtonMask = held
+                });
+            p = atlas.GetGlobalRect().GetCenter();
+            Vector2 firstMove = p + new Vector2(80, 30);
+            Vector2 continuedMove = p + new Vector2(140, 50);
+            Vector2 initialCenter = atlas.ViewCenter;
+            Vector2 initialCamera = camera.GlobalPosition;
+            before = navigations;
+            Move(main, p);
+            ChordButton(p, primary, true, primaryMask);
+            Move(main, firstMove, primaryMask, firstMove - p);
+            await Frames(parent);
+            Vector2 draggedCenter = atlas.ViewCenter;
+            Require(draggedCenter.DistanceTo(initialCenter) > 1, $"{primary}键双键夹具没有先形成实际拖动");
+            ChordButton(firstMove, secondary, true, MouseButtonMask.Left | MouseButtonMask.Right);
+            Require(Input.IsMouseButtonPressed(MouseButton.Left) && Input.IsMouseButtonPressed(MouseButton.Right),
+                "双键夹具没有同时保持左右键按下");
+            ChordButton(firstMove, secondary, false, primaryMask);
+            await Frames(parent);
+            Require(navigations == before && camera.GlobalPosition.IsEqualApprox(initialCamera) &&
+                atlas.ViewCenter.IsEqualApprox(draggedCenter), $"{primary}键拖动中按放{secondary}键误定位或重置浏览位置");
+            Move(main, continuedMove, primaryMask, continuedMove - firstMove);
+            await Frames(parent);
+            Require(atlas.ViewCenter.DistanceTo(draggedCenter) > 1 && navigations == before &&
+                camera.GlobalPosition.IsEqualApprox(initialCamera), $"{secondary}键释放取消了原{primary}键浏览手势");
+            ChordButton(continuedMove, primary, false, (MouseButtonMask)0);
+            Vector2 stoppedCenter = atlas.ViewCenter;
+            Move(main, continuedMove + new Vector2(20, 0), relative: new Vector2(20, 0));
+            await Frames(parent);
+            Require(navigations == before && camera.GlobalPosition.IsEqualApprox(initialCamera) &&
+                atlas.ViewCenter.IsEqualApprox(stoppedCenter), $"{primary}键最终释放后误定位或遗留拖动");
+        }
+        p = atlas.GetGlobalRect().GetCenter() + new Vector2(70, 0);
+        Vector2 afterChordDestination = atlas.ToMapLocal(p - atlas.GlobalPosition);
+        before = navigations;
+        Click(main, p);
+        Require(navigations == before + 1, "双键交叠结束后正常短按未恢复唯一导航");
+        RequireCamera(main, afterChordDestination);
         foreach (MouseButton button in new[] { MouseButton.Left, MouseButton.Right })
         {
             p = atlas.GetGlobalRect().GetCenter();

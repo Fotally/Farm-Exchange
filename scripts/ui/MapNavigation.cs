@@ -245,10 +245,10 @@ public partial class MapNavigation : Control
     {
         if (input is not InputEventMouseButton button) return;
         view.AcceptEvent();
-        if (!button.Pressed) return;
+        if (!button.Pressed || _gestureView != null) return;
         if (button.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
-            if (view == _atlas && _gestureView == null)
+            if (view == _atlas)
                 ChangeZoom(_atlas.ViewZoom * (button.ButtonIndex == MouseButton.WheelUp ? 1.25f : .8f), button.Position);
             return;
         }
