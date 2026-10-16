@@ -54,7 +54,7 @@
 - [主界面接口](architecture/ui/main/interface-main.md)、[可拖动窗口](architecture/ui/draggable-window/interface-draggable-window.md)、[建造目录](architecture/ui/build-catalog-window/interface-build-catalog-window.md)、[库存窗口](architecture/ui/inventory-window/interface-inventory-window.md)、[市场窗口](architecture/ui/market-window/interface-market-window.md)与[可点击 HTML 原型](architecture/ui/main/prototype-main.html)：场景命令分发、异常后的实际状态刷新、空地与水域详情、目录详情互斥、共同道路候选、建造摆放及窗口位置记忆。选种及两类详情的接口由主界面文档继续导航。
 - [道路详情接口](architecture/ui/road-details-panel/interface-road-details-panel.md)：固定用途说明与移除意图，不读取作物或加工状态。
 - [统一 UI 倍率接口](architecture/ui/ui-scaling/interface-ui-scaling.md)：按原始排版独立设置整体与字体倍率、动态继承及1080P固定像素策略。
-- [大小地图接口](architecture/ui/map-navigation/interface-map-navigation.md)：真实地形与设施缓存、完整视野框、独立缩放与手势、同局浏览记忆；主场景负责输入优先级和镜头导航。
+- [大小地图接口](architecture/ui/map-navigation/interface-map-navigation.md)：真实地形与设施缓存、完整视野框、独立缩放与手势、同局浏览记忆；主场景负责输入优先级、后台按下／拖放取消和镜头导航。
 - [原型图标](architecture/ui/ui-icons/interface-ui-icons.md)与[设施缩略图](architecture/ui/facility-preview/interface-facility-preview.md)：图标、农田与选种沿用主稿SVG；加工和道路缩略复用正式PNG，目录与详情共用取图并显示真实锚点及道路材质。
 - [镜头编辑输入实现](architecture/world/camera-controller/implementation-editing-input-proposal.md)：真实编辑焦点集中阻断键盘平移，场景树处理帧回归及退出编辑后的恢复。
 - [NPC 角色场景接口](architecture/characters/npc-character/interface-npc-character.md)及[独立预览操作](architecture/ui/npc-preview/interface-npc-preview.md)：角色动画、移动和切换图集。

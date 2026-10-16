@@ -14,7 +14,7 @@
 | 右键按下／Esc | 有道路段先取消段，无段则退出工具 | 大地图展开时右键属于大地图，Esc 只关闭大地图 | `Main._Input`、`CancelCurrentSegmentOrPlacement` |
 | Esc | 非摆放时关闭一个窗口 | 按开发工具（DEBUG）、年度表、委托、市场、库存、选种、建造、详情顺序；大地图先关闭且不穿透 | `Main._UnhandledInput` |
 | 左键拖动标题栏 | 移动对应窗口 | 原始输入捕获移动和释放；打开大地图调用 `CancelDrag`，保留窗口位置和内容 | `DraggableWindow.StartDrag`、`_Input` |
-| 左键点击／拖放年度条目 | 选中、编辑与拖放年度条目 | Godot GUI 拖放；打开大地图调用 `Viewport.GuiCancelDrag` 结束旧拖放 | `CultivationTimeline` |
+| 左键点击／拖放年度条目 | 选中、编辑与拖放年度条目 | 开图同时取消已开始拖放与按住未移动的捕获，旧左键经过关图释放也不落位；重新按下恢复操作 | `CultivationTimeline`、`Main.CancelBackgroundGuiGesture` |
 | Esc（开发确认面板） | 取消确认面板 | 确认面板可见时禁止打开大地图；确认内容仍由开发窗口维护 | `ScenarioConfirmationPanel._Input`、`DeveloperToolsWindow.HasVisibleConfirmation` |
 
 来源：[镜头代码](../../scripts/world/CameraController.cs)、[主场景代码](../../scripts/ui/Main.cs)、[窗口拖动](../../scripts/ui/DraggableWindow.cs)、[年度时间图](../../scripts/ui/CultivationTimeline.cs)、[开发确认面板](../../scripts/ui/development/ScenarioConfirmationPanel.cs)。暂停、倍率、建造目录、库存、市场仍以按钮操作，不额外分配 Space、B、I 等键；文本编辑和按钮激活的内建操作不是空闲键位。
@@ -38,6 +38,8 @@
 ## 输入归属与验收
 
 同一手势只归属起始控件。地图拖出控件后继续捕获至松开；离窗、失焦或关闭结束手势且不定位。背景镜头门控同时覆盖 `_UnhandledInput` 和全局按键轮询，不能仅凭 GUI 消费键盘事件判断隔离完成。
+
+开图取消旧 GUI 手势时先消费当前事件，再取消已开始拖放，并在同一个同步调用内隐藏／显示 UI 父节点来清理待启动的鼠标捕获。子窗口自身显示状态、编辑草稿及位置保留，不产生跨帧闪烁，不让内部释放触发背景按钮。实现顺序与原因见[主场景接口](../architecture/ui/main/interface-main.md)。
 
 需要回归文字框内 M／R／WASD、M 自动重复与组合键、确认框阻止打开、未完成道路段打开后的工具取消、背景窗口及年度条目拖动取消、Esc 单层关闭、小地图与大地图滚轮分流、拖回起点和跨控件释放、离窗失焦、重开记忆与新局重置、开关不改变暂停。测试定义与本轮实际通过记录分开维护，不把文档登记当作已完成运行验收。
 

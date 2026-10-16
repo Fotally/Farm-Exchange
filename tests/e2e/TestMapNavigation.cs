@@ -27,6 +27,8 @@ public partial class TestMapNavigation : Node
             parent.GetWindow().Size = new Vector2I(1920, 1080);
             await Frames(parent);
             main = await CreateMain(parent, true);
+            await CheckCultivationDragCancellation(parent, main);
+            await CheckButtonPressCancellation(parent, main);
             await CheckInput(parent, main);
             await CheckGestures(parent, main);
             await CheckMapChanges(parent, main);
@@ -71,6 +73,150 @@ public partial class TestMapNavigation : Node
         await Frames(parent);
         Require(main.Game.IsPaused, "夹具未通过真实按钮暂停");
         return main;
+    }
+
+    private static async Task CheckCultivationDragCancellation(Node parent, Main main)
+    {
+        if (DisplayServer.GetName() != "headless")
+            Require(main.GetWindow().HasFocus(), "年度表原生拖放夹具没有真实窗口焦点");
+        Click(main, Find<Button>(main, "CultivationButton").GetGlobalRect().GetCenter());
+        await Frames(parent);
+        var maps = Find<MapNavigation>(main, "MapNavigation");
+        var timeline = Find<CultivationTimeline>(main, "CultivationTimeline");
+        var info = Find<Label>(main, "CultivationEntryInfo");
+        var card = Find<Control>(main, "CultivationCropWheat");
+        int drops = 0;
+        void OnDrop(int id, CropKind crop, int day) => drops++;
+        timeline.EntryDropped += OnDrop;
+        try
+        {
+            foreach (string scenario in new[] { "正常对照", "条目待启动", "卡片待启动", "卡片已拖放", "重新拖放" })
+            {
+                bool entry = scenario == "条目待启动";
+                bool active = scenario == "卡片已拖放";
+                bool interrupt = entry || active || scenario == "卡片待启动";
+                if (!entry)
+                    Click(main, Find<Button>(main, "NewCultivationPlanButton").GetGlobalRect().GetCenter());
+                await Frames(parent);
+                Vector2 start = entry ? timeline.GlobalPosition + new Vector2(165, 38) : card.GetGlobalRect().GetCenter();
+                Vector2 moved = start + new Vector2(50, 35);
+                Vector2 destination = timeline.GlobalPosition + new Vector2(entry ? 340 : 165, 38);
+                string before = info.Text;
+                int previousDrops = drops;
+                Move(main, start);
+                await Frames(parent);
+                Send(main, new InputEventMouseButton
+                {
+                    Position = start,
+                    ButtonIndex = MouseButton.Left,
+                    Pressed = true,
+                    ButtonMask = MouseButtonMask.Left
+                });
+                await Frames(parent);
+                Require(!main.GetViewport().GuiIsDragging() && Input.IsMouseButtonPressed(MouseButton.Left),
+                    "年度表待启动拖放夹具未保持左键或提前越过阈值");
+                if (interrupt && !active)
+                {
+                    Key(main, Godot.Key.M);
+                    await Frames(parent);
+                    Require(maps.IsExpanded && !main.GetViewport().GuiIsDragging(), "待启动拖放期间M未正常打开地图");
+                }
+                Move(main, moved, MouseButtonMask.Left, moved - start);
+                await Frames(parent);
+                bool draggingAfterMove = main.GetViewport().GuiIsDragging();
+                if (active)
+                {
+                    Require(draggingAfterMove, "年度表已启动拖放夹具未越过原生阈值");
+                    Key(main, Godot.Key.M);
+                    await Frames(parent);
+                    Require(maps.IsExpanded && !main.GetViewport().GuiIsDragging(), "开图没有取消已启动的年度表原生拖放");
+                }
+                if (interrupt)
+                {
+                    Key(main, Godot.Key.M);
+                    await Frames(parent);
+                    Require(!maps.IsExpanded, "待启动拖放回归无法关闭地图");
+                    Require(main.GetNode<CameraController>("Camera2D").IsMouseInsideWindow,
+                        "地图关闭后丢失原有在窗状态，必须额外移鼠才能恢复输入");
+                }
+                Move(main, destination, MouseButtonMask.Left, destination - moved);
+                await Frames(parent);
+                bool draggingBeforeDrop = main.GetViewport().GuiIsDragging();
+                MouseButtonEvent(main, destination, MouseButton.Left, false);
+                await Frames(parent);
+                bool changed = info.Text != before;
+                GD.Print($"年度表原生拖放：{scenario}，阈值后拖放={draggingAfterMove}，落位前拖放={draggingBeforeDrop}，" +
+                    $"实际落位={drops - previousDrops}，草稿改变={changed}");
+                if (interrupt)
+                    Require((active || !draggingAfterMove) && !draggingBeforeDrop && drops == previousDrops && !changed,
+                        $"开图未取消年度表{scenario}，旧按下在地图上启动或关图后改变草稿");
+                else
+                    Require(draggingAfterMove && draggingBeforeDrop && drops == previousDrops + 1 && changed,
+                        "年度作物卡片正常原生拖放对照未成功，不能判定中断回归");
+            }
+        }
+        finally
+        {
+            timeline.EntryDropped -= OnDrop;
+            MouseButtonEvent(main, main.GetViewport().GetMousePosition(), MouseButton.Left, false);
+            if (maps.IsExpanded) Key(main, Godot.Key.M);
+            Find<DraggableWindow>(main, "CultivationWindow").Hide();
+        }
+    }
+
+    private static async Task CheckButtonPressCancellation(Node parent, Main main)
+    {
+        var button = Find<Button>(main, "InventoryButton");
+        var window = Find<DraggableWindow>(main, "InventoryWindow");
+        var maps = Find<MapNavigation>(main, "MapNavigation");
+        int presses = 0;
+        void OnPressed() => presses++;
+        button.Pressed += OnPressed;
+        try
+        {
+            Require(!window.Visible, "背景按钮中断夹具的库存窗口已打开");
+            Vector2 point = button.GetGlobalRect().GetCenter();
+            Move(main, point);
+            await Frames(parent);
+            Send(main, new InputEventMouseButton
+            {
+                Position = point,
+                ButtonIndex = MouseButton.Left,
+                Pressed = true,
+                ButtonMask = MouseButtonMask.Left
+            });
+            await Frames(parent);
+            Require(presses == 0 && !window.Visible, "背景按钮夹具在按下阶段已触发动作");
+            Key(main, Godot.Key.M);
+            await Frames(parent);
+            Require(maps.IsExpanded && presses == 0 && !window.Visible, "开图清理鼠标捕获时意外触发背景按钮");
+            Key(main, Godot.Key.M);
+            await Frames(parent);
+            MouseButtonEvent(main, point, MouseButton.Left, false);
+            await Frames(parent);
+            Require(!maps.IsExpanded && presses == 0 && !window.Visible, "关图后的旧释放触发了背景按钮");
+            Click(main, point);
+            await Frames(parent);
+            Require(presses == 1 && window.Visible, "清理旧捕获后背景按钮不能重新正常点击");
+            Click(main, Find<Button>(window, "CloseButton").GetGlobalRect().GetCenter());
+            await Frames(parent);
+            Require(!window.Visible, "背景按钮回归未正常关闭库存窗口");
+            var camera = main.GetNode<CameraController>("Camera2D");
+            main.GetWindow().EmitSignal(Window.SignalName.MouseExited);
+            Key(main, Godot.Key.M);
+            await Frames(parent);
+            Require(maps.IsExpanded && !camera.IsMouseInsideWindow, "离窗时开图伪造鼠标返回窗口");
+            Key(main, Godot.Key.M);
+            Require(!maps.IsExpanded && !camera.IsMouseInsideWindow, "离窗时关图伪造鼠标返回窗口");
+            main.GetWindow().EmitSignal(Window.SignalName.MouseEntered);
+        }
+        finally
+        {
+            button.Pressed -= OnPressed;
+            MouseButtonEvent(main, main.GetViewport().GetMousePosition(), MouseButton.Left, false);
+            if (maps.IsExpanded) Key(main, Godot.Key.M);
+            main.GetWindow().EmitSignal(Window.SignalName.MouseEntered);
+        }
     }
 
     private static async Task CheckInput(Node parent, Main main)

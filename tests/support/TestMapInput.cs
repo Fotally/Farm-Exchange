@@ -53,8 +53,9 @@ internal static class TestMapInput
         });
     }
 
-    internal static void Move(Node owner, Vector2 position, MouseButtonMask buttons = (MouseButtonMask)0) =>
-        Send(owner, new InputEventMouseMotion { Position = position, ButtonMask = buttons });
+    internal static void Move(Node owner, Vector2 position, MouseButtonMask buttons = (MouseButtonMask)0,
+        Vector2 relative = default) =>
+        Send(owner, new InputEventMouseMotion { Position = position, Relative = relative, ButtonMask = buttons });
 
     internal static void MouseButtonEvent(Node owner, Vector2 position, MouseButton button, bool pressed) =>
         Send(owner, new InputEventMouseButton { Position = position, ButtonIndex = button, Pressed = pressed });

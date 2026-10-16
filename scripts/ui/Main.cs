@@ -569,7 +569,7 @@ public partial class Main : Node2D
             if (_placement != null) CancelPlacement();
             _mapPreviousFocus = GetViewport().GuiGetFocusOwner();
             _mapPreviousFocus?.ReleaseFocus();
-            GetViewport().GuiCancelDrag();
+            CancelBackgroundGuiGesture();
             foreach (Node child in _uiRoot.GetChildren())
                 if (child is DraggableWindow window) window.CancelDrag();
             _uiRoot.MoveChild(_mapNavigation, _uiRoot.GetChildCount() - 1);
@@ -583,6 +583,17 @@ public partial class Main : Node2D
                 _mapPreviousFocus.GrabFocus();
             _mapPreviousFocus = null;
         }
+    }
+
+    private void CancelBackgroundGuiGesture()
+    {
+        // 先消费当前事件，阻止隐藏控件时的引擎内部释放触发背景按钮。
+        GetViewport().SetInputAsHandled();
+        GetViewport().GuiCancelDrag();
+        // GuiCancelDrag 只清已启动拖放；同帧隐藏父节点还会清除未启动的鼠标捕获。
+        // 子窗口自身 Visible、草稿及位置保持，不跨帧隐藏，也不修改窗口鼠标进出状态。
+        _uiRoot.Hide();
+        _uiRoot.Show();
     }
 
     private void RefreshMapCameraView()
