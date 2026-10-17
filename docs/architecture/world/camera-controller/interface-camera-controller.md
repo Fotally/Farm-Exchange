@@ -1,6 +1,6 @@
 # CameraController 对外接口
 
-对应类型：FarmExchange.World.CameraController，代码位于 scripts/world/CameraController.cs。作为 Godot Camera2D 节点，它接收输入，使用 WorldMap.SelectAtScreenPosition 完成短按选格，使用 WorldMap.ClampGlobalCameraCenter 限制全局镜头位置。
+对应类型：FarmExchange.World.CameraController，代码位于 scripts/world/CameraController.cs。作为 Godot Camera2D 节点，它识别已通过界面门禁的短按、拖动与缩放，使用 WorldMap.ClampGlobalCameraCenter 限制全局镜头位置；短按的当前模式归属由 Main 统一决定。
 
 左键按下到释放的移动距离达到 8 个逻辑视口像素时转为拖动，不再发出选格；释放立即结束拖动，即使释放事件被界面拦截，也在下一帧校正。中键拖动、滚轮缩放、WASD 和方向键移动由该模块处理。玩家倍率范围为 1.25～2 倍，开局为 1.25。
 
@@ -12,7 +12,7 @@
 
 `NavigateTo(Vector2 mapLocalPosition)` 接收 `WorldMap` 本地世界像素位置，转换全局位置、复用同一 `ClampGlobalCameraCenter` 并立即刷新引擎画布变换。大小地图共用此入口，输入禁用期间也可显式定位；它结束旧手势、保留倍率，不选择地块、不提交经营命令。真实视野四角由宿主读取实际地图画布逆变换，不复制镜头限制算法。
 
-`MapShortClicked(Vector2)` 在已通过界面和拖动检查的左键释放处、原 `WorldMap.SelectAtScreenPosition` 前通知逻辑视口像素位置，包含地图外位置；道路工具据此提交越界整段并显示实际拒绝原因。`Main` 的普通选择信号在道路工具期间只清选择并返回，避免同次短按执行两次道路命令。
+`MapShortClicked(Vector2)` 是已接受左键短按的唯一通知，参数为释放处逻辑视口像素，包含地图外位置。镜头发送后不再执行地图选择。`Main` 一次解析释放格，按当前模式只选择普通地块、提交一座生产设施或处理一次道路起点／终点；道路保留地图外端点，由经营入口整段重验并显示实际拒绝原因。调用方无需维护短按与后续选择事件的先后或撤销协议。
 
 `MapPointerMoved(Vector2)` 只在 `_UnhandledInput` 的真实鼠标移动、左键未按住且左／中键未拖动时通知。按住但尚未达到阈值也不通知，避免随后变为拖镜头的运动污染铺路轨迹。界面接收的移动不会通知；松开、滚轮、窗口、键盘和逐帧更新不冒充鼠标轨迹。Main 在退出场景解除两个通知订阅，详细状态规则见[道路操作](../../../gameplay/land/roads.md)。
 
@@ -37,3 +37,7 @@ Module 内部唯一保存玩家倍率；初始化及视口尺寸变化时，按�
 它不计算等距坐标、不修改经营状态；输入的玩家可见行为见[地图与操作](../../../gameplay/world/map-and-camera.md)。tests/integration/TestCameraInteraction.cs 检查镜头与地图协作。
 
 表现诊断通过内部 PlayerZoom 读取模块持有的真实玩家倍率；它不是抵消画布拉伸后的 Camera2D.Zoom。Main 只在检测到实际视图变化且局级 ViewChanged 入选时记录，不改变镜头输入或缩放规则。
+
+#187 的输入回归由同一正式镜头入口进入：`TestCameraInteraction` 注入真实 `Input` 按放，检查一次普通选择、UI按下／地图松开、地图按下／UI松开和失焦释放；`TestBuildPlacement` 与 `TestRoadPlacement` 保留原生拖动、取消和工具流程，并断言工具短按不产生普通选框。`TestRoadPlacement` 另在实际可见地图边缘用原生输入检查新建与拆除越界整段拒绝、原段缩回后可提交。`TestMapNavigation` 检查大小地图全部手势不进入主地图短按分派。
+
+越界道路夹具从有效边界格及其内侧相邻格的屏幕差外推地图外鼠标点，并用 `ScreenToCell` 核对实际落格；不把地图外格传给仅接受有效格的 `MapCoordinates.CellToLocalCenter`。

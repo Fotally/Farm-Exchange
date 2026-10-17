@@ -93,6 +93,7 @@ try {
     }
     New-Item -ItemType Directory -Path (Join-Path $build 'logs') -Force | Out-Null
     Copy-Item -LiteralPath $schema -Destination (Join-Path $build 'logs/schema-v1.md') -Force
+    & (Join-Path $PSScriptRoot 'Test-RuntimePack.ps1') -PackPath (Join-Path $build 'FarmExchange.pck') -ReportPath (Join-Path $evidence 'runtime-pack.json')
     $startArguments = @{
         FilePath = Join-Path $build 'FarmExchange.exe'
         ArgumentList = @('--headless', '--quit-after', '5')
@@ -169,6 +170,7 @@ if ($primaryFailure -or $preservationFailures.Count -gt 0) {
     throw (@($primaryFailure) + $preservationFailures.ToArray() | Where-Object { $_ }) -join '; '
 }
 Assert-BuildContent
+& (Join-Path $PSScriptRoot 'Test-RuntimePack.ps1') -PackPath (Join-Path $build 'FarmExchange.pck') -ReportPath (Join-Path $evidence 'runtime-pack-final.json')
 if ($archive) {
     $archiveDirectory = Split-Path -Parent $archive
     New-Item -ItemType Directory -Path $archiveDirectory -Force | Out-Null
@@ -176,6 +178,7 @@ if ($archive) {
     try {
         [IO.Compression.ZipFile]::CreateFromDirectory($build, $temporaryArchive)
         Assert-ArchiveContent $temporaryArchive
+        & (Join-Path $PSScriptRoot 'Test-RuntimePack.ps1') -PackPath $temporaryArchive -ReportPath (Join-Path $evidence 'runtime-pack-archive.json')
         [IO.File]::Move($temporaryArchive, $archive)
     } finally {
         if (Test-Path -LiteralPath $temporaryArchive) { Remove-Item -LiteralPath $temporaryArchive -Force }

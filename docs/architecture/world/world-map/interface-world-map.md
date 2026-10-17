@@ -1,13 +1,13 @@
 # WorldMap 对外接口
 
-对应类型：FarmExchange.World.WorldMap，代码位于 scripts/world/WorldMap.cs。模块负责地图表现、屏幕输入与节点坐标变换、格子选择及镜头范围，不保存或推进经营。等距公式由[MapCoordinates](../map-coordinates/interface-map-coordinates.md)提供。
+对应类型：FarmExchange.World.WorldMap，代码位于 scripts/world/WorldMap.cs。模块负责地图表现、视口与节点坐标变换、已决定的格子选框及镜头范围，不保存或推进经营。等距公式由[MapCoordinates](../map-coordinates/interface-map-coordinates.md)提供。
 
 | 成员 | 输入与输出 | 调用约定 |
 | --- | --- | --- |
 | SetGame | FarmGame、可选同局SimulationDriver | 地图挂树后初始化一次；独立场景省略driver按1×，初次绑定不回播已有结果 |
 | SyncFromGame | 无参数 | 每个成功经营命令或tick结束后调用；读取快照更新外观并按实际完整占地永久清除环境根点，拆建之间不可跳过同步 |
 | AttachDepthSorted | 尚未挂树的Node2D表现容器 | SetGame后调用；设零位置并启用嵌套YSort，子节点原点为脚根，不另设ZIndex；地图负责生命周期 |
-| SelectAtScreenPosition | 屏幕坐标 | 有效格发出SelectionChanged(cell)，保留原点击子格 |
+| SelectCell | 已决定的基础格 | 只落实普通选框，保留原点击子格；地图外保持原选择，不发送输入或经营事件 |
 | ScreenToCell | 逻辑视口坐标→基础格 | 返回未限制格坐标，使越界候选完整显示 |
 | UpdatePlacementPreview | 建筑类型、作物、锚点、可选BuildingOrientation（默认Q0） | 只读更新完整占地、局部冲突、半透明实例图及外围，不更新地面块 |
 | ClearPlacementPreview | 无参数 | 隐藏预览，不改变摆放生命周期或经营资源 |
@@ -37,7 +37,9 @@ WorldMap通过`FarmGame.GetBuildingSpaces()`读取包含固定实例朝向的稳
 
 道路工具使用UpdateRoadPreview传完整范围。地图内完整陆地真实空格才参与有效新路连接，候选冲突格不覆盖正式路；已有路保持材质并临时呈现建后mask。拆除只排除范围内实际道路，待拆格红色半透明、保留旧路呈现拆后mask。纹理在地面层绘制，逐格绿/红提示独立覆盖。移动/隐藏/ClearRoadPreview撤销原候选四邻影响，仅刷新状态实际变化的缓存块；跨8×8块同样处理。预览不修改土地、资源、环境或经营，工具当前段仍由Main持有；正式提交使用FarmGame并SyncFromGame。拓扑、资源及独立图形验收入口见[道路实现](implementation-road-appearance.md)。
 
-选中任一生产子格仍发出原格坐标，由经营入口解析同实例；金色选框按占地外边完整绘制，拆除后恢复为选中空小格。选框独立于地面缓存并位于设施/人物上方。地图位置转换及玩家操作见[地图规则](../../../gameplay/world/map-and-camera.md)。
+普通短按由 Main 解析原点击子格并决定选择后，再交给 SelectCell 显示选框；详情通过经营入口解析同实例；金色选框按占地外边完整绘制，拆除后恢复为选中空小格。选框独立于地面缓存并位于设施/人物上方。地图位置转换及玩家操作见[地图规则](../../../gameplay/world/map-and-camera.md)。
+
+地图不持有工具模式，也不通过选框通知触发建造。`CameraController` 只发布已接受短按；`Main` 统一分派普通选择、生产或道路。`SelectionChanged` 与 `SelectAtScreenPosition` 的旧双事件输入协议已移除；普通选择调用 `ScreenToCell` 后使用 `SelectCell`，工具分支直接处理自身意图。独立地图表现用例仍可显式设置选框，并检查实际子格、完整外围与重绘；经营／UI连接测试经正式镜头输入进入同一分派。
 
 正式建筑选框与候选预览共用内部 `PlacementPreviewGeometry.GetCellOuterEdges`：以土地定义的完整偏移集合排除内部相邻边，返回未经地图边界裁切的本地线段。两条绘制路径各自保留颜色、线宽、显示时机和缓存；正式选框仍为3像素金线，候选外围仍为2像素且逐段沿用所属格的绿／红冲突颜色。此共享计算不改变占地、子格选择、费用或候选生命周期，具体调用见[实现说明](implementation-chunk-cache.md#占地外围几何)。
 

@@ -5,6 +5,7 @@
 - [自动化测试与性能测量](testing.md)：headless 场景、覆盖率、满地图负载和图形 FPS。
 - [GitHub Actions](continuous-integration.md)：测试与双平台构建三条并行 CI、手动入口及发布门禁。
 - [正式版本发布](release.md)：版本号、压缩包和发布验收。
+- [运行资源与实际 PCK 验收](runtime-resources.md)：正式/开发/历史资源选择、动态资源完整性、禁止资源正反夹具与包体清单。
 - [当前玩法人工验收](manual-playthrough.md)：地图、七种作物、日历、建造、加工与交易操作。
 
 - [参数化开发测试](parameterized-tests-usage.md)：持久JSON用例、当前局和独立数据局、开发窗口与报告；现有TestSuite接入同一固定流程，dev导出仅本地验收。

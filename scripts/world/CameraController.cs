@@ -32,7 +32,7 @@ public partial class CameraController : Camera2D
 
     /**
      * <summary>通知已通过界面与拖动检查的地图左键短按。</summary>
-     * <remarks>参数为逻辑视口像素，包含地图外位置；在原地图选格前通知。</remarks>
+     * <remarks>参数为逻辑视口像素，包含地图外位置；由宿主唯一分派当前模式意图，镜头不执行选格。</remarks>
      */
     public event Action<Vector2>? MapShortClicked;
 
@@ -142,10 +142,7 @@ public partial class CameraController : Camera2D
                 else
                 {
                     if (_leftPressed && !_leftDragging && mouse.Position.DistanceTo(_leftPressPosition) < ClickDistance)
-                    {
                         MapShortClicked?.Invoke(mouse.Position);
-                        _worldMap.SelectAtScreenPosition(mouse.Position);
-                    }
                     _leftPressed = false;
                     _leftDragging = false;
                 }

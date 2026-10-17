@@ -21,6 +21,12 @@
 
 旧三份schemaVersion=1 JSON保持兼容，没有增加名称键或改变字段层次。原料正式值和中文名直接读取唯一作物目录。
 
+## 校验错误
+
+`ScenarioConfigurationException.FieldPath`独立提供机器使用的字段位置：点式对象路径与零起点数组索引，例如`execution.timePlan[1].endDate`；空字符串表示整份配置或文件操作错误。`Message`只负责人类可读反馈，允许中文冒号、补充上下文与文案修改，调用方不得拆分说明来恢复字段路径。Schema在生成错误时显式写入位置，现有中文显示保留。
+
+构造`ScenarioConfigurationException(message,inner,fieldPath)`时，显式位置优先；省略位置则继承内层`ScenarioConfigurationException`的`FieldPath`，没有该内层异常时为空。包装说明不改变内层定位；传入空字符串可明确表达新的整体错误。异常仍保留原`InnerException`。
+
 ## 草稿
 
 `new ScenarioConfigurationDraft(schema,bytes,entry)`构造独立草稿；第三参数可省略，用于第二配置形状的通用表单测试。字段路径使用`run.target`、`parameters.processorAnchor.x`、`execution.timePlan[0].rate`。
@@ -30,13 +36,17 @@
 | `GetValue(path)` | 标量保留原生int/uint/double/bool/string；非法输入返回原文本；数组返回int行数，对象返回null，不泄漏可变对象 |
 | `SetValue(path,text)` | 按描述解析，返回本字段是否有效；非法输入保留文本及字段错误，原文件保持；只读、隐藏或对象/数组直接修改明确拒绝 |
 | `IsVisible(path)` | 查询当前条件显示与输出约定 |
-| `Validate()` / `Errors` | 返回按字段路径定位的独立只读错误快照；空集合表示可保存 |
+| `Validate()` / `Errors` | 返回按结构化字段路径定位的独立只读错误快照，值为中文显示说明；空键表示整体错误，空集合表示可保存 |
 | `IsDirty` | 与加载时的规范编辑值比较；非法输入或不合法时间顺序也为未保存状态 |
 | `AddArrayItem(path)` | 使用数组元素具体类型的默认值加入新行 |
 | `RemoveArrayItem(path,index)` | 删除该行，移动其余行的非法输入与错误路径 |
 | `MoveArrayItem(path,index,target)` | 移动原行及其错误；不自动排序或修正终点日期 |
 
 切换到当前局时隐藏种子，清除隐藏种子的非法输入错误；已解析的种子值仍保留，切回独立局后可继续编辑。数组为空、终点乱序等整体错误明确呈现，不自动补行或调整日期。
+
+整份schema校验直接使用异常的`FieldPath`定位，不解析`Message`标点；本字段输入解析失败仍由`SetValue(path,text)`已知路径定位。表单把字段错误显示在相应字段下，空时间数组显示在时间区间下，倒序终点显示在具体行的终点日期下；空路径错误在表单顶部的整体错误区显示，无错误时该区域不占内容高度。数组移动和删除继续同步原行非法输入与错误，隐藏字段仍清理其输入错误。
+
+`TestScenarioConfigurationSchema`验证严格JSON、结构化字段位置、整体JSON错误及更换中文说明后的包装定位；`TestDeveloperFlowEditor`通过真实schema→draft→form验证倒序终点、空数组、非法原文及数组错误重映射，不改变既有持久化与执行规则。临时表单由测试管理生命周期：数组编辑后先在树内等待已排队的焦点恢复回调完成，再移除、释放表单并等待释放结束，避免对离树控件恢复焦点；headless与1080P图形验收均须核对运行日志无此类错误。
 
 ## 配置库
 

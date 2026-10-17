@@ -48,11 +48,9 @@ public partial class TestRoadMap : Node
             if (!await TestRoadAppearance.CheckPreview(parent, game, map, firstRoad, secondRoad)) return false;
 
             int roadRedraws = map.ChunkRedrawCount;
-            Vector2I selected = new(-1, -1);
-            map.SelectionChanged += cell => selected = cell;
-            map.SelectAtScreenPosition(ScreenCenter(map, firstRoad));
+            map.SelectCell(map.ScreenToCell(ScreenCenter(map, firstRoad)));
             await LayoutFrames(parent);
-            if (selected != firstRoad || map.ChunkRedrawCount != roadRedraws ||
+            if (map.SelectedCell != firstRoad || map.ChunkRedrawCount != roadRedraws ||
                 game.Calendar.ElapsedSeconds != 0)
                 return Fail("平移地图后的道路选择错误，或选框重建了地块/推进了经营");
 
@@ -89,8 +87,8 @@ public partial class TestRoadMap : Node
                     return Fail("拆除后没有恢复绿色空地，或相邻道路外观被清除");
                 SaveScreenshot(after, "road-map-after.png");
             }
-            map.SelectAtScreenPosition(ScreenCenter(map, secondRoad));
-            if (selected != secondRoad)
+            map.SelectCell(map.ScreenToCell(ScreenCenter(map, secondRoad)));
+            if (map.SelectedCell != secondRoad)
                 return Fail("道路移除后，相邻道路无法继续选择");
             return await CheckSameCountRoadReplacement(parent, game, map, secondRoad) &&
                 await CheckProductionFootprints(parent, game, map);
@@ -149,15 +147,13 @@ public partial class TestRoadMap : Node
         map.ClearSelection();
         await LayoutFrames(parent);
         Image? unselected = graphical ? parent.GetViewport().GetTexture().GetImage() : null;
-        Vector2I selected = new(-1, -1);
-        map.SelectionChanged += cell => selected = cell;
         foreach (var space in new[] { game.GetBuildingSpace(farm)!, game.GetBuildingSpace(processor)! })
             foreach (Vector2I offset in space.Footprint.Offsets)
             {
                 Vector2I child = space.AnchorCell + offset;
-                map.SelectAtScreenPosition(ScreenCenter(map, child));
+                map.SelectCell(map.ScreenToCell(ScreenCenter(map, child)));
                 await LayoutFrames(parent);
-                if (selected != child || game.GetBuildingSpace(selected) != space)
+                if (map.SelectedCell != child || game.GetBuildingSpace(child) != space)
                     return Fail("平移后的任一生产子格未关联同一整座设施");
                 if (map.ChunkRedrawCount != builtRedraws)
                     return Fail("任一生产子格的选框重建了地图块");
@@ -169,7 +165,7 @@ public partial class TestRoadMap : Node
                         return Fail($"选择子格{child}未绘制完整外围，或金框覆盖了占地内部边");
                 }
             }
-        map.SelectAtScreenPosition(ScreenCenter(map, farm + new Vector2I(2, 2)));
+        map.SelectCell(map.ScreenToCell(ScreenCenter(map, farm + new Vector2I(2, 2))));
         await LayoutFrames(parent);
         if (map.ChunkRedrawCount != builtRedraws)
             return Fail("多格设施选框重建了地图块");
@@ -183,7 +179,7 @@ public partial class TestRoadMap : Node
                 !TestWorldArt.MatchesTexture(image, map, processor + Vector2I.One,
                     "buildings/corn_workshop_q0.png", new Vector2(128, 176)))
                 return Fail("跨块农田土层或加工设施没有按工作中心绘制完整原图");
-            map.SelectAtScreenPosition(ScreenCenter(map, farm + new Vector2I(2, 2)));
+            map.SelectCell(map.ScreenToCell(ScreenCenter(map, farm + new Vector2I(2, 2))));
             await LayoutFrames(parent);
             image = parent.GetViewport().GetTexture().GetImage();
             if (!HasGoldenOutline(image, map, farm, 3, 3))

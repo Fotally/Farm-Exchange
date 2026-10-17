@@ -14,7 +14,9 @@ namespace FarmExchange.UI;
  */
 public partial class ScenarioConfigurationForm : ScrollContainer
 {
+    private readonly VBoxContainer _body = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
     private readonly GridContainer _content = new();
+    private readonly Label _overallError = MakeLabel("", 11, new Color("963f2c"));
     private readonly List<Control> _groupPanels = new();
     private readonly List<(string Path, Control Row)> _rows = new();
     private readonly List<(string Path, Label Error)> _errors = new();
@@ -40,7 +42,11 @@ public partial class ScenarioConfigurationForm : ScrollContainer
         var padding = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         padding.AddThemeConstantOverride("margin_right", 12);
         AddChild(padding);
-        padding.AddChild(_content);
+        padding.AddChild(_body);
+        _overallError.Name = "ScenarioConfigurationOverallError";
+        _overallError.Visible = false;
+        _body.AddChild(_overallError);
+        _body.AddChild(_content);
         Resized += UpdateGroupLayout;
     }
 
@@ -247,6 +253,7 @@ public partial class ScenarioConfigurationForm : ScrollContainer
         if (field.Description.Length != 0)
             card.AddChild(MakeLabel(field.Description, 12, Muted));
         Label error = MakeLabel("", 11, new Color("963f2c"));
+        error.Name = "ScenarioError_" + ControlName(path);
         error.Visible = false;
         card.AddChild(error);
         _errors.Add((path, error));
@@ -301,6 +308,8 @@ public partial class ScenarioConfigurationForm : ScrollContainer
                 input.Text = Convert.ToString(_draft.GetValue(path), CultureInfo.InvariantCulture) ?? "";
         }
         IReadOnlyDictionary<string, string> errors = _draft!.Errors;
+        _overallError.Visible = errors.TryGetValue("", out string? overallError);
+        _overallError.Text = overallError ?? "";
         foreach ((string path, Label label) in _errors)
         {
             label.Visible = errors.TryGetValue(path, out string? error);
@@ -347,7 +356,7 @@ public partial class ScenarioConfigurationForm : ScrollContainer
     {
         if (_groupPanels.Count == 0 || Size.X <= 0) return;
         float scale = UiScaling.OverallScale(this);
-        float width = Size.X - ((MarginContainer)_content.GetParent()).GetThemeConstant("margin_right") - GetVScrollBar().GetCombinedMinimumSize().X;
+        float width = Size.X - ((MarginContainer)_body.GetParent()).GetThemeConstant("margin_right") - GetVScrollBar().GetCombinedMinimumSize().X;
         float gap = _content.GetThemeConstant("h_separation");
         int columns = Math.Min(_groupPanels.Count, Math.Clamp((int)((width + gap) / (320 * scale * UiScaling.FontScale(this) + gap)), 1, 3));
         _content.Columns = columns;

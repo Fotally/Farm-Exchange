@@ -14,7 +14,7 @@
 - [委托与自动交易](gameplay/trading/orders.md)：多因素条件、两种一次买单、资源冻结、原现金基准保留和 1% 成交费用。
 - [开局与建造](gameplay/land/opening-and-building.md)：预置建筑、建造收费与扩张。
 - [道路铺设与移除](gameplay/land/roads.md)：五材质、两次点击直线／L 形铺设、投影直线拆除、整段提交及连接预览；工人优先道路选路，速度不变。
-- [地图与操作](gameplay/world/map-and-camera.md)：坐标、选择、镜头与画面含义；窗口和全屏扩大时增加地图视野，保持农田大小。
+- [地图与操作](gameplay/world/map-and-camera.md)：坐标、选择、镜头与画面含义，地图短按由主场景按模式唯一分派；窗口和全屏扩大时增加地图视野，保持农田大小。
 - [经营速率与暂停](gameplay/world/simulation-rate.md)：发布0.5×/1×/2×、暂停保留未完成tick进度与工人动画；开发倍率最高16×及现场流程中断语义。
 
 ## 代码架构
@@ -44,7 +44,7 @@
 - [日志专项验收](architecture/logging/implementation-validation.md)：真实provider故障、1080P满图1×/16×负载与分配矩阵、进程退出与实际Release程序集门禁；运行命令见测试说明。
 - [SimulationDriver 接口](architecture/time/simulation-driver/interface-simulation-driver.md)：唯一倍率与未完成tick进度、导航等待门禁、完整秒异常提交凭据、稳定检查点、预算限额和玩家/流程改速来源。
 - [参数化流程接口](architecture/development/interface-parameterized-scenario.md)与[固定流程实现](architecture/development/implementation-buy-process-sell.md)：严格配置、两种运行对象、日期及等待预算、同步结算和证据检查、只输出JSON报告。
-- [配置编辑接口](architecture/development/interface-scenario-configuration-editor.md)与[配置库实现](architecture/development/implementation-scenario-configuration-library.md)：可编辑字段元数据、严格扫描与草稿、Git持久配置、另存覆盖及两种删除的文件归属。
+- [配置编辑接口](architecture/development/interface-scenario-configuration-editor.md)与[配置库实现](architecture/development/implementation-scenario-configuration-library.md)：可编辑字段元数据、严格扫描、结构化字段错误与草稿、Git持久配置、另存覆盖及两种删除的文件归属。
 - [开发窗口接口](architecture/ui/developer-tools-window/interface-developer-tools-window.md)：文件选择、显式重选恢复与草稿冲突保护、启动/中止、当前局与独立数据局接入、真实进度及报告保存结果。
 - [MapCoordinates 接口](architecture/world/map-coordinates/interface-map-coordinates.md)：格坐标与地图本地坐标的统一换算。
 - [WorldMap 接口](architecture/world/world-map/interface-world-map.md)及[分块缓存实现](architecture/world/world-map/implementation-chunk-cache.md)：清亮 v2 草地、干湿土、七作物三档、七设施四向、候选同向图、人物共同深度排序，以及正式选框/候选共用外围几何。
@@ -67,9 +67,10 @@
 
 - [系统规划](project/roadmap.md)与[后续功能计划](project/deferred-features-plan.md)：当前范围、未确认事项及后续入口。
 - [UI视觉基准](project/ui-visual-prototype.md)：已采用的像素田园布局、1080P和固定倍率参考。
-- [构建与验收](project/build-and-validation.md)、[.NET SDK、测试与双平台并行 CI](project/continuous-integration.md)、[测试方法](project/testing.md)、[手工游玩验收](project/manual-playthrough.md)。
+- [构建与验收](project/build-and-validation.md)、[.NET SDK、测试与双平台并行 CI](project/continuous-integration.md)、[测试方法与引擎错误核对](project/testing.md)、[手工游玩验收](project/manual-playthrough.md)。
 - [Windows 分发与性能证据实现](project/validation-artifacts-proposal.md)：CI／发布共用启动及干净 ZIP 检查，性能失败后保留本次已生成的报告和截图。
 - [GitHub协作](project/contribution-workflow.md)、[PR独立审查skill](../.codex/skills/farm-exchange-review-pr/SKILL.md)、[议题模板](../.github/ISSUE_TEMPLATE/)及[模板来源](research/issue-template-sources.md)：提交PR后先询问是否审查，明确同意才委派。
+- [运行资源分发与 PCK 验证](project/runtime-resources.md)：必需资源、文档与退役素材隔离、正式和开发预设及实际包正反检查。
 - [多issue独立会话交付skill](../.codex/skills/farm-exchange-parallel-issue-delivery/SKILL.md)：相互影响的代码同分支串行，独立组各建分支与会话并调用[工程统筹受派模式](../.codex/skills/farm-exchange-engineering-lead/SKILL.md)；总控等待全部交付、回传返修并集成到dev，经CI、最终独立审查和人工验收后合并，清理修复分支并关单，保留dev。
 - [Codex真实会话控制接口](project/codex-thread-control.md)：共享App Server接入、独立thread创建与等待、原会话返修、真实双分支测试与测试会话永久删除。
 - [素材管理](project/asset-organization.md)、[素材来源](project/asset-sources.md)、[清亮v2基准](research/bright-complete-v2.md)。

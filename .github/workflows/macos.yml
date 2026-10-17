@@ -72,6 +72,20 @@ jobs:
           "$GODOT_BIN" --headless --path . --export-release macOS build/macos/FarmExchange.zip --quit
           test -s build/macos/FarmExchange.zip
 
+      - name: 检查 macOS 实际运行资源包
+        id: resources
+        shell: pwsh
+        run: ./tools/Test-RuntimePack.ps1 -PackPath build/macos/FarmExchange.zip -ReportPath build/validation/macos/runtime-pack.json
+
+      - name: 上传 macOS 资源清单
+        if: ${{ !cancelled() && (steps.resources.outcome == 'success' || steps.resources.outcome == 'failure') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-resource-validation-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/validation/macos/runtime-pack.json
+          if-no-files-found: error
+          retention-days: 14
+
       - name: 验收应用包与启动
         run: |
           set -euo pipefail
