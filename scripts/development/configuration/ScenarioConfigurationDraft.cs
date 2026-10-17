@@ -99,7 +99,7 @@ public sealed class ScenarioConfigurationDraft
 
     /**
      * <summary>校验全部已输入值及时间顺序，按字段路径返回错误。</summary>
-     * <returns>独立只读错误快照；空集合表示可保存。</returns>
+     * <returns>独立只读错误快照；键取异常的结构化字段路径，空键表示整体错误，空集合表示可保存。</returns>
      */
     public IReadOnlyDictionary<string, string> Validate()
     {
@@ -107,9 +107,7 @@ public sealed class ScenarioConfigurationDraft
         try { Schema.Write(_value); }
         catch (ScenarioConfigurationException error)
         {
-            int separator = error.Message.IndexOf('：');
-            string path = separator >= 0 ? error.Message[..separator] : "";
-            errors.TryAdd(path, error.Message);
+            errors.TryAdd(error.FieldPath, error.Message);
         }
         return new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(errors);
     }

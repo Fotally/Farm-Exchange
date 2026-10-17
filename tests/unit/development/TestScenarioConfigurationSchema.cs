@@ -58,7 +58,7 @@ public partial class TestScenarioConfigurationSchema : Node
             draft.RemoveArrayItem("execution.timePlan", 0);
             if (!draft.Errors.ContainsKey("execution.timePlan")) return Fail("空时间数组未拒绝");
             if (!Throws(() => draft.RemoveArrayItem("execution.timePlan", 0))) return Fail("超界数组行未拒绝");
-            return CheckAlternateShape() && CheckStrictInput(schema, bytes);
+            return CheckStructuredErrors(schema) && CheckAlternateShape() && CheckStrictInput(schema, bytes);
         }
         catch (Exception error) { return Fail(error.ToString()); }
 #else
@@ -67,6 +67,50 @@ public partial class TestScenarioConfigurationSchema : Node
     }
 
 #if DEBUG
+    private static bool CheckStructuredErrors(ScenarioConfigurationSchema schema)
+    {
+        var value = new ScenarioEditableConfiguration();
+        value.Execution.TimePlan.Add(new ScenarioEditableTimeSegment { EndDate = "01-01-02" });
+        try { schema.Write(value); return Fail("时间段倒序未拒绝"); }
+        catch (ScenarioConfigurationException error)
+        {
+            const string path = "execution.timePlan[1].endDate";
+            if (error.FieldPath != path || !error.Message.Contains("时间区间终点须严格递增"))
+                return Fail("schema错误未独立提供字段位置与中文说明");
+            foreach (string explanation in new[] { "修改后的中文说明", "校验失败：终点日期：需要调整" })
+            {
+                var wrapped = new ScenarioConfigurationException(explanation, error);
+                if (wrapped.FieldPath != path || wrapped.Message != explanation || !ReferenceEquals(wrapped.InnerException, error))
+                    return Fail("包装说明或中文冒号改变了字段位置");
+            }
+            var overall = new ScenarioConfigurationException("整体错误：请检查配置", error, fieldPath: "");
+            if (overall.FieldPath != "" || overall.Message != "整体错误：请检查配置")
+                return Fail("显式整体错误未清除内层字段位置");
+        }
+        value.Execution.TimePlan.Clear();
+        try { schema.Write(value); return Fail("空时间段数组未拒绝"); }
+        catch (ScenarioConfigurationException error)
+        {
+            if (error.FieldPath != "execution.timePlan") return Fail("数组错误未定位到数组字段");
+        }
+        foreach (string invalid in new[] { "null", "{", "[]" })
+        {
+            try { schema.Read(Encoding.UTF8.GetBytes(invalid)); return Fail("整体JSON错误未拒绝"); }
+            catch (ScenarioConfigurationException error)
+            {
+                if (error.FieldPath != "") return Fail("整体JSON错误错误地冒充字段错误");
+            }
+        }
+        value = new ScenarioEditableConfiguration();
+        value.Execution.TimePlan[0].EndDate = "01-01-29";
+        try { schema.Write(value); return Fail("非法游戏日期未拒绝"); }
+        catch (ScenarioConfigurationException error)
+        {
+            if (error.FieldPath != "execution.timePlan[0].endDate") return Fail("日期内部错误包装丢失字段位置");
+        }
+        return true;
+    }
+
     private static bool CheckStrictInput(ScenarioConfigurationSchema schema, byte[] bytes)
     {
         string valid = Encoding.UTF8.GetString(bytes);
