@@ -100,7 +100,7 @@ public partial class TestUiFacilities : Node
         Vector2I farm = game.GetBuildingSpaces().First(s => s.Building == BuildingKind.Farm).AnchorCell;
         game.SetFarmCrop(farm, CropKind.Wheat);
         for (int tick = 0; tick < 12; tick++) game.AdvanceTick();
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        TestMapInput.ShortClickCell(map, farm);
         PlotSnapshot growing = game.GetPlot(farm);
         Label actual = Find<Label>(main, "FarmActualProgress");
         ProgressBar growth = Find<ProgressBar>(main, "FarmProgress");
@@ -121,7 +121,7 @@ public partial class TestUiFacilities : Node
         if (!game.Buy(new CommodityId(crop, CommodityKind.Raw), 1).Success)
             return Fail("加工进度夹具买入原料失败");
         game.AdvanceTick();
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
+        TestMapInput.ShortClickCell(map, processor);
         PlotSnapshot processing = game.GetPlot(processor);
         Label remaining = Find<Label>(main, "ProcessorActualProgress");
         if (processing.RemainingSeconds <= 0 || !Find<ProgressBar>(main, "ProcessorProgress").Visible ||
@@ -138,7 +138,7 @@ public partial class TestUiFacilities : Node
             return Fail("暂停刷新推进或虚构了加工进度");
         game.SetPaused(false);
         for (int tick = 0; tick < 8; tick++) game.AdvanceTick();
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
+        TestMapInput.ShortClickCell(map, processor);
         return remaining.Text.Contains($"实际剩余 {Days(game.GetPlot(processor).RemainingSeconds)} 天") &&
             Find<ProgressBar>(main, "ProcessorProgress").Value > pausedValue ||
             Fail("经营推进后加工详情没有更新真实剩余和进度条");

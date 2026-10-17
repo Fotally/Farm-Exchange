@@ -294,7 +294,7 @@ public partial class TestFacilityThumbnails : Node
         camera.GlobalPosition = map.GetGridWorldPosition(cell);
         camera.ForceUpdateScroll();
         map.SyncFromGame();
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+        TestMapInput.ShortClickCell(map, cell);
     }
 
     private static Button RoadCard(BuildCatalogWindow catalog, RoadMaterial material) =>

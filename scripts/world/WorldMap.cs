@@ -10,9 +10,6 @@ namespace FarmExchange.World;
 
 public partial class WorldMap : Node2D
 {
-    [Signal]
-    public delegate void SelectionChangedEventHandler(Vector2I cell);
-
     private const int MapSize = MapCoordinates.MapSize;
     private const int ChunkSize = 8;
     private const int ChunksPerSide = MapSize / ChunkSize;
@@ -54,6 +51,8 @@ public partial class WorldMap : Node2D
     private Vector2I _selectedCell = new(-1, -1);
     private Transform2D _lastCanvasTransform;
     private Vector2 _lastViewportSize;
+
+    internal Vector2I? SelectedCell => MapCoordinates.ContainsCell(_selectedCell) ? _selectedCell : null;
 
     internal int LastVisiblePlotCount { get; private set; }
     internal int ChunkRedrawCount { get; private set; }
@@ -330,14 +329,17 @@ public partial class WorldMap : Node2D
         UpdateFacilityVisibility();
     }
 
-    public void SelectAtScreenPosition(Vector2 screenPosition)
+    /**
+     * <summary>落实宿主已决定的普通地块选择，仅更新选框。</summary>
+     * <param name="cell">原始点击子格；地图外位置保持原选择。</param>
+     * <remarks>不分派输入、不发送经营意图，也不执行建造。</remarks>
+     */
+    public void SelectCell(Vector2I cell)
     {
-        Vector2I cell = ScreenToCell(screenPosition);
         if (!MapCoordinates.ContainsCell(cell))
             return;
 
         _selectedCell = cell;
-        EmitSignal(SignalName.SelectionChanged, cell);
         _overlay.QueueRedraw();
     }
 

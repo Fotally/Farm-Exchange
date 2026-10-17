@@ -150,8 +150,7 @@ public partial class TestCultivationWindow : Node
         for (int tick = 0; tick < 20; tick++) WeatherTestInput.AdvanceTick(game, true);
         game.ApplyCultivationPlan(game.GetCultivationPlans()[0].Id, farms.Select(f => f.AnchorCell).ToArray());
         game.SetPaused(true);
-        main.GetNode<FarmExchange.World.WorldMap>("WorldMap").EmitSignal(
-            FarmExchange.World.WorldMap.SignalName.SelectionChanged, farms[0].AnchorCell);
+        TestMapInput.ShortClickCell(main.GetNode<FarmExchange.World.WorldMap>("WorldMap"), farms[0].AnchorCell);
         PlotSnapshot before = game.GetPlot(farms[0].AnchorCell);
         if (before.Crop != CropStage.Growing) return Fail("手动接管夹具没有正在生长的本轮");
         Click(main, "PrepareCropButton");
@@ -177,7 +176,7 @@ public partial class TestCultivationWindow : Node
         for (int mode = 0; mode < 2; mode++)
         {
             Vector2I cell = farms[mode].AnchorCell;
-            main.GetNode<WorldMap>("WorldMap").EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+            TestMapInput.ShortClickCell(main.GetNode<WorldMap>("WorldMap"), cell);
             Click(main, mode == 0 ? "ChangeCropButton" : "PrepareCropButton");
             if (!Find<CropSelectionWindow>(main, "CropWindow").Visible)
             { main.QueueFree(); return Fail("移除夹具未打开手动选种窗口"); }
@@ -214,7 +213,7 @@ public partial class TestCultivationWindow : Node
         Vector2I cell = new(189, 189);
         Find<CheckBox>(window, "CultivationFarm189_189").ButtonPressed = true;
         Click(window, "ApplyCultivationPlanButton");
-        main.GetNode<WorldMap>("WorldMap").EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+        TestMapInput.ShortClickCell(main.GetNode<WorldMap>("WorldMap"), cell);
         string status = Find<Label>(main, "FarmCultivationStatus").Text;
         if (main.Game.GetFarmCultivation(cell).PreparedTimeUnits is not < 0 ||
             !status.Contains("上一年度 12月19日") || status.Contains("第0年"))
@@ -223,7 +222,7 @@ public partial class TestCultivationWindow : Node
         int id = main.Game.GetCultivationPlans()[0].Entries[0].Id;
         Drop(timeline, CropKind.Wheat, 8, id);
         Click(window, "SaveCultivationPlanButton");
-        main.GetNode<WorldMap>("WorldMap").EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+        TestMapInput.ShortClickCell(main.GetNode<WorldMap>("WorldMap"), cell);
         status = Find<Label>(main, "FarmCultivationStatus").Text;
         bool passed = status.Contains("第1年 1月9日") && !status.Contains("上一年度");
         if (!passed) Fail("非负计划起点没有展示真实游戏年份");
@@ -633,7 +632,7 @@ public partial class TestCultivationWindow : Node
             passed = Fail("暂停空田改计划后出现虚假作物标记或改变既有空土画面");
 
         // 种类在设施详情显示，空田不借旧彩点表达；恢复后检验工人实际播种的新作物。
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+        TestMapInput.ShortClickCell(map, cell);
         if (Find<Label>(main, "FarmCropTitle").Text != FarmGame.GetCrop(CropKind.Radish).CropName ||
             game.GetFarmDetails(cell).Crop.Kind != CropKind.Radish)
             passed = Fail("暂停保存后设施详情没有同步萝卜选种");

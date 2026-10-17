@@ -14,7 +14,7 @@
 - [委托与自动交易](gameplay/trading/orders.md)：多因素条件、两种一次买单、资源冻结、原现金基准保留和 1% 成交费用。
 - [开局与建造](gameplay/land/opening-and-building.md)：预置建筑、建造收费与扩张。
 - [道路铺设与移除](gameplay/land/roads.md)：五材质、两次点击直线／L 形铺设、投影直线拆除、整段提交及连接预览；工人优先道路选路，速度不变。
-- [地图与操作](gameplay/world/map-and-camera.md)：坐标、选择、镜头与画面含义；窗口和全屏扩大时增加地图视野，保持农田大小。
+- [地图与操作](gameplay/world/map-and-camera.md)：坐标、选择、镜头与画面含义，地图短按由主场景按模式唯一分派；窗口和全屏扩大时增加地图视野，保持农田大小。
 - [经营速率与暂停](gameplay/world/simulation-rate.md)：发布0.5×/1×/2×、暂停保留未完成tick进度与工人动画；开发倍率最高16×及现场流程中断语义。
 
 ## 代码架构

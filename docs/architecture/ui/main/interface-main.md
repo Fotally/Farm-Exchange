@@ -57,7 +57,7 @@
 
 `Main` 组装窗口、唯一保留摆放类型与候选生命周期、普通所选格、分发玩家命令，并在命令或 tick 后统一刷新。农田／加工短按调用 `FarmGame.TryPlace`，成功读取实际扣费、失败显示真实原因，均保留模式、不弹详情。重新打开目录或年度表调用 `CancelPlacement()` 直接退出；右键／Esc 先经 `CancelCurrentSegmentOrPlacement()` 处理道路二级取消，按钮直接退出。Esc 在 `_Input` 接收，避免被焦点控件拦截。
 
-道路 `Placement` 保存所选 `RoadMaterial`，内部 `RoadSegmentGesture` 在创建工具时固定新建/拆除模式，并维护当前起点、终点、真实轨迹轴与未起段鼠标候选，不持有正式道路。`CameraController.MapShortClicked` 第一短按设起点，第二短按调用 `TryPlaceRoads`／`TryRemoveRoads` 重验；原 `SelectionChanged` 在道路期间只清普通选择，避免双提交。仅 `MapPointerMoved` 的实际未按住地图移动可确定 L 顺序／拆路轴；帧刷新、原始 `_Input`、镜头释放、缩放和窗口更新只更新终点。未明确轴的双轴新建第二次点击给出明确提示并保留本段；直线和单格可提交。
+道路 `Placement` 保存所选 `RoadMaterial`，内部 `RoadSegmentGesture` 在创建工具时固定新建/拆除模式，并维护当前起点、终点、真实轨迹轴与未起段鼠标候选，不持有正式道路。`Main.OnMapShortClicked` 是已接受短按的唯一模式分派位置：一次 `ScreenToCell` 后，道路工具进入起点／终点处理；生产摆放进入 `PlaceProductionFacility`；无工具且地图内才调用 `WorldMap.SelectCell` 并刷新详情。道路第一短按设起点，第二短按调用 `TryPlaceRoads`／`TryRemoveRoads` 重验；生产与道路不会先产生普通选择，也无需撤销同次短按的选择。普通选择与生产建造忽略地图外释放，道路仍提交完整越界范围并由经营入口拒绝。仅 `MapPointerMoved` 的实际未按住地图移动可确定 L 顺序／拆路轴；帧刷新、原始 `_Input`、镜头释放、缩放和窗口更新只更新终点。未明确轴的双轴新建第二次点击给出明确提示并保留本段；直线和单格可提交。
 
 道路预览把全路径（含冲突／越界）交给 `WorldMap.UpdateRoadPreview(cells, material, removing)`，由地图读取正式占用计算操作后拓扑；费用复用 `CheckRoadPlacement` 的宽整数总价，拆除数量只读统计实际道路。隐藏调用 `ClearRoadPreview`，保留未提交段；失败保留起点和顺序，成功或段取消清空本段但保留工具与材质，下一段重新选起点。直接退出清全部工具状态。UI不记录正式路段归属、铺设历史，不修改资金或土地，也不启用未确认辅助材质效果。
 
@@ -67,7 +67,7 @@
 
 未占用地块的 `BuildingKind.None` 只说明没有建筑，不说明地形。`RefreshDetail` 在该分支读取本局 `Game.Terrain.IsFullLand(cell)`：完整陆地继续显示“空地”及原建造提示，池塘水面与岸边含水格统一显示“水域”和“不可建造”，说明只有完整陆地才允许建造。详情不保存地形副本、不复算岸线，也不改写经营模块的建筑占用语义。普通选择、经营刷新、暂停与恢复共用这次查询，农田、加工场地与道路仍使用各自的原详情和操作。
 
-[#173](https://github.com/Fotally/Farm-Exchange/issues/173) 回归由 `tests/e2e/TestWaterDetails.cs` 在真实含水主场景中等待 `ReadyTask` 后完成：从同局权威地形寻找池塘内部、岸边含水和未占用完整陆地，通过 `WorldMap.SelectAtScreenPosition` 选择，反复切换并经过真实经营推进和暂停按钮刷新；另检查农田改种入口、加工投入产出说明、道路拆除及拆后空地详情。该检查已接入统一 `TestSuite`，独立场景为 `tests/e2e/test_water_details.tscn`。有窗口执行时以至少1920×1080保存修前与修后水面、修后岸边和陆地截图至 `build/issue173/`，headless执行检查相同详情行为。
+[#173](https://github.com/Fotally/Farm-Exchange/issues/173) 回归由 `tests/e2e/TestWaterDetails.cs` 在真实含水主场景中等待 `ReadyTask` 后完成：从同局权威地形寻找池塘内部、岸边含水和未占用完整陆地，通过镜头已接受短按入口和同一 Main 分派选择，反复切换并经过真实经营推进和暂停按钮刷新；另检查农田改种入口、加工投入产出说明、道路拆除及拆后空地详情。该检查已接入统一 `TestSuite`，独立场景为 `tests/e2e/test_water_details.tscn`。有窗口执行时以至少1920×1080保存修前与修后水面、修后岸边和陆地截图至 `build/issue173/`，headless执行检查相同详情行为。
 
 `Main` 的当前 `Placement` 唯一持有候选 `BuildingOrientation`，每座候选从 `Q0` 开始。农田和加工摆放中的 R 与 `RotatePlacementButton` 共用内部旋转入口，按 `Q0→Q1→Q2→Q3→Q0` 更新候选并刷新预览，按钮显示当前 q。快捷键在 `_Input` 接收，但忽略重复按键、Ctrl/Alt/Meta 组合及 `LineEdit`/`TextEdit` 输入焦点，不截获文本编辑；道路与非摆放状态没有入口。近况面板使用主题次按钮把旋转和取消并排显示，整体/字体倍率仍由 `UiScaling` 管理。
 
@@ -81,7 +81,11 @@
 
 每帧在镜头处理后读取当前鼠标位置，检查窗口内状态、镜头拖动及可见界面矩形，使用 `WorldMap.ScreenToCell` 得到未裁剪的候选锚点并调用 `UpdatePlacementPreview`。界面遮挡检查递归穿过忽略鼠标的透明容器，遇到接收鼠标的面板只检查其自身矩形，不读取滚动区域外被裁切子项的矩形。透明 `TopBar` 容器忽略鼠标、仅三个真实顶部面板阻挡地图；间隙可继续操作地图。界面遮挡、离窗或拖动时清候选并调用 `ClearPlacementPreview`，不重同步生产地图块。整体原因复用 `FarmGame.CheckPlacement` 的现有顺序；空间逐格染色由地图读取实际占用，费用独立读取 `GetBuildingCostCents`，不能使用失败预检的零费用。摆放反馈每帧读取 `AvailableMoneyCents`，使经营、交易和冻结变化即时反映；预览不持有金币或生产状态，不推进经营，进入摆放保持暂停状态。
 
-原始鼠标移动和左键松开也在 `_Input` 同步候选，沿用同一界面、窗口与拖动隐藏检查，避免同一帧的新位置尚未进入 `_Process` 就被提交。选择信号的经营提交入口再通过共用的 `SetPlacementCandidate` 同步释放格、地图覆盖、预检与费用，并将同一个释放格参数交给 `TryPlace` 重验，不从可空状态字段反读目标。回归用例在主场景挂树前订阅真实 `SelectionChanged`，先于经营回调观察候选与未扣费、未建状态；覆盖连续移动/松开和小于 8 像素跨格短按，验证提交前就已一致，不依赖建成后下一帧自愈。
+原始鼠标移动和左键松开也在 `_Input` 同步候选，沿用同一界面、窗口与拖动隐藏检查，避免同一帧的新位置尚未进入 `_Process` 就被提交。唯一短按分派的生产分支再通过共用的 `SetPlacementCandidate` 同步释放格、地图覆盖、预检与费用，并将同一个释放格参数交给 `TryPlace` 重验，不从可空状态字段反读目标。回归用例在主场景挂树前观察真实 `CameraController.MapShortClicked`，先于 Main 分派观察原始输入已同步的候选与未扣费、未建状态；覆盖连续移动/松开和小于 8 像素跨格短按，验证提交前就已一致，不依赖建成后下一帧自愈。
+
+`tests/support/TestMapInput.ShortClickCell` 将格坐标转换成释放位置，并向正式 `CameraController._UnhandledInput` 送入完整按下／释放；既有经营、详情、年度表、缩略图和天气图形夹具均从此进入同一 `Main` 模式分派，不再人工发送选择信号或调用 Main 私有回调。该夹具代表已经通过 GUI 的地图输入，适合验证经营与详情连接；UI防穿透、真实拖动、失焦及大小地图归属仍由 `Input.ParseInputEvent` 的原生输入用例覆盖，不用夹具代替门禁验收。
+
+`TestBuildPlacement` 检查全部农田／加工类型、旋转、同帧跨格与单次扣费，生产点击后没有普通选框。`TestRoadPlacement` 在每次起点／终点后检查没有普通选框或详情，并核验地图外新建和拆除均完整拒绝、失败后仍可调整原段；原生UI按放、失焦释放、拖动与两级取消保持。`TestMapNavigation` 的大小地图原生手势全程要求主镜头短按通知为零。具体运行结果随关联 issue／PR 验收记录维护。
 
 左侧摆放提示和费用按明确换行排布，不进行逐字自动折行；预检原因独立一行，费用与取消按钮在其下方。端到端验收检查底部四入口及左侧近况控件的真实矩形均位于可见范围，逐行文字宽高足够，提示、费用与取消按钮纵向不重叠；有效、冲突、余额不足和窗口变化后均检查布局。
 

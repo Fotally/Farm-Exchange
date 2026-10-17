@@ -33,7 +33,8 @@ public partial class TestRoadPlacement : Node
         try
         {
             return await CheckStartPreview(parent, main) && await CheckRemovalStartPreview(parent, main) &&
-                await CheckTools(parent, main) && await CheckInput(parent, main);
+                await CheckTools(parent, main) && await CheckInput(parent, main) &&
+                await CheckOutsideMap(parent, main);
         }
         catch (InvalidOperationException error)
         {
@@ -489,6 +490,14 @@ public partial class TestRoadPlacement : Node
         Send(main, new InputEventMouseButton { Position = Screen(map, start), ButtonIndex = MouseButton.Left, Pressed = false });
         await Frames(parent);
         if (!Find<Label>(main, "BuildHint").Text.Contains("短按选择起点")) return Fail("跨界面输入选择了道路起点");
+        Vector2 focusPoint = Screen(map, start);
+        Send(main, new InputEventMouseMotion { Position = focusPoint });
+        Send(main, new InputEventMouseButton { Position = focusPoint, ButtonIndex = MouseButton.Left, Pressed = true, ButtonMask = MouseButtonMask.Left });
+        main.GetWindow().EmitSignal(Window.SignalName.FocusExited);
+        Send(main, new InputEventMouseButton { Position = focusPoint, ButtonIndex = MouseButton.Left, Pressed = false });
+        AssertRoadInputOwnership(main);
+        if (!Find<Label>(main, "BuildHint").Text.Contains("短按选择起点"))
+            return Fail("失焦后释放仍被分派为道路起点");
         await NativeClick(parent, main, Screen(map, start));
         main.GetWindow().EmitSignal(Window.SignalName.MouseExited);
         await Frames(parent);
@@ -500,6 +509,49 @@ public partial class TestRoadPlacement : Node
         await NativeClick(parent, main, Screen(map, start));
         return main.Game.GetBuildingSpace(start)?.RoadMaterial == RoadMaterial.Cobble && main.Game.MoneyCents == money - 100 ||
             Fail("取消当前段后沿用了旧轨迹或丢失材质");
+    }
+
+    private static async Task<bool> CheckOutsideMap(Node parent, Main main)
+    {
+        var map = main.GetNode<WorldMap>("WorldMap");
+        var camera = main.GetNode<CameraController>("Camera2D");
+        Vector2I edge = new(383, 191), outside = new(384, 191);
+        camera.NavigateTo(MapCoordinates.CellToLocalCenter(edge));
+        Start(main, RoadMaterial.Dirt);
+        await Frames(parent);
+        // CellToLocalCenter 只接收地图内格；沿有效边格与内邻格的屏幕差外推地图外鼠标点。
+        Vector2 edgeScreen = Screen(map, edge);
+        Vector2 outsideScreen = edgeScreen + (edgeScreen - Screen(map, edge - Vector2I.Right));
+        if (map.ScreenToCell(outsideScreen) != outside)
+            return Fail("越界道路鼠标夹具未落在预期地图外格");
+        int money = main.Game.MoneyCents;
+        var spaces = main.Game.GetBuildingSpaces();
+        await NativeClick(parent, main, Screen(map, edge));
+        await NativeClick(parent, main, outsideScreen);
+        if (main.Game.MoneyCents != money || !ReferenceEquals(spaces, main.Game.GetBuildingSpaces()) ||
+            !Find<Label>(main, "MessageLabel").Text.Contains("地图外") ||
+            !Find<Label>(main, "BuildHint").Text.Contains("短按终点提交"))
+            return Fail("地图外道路终点未完整提交拒绝，或失败清除了原起点/修改了资源");
+        // 同一个未成功的段允许缩回地图内，随后拆路也必须完整拒绝越界范围。
+        await NativeClick(parent, main, Screen(map, edge));
+        if (main.Game.GetPlot(edge).Building != BuildingKind.Road || main.Game.MoneyCents != money - 100)
+            return Fail("地图外失败没有保留起点供原段调整");
+        StartRemoval(main);
+        await NativeClick(parent, main, Screen(map, edge));
+        await NativeClick(parent, main, outsideScreen);
+        if (main.Game.GetPlot(edge).Building != BuildingKind.Road || main.Game.MoneyCents != money - 100 ||
+            !Find<Label>(main, "MessageLabel").Text.Contains("地图外"))
+            return Fail("地图外拆路未整段拒绝或改变了有效段内道路");
+        await NativeClick(parent, main, Screen(map, edge));
+        return main.Game.GetPlot(edge).Building == BuildingKind.None && main.Game.MoneyCents == money - 100 ||
+            Fail("越界拆除失败后不能调整同一段或发生退款");
+    }
+
+    private static void AssertRoadInputOwnership(Main main)
+    {
+        if (main.GetNode<WorldMap>("WorldMap").SelectedCell != null ||
+            Find<Control>(main, "DetailWindow").Visible)
+            throw new InvalidOperationException("道路短按错误分派普通选择或弹出设施详情");
     }
 
     private static void Start(Main main, RoadMaterial material)
@@ -520,8 +572,8 @@ public partial class TestRoadPlacement : Node
     {
         RequireMapPoint(camera.GetParent<Main>(), position);
         if (!camera.IsMouseInsideWindow) throw new InvalidOperationException("道路短按夹具尚未真实移鼠进入窗口");
-        camera._UnhandledInput(new InputEventMouseButton { Position = position, ButtonIndex = MouseButton.Left, Pressed = true });
-        camera._UnhandledInput(new InputEventMouseButton { Position = position, ButtonIndex = MouseButton.Left, Pressed = false });
+        TestMapInput.ShortClick(camera, position);
+        AssertRoadInputOwnership(camera.GetParent<Main>());
     }
 
     private static async Task NativeClick(Node parent, Main main, Vector2 position)
@@ -530,6 +582,7 @@ public partial class TestRoadPlacement : Node
         await MoveIntoWindow(parent, main, position);
         Send(main, new InputEventMouseButton { Position = position, ButtonIndex = MouseButton.Left, Pressed = true, ButtonMask = MouseButtonMask.Left });
         Send(main, new InputEventMouseButton { Position = position, ButtonIndex = MouseButton.Left, Pressed = false });
+        AssertRoadInputOwnership(main);
         await Frames(parent);
     }
 

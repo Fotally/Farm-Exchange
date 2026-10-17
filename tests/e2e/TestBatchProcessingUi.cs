@@ -110,7 +110,7 @@ public partial class TestBatchProcessingUi : Node
     {
         WorldMap map = main.GetNode<WorldMap>("WorldMap");
         map.SyncFromGame();
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+        TestMapInput.ShortClickCell(map, cell);
         await Frames(parent);
         ProcessorDetailsSnapshot details = main.Game.GetProcessorDetails(cell);
         ProcessorDetailsPanel panel = Find<ProcessorDetailsPanel>(main, "ProcessorDetailsPanel");

@@ -42,7 +42,7 @@ public partial class TestUiVisualLayout : Node
                 passed = CheckMain(main) && passed;
                 await Capture(parent, "main-" + size.X + ".png");
                 var map = main.GetNode<WorldMap>("WorldMap");
-                map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(189, 189));
+                TestMapInput.ShortClickCell(map, new Vector2I(189, 189));
                 await Frames(parent);
                 passed = CheckWindow(Find<DraggableWindow>(main, "DetailWindow")) && passed;
                 passed = CheckFacilityText(Find<Control>(main, "FarmDetailsPanel"), new[]
@@ -62,7 +62,7 @@ public partial class TestUiVisualLayout : Node
                 passed = await CheckReachable(parent, Find<DraggableWindow>(main, "CropWindow"),
                     "CropScroll", "CropCardRadish") && passed;
                 HideWindows(main);
-                map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(189, 192));
+                TestMapInput.ShortClickCell(map, new Vector2I(189, 192));
                 await Frames(parent);
                 passed = CheckFacilityText(Find<Control>(main, "ProcessorDetailsPanel"), new[]
                 { "ProcessorBuildingTitle", "ProcessorCurrentStatus", "ProcessorProductStock", "ProcessorProductStockUnit", "ProcessorProductPrice", "ProcessorProductPriceUnit" },
@@ -72,7 +72,7 @@ public partial class TestUiVisualLayout : Node
                 main.Game.TryPlace(new Vector2I(198, 192), BuildingKind.Road, CropKind.Wheat);
                 await main.Game.WaitForNavigationAsync(parent.GetTree());
                 map.SyncFromGame();
-                map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(198, 192));
+                TestMapInput.ShortClickCell(map, new Vector2I(198, 192));
                 await Frames(parent);
                 passed = CheckFacilityText(Find<Control>(main, "RoadDetailsPanel"), new[] { "RoadTitle", "RoadCurrentStatus" }, "RoadNextStep") && passed;
                 await Capture(parent, "road-detail-" + size.X + ".png");
@@ -129,7 +129,7 @@ public partial class TestUiVisualLayout : Node
                     for (int tick = 0; tick < 360; tick++) main.Game.AdvanceTick();
                     Click(main, "PauseButton");
                     map.SyncFromGame();
-                    map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+                    TestMapInput.ShortClickCell(map, farm);
                     await Frames(parent);
                     if (main.Game.GetFarmDetails(farm).Status != FarmStatus.Growing)
                         passed = Fail("生长截图夹具未由真实工人完成小麦播种供水");

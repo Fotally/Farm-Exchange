@@ -181,7 +181,6 @@ public partial class Main : Node2D
         _worldMap.AttachDepthSorted(_workerPresentation);
         _workerPresentation.SetGame(GameState, _worldMap, _driver);
         _workerPresentation.ProcessPriority = 2;
-        _worldMap.SelectionChanged += OnSelectionChanged;
         _camera.MapShortClicked += OnMapShortClicked;
         _camera.MapPointerMoved += OnMapPointerMoved;
         BuildInterface();
@@ -852,40 +851,21 @@ public partial class Main : Node2D
         return row;
     }
 
-    private void OnSelectionChanged(Vector2I cell)
+    private void PlaceProductionFacility(Vector2I cell, Placement placement)
     {
-        if (_placement is Placement { Kind: BuildingKind.Road })
+        SetPlacementCandidate(cell, placement);
+        PlacementResult result = GameState.TryPlace(cell, placement.Kind, placement.Crop,
+            orientation: placement.Orientation);
+        if (!result.Success)
         {
-            _worldMap.ClearSelection();
-            return;
-        }
-        if (_placement is Placement placement)
-        {
-            SetPlacementCandidate(cell, placement);
-            PlacementResult result = GameState.TryPlace(cell, placement.Kind, placement.Crop,
-                orientation: placement.Orientation);
-            if (!result.Success)
-            {
-                SetMessage(result.ErrorMessage);
-                _worldMap.ClearSelection();
-                RefreshPlacementPreview();
-                return;
-            }
-            _placement = placement with { Orientation = BuildingOrientation.Q0 };
-            SetMessage($"{placement.Name}已建造，花费 {FormatCoins(result.ChargedCents)} 金币");
-            _worldMap.ClearSelection();
-            RefreshAfterGameChange(worldChanged: true);
+            SetMessage(result.ErrorMessage);
             RefreshPlacementPreview();
             return;
         }
-        _selectedCell = cell;
-        _cultivationWindow.Hide();
-        _cropWindow.Hide();
-        _inventoryWindow.Hide();
-        _marketWindow.Hide();
-        _ordersWindow.Hide();
-        RefreshUi();
-        _uiRoot.MoveChild(_detailWindow, _uiRoot.GetChildCount() - 1);
+        _placement = placement with { Orientation = BuildingOrientation.Q0 };
+        SetMessage($"{placement.Name}已建造，花费 {FormatCoins(result.ChargedCents)} 金币");
+        RefreshAfterGameChange(worldChanged: true);
+        RefreshPlacementPreview();
     }
 
     private void OpenBuild()
@@ -950,9 +930,32 @@ public partial class Main : Node2D
 
     private void OnMapShortClicked(Vector2 position)
     {
-        if (_placement is not Placement { Kind: BuildingKind.Road } placement ||
-            !_camera.IsMouseInsideWindow || IsPointerOverUi(_uiRoot, position)) return;
         Vector2I cell = _worldMap.ScreenToCell(position);
+        if (_placement is Placement { Kind: BuildingKind.Road } road)
+        {
+            if (!_camera.IsMouseInsideWindow || IsPointerOverUi(_uiRoot, position)) return;
+            HandleRoadShortClick(cell, position, road);
+            return;
+        }
+        if (!MapCoordinates.ContainsCell(cell)) return;
+        if (_placement is Placement production)
+        {
+            PlaceProductionFacility(cell, production);
+            return;
+        }
+        _worldMap.SelectCell(cell);
+        _selectedCell = cell;
+        _cultivationWindow.Hide();
+        _cropWindow.Hide();
+        _inventoryWindow.Hide();
+        _marketWindow.Hide();
+        _ordersWindow.Hide();
+        RefreshUi();
+        _uiRoot.MoveChild(_detailWindow, _uiRoot.GetChildCount() - 1);
+    }
+
+    private void HandleRoadShortClick(Vector2I cell, Vector2 position, Placement placement)
+    {
         if (!_roadSegment.GetCandidate().Started)
         {
             _roadSegment.Begin(cell);
