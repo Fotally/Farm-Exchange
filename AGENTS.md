@@ -69,10 +69,14 @@
 - `.github/workflows/release.yml`：独立手动发布游戏版本；操作者输入版本号，要求触发时 main 同提交的测试、Windows 构建、macOS 构建三条 CI 全部成功，再复用两平台产物。精确检出发布提交的工具和 schema；Windows 下载后共用分发命令再次验收启动、保全日志并检查最终干净 ZIP，macOS 检查 Universal 2 ZIP 后保持原包字节；两平台准备成功后创建标签与单个 GitHub Release，上传两份版本 ZIP。操作与失败处理见 `docs/project/release.md`。
 - `export_presets.cfg`：定义 Windows x86_64 与 macOS Universal 2 正式验收构建，以及保留开发节点脚本资源的本地 Windows Dev / macOS Dev 预设；开发包不进入 CI 或正式发布。
 - `.codex/skills/farm-exchange-review-pr/SKILL.md`：提交PR后的可选择独立审查入口，先询问是否审查，明确同意后委派新的指定模型子Agent；绑定准确PR版本，检查规则落实、深模块设计、维护成本和验收证据，保持只读。
+- `.codex/skills/farm-exchange-parallel-issue-delivery/SKILL.md`：多issue独立会话交付入口；相互影响的同分支串行，独立组各建分支与Codex会话，调用工程统筹受派模式；总控等待全部交付、回传返修并负责dev集成，PR经CI、最终独立审查和人工验收后合并，清理修复分支并关单，保护dev与main。
+- `tools/Invoke-CodexThread.ps1` 与 `Test-CodexThreadControl.ps1`：通过本机共享Codex App Server的真实thread/turn协议创建、读取、有界等待和原会话返修；登记分支/worktree与当前turn，拒绝并发返修和错误分支；测试会话经永久删除后查证活动、归档列表及恢复失败。接入与实测见 `docs/project/codex-thread-control.md`。
 - `.github/ISSUE_TEMPLATE/`：六类中文议题正文模板的唯一维护位置，供 GitHub 网页与 `.codex/skills/farm-exchange-submit-issue/SKILL.md` 共用；skill 负责查重、按模板填写与提交核对。模板在人工合入默认分支后供网页使用，来源说明见 `docs/research/issue-template-sources.md`。
 
 
 # 工作约定
+
+用户要求按选定issue分组开发并将修复分支PR到dev时，使用 [farm-exchange-parallel-issue-delivery](.codex/skills/farm-exchange-parallel-issue-delivery/SKILL.md)。独立组各用一个Codex会话、分支与worktree，由 [farm-exchange-engineering-lead](.codex/skills/farm-exchange-engineering-lead/SKILL.md) 受派开发；总控等待全部交付、向原会话回传返修并负责集成。该情形采用修复分支→dev交付，替代下列第7、8条的默认分支路径；最终独立审查纳入本工作流，人工验收授权后才可合并并清理修复分支、关闭issue，始终保留dev。第10条开发子Agent的三人并发上限由总控跨会话统一分配，其余工程与验收规范继续适用。
 
 1. 每次代码修改完成后，在同一任务中及时更新 `docs/` 对应的中文文档与本文件的系统结构；代码、规则、操作说明和验收步骤一致后，才视为修改完成。功能合并后按 `docs/AGENTS.md` 的持续整理约定检查并归档历史方案，现行规则和待办先保留在对应专题。
 2. 实施前核对 `docs/project/roadmap.md` 中的已确认范围。具体数值和操作规则未确认前仅做不依赖它们的工作；需要变更已沟通的实施方案时，先与用户沟通。
