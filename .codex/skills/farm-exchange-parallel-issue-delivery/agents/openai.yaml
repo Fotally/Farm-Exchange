@@ -1,0 +1,4 @@
+interface:
+  display_name: "Farm Exchange 并行议题交付"
+  short_description: "按代码影响分组，为独立分支启动工程统筹会话，汇总返修并完成dev验收交付"
+  default_prompt: "请使用 $farm-exchange-parallel-issue-delivery 处理我选定的 issues，每组建立独立分支与 Codex 会话并调用工程统筹技能；等待全部会话交付，返修回传原会话，由本会话汇总并处理 dev 集成冲突。PR 到 dev，经 CI、独立审查和我的验收授权后合并，清理修复分支与已完成 issue，保留 dev。"

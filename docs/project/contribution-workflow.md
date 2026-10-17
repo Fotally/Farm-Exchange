@@ -4,11 +4,11 @@
 
 - GitHub 仓库：`Fotally/Farm-Exchange`。
 - `main` 是保护分支，只接收从 `dev` 发起并由人工合并的 Pull Request。
-- `dev` 是 Agent 实施修改、提交验证结果和发起 Pull Request 的开发分支。
+- `dev` 是长期开发与集成分支；按下述默认流程可直接实施修改，选定多 issue 分组交付时则接收独立修复分支的 Pull Request。
 
 ## Issue 驱动流程
 
-项目根目录 `AGENTS.md` 的工作约定是修改流程的唯一规则来源。每次修改按以下顺序进行：
+项目根目录 `AGENTS.md` 的工作约定是修改流程的唯一规则来源。未选择下述“多 issue 分组交付”时，按以下默认顺序进行：
 
 1. 在 GitHub 中找到或创建一项 issue，写明本次修改的范围和验收标准。只读查看 issue/PR 已获用户持续授权；项目的 [GitHub 只读命令规则](../../.codex/rules/github-read.rules) 放行相应查询，无需逐次询问。
 2. Agent 在 `dev` 分支只实施该 issue 记录的内容；范围变更先沟通并更新 issue。最多 3 名开发子 Agent 同时工作，先划分文件所有权并互通接口。新任务与原 Agent 的历史任务不相关时另建开发 Agent，同任务或模块的修复可接续，避免无关上下文污染。
@@ -17,7 +17,21 @@
 5. 使用仓库的 `farm-exchange-submit-pr` skill，按 `.github/PULL_REQUEST_TEMPLATE.md` 整理说明，提交并推送 `dev`，创建或更新从 `dev` 到 `main` 的 Pull Request；在说明中关联对应 issue，按实际改动多选附有简短说明的变更类型，并列出验证结果。推送会触发 GitHub Actions，再次执行编译、测试与覆盖率检查。
 6. PR创建或更新后，使用 [farm-exchange-review-pr](../../.codex/skills/farm-exchange-review-pr/SKILL.md) 先询问是否需要提交后的独立代码与设计审查；明确同意后才委派。未回复或拒绝时保持PR已交付状态，明确要求审查同一PR的指令不重复询问。此审查保留第3步既有的提交前流程，结束后仍由人工决定合并。
 
+## 多 issue 分组交付
+
+用户要求按选定 issue 分组开发并提交到 `dev` 时，使用仓库级 [farm-exchange-parallel-issue-delivery](../../.codex/skills/farm-exchange-parallel-issue-delivery/SKILL.md)，替代上述默认流程中的直接开发 `dev`、`dev → main` 提交路径及可选提交后审查入口。
+
+按实际代码影响划分：相互影响的 issue 在同一修复分支串行开发；每个独立组绑定独立分支、worktree 和 Codex 会话，调用 [farm-exchange-engineering-lead](../../.codex/skills/farm-exchange-engineering-lead/SKILL.md) 的分支受派模式开发与验收。总控通过[仓库会话控制接口](codex-thread-control.md)创建和跟踪真实 thread，统一分配开发预算及验证资源；等待所有组交付并停止写入后汇总，问题交回原会话返修，再重新核对全部交付。接口不可连接时报告阻碍，不能擅自替换为子 Agent 或 CLI session。
+
+受派工程统筹只在指定修复分支提交本组成果，公共说明、推送、PR 和最终验收由总控组织。各组 PR 统一为修复分支 → `dev`；完成适用验证、当前版本 CI 与最终独立审查后等待人工验收，取得对应版本及范围的合并授权才合并。
+
+总控确认原会话停止写入后，负责处理与最新 `dev` 的合并前冲突，在修复分支完成文档、验证、全新审查及新范围人工确认再合并。已经合入 `dev` 才发现的集成回归，由总控在 `dev` 关联 issue 修复并完成审查与适用验收，回到开发闭环；不绕过 `main` 的发布门槛。
+
+查证已合并到 `dev` 后，精确清理对应修复分支并关闭完整范围已交付的关联 issue；保护 `dev`、`main` 和默认分支，保留证据与未完成总入口。版本绑定、分组调整及清理条件以该 skill 为准。
+
 ## PR独立审查的调用
+
+上节多 issue 分组交付已包含必经的最终独立审查，不再重复询问；其他 PR 使用以下可选入口。
 
 可用 `$farm-exchange-review-pr` 在提交PR后询问是否审查，也可明确指定“独立审查PR链接／编号”直接表达同意。选择只针对该PR；修复后的复查每轮新建审查员，模型和思考强度默认值由技能维护。审查读取准确base/head提交及完整调用上下文，区分当前缺陷、非阻断建议与未独立运行的验收证据。审查结果本身不授权改代码、发布评论或合并；需要修复时继续按关联issue和已确认范围执行。
 
