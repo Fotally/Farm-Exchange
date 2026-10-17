@@ -57,6 +57,8 @@
 
 `Main` 组装窗口、唯一保留摆放类型与候选生命周期、普通所选格、分发玩家命令，并在命令或 tick 后统一刷新。农田／加工短按调用 `FarmGame.TryPlace`，成功读取实际扣费、失败显示真实原因，均保留模式、不弹详情。重新打开目录或年度表调用 `CancelPlacement()` 直接退出；右键／Esc 先经 `CancelCurrentSegmentOrPlacement()` 处理道路二级取消，按钮直接退出。Esc 在 `_Input` 接收，避免被焦点控件拦截。
 
+`RefreshDetail` 继续按真实所选地块决定详情类型、标题、窗口可见性与位置。农田和加工场地分别单次调用对应面板的 `Refresh(GameState, cell)`，只表达本局要展示的真实设施；同实例的详情、进度、空间、作物与年度安排由面板内部解析并完整刷新，`Main` 不为面板拼装局部刷新输入，也不维护另一套刷新顺序。普通选择、换子格、经营推进、暂停／继续及拆除重建沿用此入口；建造目录、摆放和年度表打开时隐藏详情的规则保持。
+
 道路 `Placement` 保存所选 `RoadMaterial`，内部 `RoadSegmentGesture` 在创建工具时固定新建/拆除模式，并维护当前起点、终点、真实轨迹轴与未起段鼠标候选，不持有正式道路。`Main.OnMapShortClicked` 是已接受短按的唯一模式分派位置：一次 `ScreenToCell` 后，道路工具进入起点／终点处理；生产摆放进入 `PlaceProductionFacility`；无工具且地图内才调用 `WorldMap.SelectCell` 并刷新详情。道路第一短按设起点，第二短按调用 `TryPlaceRoads`／`TryRemoveRoads` 重验；生产与道路不会先产生普通选择，也无需撤销同次短按的选择。普通选择与生产建造忽略地图外释放，道路仍提交完整越界范围并由经营入口拒绝。仅 `MapPointerMoved` 的实际未按住地图移动可确定 L 顺序／拆路轴；帧刷新、原始 `_Input`、镜头释放、缩放和窗口更新只更新终点。未明确轴的双轴新建第二次点击给出明确提示并保留本段；直线和单格可提交。
 
 道路预览把全路径（含冲突／越界）交给 `WorldMap.UpdateRoadPreview(cells, material, removing)`，由地图读取正式占用计算操作后拓扑；费用复用 `CheckRoadPlacement` 的宽整数总价，拆除数量只读统计实际道路。隐藏调用 `ClearRoadPreview`，保留未提交段；失败保留起点和顺序，成功或段取消清空本段但保留工具与材质，下一段重新选起点。直接退出清全部工具状态。UI不记录正式路段归属、铺设历史，不修改资金或土地，也不启用未确认辅助材质效果。

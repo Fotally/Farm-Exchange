@@ -71,7 +71,7 @@ public partial class TestWeatherPresentation : Node
                 return Fail("天气绘制推进了经营或修改库存");
             if (!CheckProcessorMotion(game, map)) return false;
             Vector2I farm = new(189, 189);
-            details.Refresh(game.GetFarmDetails(farm));
+            details.Refresh(game, farm);
             if (details.GetNode<Label>("FarmCurrentWeather").Text != "当前天气：降雨" ||
                 details.FindChild("FarmHarvestQuantity", true, false) is not Label quantity ||
                 quantity.Text != game.GetFarmDetails(farm).Crop.HarvestQuantity.ToString())
@@ -83,7 +83,7 @@ public partial class TestWeatherPresentation : Node
                 return Fail("天气仍绘制离屏区域或保留离屏雨点");
             if (!game.TryClearWeatherRegion(rain, out _) || !game.TryClearWeatherRegion(cloudy, out _))
                 return Fail("天气清除夹具失败");
-            details.Refresh(game.GetFarmDetails(farm));
+            details.Refresh(game, farm);
             if (details.GetNode<Label>("FarmCurrentWeather").Text != "当前天气：晴天")
                 return Fail("天气清除后详情仍显示旧雨");
             GD.Print("局部天气表现、真实落点、暂停、倍率、离屏与详情检查通过");
