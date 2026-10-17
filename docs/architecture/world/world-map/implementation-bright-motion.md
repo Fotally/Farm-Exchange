@@ -14,7 +14,7 @@
 
 ## 包内资源与两建筑分层
 
-以下路径均相对 `FarmExchange-Bright-Complete-v2/default/motion/`，正式建筑在 `assets/gameplay/buildings/motion/`，植株在 `assets/gameplay/crops/motion/`，映射与许可见各自 `source_notes.md`，程序效果说明在 `assets/gameplay/fx/source_notes.md`。按[素材管理](../../../project/asset-organization.md)分类，不复制独立工程、预览时钟或示例经营状态；清单版本及哈希见[清亮 v2 分析](../../../research/bright-complete-v2.md)。
+以下路径均相对 `FarmExchange-Bright-Complete-v2/default/motion/`，正式建筑在 `assets/gameplay/buildings/motion/`，植株在 `assets/gameplay/crops/motion/`，映射与许可见各自 `source_notes.md`，程序效果说明在 `assets/gameplay/fx/source_notes.md`。按[素材管理](../../../project/asset-organization.md)分类，不复制独立工程、预览时钟或示例经营状态；清单版本及哈希见[清亮 v2 历史分析](../../../archive/research/bright-complete-v2.md)。
 
 | 用途 | 实际文件 | 使用约定 |
 | --- | --- | --- |

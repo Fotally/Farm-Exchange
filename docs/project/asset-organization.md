@@ -1,6 +1,6 @@
 # assets 目录与素材管理约定
 
-目录约定以本文为准；当前素材基准见[完整清亮 v2.0.0](../research/bright-complete-v2.md)。素材选择不代表已接入，实际开发按运行资源的使用状态验收。
+目录约定以本文为准；[素材来源与接入入口](asset-sources.md)直接链接各组 `source_notes.md`，由所属说明维护实际采用状态与映射。[清亮 v2 使用基准](../research/bright-complete-v2.md)维护使用限制，包内容核对保留在[历史分析](../archive/research/bright-complete-v2.md)。本页不复制接入快照，素材选择不代表已接入。
 
 ## 按使用用途组织
 
@@ -84,7 +84,7 @@ assets/
 
 原始清单留在 ZIP。运行目录只保存实际加载需要的元数据，迁移其路径字段时同步修复引用，不复制整个来源树去满足历史路径。暂不建立全项目素材注册器、动态扫描器或自定义资源加载框架。
 
-来源总览维护在[素材来源记录](asset-sources.md)；当前包的数量、入口和已知限制见[完整清亮 v2 分析](../research/bright-complete-v2.md)，[v1 分析](../archive/research/art-agent-bundle-v1.md)保留为历史。配色与素材版本不作为建立第二套运行目录的理由。
+来源包与授权历史维护在[素材来源记录](asset-sources.md)；实际采用细节只在所属 `source_notes.md` 更新，包内提供数量与历史核对见[清亮 v2 历史分析](../archive/research/bright-complete-v2.md)，[v1 分析](../archive/research/art-agent-bundle-v1.md)同样保留为历史。配色与素材版本不作为建立第二套运行目录的理由。
 
 ## 图像和资源使用规则
 
@@ -95,15 +95,10 @@ assets/
 - UI SVG 和字体沿用 UI 的显示与倍率约定，不把世界 PNG 导入策略套到矢量和字体上。
 - 素材接入的主要画面验收至少为 1920×1080，并另外检查 1× 与整数放大下的像素边缘；不据此改动已确认的镜头缩放范围。
 
-## 当前目录处理边界
+## 路径与迁移边界
 
-| 当前路径 | 已核对状态 | 归属与本次处理 |
-| --- | --- | --- |
-| `assets/gameplay/npc/` | 20 名当前角色各五动作与 SpriteFrames 由正式角色及预览加载；根目录 20 张 `npc_animation_*` 已停用 | 当前动作保留正式路径和引用；历史图集在仓库保留，四个导出预设排除 |
-| `assets/ui/icons/`、`assets/ui/facilities/` | 现有 UI 已使用 SVG | 保留目录和来源说明 |
-| `assets/development/` | 现有开发资源，正式导出预设已列排除项 | 保留当前约定 |
-| `assets/npc/` | 当前未跟踪的完整旧角色示例，含另一个 `project.godot`、GDScript 与图集；已检查的正式角色入口引用 `gameplay/npc` | 属于原始/示例资料，后续归档时处理；本次不移动或删除 |
-| `assets/FarmExchange-Art-Agent-Bundle-v1.zip` | 当前未跟踪；内部版本 1.0.2，保留历史来源 | 后续可按 `source/` 约定归档；本次保留原位 |
-| `assets/FarmExchange-Bright-Complete-v2.zip` | 当前未跟踪；内部版本 2.0.0，已选当前完整清亮基准 | 后续可按 `source/` 约定归档；本次保留原位，尚未接入 |
+`assets/gameplay/` 与 `assets/ui/` 按用途保存已采用资源；UI 可以复用世界 PNG 派生缩略，不要求全部文件都是 SVG，也不要求复制一份正式 PNG 到 UI 目录。实际图源与退役文件由所属来源说明维护。`assets/development/` 继续遵守开发资源的正式包排除约定。
+
+历史记录中的 `assets/npc/` 独立示例与 `assets/*.zip` 是本地原始资料位置，不保证每个 worktree 均存在。来源包版本、原交付路径与 SHA-256 在[来源记录](asset-sources.md)追溯；它们不因本地位置或整包名称成为运行依赖。本次文档整理不搬动、删除或纳入原包与示例；将来迁至 `source/` 仍需单独落实隔离及导出检查。
 
 目录立规矩不等于一次性重命名全部历史素材。以后每次迁移都以确认的范围为单位，完成资源路径、`.tscn`、`.tres`、脚本动态路径、JSON 路径及来源记录的同步核对，再验证 Godot 导入、运行和导出。没有同时完成这些检查时，保留旧路径，不增加旧新路径兜底加载。

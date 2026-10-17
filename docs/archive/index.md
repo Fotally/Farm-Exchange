@@ -23,6 +23,7 @@
 | [固定流程与可变参数的开发测试设计](project/developer-tools-parameterized-tests.md) | [现行说明](../project/parameterized-tests-usage.md) | #100、#101；PR #102已合并 |
 | [点击倍率与分类流程配置界面设计](project/developer-tools-flow-editor-design.md) | [现行说明](../architecture/ui/developer-tools-window/interface-developer-tools-window.md) | #103、#104；PR #102已合并 |
 | [Farm Exchange 美术总包 v1 分析](research/art-agent-bundle-v1.md) | [现行说明](../research/bright-complete-v2.md) | #105；首批PR #122已合并，后续设计仍开放 |
+| [清亮完整 v2 原始分析与首批接入记录](research/bright-complete-v2.md) | [使用基准](../research/bright-complete-v2.md)、[接入入口](../project/asset-sources.md) | #194；保留 2026-10-06 分析及 2026-10-07 首批记录，后续状态以所属来源说明为准 |
 | [Farm Exchange 系统组织与深接口设计：已完成计划归档](project/farm-exchange-system-design-and-execution-plan.md) | [现行说明](../project/roadmap.md) | #76、#75；PR #70已合并 |
 | [历史自动化测试与性能验收](project/testing.md) | [现行说明](../project/testing.md) | #36、#42、#75、#78、#86、#87、#94、#100、#101、#105、#116；#116已验收，本地dev交付状态见议题 |
 | [UI 原型与早期验收历史](project/ui-visual-prototype.md) | [现行说明](../project/ui-visual-prototype.md) | #94；PR #95已合并 |

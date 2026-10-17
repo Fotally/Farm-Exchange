@@ -73,7 +73,7 @@
 - [运行资源分发与 PCK 验证](project/runtime-resources.md)：必需资源、文档与退役素材隔离、正式和开发预设及实际包正反检查。
 - [多issue独立会话交付skill](../.codex/skills/farm-exchange-parallel-issue-delivery/SKILL.md)：相互影响的代码同分支串行，独立组各建分支与会话并调用[工程统筹受派模式](../.codex/skills/farm-exchange-engineering-lead/SKILL.md)；总控等待全部交付、回传返修并集成到dev，经CI、最终独立审查和人工验收后合并，清理修复分支并关单，保留dev。
 - [Codex真实会话控制接口](project/codex-thread-control.md)：共享App Server接入、独立thread创建与等待、原会话返修、真实双分支测试与测试会话永久删除。
-- [素材管理](project/asset-organization.md)、[素材来源](project/asset-sources.md)、[清亮v2基准](research/bright-complete-v2.md)。
+- [素材管理](project/asset-organization.md)、[素材来源与接入入口](project/asset-sources.md)、[清亮 v2 使用基准](research/bright-complete-v2.md)。
 - [水域导航的行业实践](research/water-navigation-game-practices.md)：经典游戏的一手资料、成熟导航实现的接入与精度限制；#110 选型依据，尚非功能验收记录。
 - [Godot 原生导航核验](research/godot-water-navigation.md)：净空、保守简化、道路区域成本与原生同步的源码和实验依据；现行调用约定见地形接口。
 - [大小地图导航调研](research/minimap-navigation.md)：开源与经典游戏依据、左下角全图概览与 M 键大地图设计，以及同次游戏内倍率记忆。
