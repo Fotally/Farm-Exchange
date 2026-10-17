@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using FarmExchange.Farming;
 using FarmExchange.Gameplay;
@@ -19,7 +21,10 @@ public static class TestProductionDueIntegration
             CheckCancellationAndPromotion();
             CheckCalendarLimit();
             CheckGameFifo();
-            GD.Print("生产到期索引混合FIFO、容量保留、撤销与绝对时钟边界通过");
+            CheckInitialStockPreparation();
+            CheckGameHarvestOverflowContinuation();
+            CheckGameProductOverflowContinuation();
+            GD.Print("生产到期索引混合FIFO、FarmGame库存溢出续推、容量保留、撤销与绝对时钟边界通过");
             return true;
         }
         catch (Exception error) { GD.PushError("生产到期接入失败：" + error); return false; }
@@ -190,6 +195,178 @@ public static class TestProductionDueIntegration
             output[1].AnchorCell == second && output[0].Quantity == 9 && output[1].Quantity == 9 &&
             game.GetProductStock(CropKind.Radish) == 18, "正式产出未按登记FIFO或重复入库");
     }
+
+    private static void CheckInitialStockPreparation()
+    {
+        var initialStock = FarmGame.Crops.ToDictionary(crop => new CommodityId(crop.Kind, CommodityKind.Raw), _ => 27);
+        using var game = new FarmGame(65, 0, weatherMode: WeatherMode.Explicit,
+            terrainRules: TerrainTestFixtures.AllLandRules, initialStock: initialStock);
+        initialStock.Clear();
+        Require(FarmGame.Crops.All(crop => game.GetRawStock(crop.Kind) == 27) &&
+            game.GetBuildingSpaces().Where(space => space.Building == BuildingKind.Processor)
+                .All(space => game.GetProcessorDetails(space.AnchorCell).BatchQuantity == 0),
+            "初始库存未复制、开局加工提前领取或商品间数量串扰");
+        foreach (var invalid in new[]
+        {
+            new KeyValuePair<CommodityId, int>(new(CropKind.Radish, CommodityKind.Raw), -1),
+            new KeyValuePair<CommodityId, int>(new((CropKind)99, CommodityKind.Raw), 1),
+            new KeyValuePair<CommodityId, int>(new(CropKind.Radish, (CommodityKind)99), 1),
+        })
+            Throws<ArgumentOutOfRangeException>(() =>
+            {
+                using var rejected = new FarmGame(65, 0, weatherMode: WeatherMode.Explicit,
+                    terrainRules: TerrainTestFixtures.AllLandRules,
+                    initialStock: new Dictionary<CommodityId, int> { [invalid.Key] = invalid.Value });
+            });
+    }
+
+    private static void CheckGameHarvestOverflowContinuation()
+    {
+        // 无溢出对照局给出同种子真实收成，避免把随机算法复制进经营集成测试。
+        using var reference = CreateGrowingFarmGame(0);
+        TickResult expectedTick = reference.AdvanceTick();
+        ProductionResult[] expectedHarvests = reference.GetPresentationResults()
+            .Where(result => result.Kind == ProductionResultKind.Harvest).ToArray();
+        Require(expectedHarvests.Length == 3 && expectedTick.Harvested == expectedHarvests.Sum(result => result.Quantity),
+            "原料溢出对照夹具未形成同秒三田成熟");
+        using var game = CreateGrowingFarmGame(int.MaxValue - expectedHarvests[0].Quantity);
+        Vector2I[] cells = expectedHarvests.Select(result => result.AnchorCell).ToArray();
+        var workersBefore = game.GetWorkers().ToArray();
+        int moneyBefore = game.MoneyCents;
+        Require(game.Calendar.ElapsedSeconds == 206 && cells.All(cell => game.GetPlot(cell).RemainingSeconds == 1),
+            "原料溢出夹具未停在共同到期前一秒");
+
+        Throws<OverflowException>(() => game.AdvanceTick());
+        var partial = game.GetPresentationResults();
+        PlotSnapshot[] failedPlots = cells.Select(game.GetPlot).ToArray();
+        Require(game.Calendar.ElapsedSeconds == 206 && game.GetRawStock(CropKind.Radish) == int.MaxValue &&
+            game.MoneyCents == moneyBefore && game.GetProductStock(CropKind.Radish) == 0 &&
+            partial.Count == 1 && partial[0].AnchorCell == cells[0] && partial[0].Quantity == expectedHarvests[0].Quantity &&
+            partial[0].ElapsedSeconds == 207 && !game.IsPresentationResultCurrent(partial[0]),
+            "原料溢出错误提交日历、跳过失败田或发布未完成秒的可播放结果");
+        Require(failedPlots[0].Crop == CropStage.None && !failedPlots[0].HasWater &&
+            failedPlots.Skip(1).All(plot => plot.Crop == CropStage.Growing && plot.HasWater && plot.RemainingSeconds == 0) &&
+            game.GetWorkers().SequenceEqual(workersBefore), "原料溢出提前清理失败轮次、尾项或推进工人");
+
+        int failedCheckpoints = 0;
+        Throws<OverflowException>(() => game.AdvanceTicks(1, _ => { failedCheckpoints++; return true; }));
+        Require(failedCheckpoints == 0 && game.Calendar.ElapsedSeconds == 206 && game.MoneyCents == moneyBefore &&
+            game.GetRawStock(CropKind.Radish) == int.MaxValue && game.GetPresentationResults().SequenceEqual(partial) &&
+            cells.Select(game.GetPlot).SequenceEqual(failedPlots) && game.GetWorkers().SequenceEqual(workersBefore),
+            "未释放容量的重复请求重跑降雨、重提首项、修改失败轮次或发布检查点");
+
+        int released = expectedHarvests.Skip(1).Sum(result => result.Quantity);
+        Require(game.Sell(new(CropKind.Radish, CommodityKind.Raw), released).Success, "原料容量释放失败");
+        TickResult resumed = game.AdvanceTick();
+        Require(resumed == expectedTick && game.Calendar == reference.Calendar && game.GetRawStock(CropKind.Radish) == int.MaxValue,
+            "原料续推没有在同秒完成，或漏计/重计异常前已入库收成");
+        Require(SamePresentation(game, reference) && cells.All(cell => game.GetPlot(cell) == reference.GetPlot(cell)) &&
+            game.IsPresentationResultCurrent(partial[0]) && partial.Count == 1,
+            "原料续推丢失FIFO真实结果、改变产量/轮次，或修改旧只读结果快照");
+        var followup = game.AdvanceTicks(1);
+        TickResult referenceFollowup = reference.AdvanceTick();
+        Require(followup.Harvested == 0 && followup.Produced == 0 && referenceFollowup.Harvested == 0 &&
+            game.GetRawStock(CropKind.Radish) == int.MaxValue && !game.IsPresentationResultCurrent(partial[0]) &&
+            SamePresentation(game, reference), "原料续推后下一秒重复入库或重播旧收获");
+    }
+
+    private static FarmGame CreateGrowingFarmGame(int rawStock)
+    {
+        var game = new FarmGame(65, 0, weatherMode: WeatherMode.Explicit,
+            terrainRules: TerrainTestFixtures.AllLandRules,
+            initialStock: new Dictionary<CommodityId, int> { [new(CropKind.Radish, CommodityKind.Raw)] = rawStock });
+        try
+        {
+            foreach (var space in game.GetBuildingSpaces())
+                if (space.Building == BuildingKind.Processor) game.RemoveBuilding(space.AnchorCell);
+            Require(game.GetRawStock(CropKind.Radish) == rawStock, "初始库存被开局设施提前领取");
+            foreach (var space in game.GetBuildingSpaces())
+                Require(game.SetFarmCrop(space.AnchorCell, CropKind.Radish) == null, "原料溢出夹具改种失败");
+            Require(game.TrySetWeatherRegion(new Rect2I(0, 0, FarmGame.MapSize, FarmGame.MapSize), WeatherKind.Rain, out _),
+                "原料溢出夹具降雨设置失败");
+            game.AdvanceTick();
+            Require(game.GetBuildingSpaces().All(space => game.GetPlot(space.AnchorCell).Crop == CropStage.Growing &&
+                game.GetPlot(space.AnchorCell).RemainingSeconds == 206), "三名工人未在首秒完成湿田播种");
+            Require(game.AdvanceTicks(205).Harvested == 0, "原料溢出夹具提前成熟");
+            return game;
+        }
+        catch { game.Dispose(); throw; }
+    }
+
+    private static void CheckGameProductOverflowContinuation()
+    {
+        var product = new CommodityId(CropKind.Radish, CommodityKind.Product);
+        var initialStock = new Dictionary<CommodityId, int> { [product] = int.MaxValue - 9 };
+        using var game = new FarmGame(65, 0, weatherMode: WeatherMode.Explicit,
+            terrainRules: TerrainTestFixtures.AllLandRules, initialStock: initialStock);
+        initialStock.Clear();
+        Require(game.GetStock(product) == int.MaxValue - 9, "初始库存仍引用调用方可变容器");
+        foreach (var space in game.GetBuildingSpaces()) game.RemoveBuilding(space.AnchorCell);
+        Vector2I[] cells = { new(180, 180), new(183, 180), new(186, 180) };
+        foreach (Vector2I cell in cells)
+            Require(game.BuildProcessor(cell, CropKind.Radish) == null, "成品溢出夹具建造失败");
+        Require(game.Buy(new(CropKind.Radish, CommodityKind.Raw), 27).Success, "成品溢出夹具买入失败");
+        var checkpoints = new List<SimulationCheckpoint>();
+        var workersBefore = game.GetWorkers().ToArray();
+        int moneyBefore = game.MoneyCents;
+        Throws<OverflowException>(() => game.AdvanceTicks(30, point => { checkpoints.Add(point); return true; }));
+        // 第1秒正常领取，26秒批次在第27秒到期；异常前的平静段已完成到第26秒。
+        Require(checkpoints.Count == 1 && checkpoints[0].ElapsedSeconds == 1 && checkpoints[0].AdvancedTicks == 1 &&
+            checkpoints[0].IntervalTicks == 1 && checkpoints[0].IsEvent && checkpoints[0].Result.Produced == 0 &&
+            game.Calendar.ElapsedSeconds == 26, "失败批次丢失此前完整检查点，或发布了第27秒检查点");
+        var partial = game.GetPresentationResults();
+        PlotSnapshot[] failedPlots = cells.Select(game.GetPlot).ToArray();
+        Require(game.GetStock(product) == int.MaxValue && game.GetRawStock(CropKind.Radish) == 0 &&
+            partial.Count == 1 && partial[0].AnchorCell == cells[0] && partial[0].Quantity == 9 &&
+            partial[0].ElapsedSeconds == 27 && !game.IsPresentationResultCurrent(partial[0]) &&
+            game.GetProcessorDetails(cells[0]).BatchQuantity == 0 &&
+            cells.Skip(1).All(cell => game.GetProcessorDetails(cell).BatchQuantity == 9 && game.GetPlot(cell).RemainingSeconds == 0),
+            "成品溢出回滚首项、丢失锁量/尾项或把未完成秒结果视为可播放");
+        var workersAtFailure = game.GetWorkers().ToArray();
+        Require(workersAtFailure.All(worker => worker.TargetCell == null) &&
+            workersAtFailure.Select(worker => worker.GridPosition).SequenceEqual(workersBefore.Select(worker => worker.GridPosition)),
+            "无农田夹具错误产生工人移动");
+        Throws<OverflowException>(() => game.AdvanceTick());
+        Require(game.Calendar.ElapsedSeconds == 26 && game.MoneyCents == moneyBefore && game.GetStock(product) == int.MaxValue &&
+            game.GetRawStock(CropKind.Radish) == 0 && cells.Select(game.GetPlot).SequenceEqual(failedPlots) &&
+            game.GetWorkers().SequenceEqual(workersAtFailure) && game.GetPresentationResults().SequenceEqual(partial),
+            "成品重复失败推进时钟、重复首项或修改保留批次");
+
+        Require(game.Sell(product, 18).Success, "成品容量释放失败");
+        checkpoints.Clear();
+        var resumed = game.AdvanceTicks(5, point =>
+        {
+            checkpoints.Add(point);
+            if (point.ElapsedSeconds == 27)
+            {
+                var output = game.GetPresentationResults();
+                Require(output.Count == 3 && output.Select(result => result.AnchorCell).SequenceEqual(cells) &&
+                    output.All(result => result.Kind == ProductionResultKind.Product && result.Quantity == 9 &&
+                        result.ElapsedSeconds == 27 && game.IsPresentationResultCurrent(result)) && partial.Count == 1,
+                    "成品续推没有保留首项并按FIFO发布三项真实结果");
+            }
+            return true;
+        });
+        Require(resumed.AdvancedTicks == 5 && resumed.Produced == 27 && resumed.Harvested == 0 &&
+            resumed.EventTicks == 1 && resumed.QuietTicks == 4 && !resumed.StoppedAtCheckpoint &&
+            checkpoints.Count == 2 && checkpoints[0].ElapsedSeconds == 27 && checkpoints[0].AdvancedTicks == 1 &&
+            checkpoints[0].IntervalTicks == 1 && checkpoints[0].Result.Produced == 27 && checkpoints[0].IsEvent &&
+            checkpoints[1].ElapsedSeconds == 31 && checkpoints[1].AdvancedTicks == 5 && checkpoints[1].IntervalTicks == 4 &&
+            !checkpoints[1].IsEvent && checkpoints[1].Result.Produced == 0,
+            "成品续推批量汇总或完整检查点重复/漏计异常前产出");
+        Require(game.Calendar.ElapsedSeconds == 31 && game.GetStock(product) == int.MaxValue &&
+            cells.All(cell => game.GetProcessorDetails(cell).BatchQuantity == 0) &&
+            game.GetPresentationResults().Count == 0 && !game.IsPresentationResultCurrent(partial[0]),
+            "平静尾段重复入库、保留已完成批次或重播旧产出");
+        Require(game.AdvanceTick().Produced == 0 && game.GetStock(product) == int.MaxValue && game.Calendar.ElapsedSeconds == 32,
+            "完成续推后的普通秒重复提交成品");
+    }
+
+    private static bool SamePresentation(FarmGame left, FarmGame right) =>
+        left.GetPresentationResults().Select(result => (result.ElapsedSeconds, result.AnchorCell,
+            result.CropKind, result.Kind, result.Quantity, result.WorkerNumber)).SequenceEqual(
+            right.GetPresentationResults().Select(result => (result.ElapsedSeconds, result.AnchorCell,
+                result.CropKind, result.Kind, result.Quantity, result.WorkerNumber)));
 
     private static void Throws<T>(Action action) where T : Exception
     {

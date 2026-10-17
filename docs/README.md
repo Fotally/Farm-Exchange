@@ -40,7 +40,7 @@
 - [历史市场曲线接口](architecture/market/market-price-curve/interface-market-price-curve.md)及[曲线实现](architecture/market/market-price-curve/implementation-bounded-curve.md)：保留独立曲线测试，正式经营改走报价模块。
 - [GameCalendar 接口](architecture/time/game-calendar/interface-game-calendar.md)和[GameTimeUnits 接口](architecture/time/game-time-units/interface-game-time-units.md)：经营日历、暂停与生产共用的精确时间比例。
 - [经营到期索引接口](architecture/time/simulation-due-index/interface-simulation-due-index.md)：一年窗口内的固定秒桶、阶段内 FIFO、取消句柄和成功后移除；首批承载成熟与加工完工。
-- [生产到期结算实现](architecture/game-state/farm-game/implementation-production-due.md)：农田与加工精确目标、天气分段积分、产出 FIFO、容量异常与原经营相位的衔接。
+- [生产到期结算实现](architecture/game-state/farm-game/implementation-production-due.md)：农田与加工精确目标、天气分段积分、产出 FIFO、容量异常与原经营相位的衔接，以及真实 FarmGame 溢出续推回归。
 - [日志专项验收](architecture/logging/implementation-validation.md)：真实provider故障、1080P满图1×/16×负载与分配矩阵、进程退出与实际Release程序集门禁；运行命令见测试说明。
 - [SimulationDriver 接口](architecture/time/simulation-driver/interface-simulation-driver.md)：唯一倍率与未完成tick进度、导航等待门禁、完整秒异常提交凭据、稳定检查点、预算限额和玩家/流程改速来源。
 - [参数化流程接口](architecture/development/interface-parameterized-scenario.md)与[固定流程实现](architecture/development/implementation-buy-process-sell.md)：严格配置、两种运行对象、日期及等待预算、同步结算和证据检查、只输出JSON报告。

@@ -220,8 +220,21 @@ public sealed class FarmGame : IDisposable
      */
     public FarmGame(int? marketSeed = null, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null, TerrainRules? terrainRules = null) : this(marketSeed, 0, logging, purpose, weatherMode, weatherRules, terrainRules) { }
 
-    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null, TerrainRules? terrainRules = null)
-        : this(CreateSynchronousTerrain(marketSeed, terrainRules, purpose), elapsedSeconds, logging, purpose, weatherMode, weatherRules) { }
+    /**
+     * <summary>创建内部时间与库存边界夹具，继续使用真实经营模块。</summary>
+     * <param name="marketSeed">报价、初始设施与产量随机种子。</param>
+     * <param name="elapsedSeconds">初始完整经营秒。</param>
+     * <param name="logging">可选日志会话。</param>
+     * <param name="purpose">本局用途。</param>
+     * <param name="weatherMode">本局固定天气模式。</param>
+     * <param name="weatherRules">本局天气配置。</param>
+     * <param name="terrainRules">显式纯陆地配置。</param>
+     * <param name="initialStock">可选初始商品数量；按库存规则校验并复制，不保留调用方容器。</param>
+     * <remarks>初始设施建立后、日志绑定前入库；加工在后续正常领取相位开批，不提供运行中资源改写。</remarks>
+     */
+    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null, TerrainRules? terrainRules = null,
+        IReadOnlyDictionary<CommodityId, int>? initialStock = null)
+        : this(CreateSynchronousTerrain(marketSeed, terrainRules, purpose), elapsedSeconds, logging, purpose, weatherMode, weatherRules, initialStock) { }
 
     /**
      * <summary>完整生成地形并等待原生导航同步后创建经营局，不发布可提前推进的半成品。</summary>
@@ -267,7 +280,8 @@ public sealed class FarmGame : IDisposable
     }
 
     private FarmGame((int Seed, TerrainMap Map) prepared, uint elapsedSeconds, RuntimeLog? logging,
-        GamePurpose purpose, WeatherMode weatherMode, WeatherRules? weatherRules)
+        GamePurpose purpose, WeatherMode weatherMode, WeatherRules? weatherRules,
+        IReadOnlyDictionary<CommodityId, int>? initialStock = null)
     {
         int seed = prepared.Seed;
         _terrain = prepared.Map;
@@ -285,6 +299,9 @@ public sealed class FarmGame : IDisposable
             _trading = new TradingService(_inventory, _wallet, _market);
             _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
             InitializeCenter(new Random(seed));
+            if (initialStock != null)
+                foreach (var entry in initialStock)
+                    _inventory.Add(entry.Key, entry.Value);
             _log = logging?.BindGame(this, seed, collectProduction: true, purpose);
             _tradeOrders.AttachLog(_log?.Orders);
             _trading.SetLogging(_log?.Trading);
