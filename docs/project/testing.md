@@ -38,6 +38,14 @@ PR #179 的年度表原生拖放回归接入 `TestMapNavigation`：真实输入�
 
 `TestFarmGame` 独立入口和 `TestSuite` 完整入口都捕获异步测试异常，记录完整堆栈并以退出码 1 结束。测试进程仍须实际退出；仅有最后一条输出或未退出的进程不能作为通过证据。
 
+### Godot 引擎错误与资源重载
+
+验收同时核对进程退出码和完整引擎日志。Godot 内部捕获并记录的异常可能不改变场景的布尔结果或退出码；出现未解释的 `ERROR:` 时，保留原始堆栈、引擎版本、提交和运行参数，单独报告，不以 CI 成功或覆盖率达标说明日志无错误。资源生命周期排查使用真实 `ResourceLoader`、节点持有及释放过程，并对目标异常单独计数；不通过注入异常验证重现。
+
+PR #199 的 `Handle is not initialized` 已在指定 Godot 4.7.2 Mono 引擎下重现：批量加载纹理，由原生 `Sprite2D` 持有，释放节点并跨帧重载，在真实 GC 压力下进入 `ResourceLoader.Load → ScriptManagerBridge.SwapGCHandleForType → GCHandle.FromIntPtr`。该对照不调用 `FarmGame`、`WorldMap` 或 NPC 代码，因此这些项目模块不是复现此症状的必要条件；这不证明原 CI 的具体触发资源或引擎内部竞争位置已经确定。原 CI 的加载点为 NPC 场景，本地压力对照的加载点为纹理，须分别保留证据。
+
+上游 [Godot 4.7.2 的桥接实现](https://github.com/godotengine/godot/blob/4.7.2-stable/modules/mono/glue/GodotSharp/GodotSharp/Core/Bridge/ScriptManagerBridge.cs)会在句柄强弱转换中读取旧句柄，并捕获、记录该路径的异常。等待终结器的时序对照只用于缩小诊断范围，不作为游戏中的强制 GC、永久资源缓存、重试或吞错方案；当前未修改引擎，也不将本次排查表述为句柄问题已修复。重放源码、精确错误计数和原始日志保存在 `build/main-pr-validation/`，不作为生产测试代码提交。
+
 `tests/performance/test_water_fps.tscn` 必须使用真实 1920×1080 图形窗口运行，覆盖默认含水局、三类水纹逐像素、干地不变、暂停、有路／拆路真实工人对照及 0.5×／1×／2×／16×三工人跨图负载。筹资只使用真实收获出售。`test_road_fps.tscn` 保留45格道路和原采样窗口，在导航就绪后测量；两者继续采用平均至少60 FPS、P95不超过16.67 ms的门槛。报告和截图位于对应场景声明的 build 目录，不纳入 Git。
 
 计划供水修复的回归继续由 `TestProductionState`、`TestProductionResults`、`TestCultivationPlanBook` 和 `TestWorkerScheduler` 的既有 TestSuite 入口运行。通过真实 FarmGame 的三田／四田、两种计划、手动预备、首次应用与重应用、雨水取消及单秒／批量对照，验证当前 Water 认领和成功 Sow 保持；旧待执行 Sow 禁播再启用不复活，真正重启、拆建、收获及禁生清理继续失效。实现见[农田工作身份](../architecture/farming/farming-system/implementation-work-identity-proposal.md)。
