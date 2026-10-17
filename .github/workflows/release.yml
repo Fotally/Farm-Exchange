@@ -153,6 +153,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $sourceArchive -PathType Leaf)) {
             throw 'macOS 产物缺少 FarmExchange.zip'
           }
+          ./tools/Test-RuntimePack.ps1 -PackPath $sourceArchive -ReportPath 'build/validation/macos-release/runtime-pack.json'
           $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $sourceArchive).Path)
           try {
             $appRoots = @($zip.Entries.FullName |
@@ -182,6 +183,15 @@ jobs:
           $archive = Join-Path (Resolve-Path -LiteralPath $releaseDirectory).Path "FarmExchange-$($env:RELEASE_VERSION)-macos-universal.zip"
           Copy-Item -LiteralPath $sourceArchive -Destination $archive
           "archive=$archive" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: 上传 macOS 发布资源清单
+        if: ${{ !cancelled() && (steps.macos-package.outcome == 'success' || steps.macos-package.outcome == 'failure') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-release-resource-validation-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/validation/macos-release/runtime-pack.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: 创建标签与 GitHub Release 并上传压缩包
         shell: pwsh

@@ -36,6 +36,8 @@ E:\Godot\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64_console.e
 
 命令检查有效 EXE、PCK 和程序集，将本提交 schema 原字节复制到 `logs/schema-v1.md`，真实运行 `--headless --quit-after 5`，最多等待 60 秒。stdout、stderr、启动退出事实和实际存在的 runtime/debug 日志保存在证据目录；超时会先终止进程并等待退出。日志逐文件复制并校验成功后才从构建移出；保存失败保留未保存的源日志并停止分发，启动失败也继续保留原错误。
 
+启动前后还通过 `Test-RuntimePack.ps1` 检查实际 PCK：文档附件、退役 NPC 图集及其导入纹理均须不存在，四向作物、当前 NPC、UI、地形/天气/道路等必需动态资源及实际导入目标必须完整。启动前后的完整目录清单分别保存到证据目录 `runtime-pack.json`、`runtime-pack-final.json`，附加 ZIP 时再保存 `runtime-pack-archive.json`；PCK 检查失败同样阻止分发。正式与 Dev 预设的选择范围及前后字节对照规则见[运行资源验收](runtime-resources.md)。
+
 仅 `logs/runtime/`、`logs/debug/` 是需要外移的验收会话，schema 与其他运行文件原样保留。准备后的目录必须无这两类会话文件，schema SHA256 与本次源一致，全部必需文件存在且非空。命令用于受控构建目录，不能指向玩家已解压的游戏；证据目录与构建目录不得相同或互相包含，schema 源必须来自构建目录之外，已有证据目录拒绝覆盖。
 
 正式包或本地 ZIP 验收可附加 `-ArchivePath`，例如：
