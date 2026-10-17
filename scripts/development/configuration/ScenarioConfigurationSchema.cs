@@ -275,5 +275,5 @@ public sealed class ScenarioConfigurationSchema
     }
 
     internal static string Join(string parent, string child) => parent.Length == 0 ? child : parent + "." + child;
-    internal static ScenarioConfigurationException Error(string path, string message) => new((path.Length > 0 ? path + "：" : "") + message);
+    internal static ScenarioConfigurationException Error(string path, string message) => new((path.Length > 0 ? path + "：" : "") + message, fieldPath: path);
 }

@@ -152,7 +152,7 @@ public partial class TestDeveloperFlowEditor : Node
             Find<Button>(window, "ScenarioArrayRemove_execution_timePlan_2").EmitSignal(Button.SignalName.Pressed);
             if (Find<Label>(window, "ScenarioFeedbackLabel").Text.Length != 0) return Fail("数组删除后没有清理对应错误");
 
-            if (!await CheckOtherShape(parent, window)) return false;
+            if (!await CheckFormErrors(parent, window) || !await CheckOtherShape(parent, window)) return false;
             await CheckSize(parent, window, new Vector2I(2560, 1440), root, "editor-2560.png");
             await CheckSize(parent, window, new Vector2I(3840, 2160), root, "editor-3840.png");
             GetWindow(parent).Size = new Vector2I(1920, 1080);
@@ -244,6 +244,55 @@ public partial class TestDeveloperFlowEditor : Node
             window.QueueFree();
             await Frames(parent);
             original.ShowRaised();
+        }
+    }
+
+    private static async Task<bool> CheckFormErrors(Node parent, DeveloperToolsWindow window)
+    {
+        var schema = ScenarioConfigurationSchema.BuyProcessSell;
+        var draft = new ScenarioConfigurationDraft(schema, schema.Write(new ScenarioEditableConfiguration()));
+        var form = new ScenarioConfigurationForm();
+        window.Body.AddChild(form);
+        form.BindDraft(draft);
+        try
+        {
+            await Frames(parent);
+            if (Find<Label>(form, "ScenarioConfigurationOverallError").Visible) return Fail("合法草稿仍显示整体错误区");
+            Find<Button>(form, "ScenarioArrayAdd_execution_timePlan").EmitSignal(Button.SignalName.Pressed);
+            Label dateError = Find<Label>(form, "ScenarioError_execution_timePlan_1_endDate");
+            if (!draft.Errors.ContainsKey("execution.timePlan[1].endDate") || !dateError.IsVisibleInTree() ||
+                !dateError.Text.Contains("时间区间终点须严格递增")) return Fail("schema到草稿到表单的倒序日期定位丢失");
+            SetText(Find<LineEdit>(form, "ScenarioField_execution_timePlan_1_endDate_1"), "03");
+            if (dateError.Visible || draft.Errors.Count != 0) return Fail("日期修正后错误未清理");
+            var quantity = Find<LineEdit>(form, "ScenarioField_parameters_quantity");
+            SetText(quantity, "非法：整数：原文");
+            Label quantityError = Find<Label>(form, "ScenarioError_parameters_quantity");
+            if (!quantityError.IsVisibleInTree() || !draft.Errors.ContainsKey("parameters.quantity") ||
+                !Equals(draft.GetValue("parameters.quantity"), "非法：整数：原文")) return Fail("带冒号的非法原文未保留或字段失定位");
+            SetText(quantity, "1");
+            SetText(Find<LineEdit>(form, "ScenarioField_execution_timePlan_1_rate"), "坏倍率");
+            Find<Button>(form, "ScenarioArrayUp_execution_timePlan_1").EmitSignal(Button.SignalName.Pressed);
+            if (!draft.Errors.ContainsKey("execution.timePlan[0].rate") ||
+                !Find<Label>(form, "ScenarioError_execution_timePlan_0_rate").IsVisibleInTree() ||
+                Find<LineEdit>(form, "ScenarioField_execution_timePlan_0_rate").Text != "坏倍率") return Fail("移动数组后字段错误与非法原文未随行移动");
+            Find<Button>(form, "ScenarioArrayRemove_execution_timePlan_0").EmitSignal(Button.SignalName.Pressed);
+            if (draft.Errors.Count != 0) return Fail("删除非法数组行后仍残留错误");
+            Find<Button>(form, "ScenarioArrayRemove_execution_timePlan_0").EmitSignal(Button.SignalName.Pressed);
+            Label arrayError = Find<Label>(form, "ScenarioError_execution_timePlan");
+            if (!draft.Errors.ContainsKey("execution.timePlan") || !arrayError.IsVisibleInTree() ||
+                !arrayError.Text.Contains("数组条目数量超出允许范围")) return Fail("schema到草稿到表单的空数组定位丢失");
+            Find<Button>(form, "ScenarioArrayAdd_execution_timePlan").EmitSignal(Button.SignalName.Pressed);
+            if (draft.Errors.Count != 0 || Find<Label>(form, "ScenarioError_execution_timePlan").Visible)
+                return Fail("补入合法时间段后数组错误未清理");
+            return true;
+        }
+        finally
+        {
+            // 数组编辑排队的焦点恢复须在表单仍在树内时完成。
+            await Frames(parent);
+            window.Body.RemoveChild(form);
+            form.QueueFree();
+            await Frames(parent);
         }
     }
 
