@@ -146,7 +146,7 @@ public partial class TestPlacementPreview : Node
                 return Fail("达到左键拖动阈值后未对协调入口报告拖动状态");
             map.ClearPlacementPreview();
             int selections = 0;
-            map.SelectionChanged += _ => selections++;
+            camera.MapShortClicked += _ => selections++;
             camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = point + new Vector2(30, 0) });
             if (camera.IsDragging || selections != 0 || map.PlacementPreviewAnchor != null)
                 return Fail("拖动松开后仍拖动或误发建造确认");

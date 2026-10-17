@@ -42,7 +42,8 @@ public partial class TestCameraInteraction : Node
         {
             window.Size = new Vector2I(1920, 1080);
             await Frames(parent);
-            if (!await CheckEditingInputAsync(parent, main, camera)) return false;
+            if (!await CheckNativeShortClicksAsync(parent, main, camera) ||
+                !await CheckEditingInputAsync(parent, main, camera)) return false;
             foreach (Vector2I size in new[] { new Vector2I(1280, 720), new Vector2I(1920, 1080), new Vector2I(2560, 1440), new Vector2I(3840, 2160), new Vector2I(1280, 720) })
             {
                 window.Size = size;
@@ -459,6 +460,47 @@ public partial class TestCameraInteraction : Node
         Input.FlushBufferedEvents();
     }
 
+    private static async Task<bool> CheckNativeShortClicksAsync(Node parent, Main main, CameraController camera)
+    {
+        var map = main.GetNode<WorldMap>("WorldMap");
+        Vector2I cell = new(186, 192);
+        Vector2 point = map.GetGlobalTransformWithCanvas() * MapCoordinates.CellToLocalCenter(cell);
+        Vector2 ui = TestMapInput.Find<Control>(main, "ResourcesPanel").GetGlobalRect().GetCenter();
+        int accepted = 0;
+        void OnAccepted(Vector2 _) => accepted++;
+        camera.MapShortClicked += OnAccepted;
+        try
+        {
+            TestMapInput.Click(main, point);
+            await Frames(parent);
+            if (accepted != 1 || map.SelectedCell != cell)
+                return Fail("原生普通短按未通过唯一分派落实选择");
+            // GUI 按下、地图释放；以及地图按下、GUI释放，都不能成为下一次地图短按。
+            foreach (bool fromUi in new[] { true, false })
+            {
+                Vector2 press = fromUi ? ui : point, release = fromUi ? point : ui;
+                TestMapInput.Move(main, press);
+                TestMapInput.MouseButtonEvent(main, press, MouseButton.Left, true);
+                TestMapInput.Move(main, release, MouseButtonMask.Left);
+                TestMapInput.MouseButtonEvent(main, release, MouseButton.Left, false);
+                await Frames(parent);
+                if (accepted != 1 || map.SelectedCell != cell)
+                    return Fail("跨GUI的原生按放错误分派地图短按");
+            }
+            TestMapInput.Move(main, point);
+            TestMapInput.MouseButtonEvent(main, point, MouseButton.Left, true);
+            main.GetWindow().EmitSignal(Window.SignalName.FocusExited);
+            TestMapInput.MouseButtonEvent(main, point, MouseButton.Left, false);
+            if (accepted != 1 || camera.IsDragging)
+                return Fail("失焦后的原生释放仍分派短按或残留拖动");
+            TestMapInput.Click(main, point);
+            if (accepted != 2 || map.SelectedCell != cell)
+                return Fail("失焦清理后新的原生短按无法恢复唯一分派");
+            return true;
+        }
+        finally { camera.MapShortClicked -= OnAccepted; }
+    }
+
     private static bool CheckView(Window window, WorldMap map, CameraController camera, Control ui, float zoom)
     {
         Vector2 expectedCell = new Vector2(64, 32) * zoom;
@@ -478,14 +520,10 @@ public partial class TestCameraInteraction : Node
     private static bool CheckResizeInput(WorldMap map, CameraController camera)
     {
         Vector2I cell = new(186, 192);
-        Vector2I selected = new(-1, -1);
-        void OnSelected(Vector2I value) => selected = value;
-        map.SelectionChanged += OnSelected;
         Vector2 viewportPoint = map.GetGlobalTransformWithCanvas() * MapCoordinates.CellToLocalCenter(cell);
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = viewportPoint });
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = viewportPoint });
-        map.SelectionChanged -= OnSelected;
-        if (selected != cell) return Fail("窗口变化后点击未选中对应基础格");
+        if (map.SelectedCell != cell) return Fail("窗口变化后点击未选中对应基础格");
 
         Vector2 before = camera.Position;
         Vector2 physicalDrag = new(100, 0);
@@ -569,14 +607,14 @@ public partial class TestCameraInteraction : Node
         camera._UnhandledInput(new InputEventMouseMotion { Position = firstScreen + new Vector2(120f, 0f), Relative = new Vector2(20f, 0f) });
         if (camera.Position != cameraAfterMissedRelease)
             return Fail("左键释放事件未传入镜头时仍会拖动镜头");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(189, 189));
+        TestMapInput.ShortClickCell(map, new Vector2I(189, 189));
         Vector2 nextClickScreen = map.GetGlobalTransformWithCanvas() * firstWorld;
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = nextClickScreen });
         camera._UnhandledInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = nextClickScreen });
         if (!ContainsText(detail, "地块 (186, 192)"))
             return Fail("左键拖动松开后无法再次短按选格");
         Vector2 outsideScreen = map.GetGlobalTransformWithCanvas() * new Vector2(30000f, 30000f);
-        map.SelectAtScreenPosition(outsideScreen);
+        TestMapInput.ShortClick(camera, outsideScreen);
         if (!ContainsText(detail, "地块 (186, 192)"))
             return Fail("地图外的位置仍可被选中");
 
@@ -584,10 +622,10 @@ public partial class TestCameraInteraction : Node
         Vector2I translatedCell = new(186, 192);
         if (map.GetCellWorldCenter(translatedCell) != new Vector2(-119f, 6007f))
             return Fail("平移后的格中心没有应用地图节点变换");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(189, 189));
+        TestMapInput.ShortClickCell(map, new Vector2I(189, 189));
         Vector2 translatedScreen = map.GetGlobalTransformWithCanvas() *
             MapCoordinates.CellToLocalCenter(translatedCell);
-        map.SelectAtScreenPosition(translatedScreen);
+        TestMapInput.ShortClick(camera, translatedScreen);
         if (!ContainsText(detail, "地块 (186, 192)"))
             return Fail("地图平移后选格与全局格中心不一致");
         camera.GlobalPosition = new Vector2(30073f, 6087f);

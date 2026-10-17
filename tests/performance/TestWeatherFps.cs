@@ -81,7 +81,7 @@ public partial class TestWeatherFps : Node
         _camera.ForceUpdateScroll();
         _main.Game.SetPaused(true);
         _main.Driver.SetDevelopmentRate(_rate);
-        _map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(186, 189));
+        TestMapInput.ShortClickCell(_map, new Vector2I(186, 189));
         ProcessPriority = 3;
         Engine.MaxFps = 0;
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
@@ -197,7 +197,7 @@ public partial class TestWeatherFps : Node
                 !_main.Game.TrySetWeatherRegion(new Rect2I(96, 288, 192, 96), WeatherKind.Rain, out _)))
             { Fail("图形天气区域夹具失败"); return; }
             _main.Game.SetPaused(false);
-            _map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(186, 189));
+            TestMapInput.ShortClickCell(_map, new Vector2I(186, 189));
             _stage = 1;
             _stageStart = Time.GetTicksUsec();
             return;

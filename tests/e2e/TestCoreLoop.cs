@@ -72,7 +72,7 @@ public partial class TestCoreLoop : Node
             var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
             var map = main.GetNode<WorldMap>("WorldMap");
             var farm = System.Linq.Enumerable.First(main.Game.GetBuildingSpaces(), space => space.Building == BuildingKind.Farm);
-            map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm.AnchorCell);
+            TestMapInput.ShortClickCell(map, farm.AnchorCell);
             CommodityId commodity = new(main.Game.GetPlot(farm.AnchorCell).CropKind, CommodityKind.Raw);
             if (main.AdvanceSimulation(0.5) != 0) return Fail("主场景半 tick 夹具未保留小数");
             uint advanced = main.AdvanceSimulation(0.5, _ =>
@@ -119,7 +119,7 @@ public partial class TestCoreLoop : Node
             await main.Game.WaitForNavigationAsync(parent.GetTree());
             foreach (Vector2I cell in new[] { new Vector2I(90, 90), farm.AnchorCell, processor.AnchorCell, road })
             {
-                map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+                TestMapInput.ShortClickCell(map, cell);
                 if (!detail.Visible) return Fail("目录打开前原选择详情未显示");
                 detail.Position = new Vector2(1200, 170);
                 Find<Button>(ui, "BuildButton").EmitSignal(Button.SignalName.Pressed);
@@ -396,7 +396,7 @@ public partial class TestCoreLoop : Node
                     return Fail("主场景开局布局未按标准田跨度放置完整3×3设施");
                 foreach (Vector2I offset in space.Footprint.Offsets)
                 {
-                    map.EmitSignal(WorldMap.SignalName.SelectionChanged, anchor + offset);
+                    TestMapInput.ShortClickCell(map, anchor + offset);
                     Control panel = Find<Control>(detail, space.Building == BuildingKind.Farm ? "FarmDetailsPanel" : "ProcessorDetailsPanel");
                     if (!panel.IsVisibleInTree() || Find<Label>(panel, "FacilityPreviewPlacement").Text !=
                         $"3 × 3 基础格 · ({anchor.X}, {anchor.Y})" ||
@@ -413,16 +413,16 @@ public partial class TestCoreLoop : Node
                 return Fail("建造目录未说明生产设施占地");
             Find<Button>(buildWindow, "FarmCard").EmitSignal(Button.SignalName.Pressed);
             Vector2I farm = new(188, 198); // 任意小格锚点，无需按三格对齐。
-            map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+            TestMapInput.ShortClickCell(map, farm);
             if (game.MoneyCents != 4000 || game.GetBuildingSpace(farm)?.AnchorCell != farm)
                 return Fail("非三格对齐锚点未建造一次并只收一座费用");
             Find<Button>(ui, "CancelPlacementButton").EmitSignal(Button.SignalName.Pressed);
-            map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm + new Vector2I(2, 1));
+            TestMapInput.ShortClickCell(map, farm + new Vector2I(2, 1));
             Find<Button>(detail, "ChangeCropButton").EmitSignal(Button.SignalName.Pressed);
             Find<Button>(Find<Control>(ui, "CropWindow"), "CropCardRadish").EmitSignal(Button.SignalName.Pressed);
             foreach (Vector2I offset in game.GetBuildingSpace(farm)!.Footprint.Offsets)
             {
-                map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm + offset);
+                TestMapInput.ShortClickCell(map, farm + offset);
                 if (game.GetPlot(farm + offset).CropKind != CropKind.Radish ||
                     !ContainsVisibleText(detail, "获得水后 4 天成熟") ||
                     Find<Label>(Find<Control>(detail, "FarmDetailsPanel"), "FacilityPreviewPlacement").Text !=
@@ -460,8 +460,7 @@ public partial class TestCoreLoop : Node
         if (!main.Game.TrySetWeatherRegion(new Rect2I(189, 189, 12, 3), WeatherKind.Rain, out _))
             return Fail("天气区域夹具设置失败");
         main.Game.AdvanceTick();
-        main.GetNode<WorldMap>("WorldMap").EmitSignal(
-            WorldMap.SignalName.SelectionChanged, wetFarm);
+        TestMapInput.ShortClickCell(main.GetNode<WorldMap>("WorldMap"), wetFarm);
         Control detail = Find<Control>(main.GetNode<Control>("CanvasLayer/UiRoot"), "DetailWindow");
         bool visible = main.Game.GetFarmDetails(wetFarm).Status ==
             FarmStatus.WaitingForWorkerWithWater &&
@@ -502,7 +501,7 @@ public partial class TestCoreLoop : Node
         main.Game.BuildProcessor(processor, CropKind.Radish);
 
         var ui = main.GetNode<Control>("CanvasLayer/UiRoot");
-        main.GetNode<WorldMap>("WorldMap").EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
+        TestMapInput.ShortClickCell(main.GetNode<WorldMap>("WorldMap"), processor);
         var detail = Find<Control>(ui, "DetailWindow");
         if (!ContainsVisibleText(detail, "等待原料超过保留底线"))
             return Fail("加工详情未显示保留底线等待原因");
@@ -710,7 +709,7 @@ public partial class TestCoreLoop : Node
         main._UnhandledInput(new InputEventKey { Pressed = true, Keycode = Key.Escape });
         if (cancel.Visible || footer.Text.Contains("铺路中"))
             return Fail("Esc没有退出连续道路模式");
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+        TestMapInput.ShortClickCell(map, first);
         Control roadDetails = Find<Control>(detail, "RoadDetailsPanel");
         Button remove = Find<Button>(roadDetails, "RemoveRoadButton");
         if (!detail.Visible || !roadDetails.IsVisibleInTree() || !remove.IsVisibleInTree() ||
@@ -737,7 +736,7 @@ public partial class TestCoreLoop : Node
         build.EmitSignal(Button.SignalName.Pressed);
         roadCard.EmitSignal(Button.SignalName.Pressed);
         cancel.EmitSignal(Button.SignalName.Pressed);
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+        TestMapInput.ShortClickCell(map, first);
         if (cancel.Visible || main.Game.GetPlot(first).Building != BuildingKind.None || main.Game.MoneyCents != 4800)
             return Fail("取消按钮没有停止铺路，或普通选择仍触发扣费");
         return true;
@@ -769,7 +768,7 @@ public partial class TestCoreLoop : Node
         if (main.Game.Calendar.IsPaused || pause.Icon == null || !pause.TooltipText.Contains("暂停"))
             return Fail("顶部继续按钮未恢复经营");
 
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(90, 90));
+        TestMapInput.ShortClickCell(map, new Vector2I(90, 90));
         if (!detail.Visible || ContainsVisibleText(detail, "生长周期") ||
             ContainsVisibleText(detail, "每批加工") || ContainsVisibleText(detail, "库存"))
             return Fail("空地详情显示了生产或库存信息");
@@ -796,11 +795,11 @@ public partial class TestCoreLoop : Node
             return Fail("选中农田后未进入摆放状态");
 
         Vector2I farm = new(186, 192);
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        TestMapInput.ShortClickCell(map, farm);
         if (!cancel.Visible || detail.Visible)
             return Fail("农田成功后没有保持摆放或弹出详情");
         cancel.EmitSignal(Button.SignalName.Pressed);
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        TestMapInput.ShortClickCell(map, farm);
         if (main.Game.GetPlot(farm).Building != BuildingKind.Farm ||
             main.Game.MoneyCents != 4000 || !detail.Visible || cancel.Visible ||
             Find<Label>(detail, "FarmRawPrice").Text != "2.50" ||
@@ -822,7 +821,7 @@ public partial class TestCoreLoop : Node
         if (remembered == new Vector2(760, 90))
             return Fail("详情标题栏拖动没有改变窗口位置");
         Find<Button>(detail, "CloseButton").EmitSignal(Button.SignalName.Pressed);
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        TestMapInput.ShortClickCell(map, farm);
         if (!detail.Visible || detail.Position != remembered)
             return Fail("详情窗口关闭后未记住位置");
 
@@ -858,15 +857,15 @@ public partial class TestCoreLoop : Node
         if (!Find<Button>(buildWindow, "ProcessorCardCorn").Text.Contains("10.00"))
             return Fail("加工场地目录未显示建造费");
         Find<Button>(buildWindow, "ProcessorCardRadish").EmitSignal(Button.SignalName.Pressed);
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, farm);
+        TestMapInput.ShortClickCell(map, farm);
         if (!cancel.Visible || main.Game.MoneyCents != 4000 || !message.Text.Contains("已有建筑"))
             return Fail("占用地块仍建造或扣费");
         Vector2I processor = new(198, 192);
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
+        TestMapInput.ShortClickCell(map, processor);
         if (!cancel.Visible || detail.Visible)
             return Fail("加工场地成功后没有保持摆放或弹出详情");
         cancel.EmitSignal(Button.SignalName.Pressed);
-        map.EmitSignal(WorldMap.SignalName.SelectionChanged, processor);
+        TestMapInput.ShortClickCell(map, processor);
         if (main.Game.GetPlot(processor).Building != BuildingKind.Processor ||
             main.Game.MoneyCents != 3000 || cancel.Visible ||
             !ContainsVisibleText(detail, "等待萝卜") ||

@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Godot;
+using FarmExchange.World;
 
 // 共享真实输入注入与绘制等待；地图行为仍由正式 Main 和控件处理。
 internal static class TestMapInput
@@ -65,6 +66,28 @@ internal static class TestMapInput
         Move(owner, position);
         MouseButtonEvent(owner, position, MouseButton.Left, true);
         MouseButtonEvent(owner, position, MouseButton.Left, false);
+    }
+
+    // 经营/详情夹具从镜头的已接受输入入口进入；GUI、窗口及拖动门禁另由原生输入用例覆盖。
+    // 不直接发送地图选中通知或调用 Main 私有回调，生产与道路使用同一正式模式分派。
+    internal static void ShortClickCell(WorldMap map, Vector2I cell) =>
+        ShortClick(map.GetNode<CameraController>("../Camera2D"),
+            map.GetGlobalTransformWithCanvas() * MapCoordinates.CellToLocalCenter(cell));
+
+    internal static void ShortClick(CameraController camera, Vector2 position)
+    {
+        camera._UnhandledInput(new InputEventMouseButton
+        {
+            Position = position,
+            ButtonIndex = MouseButton.Left,
+            Pressed = true
+        });
+        camera._UnhandledInput(new InputEventMouseButton
+        {
+            Position = position,
+            ButtonIndex = MouseButton.Left,
+            Pressed = false
+        });
     }
 
     internal static void Wheel(Node owner, Vector2 position, bool up)

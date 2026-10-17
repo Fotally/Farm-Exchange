@@ -308,7 +308,8 @@ public partial class TestMapNavigation : Node
         var mini = Find<MapNavigationCanvas>(maps, "MiniMap");
         var atlas = Find<MapNavigationCanvas>(maps, "AtlasMap");
         var camera = main.GetNode<CameraController>("Camera2D");
-        int navigations = 0;
+        int navigations = 0, mainClicks = 0;
+        camera.MapShortClicked += _ => mainClicks++;
         maps.NavigateRequested += _ => navigations++;
         Vector2 zoom = camera.Zoom;
         Wheel(main, mini.GetGlobalRect().GetCenter(), true);
@@ -448,6 +449,7 @@ public partial class TestMapNavigation : Node
         MapButton(maps, "查看全图").EmitSignal(Button.SignalName.Pressed);
         Require(atlas.ViewZoom == 1 && atlas.ViewCenter.IsEqualApprox(MapNavigationDrawing.Center), "全图按钮未归位");
         Key(main, Godot.Key.M);
+        Require(mainClicks == 0, "大小地图手势穿透主地图短按分派");
     }
 
     private static async Task CheckViewsAndLayout(Node parent, Main main)

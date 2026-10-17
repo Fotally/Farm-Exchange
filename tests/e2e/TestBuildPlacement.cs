@@ -111,8 +111,8 @@ public partial class TestBuildPlacement : Node
             Label hint = Find<Label>(main, "BuildHint");
             if (!hint.Text.Contains($"占地 {BuildingFootprint.Get(kind).Offsets.Count} 格") || !main.Game.IsPaused)
                 return Fail("占地提示没有读取属性或进入摆放改变了暂停状态");
-            map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
-            map.EmitSignal(WorldMap.SignalName.SelectionChanged, second);
+            TestMapInput.ShortClickCell(map, first);
+            TestMapInput.ShortClickCell(map, second);
             if (main.Game.MoneyCents != 5000 - 2 * cost || main.Game.GetPlot(first).Building != kind ||
                 main.Game.GetPlot(second).Building != kind || !cancel.Visible || detail.Visible)
                 return Fail($"{kind}/{crop}连续建造没有一次扣费、保持模式或误弹详情");
@@ -121,7 +121,7 @@ public partial class TestBuildPlacement : Node
                 main.Game.GetBuildingSpace(second)?.Orientation != BuildingOrientation.Q0)
                 return Fail($"{kind}/{crop}没有提交候选朝向或成功后下一座没有重置q0");
             int money = main.Game.MoneyCents;
-            map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+            TestMapInput.ShortClickCell(map, first);
             if (main.Game.MoneyCents != money || !cancel.Visible ||
                 !Find<Label>(main, "MessageLabel").Text.Contains("已有建筑"))
                 return Fail("冲突失败扣费或退出摆放");
@@ -150,7 +150,7 @@ public partial class TestBuildPlacement : Node
                 if (cancel.Visible || map.PlacementPreviewAnchor != null || main.Game.MoneyCents != money)
                     return Fail($"{kind}/{crop}取消方式{method}没有清除状态或改变资源");
             }
-            map.EmitSignal(WorldMap.SignalName.SelectionChanged, first);
+            TestMapInput.ShortClickCell(map, first);
             if (!detail.Visible || main.Game.MoneyCents != money)
                 return Fail("取消后选择仍触发建造或没有恢复详情");
             return true;
@@ -208,12 +208,12 @@ public partial class TestBuildPlacement : Node
                 if (direction == 3)
                 {
                     int money = main.Game.MoneyCents;
-                    map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(186, 192));
+                    TestMapInput.ShortClickCell(map, new Vector2I(186, 192));
                     if (!HasDirection(3) || main.Game.MoneyCents != money)
                         return Fail("失败建造没有保留候选朝向或扣了费");
                 }
                 Vector2I cell = new(186 - direction * 3, 192);
-                map.EmitSignal(WorldMap.SignalName.SelectionChanged, cell);
+                TestMapInput.ShortClickCell(map, cell);
                 if (main.Game.GetBuildingSpace(cell)?.Orientation != (BuildingOrientation)direction || !HasDirection(0))
                     return Fail("四向建造没有提交实际朝向或下一座没有重置q0");
                 await Frames(parent);
@@ -262,7 +262,7 @@ public partial class TestBuildPlacement : Node
                 cost.GetThemeColor("font_color").G >= 0.6f)
                 return Fail("冻结资金未反映到标准费用与可用金币红色提示");
             int money = main.Game.MoneyCents, frozen = main.Game.FrozenMoneyCents;
-            map.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(186, 192));
+            TestMapInput.ShortClickCell(map, new Vector2I(186, 192));
             if (main.Game.MoneyCents != money || main.Game.FrozenMoneyCents != frozen ||
                 main.Game.GetPlot(new Vector2I(186, 192)).Building != BuildingKind.None)
                 return Fail("执行时动用冻结金币或失败留下设施");
@@ -280,10 +280,15 @@ public partial class TestBuildPlacement : Node
         var main = GD.Load<PackedScene>("res://scenes/main.tscn").Instantiate<Main>();
         var map = main.GetNode<WorldMap>("WorldMap");
         var confirmations = new List<(Vector2I Cell, Vector2I? Preview, int Money, BuildingKind Building)>();
-        void BeforePlacement(Vector2I cell) => confirmations.Add((cell, map.PlacementPreviewAnchor,
-            main.Game.MoneyCents, main.Game.GetPlot(cell).Building));
-        // 挂树前订阅真实选择信号，保证观察先于 Main._Ready 注册的经营提交回调。
-        map.SelectionChanged += BeforePlacement;
+        var camera = main.GetNode<CameraController>("Camera2D");
+        void BeforePlacement(Vector2 position)
+        {
+            Vector2I cell = map.ScreenToCell(position);
+            confirmations.Add((cell, map.PlacementPreviewAnchor, main.Game.MoneyCents,
+                main.Game.GetPlot(cell).Building));
+        }
+        // 挂树前观察已接受短按，原始输入须已同步候选；随后 Main 只分派生产意图。
+        camera.MapShortClicked += BeforePlacement;
         main.InitialTerrainRules = TerrainTestFixtures.AllLandRules;
         parent.AddChild(main);
         main.SetProcess(false);
@@ -313,7 +318,8 @@ public partial class TestBuildPlacement : Node
                 Pressed = false
             });
             if (confirmations.Count != 1 || confirmations[0] != (first, (Vector2I?)first, 5000, BuildingKind.None) ||
-                main.Game.GetBuildingSpace(first)?.AnchorCell != first || main.Game.MoneyCents != 4000)
+                main.Game.GetBuildingSpace(first)?.AnchorCell != first || main.Game.MoneyCents != 4000 ||
+                map.SelectedCell != null)
                 return Fail("同帧移动和松开没有在提交前同步同一候选，或实际建造目标/扣费错误");
 
             Transform2D transform = map.GetGlobalTransformWithCanvas();
@@ -352,13 +358,14 @@ public partial class TestBuildPlacement : Node
                 return Fail("系统鼠标取整后短按跨格夹具失效");
             if (confirmations.Count != 2 || confirmations[1] != (releasedCell, (Vector2I?)releasedCell, 4000, BuildingKind.None) ||
                 main.Game.GetBuildingSpace(releasedCell)?.AnchorCell != releasedCell || main.Game.MoneyCents != 3000 ||
-                !Find<Button>(main, "CancelPlacementButton").Visible || Find<Control>(main, "DetailWindow").Visible)
+                !Find<Button>(main, "CancelPlacementButton").Visible || Find<Control>(main, "DetailWindow").Visible ||
+                map.SelectedCell != null)
                 return Fail("小于8像素跨格短按没有在提交前同步释放格，或误拖动/重复扣费");
             return true;
         }
         finally
         {
-            map.SelectionChanged -= BeforePlacement;
+            camera.MapShortClicked -= BeforePlacement;
             main.Free();
         }
     }

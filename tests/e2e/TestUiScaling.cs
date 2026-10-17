@@ -112,7 +112,7 @@ public partial class TestUiScaling : Node
                 passed = Fail("建筑图标重复设置倍率没有使用原始宽度");
             UiScaling.SetOverallScale(catalog, 1f);
             WorldMap facilityMap = main.GetNode<WorldMap>("WorldMap");
-            facilityMap.EmitSignal(WorldMap.SignalName.SelectionChanged, new Vector2I(189, 189));
+            TestMapInput.ShortClickCell(facilityMap, new Vector2I(189, 189));
             DraggableWindow detail = Find<DraggableWindow>(main, "DetailWindow");
             foreach (float font in new[] { 0.85f, 1f, 1.2f })
             {

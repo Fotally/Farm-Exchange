@@ -112,7 +112,7 @@ public partial class TestWaterDetails : Node
         camera.GlobalPosition = map.GetGridWorldPosition(cell);
         camera.ForceUpdateScroll();
         Vector2 screen = map.GetGlobalTransformWithCanvas() * MapCoordinates.CellToLocalCenter(cell);
-        map.SelectAtScreenPosition(screen);
+        TestMapInput.ShortClick(camera, screen);
     }
 
     private static bool CheckUnoccupied(Main main, Vector2I cell, bool fullLand)
