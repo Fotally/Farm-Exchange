@@ -288,6 +288,8 @@ public partial class TestDeveloperFlowEditor : Node
         }
         finally
         {
+            // 数组编辑排队的焦点恢复须在表单仍在树内时完成。
+            await Frames(parent);
             window.Body.RemoveChild(form);
             form.QueueFree();
             await Frames(parent);

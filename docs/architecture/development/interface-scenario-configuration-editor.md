@@ -46,7 +46,7 @@
 
 整份schema校验直接使用异常的`FieldPath`定位，不解析`Message`标点；本字段输入解析失败仍由`SetValue(path,text)`已知路径定位。表单把字段错误显示在相应字段下，空时间数组显示在时间区间下，倒序终点显示在具体行的终点日期下；空路径错误在表单顶部的整体错误区显示，无错误时该区域不占内容高度。数组移动和删除继续同步原行非法输入与错误，隐藏字段仍清理其输入错误。
 
-`TestScenarioConfigurationSchema`验证严格JSON、结构化字段位置、整体JSON错误及更换中文说明后的包装定位；`TestDeveloperFlowEditor`通过真实schema→draft→form验证倒序终点、空数组、非法原文及数组错误重映射，不改变既有持久化与执行规则。
+`TestScenarioConfigurationSchema`验证严格JSON、结构化字段位置、整体JSON错误及更换中文说明后的包装定位；`TestDeveloperFlowEditor`通过真实schema→draft→form验证倒序终点、空数组、非法原文及数组错误重映射，不改变既有持久化与执行规则。临时表单由测试管理生命周期：数组编辑后先在树内等待已排队的焦点恢复回调完成，再移除、释放表单并等待释放结束，避免对离树控件恢复焦点；headless与1080P图形验收均须核对运行日志无此类错误。
 
 ## 配置库
 
