@@ -93,6 +93,23 @@ public partial class TestBatchProcessingUi : Node
             if (game.GetPlot(cell).Building != BuildingKind.None || game.GetRawStock(CropKind.Radish) != 0 ||
                 game.GetProductStock(CropKind.Radish) != 13)
                 return Fail("真实移除按钮没有丢弃整个未完成批次");
+            if (!game.TryPlace(cell, BuildingKind.Processor, CropKind.Wheat).Success)
+                return Fail("同锚点重建另一加工场地失败");
+            TestMapInput.ShortClickCell(main.GetNode<WorldMap>("WorldMap"), cell + Vector2I.One);
+            await Frames(parent);
+            ProcessorDetailsPanel rebuilt = Find<ProcessorDetailsPanel>(main, "ProcessorDetailsPanel");
+            FacilityPreview preview = Find<FacilityPreview>(rebuilt, "ProcessorFacilityPreview");
+            if (Find<Label>(rebuilt, "ProcessorBuildingTitle").Text != "磨坊" ||
+                Find<Label>(rebuilt, "ProcessorCurrentStatus").Text != "待原料" ||
+                Find<Label>(rebuilt, "ProcessorRelation").Text != "1 份小麦 → 1 份面粉" ||
+                Find<Label>(rebuilt, "ProcessorProductStock").Text != "0" ||
+                Find<Label>(rebuilt, "ProcessorActualProgress").Text != "当前没有加工批次" ||
+                Find<ProgressBar>(rebuilt, "ProcessorProgress").Visible ||
+                Find<ProgressBar>(rebuilt, "ProcessorProgress").Value != 0 ||
+                !ReferenceEquals(Find<FacilityThumbnail>(preview, "FacilityThumbnail").Texture,
+                    FacilityPreview.Texture(BuildingKind.Processor, CropKind.Wheat)) ||
+                Find<Label>(preview, "FacilityPreviewPlacement").Text != $"3 × 3 基础格 · ({cell.X}, {cell.Y})")
+                return Fail("加工拆除重建后文字、批量、进度或正式缩略图保留了原实例内容");
             return passed;
         }
         finally

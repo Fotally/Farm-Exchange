@@ -2,7 +2,6 @@ using System;
 using System.Globalization;
 using Godot;
 using FarmExchange.Gameplay;
-using FarmExchange.Land;
 using static FarmExchange.UI.UiElements;
 
 namespace FarmExchange.UI;
@@ -83,10 +82,25 @@ public partial class ProcessorDetailsPanel : VBoxContainer
     }
 
     /**
-     * <summary>按真实加工快照显示当前锁定批量、单批规则、库存及状态。</summary>
-     * <param name="details">当前选中加工实例的详情；空闲时 BatchQuantity 为零。</param>
+     * <summary>完整刷新真实加工场地的批量、状态、库存、进度、损失说明与缩略图。</summary>
+     * <param name="game">只读经营入口，不推进或修改经营。</param>
+     * <param name="cell">当前加工场地任一子格；非加工场地属于调用错误。</param>
      */
-    public void Refresh(ProcessorDetailsSnapshot details)
+    public void Refresh(FarmGame game, Vector2I cell)
+    {
+        var space = game.GetBuildingSpace(cell);
+        if (space?.Building != BuildingKind.Processor)
+            throw new InvalidOperationException("该土地没有加工场地");
+        Vector2I anchor = space.AnchorCell;
+        ProcessorDetailsSnapshot details = game.GetProcessorDetails(anchor);
+        PlotSnapshot plot = game.GetPlot(anchor);
+
+        RefreshDetails(details);
+        RefreshProgress(plot);
+        _preview.Refresh(space, plot.CropKind, CropStage.None);
+    }
+
+    private void RefreshDetails(ProcessorDetailsSnapshot details)
     {
         string status = details.Status switch
         {
@@ -117,20 +131,7 @@ public partial class ProcessorDetailsPanel : VBoxContainer
         };
     }
 
-    /**
-     * <summary>显示当前加工实例的实际占地与锚点。</summary>
-     * <param name="space">同一已选中加工实例的只读空间快照。</param>
-     * <param name="crop">同一实例匹配的作物。</param>
-     */
-    public void RefreshPlacement(BuildingSpaceSnapshot space, CropKind crop) =>
-        _preview.Refresh(space, crop, CropStage.None);
-
-    /**
-     * <summary>显示同一加工场地真实快照的本批剩余天数与时间进度。</summary>
-     * <remarks>调用方在 Refresh 后传入同一实例的地块快照；不推进或预测经营。</remarks>
-     * <param name="plot">当前加工场地任一子格的只读地块快照。</param>
-     */
-    public void RefreshProgress(PlotSnapshot plot)
+    private void RefreshProgress(PlotSnapshot plot)
     {
         double remainingDays = Math.Ceiling(plot.RemainingSeconds *
             (double)FarmExchange.Time.GameTimeUnits.PerSecond /

@@ -1,6 +1,8 @@
 # ProcessorDetailsPanel 接口
 
-对应 `scripts/ui/ProcessorDetailsPanel.cs`，由 `Main` 放在地块详情窗口内。`Refresh(ProcessorDetailsSnapshot)` 只更新现有状态、当前锁定批量、原料与产物关系、单批加工周期、加工品当前报价和库存标签；`RemoveRequested` 把移除意图交给 `Main`。
+对应 `scripts/ui/ProcessorDetailsPanel.cs`，由 `Main` 放在地块详情窗口内。唯一完整刷新入口为 `Refresh(FarmGame game, Vector2I cell)`：调用方提供本局经营入口与真实加工场地任一子格，面板一次更新状态、锁定批量、投入产出关系、单批规则、报价、库存、实际进度、下一步、拆除损失及正式缩略图；`RemoveRequested` 把移除意图交给 `Main`。
+
+面板先读取真实占地、验证设施类型并解析锚点，再取得同一锚点的加工详情和地块快照，收齐只读输入后更新现有控件。非加工场地抛出 `InvalidOperationException`，不更新控件。没有需要调用方依次执行的公开局部刷新入口，也无需调用方配对空间、作物、批次与剩余时间。每次刷新均重新查询当前实例，不保存第二份加工状态；窗口显隐及位置继续由 `Main` 管理。
 
 状态语义由 `FarmGame.GetProcessorDetails` 提供，面板映射为等待对应原料、等待原料超过保留底线、待领取原料和加工中。降低底线后到下次领取前显示待领取原料；不通过库存或倒计时自行重判原因。移除按钮保留 `RemoveButton` 名称；农田字段由独立的农田详情面板显示。
 
@@ -8,17 +10,17 @@
 
 `ProcessorNextStep` 按照经营入口的 `ProcessorStatus` 展示等待收获或买入原料、调整底线、等待下一次领取、完成后市场出售等实际入口；面板不自行重判状态，也不执行买卖或修改底线。提高底线或中途买入后，活动批次继续展示同一锁定数量。
 
-调用顺序为 `Refresh(ProcessorDetailsSnapshot)` 后立即 `RefreshProgress(PlotSnapshot)`，两份快照必须来自同一加工实例。`Main` 使用当前已选格的地块快照调用进度入口，无需新增经营查询。`ProcessorActualProgress` 把真实剩余秒向上取一位游戏天数；`ProcessorProgress` 从本批剩余秒与定义中的加工周期换算，仅有活动批次时显示，没有批次时明确说明。进度受快照秒数取整精度限制，不显示虚构精确百分比、不在渲染帧计时。
+`ProcessorActualProgress` 在完整刷新中把真实剩余秒向上取一位游戏天数；`ProcessorProgress` 从同一实例的本批剩余秒与定义中的加工周期换算，仅有活动批次时显示，没有批次时明确说明并清零进度。进度受快照秒数取整精度限制，不显示虚构精确百分比、不在渲染帧计时，也不推进或预测经营。
 
 `ProcessorRemovalLoss` 在活动批次时明确说明移除将丢失本批已投入的 N 份原料且不退还建造费；空闲时说明加工中的整批损失规则。`tests/e2e/TestUiFacilities.cs` 通过真实买入与经营步进启动少量批次，核对实际剩余与投入数量，并验证暂停刷新不推进进度、恢复经营后进度更新。
 
-`tests/e2e/TestBatchProcessingUi.cs` 使用真实 `Main`、`FarmGame`、交易、建造与移除意图验证满批 9 份、少量批 4 份、完整相同时长、暂停且中途补料不追加、完工等量入库、无原料／底线保留／待领取三种等待状态及整批拆除损失。测试固定 1920×1080，检查详情全部关键文字和移除按钮处于外层滚动可见区域，文字行数没有裁切或逐字竖排；headless 同样执行行为和排版断言。
+`tests/e2e/TestBatchProcessingUi.cs` 使用真实 `Main`、`FarmGame`、交易、建造与移除意图验证满批 9 份、少量批 4 份、完整相同时长、暂停且中途补料不追加、完工等量入库、无原料／底线保留／待领取三种等待状态及整批拆除损失；活动加工拆除后，在原锚点重建不同加工场地并选子格，检查完整刷新清除旧批次、进度、商品与正式图。测试固定 1920×1080，检查详情全部关键文字和移除按钮处于外层滚动可见区域，文字行数没有裁切或逐字竖排；headless 同样执行行为和排版断言。
 
 独立有窗口验收使用项目指定引擎运行 `res://tests/e2e/test_batch_processing_ui.tscn`，成功时退出码为 0。真实状态截图写入 `build/issue35-ui-validation/`：`full-batch-1920.png`、`small-batch-1920.png`、`waiting-raw-1920.png`、`waiting-reserve-1920.png`、`ready-to-process-1920.png`、`completed-1920.png` 与 `before-removal-1920.png`；必须实际运行后检查截图和退出事实，测试场景存在本身不代表图形验收通过。
 
 ## 原型比例复刻
 
-`RefreshPlacement(BuildingSpaceSnapshot, CropKind)` 把同一实例的空间与匹配作物传给 [FacilityPreview](../facility-preview/interface-facility-preview.md)，显示与目录相同的对应正式完整 q0 建筑 PNG、实际占地与锚点；该调用与 `Refresh`、`RefreshProgress` 使用同一已选实例。七加工各用自己的图，不共用工坊外形，不播放生产动画或增加旋转入口。标题与 `ProcessorCurrentStatus` 短状态徽标并排，下一步说明保留等待原料、保留底线或待领取的完整语义；进度条基准高度 6，原料到产物关系旁使用库存箱线条图标。
+完整刷新内部把同一实例的空间与匹配作物传给 [FacilityPreview](../facility-preview/interface-facility-preview.md)，显示与目录相同的对应正式完整 q0 建筑 PNG、实际占地与锚点。七加工各用自己的图，不共用工坊外形，不播放生产动画或增加旋转入口。标题与 `ProcessorCurrentStatus` 短状态徽标并排，下一步说明保留等待原料、保留底线或待领取的完整语义；进度条基准高度 6，原料到产物关系旁使用库存箱线条图标。
 
 `ProcessorProductStock` 和 `ProcessorProductPrice` 分别显示纯整数库存、两位小数价格，单位单独显示，左右并排指标保持真实加工品口径。商品名从匹配作物与产物关系确定，悬停数字还可查看具体加工品名称。`ProcessorInventoryButton` 发出新增 `InventoryRequested` 意图，`Main` 使用既有库存入口打开管理窗口，面板不持有窗口或修改库存。
 
@@ -28,7 +30,7 @@
 
 标题节点为 `ProcessorBuildingTitle`，纳入实际单行排版检查。指标内边距的父节点是 `PanelContainer`，由容器直接提供完整可用区域；没有依赖非容器按钮自行布局的说明卡。
 
-`TestFacilityThumbnails` 在真实主场景分别建造七类加工实例，选择其子格检查对应正式 q0 纹理、同一真实锚点及图片区与标签无重叠，并覆盖独立整体／字体倍率。有窗口 1920×1080 截图输出 `build/issue149-validation/processor-{crop}-1920.png`；测试入口及文件命名不替代实际运行验收。
+`TestFacilityThumbnails` 在真实主场景分别建造七类加工实例，切换同实例的不同子格，检查对应作物标题、正式 q0 纹理、同一真实锚点及图片区与标签无重叠，并覆盖独立整体／字体倍率。有窗口 1920×1080 截图输出 `build/issue149-validation/processor-{crop}-1920.png`；测试入口及文件命名不替代实际运行验收。
 
 ## 批量加工1080P验收示例
 

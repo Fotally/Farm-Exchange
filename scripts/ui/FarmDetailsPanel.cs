@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using Godot;
+using FarmExchange.Cultivation;
 using FarmExchange.Gameplay;
 using FarmExchange.Weather;
 using static FarmExchange.UI.UiElements;
@@ -118,7 +119,27 @@ public partial class FarmDetailsPanel : VBoxContainer
         AddChild(remove);
     }
 
-    public void Refresh(FarmDetailsSnapshot details)
+    /**
+     * <summary>完整刷新真实农田的状态、进度、水分、天气、库存、年度安排与缩略图。</summary>
+     * <param name="game">只读经营入口，不推进或修改经营。</param>
+     * <param name="cell">当前农田任一子格；非农田属于调用错误。</param>
+     */
+    public void Refresh(FarmGame game, Vector2I cell)
+    {
+        var space = game.GetBuildingSpace(cell);
+        if (space?.Building != BuildingKind.Farm)
+            throw new InvalidOperationException("该土地没有农田");
+        Vector2I anchor = space.AnchorCell;
+        FarmDetailsSnapshot details = game.GetFarmDetails(anchor);
+        PlotSnapshot plot = game.GetPlot(anchor);
+        FarmCultivationSnapshot cultivation = game.GetFarmCultivation(anchor);
+
+        RefreshDetails(details);
+        RefreshCultivation(plot, cultivation);
+        _preview.Refresh(space, plot.CropKind, plot.Crop);
+    }
+
+    private void RefreshDetails(FarmDetailsSnapshot details)
     {
         string status = details.Status switch
         {
@@ -148,16 +169,8 @@ public partial class FarmDetailsPanel : VBoxContainer
         _stock.Text = $"{details.Crop.CropName}原料库存：{details.RawStock}";
     }
 
-    /**
-     * <summary>分别展示本田共享引用、实际剩余天数与预备日期。</summary>
-     * <param name="game">只读经营入口。</param>
-     * <param name="cell">本田的任一子格。</param>
-     */
-    public void RefreshCultivation(FarmGame game, Godot.Vector2I cell)
+    private void RefreshCultivation(PlotSnapshot plot, FarmCultivationSnapshot state)
     {
-        var state = game.GetFarmCultivation(cell);
-        PlotSnapshot plot = game.GetPlot(cell);
-        _preview.Refresh(game.GetBuildingSpace(cell)!, plot.CropKind, plot.Crop);
         double remainingDays = Math.Ceiling(plot.RemainingSeconds *
             (double)FarmExchange.Time.GameTimeUnits.PerSecond /
             FarmExchange.Time.GameTimeUnits.PerDay * 10) / 10;

@@ -1328,16 +1328,9 @@ public partial class Main : Node2D
         _processorDetails.Visible = plot.Building == BuildingKind.Processor;
         _roadDetails.Visible = plot.Building == BuildingKind.Road;
         if (_farmDetails.Visible)
-        {
-            _farmDetails.Refresh(GameState.GetFarmDetails(cell));
-            _farmDetails.RefreshCultivation(GameState, cell);
-        }
+            _farmDetails.Refresh(GameState, cell);
         else if (_processorDetails.Visible)
-        {
-            _processorDetails.Refresh(GameState.GetProcessorDetails(cell));
-            _processorDetails.RefreshProgress(plot);
-            _processorDetails.RefreshPlacement(space!, plot.CropKind);
-        }
+            _processorDetails.Refresh(GameState, cell);
         if (_roadDetails.Visible) _roadDetails.RefreshPlacement(space!);
         _detailWindow.Show();
         _detailWindow.ClampToViewport();

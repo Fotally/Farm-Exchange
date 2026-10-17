@@ -53,6 +53,11 @@ public partial class TestFacilityThumbnails : Node
                 FacilityPreview preview = Find<FacilityPreview>(main, "ProcessorFacilityPreview");
                 if (!CheckPreview(preview, FacilityPreview.Texture(BuildingKind.Processor, crop), anchor, "3 × 3"))
                     return false;
+                Select(main, anchor + new Vector2I(2, 2));
+                await Frames(parent);
+                if (!CheckPreview(preview, FacilityPreview.Texture(BuildingKind.Processor, crop), anchor, "3 × 3") ||
+                    Find<Label>(main, "ProcessorBuildingTitle").Text != FarmGame.GetCrop(crop).BuildingName)
+                    return Fail("切换同一加工实例子格后标题、正式图或锚点不一致");
                 await Capture(parent, $"processor-{crop.ToString().ToLowerInvariant()}-1920.png");
             }
             return await CheckScaling(parent, main);

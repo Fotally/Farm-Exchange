@@ -6,7 +6,7 @@
 
 `Refresh(BuildingSpaceSnapshot, CropKind, CropStage)` 接受同一已选实例的空间、作物种类和本轮阶段，更新已有图与标签；构造与刷新必须对应同一种设施。农田未播种显示空田，待水显示苗点，生长中显示所选作物形状；成熟度始终由详情的真实剩余与进度条表达，不把静态作物图当作精确完成度。七加工分别使用正式完整 q0 PNG，道路从空间快照的真实 `RoadMaterial` 选择同形三格短直道路，不按默认材质替代缺失字段；占地与锚点始终来自正式空间快照。
 
-`FarmDetailsPanel.RefreshCultivation` 读取已选农田快照后调用；`ProcessorDetailsPanel.RefreshPlacement` 和 `RoadDetailsPanel.RefreshPlacement` 接受 `Main` 已选实例的空间快照。点击任一子格显示同一实际锚点，不从点击位置虚构第二个设施。
+`FarmDetailsPanel.Refresh(FarmGame, Vector2I)` 与 `ProcessorDetailsPanel.Refresh(FarmGame, Vector2I)` 在各自完整刷新中解析同一真实锚点并调用；`RoadDetailsPanel.RefreshPlacement` 继续接受 `Main` 已选实例的空间快照。点击任一子格显示同一实际锚点，不从点击位置虚构第二个设施。
 
 内部 `Texture(BuildingKind, CropKind, CropStage, RoadMaterial)` 按逻辑设施描述选择图；`RoadRemovalTexture()` 提供独立拆路工具示意。`CropTexture(CropKind)` 与农田分支继续加载 `assets/ui/facilities/` 原 SVG，不改变选种、农田及地图素材。目录和详情复用同一份只读纹理缓存，刷新不重建控件，调用方不得修改缓存纹理。
 
