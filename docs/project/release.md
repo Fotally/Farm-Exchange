@@ -26,6 +26,8 @@ build/releases/v主版本.次版本.修订版本/FarmExchange-v主版本.次版�
 
 Windows 再次启动成功或失败均单独上传 `windows-release-validation-<sha>-<run-id>-<attempt>`，保留 14 天；目录 `build/validation/windows-release-<run-id>-<attempt>/` 包含 stdout、stderr、`startup.json` 及实际存在的日志，不收入版本 ZIP。未执行验收时不上传旧证据，取消后不承诺继续上传。schema 与全部运行依赖保留，玩家解压首次启动正常产生自己的 runtime 会话；命令约束及本地用法见[Windows 构建与导出](windows-build.md)。
 
+两平台发布均通过同提交 `Test-RuntimePack.ps1` 核验实际 PCK，拒绝文档附件和退役 NPC 图集（含导入纹理），同时确认当前动态运行资源和导入目标齐全。Windows 的目录/最终 ZIP 清单随启动证据保存；macOS 从原 ZIP 读取 PCK 的报告单独上传 `macos-release-resource-validation-<sha>-<run-id>-<attempt>`，保留 14 天，ZIP 不重打包。具体边界、夹具与字节口径见[运行资源验收](runtime-resources.md)。
+
 ## 失败后的处理
 
 - **分支或版本号错误**：重新选择 `main`，填写符合规则的新版本号。

@@ -70,6 +70,7 @@
 - [构建与验收](project/build-and-validation.md)、[.NET SDK、测试与双平台并行 CI](project/continuous-integration.md)、[测试方法](project/testing.md)、[手工游玩验收](project/manual-playthrough.md)。
 - [Windows 分发与性能证据实现](project/validation-artifacts-proposal.md)：CI／发布共用启动及干净 ZIP 检查，性能失败后保留本次已生成的报告和截图。
 - [GitHub协作](project/contribution-workflow.md)、[PR独立审查skill](../.codex/skills/farm-exchange-review-pr/SKILL.md)、[议题模板](../.github/ISSUE_TEMPLATE/)及[模板来源](research/issue-template-sources.md)：提交PR后先询问是否审查，明确同意才委派。
+- [运行资源分发与 PCK 验证](project/runtime-resources.md)：必需资源、文档与退役素材隔离、正式和开发预设及实际包正反检查。
 - [素材管理](project/asset-organization.md)、[素材来源](project/asset-sources.md)、[清亮v2基准](research/bright-complete-v2.md)。
 - [水域导航的行业实践](research/water-navigation-game-practices.md)：经典游戏的一手资料、成熟导航实现的接入与精度限制；#110 选型依据，尚非功能验收记录。
 - [Godot 原生导航核验](research/godot-water-navigation.md)：净空、保守简化、道路区域成本与原生同步的源码和实验依据；现行调用约定见地形接口。

@@ -18,4 +18,6 @@ godot --headless --path . --export-release macOS build/macos/FarmExchange.zip --
 
 若编辑器可执行文件不在 `PATH` 中，将 `godot` 换为其 `.app/Contents/MacOS/` 内的可执行文件。导出路径是可覆盖的中间构建，不纳入 Git。
 
+导出后由 PowerShell 运行 `./tools/Test-RuntimePack.ps1 -PackPath build/macos/FarmExchange.zip -ReportPath build/validation/macos/runtime-pack.json`，直接核验 ZIP 内真实 PCK 的禁止资源与动态资源完整性，规则见[运行资源验收](runtime-resources.md)。CI 将实际清单单独保存为 `macos-resource-validation-<sha>-<run-id>-<attempt>`，保留 14 天；资源检查已执行且成功或失败时均尝试上传，未执行或取消不上传旧证据。发布对下载的同提交原 ZIP 再检查一次并保存 `macos-release-resource-validation-<sha>-<run-id>-<attempt>`，读取检查不会改变原始 ZIP 字节。
+
 此预设使用内建临时签名，不进行 Apple 公证。CI 产物用于编译与启动验收；独立[发布工作流](release.md)复用同提交成功 CI 的原始 Universal 2 ZIP，只改成带版本号的附件名称，与 Windows ZIP 一起上传到同一个 Release，不解压重打包，保留包内容与 UNIX 权限信息。发布 runner 不在 Windows 上重新启动 macOS 应用，双架构与启动验收由该提交的 macOS CI 完成。当前未配置 Apple 公证，从网络下载后 macOS Gatekeeper 可能阻止打开；发布工作流不增加签名或公证服务。Godot 对 [macOS Universal 2、bundle ID 与签名的要求](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_for_macos.html)及[命令行导出格式](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_projects.html)是本配置依据。

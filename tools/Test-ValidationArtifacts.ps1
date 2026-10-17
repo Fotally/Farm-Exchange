@@ -35,7 +35,9 @@ function Test-WorkflowCondition {
     if ($condition -notmatch '\b(success|failure|cancelled|always)\(' -and ($Cancelled -or $Outcome -eq 'failure')) {
         return $false
     }
-    $condition = $condition.Replace('steps.distribution.outcome', "'$Outcome'").Replace('steps.package.outcome', "'$Outcome'")
+    foreach ($stepId in @('distribution', 'package', 'resources', 'macos-package')) {
+        $condition = $condition.Replace("steps.$stepId.outcome", "'$Outcome'")
+    }
     $condition = $condition.Replace('cancelled()', "`$$($Cancelled.ToString().ToLowerInvariant())")
     $condition = $condition.Replace('success()', "`$$(((-not $Cancelled) -and $Outcome -ne 'failure').ToString().ToLowerInvariant())")
     $condition = $condition.Replace('failure()', "`$$(($Outcome -eq 'failure').ToString().ToLowerInvariant())").Replace('always()', '$true')
@@ -91,6 +93,19 @@ $macos = Get-WorkflowStep $release '检查 macOS 应用包并保留原始 ZIP'
 Assert-Contract ($macos -match 'Copy-Item -LiteralPath \$sourceArchive -Destination \$archive' -and $macos -notmatch 'CreateFromDirectory') 'macOS 发布须保留原 ZIP 字节'
 $static = Get-WorkflowStep $ci '修复规则链接并运行静态检查'
 Assert-Contract ($static -match '\./tools/Test-ValidationArtifacts\.ps1') '验收产物契约须进入真实 CI'
+& (Join-Path $PSScriptRoot 'Test-RuntimePackChecks.ps1')
+foreach ($content in @($macosWorkflow, $release)) {
+    Assert-Contract ($content -match 'Test-RuntimePack\.ps1 -PackPath') 'macOS CI 与发布须检查实际 ZIP 内的 PCK'
+}
+foreach ($binding in @(
+    @{ Content = $macosWorkflow; Upload = '上传 macOS 资源清单' },
+    @{ Content = $release; Upload = '上传 macOS 发布资源清单' }
+)) {
+    $step = Get-WorkflowStep $binding.Content $binding.Upload
+    Assert-Contract (Test-WorkflowCondition $step 'failure') 'macOS 资源检查失败仍须保存实际清单'
+    Assert-Contract (-not (Test-WorkflowCondition $step 'skipped')) '未执行 macOS 资源检查不能上传旧清单'
+    Assert-Contract (-not (Test-WorkflowCondition $step 'cancelled' $true)) '取消后不承诺上传 macOS 资源清单'
+}
 
 $evidenceRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot $EvidenceDirectory))
 $runRoot = Join-Path $evidenceRoot ([guid]::NewGuid().ToString('N'))
@@ -185,6 +200,7 @@ $schema = Join-Path $runRoot 'schema-source.md'
 $distributionCommand = Join-Path $PSScriptRoot 'Invoke-WindowsDistribution.ps1'
 $performanceCommand = Join-Path $PSScriptRoot 'Run-PerformanceTests.ps1'
 $savePerformanceCommand = Join-Path $PSScriptRoot 'Save-PerformanceEvidence.ps1'
+. (Join-Path $PSScriptRoot 'runtime-pack-fixture/New-RuntimePack.ps1')
 
 function New-DistributionFixture {
     param([string]$Name, [hashtable]$Settings = @{})
@@ -195,7 +211,7 @@ function New-DistributionFixture {
     New-Item -ItemType Directory -Path (Join-Path $directory 'data_FarmExchange_windows_x86_64') | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $directory 'logs/runtime') | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $directory 'logs/debug') | Out-Null
-    Set-Content -LiteralPath (Join-Path $directory 'FarmExchange.pck') -Value 'fixture PCK'
+    New-RuntimePackFixture -Path (Join-Path $directory 'FarmExchange.pck') -RepoRoot $repoRoot
     Set-Content -LiteralPath (Join-Path $directory 'data_FarmExchange_windows_x86_64/FarmExchange.dll') -Value 'fixture managed assembly'
     Set-Content -LiteralPath (Join-Path $directory 'engine-dependency.bin') -Value 'other runtime dependency'
     Set-Content -LiteralPath (Join-Path $directory 'logs/runtime/sentinel.log') -Value 'historical runner runtime session'
@@ -269,6 +285,17 @@ foreach ($case in @(
 $missingBuild = New-DistributionFixture 'missing-exe'
 Remove-Item -LiteralPath (Join-Path $missingBuild 'FarmExchange.exe')
 Assert-Rejected { & $distributionCommand -BuildDirectory $missingBuild -SchemaPath $schema -EvidenceDirectory (Join-Path $runRoot 'missing-exe-evidence') } '构建缺少有效运行文件'
+foreach ($case in @(
+    @{ Name = 'pck-document'; Remove = @(); Add = @{ 'docs/unexpected.png.import' = 'unexpected' }; Error = '混入文档附件' },
+    @{ Name = 'pck-retired'; Remove = @(); Add = @{ '.godot/imported/npc_animation_001.png-00000000000000000000000000000000.ctex' = 'unexpected' }; Error = '退役 NPC' },
+    @{ Name = 'pck-missing'; Remove = @('assets/gameplay/terrain/roads/atlas_regions.json'); Add = @{}; Error = '必需运行资源' }
+)) {
+    $invalidBuild = New-DistributionFixture $case.Name
+    New-RuntimePackFixture -Path (Join-Path $invalidBuild 'FarmExchange.pck') -RepoRoot $repoRoot -Remove $case.Remove -Add $case.Add
+    $invalidArchive = Join-Path $runRoot "$($case.Name).zip"
+    Assert-Rejected { & $distributionCommand -BuildDirectory $invalidBuild -SchemaPath $schema -EvidenceDirectory (Join-Path $runRoot "$($case.Name)-evidence") -ArchivePath $invalidArchive } $case.Error
+    Assert-Contract (-not (Test-Path -LiteralPath $invalidArchive)) 'PCK 检查失败不能留下最终 ZIP'
+}
 Assert-Rejected { & $distributionCommand -BuildDirectory $build -SchemaPath $schema -EvidenceDirectory (Join-Path $build 'bad-evidence') } '不能相同或互相包含'
 Assert-Rejected { & $distributionCommand -BuildDirectory $build -SchemaPath $schema -EvidenceDirectory (Join-Path $runRoot 'bad-archive-evidence') -ArchivePath (Join-Path $build 'bad.zip') } '最终 ZIP 必须'
 Assert-Rejected { & $distributionCommand -BuildDirectory $build -SchemaPath (Join-Path $build 'logs/schema-v1.md') -EvidenceDirectory (Join-Path $runRoot 'bad-schema-evidence') } 'schema 源必须'
