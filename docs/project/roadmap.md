@@ -35,6 +35,7 @@
 | 清亮v2首批素材、真实动作、局部动效与环境 | [素材基准](../research/bright-complete-v2.md)、[地图接口](../architecture/world/world-map/interface-world-map.md) |
 | 建前设施朝向与装饰随机四向 | [建造操作](../gameplay/land/opening-and-building.md)、[地图接口](../architecture/world/world-map/interface-world-map.md)、[实施范围](facility-orientation-proposal.md) |
 | 公共倍率、批量经营、参数化开发流程 | [经营倍率](../gameplay/world/simulation-rate.md)、[批量实现](../architecture/game-state/farm-game/implementation-batched-simulation.md)、[开发测试使用说明](parameterized-tests-usage.md) |
+| 生产绝对计时与到期 FIFO | [到期索引](../architecture/time/simulation-due-index/interface-simulation-due-index.md)、[生产负载验证](../architecture/time/simulation-due-index/implementation-production-measurement.md)；#65 的交付状态以议题顶部记录为准 |
 | 本地开发包与双平台正式发布 | [开发构建](development-build.md)、[正式发布](release.md) |
 
 当前玩法、接口和操作以上述专题为准。已完成方案、授权经过和交付结果统一通过[归档索引](../archive/index.md)查阅。

@@ -150,17 +150,17 @@ public partial class TestBatchProcessing : Node
     private static void CheckCompletionCapacity()
     {
         var inventory = new GoodsInventory();
-        var processing = new ProcessingSystem(1);
+        var processing = ProductionTestClock.CreateProcessors(1);
         processing.Place(0, CropKind.Radish);
         inventory.AddRaw(CropKind.Radish, 9);
         Require(processing.TryStart(0, inventory), "容量夹具开工失败");
-        processing.AdvanceQuietSeconds(0, 25);
+        processing.AdvanceQuietSeconds(0, 26);
         inventory.AddProduct(CropKind.Radish, int.MaxValue - 8);
         ProcessorSnapshot before = processing.Get(0);
         bool overflow = false;
         try { processing.Advance(0, inventory, out _, out _); }
         catch (OverflowException) { overflow = true; }
-        Require(overflow && processing.Get(0) == before && before.BatchQuantity == 9 && before.RemainingSeconds == 1 &&
+        Require(overflow && processing.Get(0) == before && before.BatchQuantity == 9 && before.RemainingSeconds == 0 &&
             inventory.GetProduct(CropKind.Radish) == int.MaxValue - 8 && inventory.GetRaw(CropKind.Radish) == 0,
             "完工容量失败没有传播或已部分消耗批次");
         inventory.Remove(new(CropKind.Radish, CommodityKind.Product), 1);
@@ -184,7 +184,7 @@ public partial class TestBatchProcessing : Node
             Require(maximum == maximums[(int)crop.Kind] && budget == budgets[(int)crop.Kind] &&
                 budget <= GameTimeUnits.RemainingSeconds(crop.GrowthDays * GameTimeUnits.PerDay), "七作物静态上界预算变化：" + crop.Kind);
             var inventory = new GoodsInventory();
-            var processing = new ProcessingSystem(1);
+            var processing = ProductionTestClock.CreateProcessors(1);
             processing.Place(0, crop.Kind);
             inventory.AddRaw(crop.Kind, maximum);
             Require(processing.TryStart(0, inventory), "静态预算开工失败");

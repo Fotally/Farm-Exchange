@@ -277,7 +277,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckSharedPlans()
     {
-        var farming = new FarmingSystem(4);
+        var farming = ProductionTestClock.CreateFarms(4);
         farming.Place(0, CropKind.Wheat);
         farming.Place(1, CropKind.Corn);
         var book = new CultivationPlanBook(farming);
@@ -309,7 +309,7 @@ public partial class TestCultivationPlanBook : Node
     {
         foreach (CultivationMode mode in Enum.GetValues<CultivationMode>())
         {
-            var farming = new FarmingSystem(2);
+            var farming = ProductionTestClock.CreateFarms(2);
             farming.Place(0, CropKind.Wheat);
             farming.TryWork(0, new GameCalendar().Snapshot); // 待水，完成日期尚未确定。
             var book = new CultivationPlanBook(farming);
@@ -336,7 +336,7 @@ public partial class TestCultivationPlanBook : Node
 
     private static bool CheckOneRoundAndYearWrap()
     {
-        var farming = new FarmingSystem(1);
+        var farming = ProductionTestClock.CreateFarms(1);
         farming.Place(0, CropKind.Radish);
         var book = new CultivationPlanBook(farming);
         int id = book.Create(new("冬春", CultivationMode.PrepareNext,

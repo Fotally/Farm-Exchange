@@ -69,7 +69,7 @@ public partial class TestProductionState : Node
 
     private static bool CheckFarming()
     {
-        var farms = new FarmingSystem(2);
+        var farms = ProductionTestClock.CreateFarms(2);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         CropKind invalid = (CropKind)999;
         if (farms.TryWork(0, spring) || farms.AdvanceGrowth(0, out _, WeatherKind.Sunny) ||
@@ -113,7 +113,7 @@ public partial class TestProductionState : Node
 
     private static bool CheckProcessing()
     {
-        var processors = new ProcessingSystem(2);
+        var processors = ProductionTestClock.CreateProcessors(2);
         var inventory = new GoodsInventory();
         CropKind invalid = (CropKind)999;
         if (processors.Advance(0, inventory, out _, out _) || processors.TryStart(0, inventory) ||
@@ -149,7 +149,7 @@ public partial class TestProductionState : Node
 
     private static bool CheckProcessingReserve()
     {
-        var processors = new ProcessingSystem(2);
+        var processors = ProductionTestClock.CreateProcessors(2);
         var inventory = new GoodsInventory();
         processors.Place(0, CropKind.Radish);
         processors.Place(1, CropKind.Radish);
@@ -178,7 +178,7 @@ public partial class TestProductionState : Node
 
     private static bool CheckWater()
     {
-        var farms = new FarmingSystem(1);
+        var farms = ProductionTestClock.CreateFarms(1);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         farms.Place(0, CropKind.Wheat);
         farms.SupplyWater(0);
@@ -287,7 +287,7 @@ public partial class TestProductionState : Node
                             return Fail($"{crop} 干湿田播种预算的边界相等、晚一秒或风险允许约定错误");
                     }
 
-                    var farms = new FarmingSystem(1);
+                    var farms = ProductionTestClock.CreateFarms(1, currentSecond: calendar.ElapsedSeconds);
                     farms.Place(0, crop);
                     farms.SupplyWater(0);
                     if (!farms.TryWork(0, calendar))
@@ -298,6 +298,7 @@ public partial class TestProductionState : Node
                         return Fail($"{crop} 正常成熟预测未对齐经营 tick 或修改农田");
 
                     farms.RestartCrop(0, crop);
+                    farms.AdvanceTimeTo(end / GameTimeUnits.PerSecond - 1);
                     CalendarSnapshot late = new GameCalendar((uint)(end / GameTimeUnits.PerSecond - 1)).Snapshot;
                     if (!farms.TryWork(0, late))
                         return Fail($"{crop} 季末风险被误用作实际播种拒绝");
@@ -325,7 +326,7 @@ public partial class TestProductionState : Node
                 crop.Kind == CropKind.Sugarcane ? 4320u : 0u).Snapshot;
             foreach (Season season in Enum.GetValues<Season>())
             {
-                var farms = new FarmingSystem(4);
+                var farms = ProductionTestClock.CreateFarms(4);
                 farms.Place(0, crop.Kind);
                 farms.Place(1, crop.Kind);
                 farms.Place(2, crop.Kind);
@@ -364,7 +365,7 @@ public partial class TestProductionState : Node
 
     private static bool CheckSowingControl()
     {
-        var farms = new FarmingSystem(1);
+        var farms = ProductionTestClock.CreateFarms(1);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         farms.Place(0, CropKind.Radish);
         FarmWorkRequest oldSow = farms.GetWorkNeed(0, spring)!.Value;
@@ -421,21 +422,20 @@ public partial class TestProductionState : Node
 
     private static bool CheckSeasonMaturity()
     {
-        var farms = new FarmingSystem(6);
+        var farms = ProductionTestClock.CreateFarms(6);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
-        // 马铃薯完整周期 5040 单位，648 次正常推进后剩 504，恰好十分之一。
+        // 在同一绝对时钟上分别于秒2、1、0开工；秒649保留511、504、497单位。
         for (int index = 0; index < 4; index++)
         {
             farms.Place(index, CropKind.Potato);
             farms.TryWork(index, spring);
-            if (index < 3)
-            {
-                farms.SupplyWater(index);
-                for (int second = 0; second < 647 + index; second++)
-                    if (farms.AdvanceGrowth(index, out _, WeatherKind.Sunny))
-                        return Fail("禁生补救测试在建立阈值状态时已提前成熟");
-            }
         }
+        for (int index = 2; index >= 0; index--)
+        {
+            farms.SupplyWater(index);
+            if (index > 0) farms.AdvanceSecond();
+        }
+        farms.AdvanceTimeTo(649);
         farms.Place(4, CropKind.Potato);
         farms.SupplyWater(4);
         FarmSnapshot nearMaturity = farms.Get(2);
@@ -473,12 +473,13 @@ public partial class TestProductionState : Node
 
     private static bool CheckExpectedRoundEnd()
     {
-        var farms = new FarmingSystem(1);
+        var farms = ProductionTestClock.CreateFarms(1);
         farms.Place(0, CropKind.Radish);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         if (farms.GetExpectedRoundEndTimeUnits(0, 0) != null || !farms.TryWork(0, spring) ||
             farms.GetExpectedRoundEndTimeUnits(0, 7) != null)
             return Fail("空田或未知供水阶段虚构了本轮结束日期");
+        farms.AdvanceTimeTo(2);
         farms.SupplyWater(0);
         FarmSnapshot growing = farms.Get(0);
         long expected = 14 + 206 * GameTimeUnits.PerSecond;
@@ -489,26 +490,27 @@ public partial class TestProductionState : Node
             return Fail("正常推进使同一轮结束缓存每日漂移");
 
         farms.RestartCrop(0, CropKind.Sugarcane);
-        CalendarSnapshot summer = new GameCalendar(8000).Snapshot;
-        farms.TryWork(0, summer);
+        farms.AdvanceTimeTo(8000);
+        farms.TryWork(0, new GameCalendar(8000).Snapshot);
         growing = farms.Get(0);
-        if (farms.GetExpectedRoundEndTimeUnits(0, 8000 * 7) != 8000 * 7 + 2058 * 7 ||
-            farms.Get(0) != growing)
+        if (farms.GetExpectedRoundEndTimeUnits(0, 8000 * 7) != (8000 + 2058) * 7 || farms.Get(0) != growing)
             return Fail("甘蔗夏秋适季跨季被错误截短，或查询重置了进度");
-        if (farms.GetExpectedRoundEndTimeUnits(0, 88004) != 252 * GameTimeUnits.PerDay)
+        farms.RestartCrop(0, CropKind.Sugarcane);
+        farms.AdvanceTimeTo(10950);
+        farms.TryWork(0, new GameCalendar(10950).Snapshot);
+        if (farms.GetExpectedRoundEndTimeUnits(0, 10950 * 7) != 252 * GameTimeUnits.PerDay)
             return Fail("甘蔗秋冬未成熟清理结局未纳入结束日期");
-        for (int tick = 0; tick < 2000; tick++)
-            farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
+        farms.AdvanceQuietSeconds(0, 2000, WeatherKind.Sunny);
         growing = farms.Get(0);
-        if (farms.GetExpectedRoundEndTimeUnits(0, 12905 * 7) != 252 * GameTimeUnits.PerDay ||
+        if (farms.GetExpectedRoundEndTimeUnits(0, 12950 * 7) != 252 * GameTimeUnits.PerDay ||
             farms.Get(0) != growing || !farms.TryMatureBeforeDisallowedSeason(0, Season.Winter, out _))
             return Fail("甘蔗临近成熟的禁生补救结局与只读预测不一致");
 
-        farms.RestartCrop(0, CropKind.Radish);
+        farms = ProductionTestClock.CreateFarms(1, currentSecond: 4114);
+        farms.Place(0, CropKind.Radish);
         farms.SupplyWater(0);
-        farms.TryWork(0, spring);
-        for (int tick = 0; tick < 205; tick++)
-            farms.AdvanceGrowth(0, out _, WeatherKind.Sunny);
+        farms.TryWork(0, new GameCalendar(4114).Snapshot);
+        farms.AdvanceQuietSeconds(0, 205, WeatherKind.Sunny);
         if (farms.GetExpectedRoundEndTimeUnits(0, 4319 * 7) != 4320 * 7 ||
             !farms.AdvanceGrowth(0, out _, WeatherKind.Sunny) || farms.GetExpectedRoundEndTimeUnits(0, 4320 * 7) != null ||
             farms.TryMatureBeforeDisallowedSeason(0, Season.Summer, out _))

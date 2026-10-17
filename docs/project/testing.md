@@ -4,6 +4,12 @@
 
 ## 自动化测试与覆盖率
 
+#65 的经营到期索引由 `TestSimulationDueIndex` 验证固定一年窗口、FIFO、逐项读取封口、句柄取消与复用、清空及环绕；农田、加工与经营回归继续通过真实状态、库存及生产结果验证精确目标、天气分段积分、正常成熟与促熟的容量检查、异常后的显式续推，以及逐秒和随机切段批量等价。容器不执行业务回调，读取失败或业务异常不表示预约已经移除。
+
+真实 FarmGame 原料与成品溢出回归在 `TestProductionDueIntegration.CheckGameHarvestOverflowContinuation/CheckGameProductOverflowContinuation`，由 `TestFarmGame.RunChecks` 同时接入 `tests/unit/gameplay/test_farm_game.tscn` 和完整 `TestSuite`。初始库存通过已有内部建局夹具复制，后续种植、降雨、建造、买入、出售与推进均调用真实经营入口；分别验证 FIFO 首项成功／中项失败／尾项保留、未释放容量重复请求无额外修改、完整秒日历与批量检查点、同秒释放容量续推的产出汇总，以及表现结果和后续秒不重复。农田用同种子无溢出局作真实收成对照；加工用九份锁定批次检查精确库存守恒。夹具与异常契约集中见[生产到期接入](../architecture/game-state/farm-game/implementation-production-due.md#验证范围)，此处不把新增用例预写为验收通过。
+
+生产访问与耗时的独立入口为 `tests/performance/test_production_due_load.tscn`：使用真实农田、加工及共享到期索引，共 16,384 个生产实例，对照少量到期与同秒集中到期。报告记录成功读取到期项及实际完成数量、分段耗时与当前线程分配；这些计数只描述该生产负载，不代表全游戏扫描次数或 FPS。测试同时核对全部实例的剩余量、实际库存及每轮只完成一次。满地图 50 tick 与有窗口 FPS 仍分别执行既有场景，不以微基准代替完整验收；本次证据统一保存在 `build/issue65-validation/`，原型选型限制见[固定时间桶评估](../research/time-wheel-design-evaluation.md)。
+
 大地图双键交叠回归由 `TestMapNavigation.CheckGestures` 使用真实鼠标事件验证：右键已经拖动时按放左键，以及左键已经拖动时按放右键，都不得导航、重置浏览位置或取消原手势；原按键继续拖动仍能浏览，最终释放后停止，随后普通左键短按恢复唯一导航。交叠阶段显式提供左右键共同掩码并检查真实全局键态，同时核对 `NavigateRequested` 次数、主镜头实际位置及大地图浏览中心。
 
 PR #179 的年度表原生拖放回归接入 `TestMapNavigation`：真实输入先验证普通小麦卡片拖放成功，再分别检查已存在条目与作物卡片的左键待启动捕获、已启动拖放被M开图取消，以及关闭后重新按下仍能正常拖放。通过原生 `GuiIsDragging`、实际 `EntryDropped` 事件和草稿文字确认旧按下不能复活或落位。鼠标移动同时提供真实位置、相对位移与左键掩码，有窗口时系统鼠标同步移动，不直接调用拖放回调或写入草稿。背景库存按钮另验证按住时开关地图、旧释放不触发 `Pressed` 或打开窗口，而重新点击恢复；原有在窗／离窗状态保持。卡片待启动序列已在生产修复前分别取得headless与1080P图形红灯，完整断言用于后续修复验收。

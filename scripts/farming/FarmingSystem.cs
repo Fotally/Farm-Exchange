@@ -4,6 +4,7 @@ using FarmExchange.Gameplay;
 using FarmExchange.Logging;
 using FarmExchange.Time;
 using FarmExchange.Weather;
+using GoodsInventory = FarmExchange.Inventory.Inventory;
 
 namespace FarmExchange.Farming;
 
@@ -18,13 +19,17 @@ internal readonly record struct FarmWorkRequest(int CellIndex, int RoundRevision
 internal sealed class FarmingSystem
 {
     private readonly Random _yieldRandom;
+    private readonly SimulationDueIndex _due;
+    private long _currentSecond;
     private readonly FarmState?[] _farms;
     private readonly int[] _roundRevisions;
     private readonly List<int> _indices = new();
     private IReadOnlyList<int>? _indicesSnapshot;
 
-    internal FarmingSystem(int cellCount, int seed = 0)
+    internal FarmingSystem(int cellCount, SimulationDueIndex due, int seed = 0)
     {
+        _due = due;
+        _currentSecond = due.CurrentSecond;
         _yieldRandom = new Random(seed);
         _farms = new FarmState?[cellCount];
         _roundRevisions = new int[cellCount];
@@ -48,18 +53,18 @@ internal sealed class FarmingSystem
     {
         FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
         return new FarmSnapshot(farm.CropKind, farm.Stage,
-            GameTimeUnits.RemainingSeconds(farm.RemainingTimeUnits), farm.HasWater,
-            farm.RemainingTimeUnits, farm.SowingEnabled);
+            GameTimeUnits.RemainingSeconds(RemainingTimeUnits(farm)), farm.HasWater,
+            RemainingTimeUnits(farm), farm.SowingEnabled);
     }
 
-    internal void Place(int index, CropKind crop)
+    internal void Place(int index, CropKind crop, WeatherKind weather)
     {
         if (!CropCatalog.IsDefined(crop))
             throw new ArgumentOutOfRangeException(nameof(crop));
         if (_farms[index] != null)
             throw new InvalidOperationException("土地已有农田状态");
         _roundRevisions[index]++;
-        _farms[index] = new FarmState(crop);
+        _farms[index] = new FarmState(crop, weather);
         int insertion = _indices.BinarySearch(index);
         _indices.Insert(~insertion, index);
         _indicesSnapshot = null;
@@ -69,6 +74,7 @@ internal sealed class FarmingSystem
     {
         if (_farms[index] == null)
             throw new InvalidOperationException("土地没有农田状态");
+        _due.Cancel(_farms[index]!.DueHandle);
         _roundRevisions[index]++;
         _farms[index] = null;
         _indices.Remove(index);
@@ -95,10 +101,11 @@ internal sealed class FarmingSystem
         if (!CropCatalog.IsDefined(crop))
             throw new ArgumentOutOfRangeException(nameof(crop));
         FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
+        _due.Cancel(farm.DueHandle);
         _roundRevisions[index]++;
         farm.CropKind = crop;
         farm.Stage = CropStage.None;
-        farm.RemainingTimeUnits = 0;
+        farm.DueTimeUnits = 0;
     }
 
     /**
@@ -119,56 +126,55 @@ internal sealed class FarmingSystem
     internal void SupplyWater(int index)
     {
         FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
+        SimulationDueIndex.Handle handle = farm.Stage == CropStage.Seeded ? ReserveGrowth(index, farm) : default;
         FarmSnapshot? before = !farm.HasWater ? Diagnostics?.BeginFarm(index, this) : null;
         farm.HasWater = true;
         Diagnostics?.Watered(index, before, this);
         if (farm.Stage == CropStage.Seeded)
-            StartGrowth(index, farm);
+            StartGrowth(index, farm, handle);
     }
 
     /**
-     * <summary>推进实际生长并累计本秒整田天气，成熟时返回已结算的作物与数量。</summary>
-     * <param name="index">农田锚点索引。</param>
-     * <param name="harvest">本轮真实收获；失败时为默认值。</param>
-     * <param name="weather">本秒开始时权威天气查询得到的整田九格判定，晴天也须显式传入。</param>
-     * <returns>完成本轮并清水返回 true；未生长或尚未成熟返回 false。</returns>
+     * <summary>同步生产读取时钟，不遍历或改写各田生长进度。</summary>
+     * <param name="second">不早于当前时钟的绝对经营秒；产出阶段使用完成后日历秒。</param>
      */
-    internal bool AdvanceGrowth(int index, out CropHarvestResult harvest, WeatherKind weather)
+    internal void AdvanceTo(long second)
+    {
+        if (second < _currentSecond)
+            throw new ArgumentOutOfRangeException(nameof(second));
+        _currentSecond = second;
+    }
+
+    /**
+     * <summary>在权威天气实际改变时结清本田旧天气段并开始新段。</summary>
+     * <param name="index">现有农田锚点。</param>
+     * <param name="weather">当前时钟开始生效的整田九格权威天气。</param>
+     */
+    internal void SetWeather(int index, WeatherKind weather)
+    {
+        FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
+        if (farm.Weather == weather)
+            return;
+        if (farm.Stage == CropStage.Growing)
+            SettleWeather(farm);
+        farm.Weather = weather;
+    }
+
+    /**
+     * <summary>结算已到期的一轮，原料容量检查通过后才终结轮次和撤销预约。</summary>
+     * <param name="index">到期索引交出的农田锚点。</param>
+     * <param name="inventory">本局库存，仅用于检查实际产量容量；入库由经营入口紧邻提交。</param>
+     * <param name="harvest">成功时本轮作物及实际数量。</param>
+     * <returns>本轮到期并成功终结为 true；其余状态为 false，容量溢出保留原轮和预约。</returns>
+     */
+    internal bool CompleteGrowth(int index, GoodsInventory inventory, out CropHarvestResult harvest)
     {
         harvest = default;
         FarmState? farm = _farms[index];
-        if (farm == null || farm.Stage != CropStage.Growing)
+        if (farm == null || farm.Stage != CropStage.Growing || RemainingTimeUnits(farm) > 0)
             return false;
-        AccumulateGrowth(farm, Math.Min(GameTimeUnits.PerSecond, farm.RemainingTimeUnits), weather);
-        if (farm.RemainingTimeUnits > 0)
-            return false;
-        harvest = FinishHarvest(index, farm);
+        harvest = FinishHarvest(index, farm, inventory);
         return true;
-    }
-
-    /**
-     * <summary>只读查询该农田正常成熟的秒距离。</summary>
-     * <param name="index">现有农田锚点。</param>
-     * <returns>未生长时为 uint.MaxValue，生长时按每轮向上取整。</returns>
-     */
-    internal uint GetNextEventSeconds(int index)
-    {
-        FarmState farm = _farms[index]!;
-        return farm.Stage == CropStage.Growing
-            ? (uint)GameTimeUnits.RemainingSeconds(farm.RemainingTimeUnits) : uint.MaxValue;
-    }
-
-    /**
-     * <summary>一次累计成熟之前的无事件生长区间。</summary>
-     * <param name="index">现有农田锚点。</param>
-     * <param name="seconds">严格小于该轮剩余经营秒数的区间。</param>
-     * <param name="weather">权威天气查询得到的整田天气，调用方保证整个平静区间不变化。</param>
-     */
-    internal void AdvanceQuietSeconds(int index, uint seconds, WeatherKind weather)
-    {
-        FarmState farm = _farms[index]!;
-        if (farm.Stage == CropStage.Growing)
-            AccumulateGrowth(farm, checked((int)(seconds * GameTimeUnits.PerSecond)), weather);
     }
 
     /**
@@ -183,8 +189,8 @@ internal sealed class FarmingSystem
         FarmState farm = _farms[index] ?? throw new InvalidOperationException("土地没有农田状态");
         if (farm.Stage != CropStage.Growing)
             return null;
-        long normalEnd = now + (long)GameTimeUnits.RemainingSeconds(farm.RemainingTimeUnits) *
-            GameTimeUnits.PerSecond;
+        long normalEnd = ((farm.DueTimeUnits + GameTimeUnits.PerSecond - 1) /
+            GameTimeUnits.PerSecond) * GameTimeUnits.PerSecond;
         return Math.Min(normalEnd, PlantingRules.GetGrowingWindowEndTimeUnits(farm.CropKind, now));
     }
 
@@ -193,10 +199,11 @@ internal sealed class FarmingSystem
      * <remarks>仅生长中且精确剩余时间严格小于完整周期的十分之一。入库仍由经营入口处理。</remarks>
      * <param name="index">农田锚点索引。</param>
      * <param name="season">实际换季即将进入的季节。</param>
+     * <param name="inventory">本局库存，用于终结轮次前的原料容量检查。</param>
      * <param name="harvest">成功时需要沿正常路径入库的作物及实际数量。</param>
      * <returns>促成成熟并完成本轮收获返回 true，其余状态零修改返回 false。</returns>
      */
-    internal bool TryMatureBeforeDisallowedSeason(int index, Season season, out CropHarvestResult harvest)
+    internal bool TryMatureBeforeDisallowedSeason(int index, Season season, GoodsInventory inventory, out CropHarvestResult harvest)
     {
         harvest = default;
         FarmState? farm = _farms[index];
@@ -205,25 +212,37 @@ internal sealed class FarmingSystem
         CropDefinition crop = CropCatalog.Get(farm.CropKind);
         GrowingSeasons nextSeason = (GrowingSeasons)(1 << (int)season);
         if ((crop.GrowingSeasons & nextSeason) != 0 ||
-            (long)farm.RemainingTimeUnits * 10 >= crop.GrowthDays * GameTimeUnits.PerDay)
+            (long)RemainingTimeUnits(farm) * 10 >= crop.GrowthDays * GameTimeUnits.PerDay)
             return false;
-        harvest = FinishHarvest(index, farm);
+        harvest = FinishHarvest(index, farm, inventory);
         return true;
     }
 
-    private static void AccumulateGrowth(FarmState farm, int timeUnits, WeatherKind weather)
+    private int RemainingTimeUnits(FarmState farm) => farm.Stage == CropStage.Growing
+        ? checked((int)Math.Max(0, farm.DueTimeUnits - _currentSecond * GameTimeUnits.PerSecond)) : 0;
+
+    private long WeatherEnd(FarmState farm) => Math.Min(
+        _currentSecond * GameTimeUnits.PerSecond, farm.DueTimeUnits);
+
+    private void SettleWeather(FarmState farm)
     {
-        farm.RemainingTimeUnits -= timeUnits;
-        farm.GrownTimeUnits += timeUnits;
-        farm.WeatherPercentTimeUnits += (long)CropYieldRules.GetWeatherPercent(farm.CropKind, weather) * timeUnits;
+        long end = WeatherEnd(farm);
+        int elapsed = checked((int)(end - farm.WeatherStartTimeUnits));
+        farm.GrownTimeUnits += elapsed;
+        farm.WeatherPercentTimeUnits += (long)CropYieldRules.GetWeatherPercent(farm.CropKind, farm.Weather) * elapsed;
+        farm.WeatherStartTimeUnits = end;
     }
 
-    private CropHarvestResult FinishHarvest(int index, FarmState farm)
+    private CropHarvestResult FinishHarvest(int index, FarmState farm, GoodsInventory inventory)
     {
+        int elapsed = checked((int)(WeatherEnd(farm) - farm.WeatherStartTimeUnits));
         int quantity = CropYieldRules.CalculateQuantity(farm.RandomBaseQuantity,
-            farm.WeatherPercentTimeUnits, farm.GrownTimeUnits);
+            farm.WeatherPercentTimeUnits + (long)CropYieldRules.GetWeatherPercent(farm.CropKind, farm.Weather) * elapsed,
+            farm.GrownTimeUnits + elapsed);
+        _ = checked(inventory.GetRaw(farm.CropKind) + quantity);
+        _due.Cancel(farm.DueHandle);
         farm.Stage = CropStage.None;
-        farm.RemainingTimeUnits = 0;
+        farm.DueTimeUnits = 0;
         farm.HasWater = false;
         _roundRevisions[index]++;
         return new CropHarvestResult(farm.CropKind, quantity);
@@ -253,11 +272,12 @@ internal sealed class FarmingSystem
         FarmState farm = _farms[request.CellIndex]!;
         if (request.Kind == FarmWorkKind.Sow)
         {
+            SimulationDueIndex.Handle handle = farm.HasWater ? ReserveGrowth(request.CellIndex, farm) : default;
             FarmSnapshot? before = Diagnostics?.BeginFarm(request.CellIndex, this);
             farm.Stage = CropStage.Seeded;
             Diagnostics?.Sown(request.CellIndex, before, this);
             if (farm.HasWater)
-                StartGrowth(request.CellIndex, farm);
+                StartGrowth(request.CellIndex, farm, handle);
         }
         else
             SupplyWater(request.CellIndex);
@@ -283,8 +303,9 @@ internal sealed class FarmingSystem
                 (CropCatalog.Get(farm.CropKind).GrowingSeasons & currentSeason) != 0)
                 continue;
             FarmSnapshot? before = Diagnostics?.BeginFarm(index, this);
+            _due.Cancel(farm.DueHandle);
             farm.Stage = CropStage.None;
-            farm.RemainingTimeUnits = 0;
+            farm.DueTimeUnits = 0;
             farm.HasWater = false;
             _roundRevisions[index]++;
             result.Record(farm.CropKind);
@@ -293,11 +314,22 @@ internal sealed class FarmingSystem
         return result;
     }
 
-    private void StartGrowth(int index, FarmState farm)
+    private SimulationDueIndex.Handle ReserveGrowth(int index, FarmState farm)
+    {
+        long dueTimeUnits = _currentSecond * GameTimeUnits.PerSecond +
+            CropCatalog.Get(farm.CropKind).GrowthDays * GameTimeUnits.PerDay;
+        return _due.Register((dueTimeUnits + GameTimeUnits.PerSecond - 1) / GameTimeUnits.PerSecond, index);
+    }
+
+    private void StartGrowth(int index, FarmState farm, SimulationDueIndex.Handle handle)
     {
         FarmSnapshot? before = Diagnostics?.BeginFarm(index, this);
+        long dueTimeUnits = _currentSecond * GameTimeUnits.PerSecond +
+            CropCatalog.Get(farm.CropKind).GrowthDays * GameTimeUnits.PerDay;
+        farm.DueHandle = handle;
+        farm.DueTimeUnits = dueTimeUnits;
         farm.Stage = CropStage.Growing;
-        farm.RemainingTimeUnits = CropCatalog.Get(farm.CropKind).GrowthDays * GameTimeUnits.PerDay;
+        farm.WeatherStartTimeUnits = _currentSecond * GameTimeUnits.PerSecond;
         farm.RandomBaseQuantity = CropCatalog.Get(farm.CropKind).HarvestQuantity *
             (CropYieldRules.MinimumMultiplier + _yieldRandom.NextDouble() *
                 (CropYieldRules.MaximumMultiplier - CropYieldRules.MinimumMultiplier));
@@ -306,18 +338,22 @@ internal sealed class FarmingSystem
         Diagnostics?.GrowthStarted(index, before, this);
     }
 
-    internal void SetGrowingForBenchmark(int index, CropKind crop)
+    internal void SetGrowingForBenchmark(int index, CropKind crop, WeatherKind weather)
     {
-        Place(index, crop);
+        Place(index, crop, weather);
         FarmState farm = _farms[index]!;
+        SimulationDueIndex.Handle handle = ReserveGrowth(index, farm);
         farm.HasWater = true;
-        StartGrowth(index, farm);
+        StartGrowth(index, farm, handle);
     }
 
     internal void Clear()
     {
         foreach (int index in _indices)
+        {
+            _due.Cancel(_farms[index]!.DueHandle);
             _roundRevisions[index]++;
+        }
         Array.Clear(_farms);
         _indices.Clear();
         _indicesSnapshot = null;
@@ -327,7 +363,10 @@ internal sealed class FarmingSystem
     {
         internal CropKind CropKind;
         internal CropStage Stage;
-        internal int RemainingTimeUnits;
+        internal long DueTimeUnits;
+        internal SimulationDueIndex.Handle DueHandle;
+        internal long WeatherStartTimeUnits;
+        internal WeatherKind Weather;
         internal bool HasWater;
         internal bool SowingEnabled = true;
         internal int SowingRevision;
@@ -335,6 +374,6 @@ internal sealed class FarmingSystem
         internal int GrownTimeUnits;
         internal long WeatherPercentTimeUnits;
 
-        internal FarmState(CropKind crop) => CropKind = crop;
+        internal FarmState(CropKind crop, WeatherKind weather) { CropKind = crop; Weather = weather; }
     }
 }

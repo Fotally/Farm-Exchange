@@ -33,7 +33,7 @@ public partial class TestFarmGame : Node
     }
 
     public static bool RunChecks() =>
-        CheckInitialCenter() && CheckInitialOtherSeasons() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
+        TestProductionDueIntegration.RunChecks() && CheckInitialCenter() && CheckInitialOtherSeasons() && CheckAllCrops() && CheckBuildingCost() && CheckMatchingAndSwitching() && CheckRemoval() &&
         CheckWorkerParticipation() && CheckContinuousProduction() && CheckRainSupply() && CheckSeasonalSowing() &&
         CheckSeasonFailure() && CheckSeasonBoundaries() && CheckRawSales() &&
         CheckInvalidCrops() && CheckStateOwnership() && CheckTerrainReadCapability() &&

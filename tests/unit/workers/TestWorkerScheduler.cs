@@ -22,7 +22,7 @@ public partial class TestWorkerScheduler : Node
 
     private static bool CheckRepeatedCancellation()
     {
-        var farms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        var farms = ProductionTestClock.CreateFarms(FarmGame.MapSize * FarmGame.MapSize);
         var workers = new WorkerScheduler(TerrainTestFixtures.AllLandTerrain, new Vector2I(190, 190));
         var calendar = new GameCalendar();
         int? previous = null;
@@ -67,8 +67,8 @@ public partial class TestWorkerScheduler : Node
         if (!found) return Fail("水域路线夹具未找到穿过池塘的起止点");
         int targetIndex = (target.Y - 1) * FarmGame.MapSize + target.X - 1;
         int blockedIndex = (blocked.Y - 1) * FarmGame.MapSize + blocked.X - 1;
-        var firstFarms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
-        var batchFarms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        var firstFarms = ProductionTestClock.CreateFarms(FarmGame.MapSize * FarmGame.MapSize);
+        var batchFarms = ProductionTestClock.CreateFarms(FarmGame.MapSize * FarmGame.MapSize);
         foreach (FarmingSystem farms in new[] { firstFarms, batchFarms })
         {
             farms.Place(blockedIndex, CropKind.Radish);
@@ -115,7 +115,7 @@ public partial class TestWorkerScheduler : Node
             firstFarms.Get(targetIndex).Stage != CropStage.Seeded)
             return Fail("绕水到达后没有以独立一秒播种");
 
-        var cancelFarms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        var cancelFarms = ProductionTestClock.CreateFarms(FarmGame.MapSize * FarmGame.MapSize);
         cancelFarms.Place(targetIndex, CropKind.Radish);
         var cancel = new WorkerScheduler(terrain.ReadOnly, start);
         cancel.AdvanceOneSecond(cancelFarms, new GameCalendar().Snapshot);
@@ -137,7 +137,7 @@ public partial class TestWorkerScheduler : Node
 
     private static bool CheckStableAnchorCursor()
     {
-        var farms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        var farms = ProductionTestClock.CreateFarms(FarmGame.MapSize * FarmGame.MapSize);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         int first = 5 * FarmGame.MapSize + 5;
         int second = first + 6;
@@ -227,7 +227,7 @@ public partial class TestWorkerScheduler : Node
 
     private static bool CheckFarmWorkCredentials()
     {
-        var farms = new FarmingSystem(1);
+        var farms = ProductionTestClock.CreateFarms(1);
         CalendarSnapshot spring = new GameCalendar().Snapshot;
         if (farms.GetWorkNeed(0, spring) != null)
             return Fail("空地产生了农田工作需求");
@@ -349,7 +349,7 @@ public partial class TestWorkerScheduler : Node
 
         int removed = 3 * FarmGame.MapSize + 8;
         int replacement = 9 * FarmGame.MapSize + 3;
-        farms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        farms = ProductionTestClock.CreateFarms(FarmGame.MapSize * FarmGame.MapSize);
         farms.Place(removed, CropKind.Radish);
         workers = new WorkerScheduler(TerrainTestFixtures.AllLandTerrain, Vector2I.One);
         workers.AdvanceOneSecond(farms, spring);
@@ -503,8 +503,9 @@ public partial class TestWorkerScheduler : Node
         var suppliedRounds = new int[cells.Length];
         for (int second = 0; second < 1000; second++)
         {
+            farms.AdvanceSecond();
             for (int field = 0; field < cells.Length; field++)
-                if (farms.AdvanceGrowth(IndexOf(cells[field]), out _, WeatherKind.Sunny))
+                if (farms.CompleteGrowth(IndexOf(cells[field]), out _))
                 {
                     waiting[field] = true;
                     readySeconds[field] = calendar.Snapshot.ElapsedSeconds;
@@ -572,7 +573,7 @@ public partial class TestWorkerScheduler : Node
 
     private static FarmingSystem CreateFarms(IEnumerable<Vector2I> cells, CropKind crop = CropKind.Radish)
     {
-        var farms = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize);
+        var farms = ProductionTestClock.CreateFarms(FarmGame.MapSize * FarmGame.MapSize);
         foreach (Vector2I cell in cells)
             farms.Place(IndexOf(cell), crop);
         return farms;
@@ -586,8 +587,9 @@ public partial class TestWorkerScheduler : Node
         if (rain)
             foreach (Vector2I cell in cells)
                 farms.SupplyWater(IndexOf(cell));
+        farms.AdvanceSecond();
         foreach (Vector2I cell in cells)
-            farms.AdvanceGrowth(IndexOf(cell), out _, WeatherKind.Sunny);
+            farms.CompleteGrowth(IndexOf(cell), out _);
         workers.AdvanceOneSecond(farms, calendar.Snapshot);
         calendar.TryAdvanceSeconds(1);
     }

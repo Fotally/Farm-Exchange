@@ -72,7 +72,11 @@ public sealed class FarmGame : IDisposable
     private readonly LandOccupancy _occupancy = new(CellCount);
     private readonly FarmingSystem _farming;
     private readonly WeatherSystem _weather;
-    private readonly ProcessingSystem _processing = new(CellCount);
+    private readonly ProcessingSystem _processing;
+    private readonly SimulationDueIndex _productionDue;
+    private bool _productionPhaseInProgress;
+    private int _pendingHarvested;
+    private int _pendingProduced;
     private readonly WorkerScheduler _workerScheduler;
 
     /**
@@ -176,8 +180,12 @@ public sealed class FarmGame : IDisposable
      * <param name="error">拒绝原因；失败零修改。</param>
      * <returns>是否成功设置；设置不推进经营或立即供水。</returns>
      */
-    public bool TrySetWeatherRegion(Rect2I cells, WeatherKind kind, out string error) =>
-        _weather.TrySetRegion(cells, kind, out error);
+    public bool TrySetWeatherRegion(Rect2I cells, WeatherKind kind, out string error)
+    {
+        if (!_weather.TrySetRegion(cells, kind, out error)) return false;
+        SynchronizeFarmWeather();
+        return true;
+    }
 
     /**
      * <summary>开发／测试显式模式移除指定矩形天气，恢复默认晴天。</summary>
@@ -185,8 +193,12 @@ public sealed class FarmGame : IDisposable
      * <param name="error">拒绝原因。</param>
      * <returns>是否成功清除，失败零修改。</returns>
      */
-    public bool TryClearWeatherRegion(Rect2I cells, out string error) =>
-        _weather.TryClearRegion(cells, out error);
+    public bool TryClearWeatherRegion(Rect2I cells, out string error)
+    {
+        if (!_weather.TryClearRegion(cells, out error)) return false;
+        SynchronizeFarmWeather();
+        return true;
+    }
 
     /**
      * <summary>查询本局已绑定的日志观察上下文；未启用采集时为空。</summary>
@@ -208,8 +220,21 @@ public sealed class FarmGame : IDisposable
      */
     public FarmGame(int? marketSeed = null, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null, TerrainRules? terrainRules = null) : this(marketSeed, 0, logging, purpose, weatherMode, weatherRules, terrainRules) { }
 
-    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null, TerrainRules? terrainRules = null)
-        : this(CreateSynchronousTerrain(marketSeed, terrainRules, purpose), elapsedSeconds, logging, purpose, weatherMode, weatherRules) { }
+    /**
+     * <summary>创建内部时间与库存边界夹具，继续使用真实经营模块。</summary>
+     * <param name="marketSeed">报价、初始设施与产量随机种子。</param>
+     * <param name="elapsedSeconds">初始完整经营秒。</param>
+     * <param name="logging">可选日志会话。</param>
+     * <param name="purpose">本局用途。</param>
+     * <param name="weatherMode">本局固定天气模式。</param>
+     * <param name="weatherRules">本局天气配置。</param>
+     * <param name="terrainRules">显式纯陆地配置。</param>
+     * <param name="initialStock">可选初始商品数量；按库存规则校验并复制，不保留调用方容器。</param>
+     * <remarks>初始设施建立后、日志绑定前入库；加工在后续正常领取相位开批，不提供运行中资源改写。</remarks>
+     */
+    internal FarmGame(int? marketSeed, uint elapsedSeconds, RuntimeLog? logging = null, GamePurpose purpose = GamePurpose.Main, WeatherMode weatherMode = WeatherMode.Natural, WeatherRules? weatherRules = null, TerrainRules? terrainRules = null,
+        IReadOnlyDictionary<CommodityId, int>? initialStock = null)
+        : this(CreateSynchronousTerrain(marketSeed, terrainRules, purpose), elapsedSeconds, logging, purpose, weatherMode, weatherRules, initialStock) { }
 
     /**
      * <summary>完整生成地形并等待原生导航同步后创建经营局，不发布可提前推进的半成品。</summary>
@@ -255,7 +280,8 @@ public sealed class FarmGame : IDisposable
     }
 
     private FarmGame((int Seed, TerrainMap Map) prepared, uint elapsedSeconds, RuntimeLog? logging,
-        GamePurpose purpose, WeatherMode weatherMode, WeatherRules? weatherRules)
+        GamePurpose purpose, WeatherMode weatherMode, WeatherRules? weatherRules,
+        IReadOnlyDictionary<CommodityId, int>? initialStock = null)
     {
         int seed = prepared.Seed;
         _terrain = prepared.Map;
@@ -264,13 +290,18 @@ public sealed class FarmGame : IDisposable
             _calendar = new GameCalendar(elapsedSeconds);
             _workerScheduler = new WorkerScheduler(Terrain,
                 Array.ConvertAll(InitialFarmCells, cell => BuildingFootprint.WorkCell(cell, BuildingKind.Farm)));
-            _farming = new FarmingSystem(CellCount, seed);
+            _productionDue = new SimulationDueIndex(CellCount / 9, elapsedSeconds);
+            _farming = new FarmingSystem(CellCount, _productionDue, seed);
+            _processing = new ProcessingSystem(CellCount, _productionDue);
             _weather = new WeatherSystem(seed, weatherRules ?? WeatherRules.Default, weatherMode, elapsedSeconds);
             _cultivation = new CultivationPlanBook(_farming);
             _market = new MarketQuotes(seed, _calendar.Snapshot.ElapsedDays);
             _trading = new TradingService(_inventory, _wallet, _market);
             _tradeOrders = new TradeOrderBook(_inventory, _wallet, _market, _trading);
             InitializeCenter(new Random(seed));
+            if (initialStock != null)
+                foreach (var entry in initialStock)
+                    _inventory.Add(entry.Key, entry.Value);
             _log = logging?.BindGame(this, seed, collectProduction: true, purpose);
             _tradeOrders.AttachLog(_log?.Orders);
             _trading.SetLogging(_log?.Trading);
@@ -518,6 +549,8 @@ public sealed class FarmGame : IDisposable
         _occupancy.Clear();
         _farming.Clear();
         _processing.Clear();
+        _productionDue.Clear();
+        _productionPhaseInProgress = false;
         for (int row = 0; row < MapSize; row += 3)
         {
             for (int col = 0; col < MapSize; col += 3)
@@ -527,7 +560,7 @@ public sealed class FarmGame : IDisposable
                 if (col % 6 == 0)
                 {
                     _occupancy.Place(index, BuildingKind.Farm);
-                    _farming.SetGrowingForBenchmark(index, crop);
+                    _farming.SetGrowingForBenchmark(index, crop, _weather.GetFarmWeather(_occupancy.GetSpace(index)!));
                 }
                 else
                 {
@@ -545,7 +578,7 @@ public sealed class FarmGame : IDisposable
         {
             int index = IndexOf(cell);
             _farming.Remove(index);
-            _farming.Place(index, CropKind.Radish);
+            _farming.Place(index, CropKind.Radish, _weather.GetFarmWeather(_occupancy.GetSpace(index)!));
         }
         AdvanceTick();
     }
@@ -1171,23 +1204,25 @@ public sealed class FarmGame : IDisposable
 
     private uint GetNextEventSeconds()
     {
+        if (_productionPhaseInProgress) return 1;
         uint next = Math.Min(_calendar.SecondsUntilNextSeason,
             _calendar.SecondsUntilDay(_market.NextEventDay));
         next = Math.Min(next, _weather.GetNextEventSeconds(Calendar.ElapsedSeconds));
         next = Math.Min(next, _cultivation.GetNextEventSeconds(Calendar.ElapsedSeconds));
         next = Math.Min(next, _workerScheduler.GetNextEventSeconds(_farming, Calendar));
+        if (_productionDue.TryGetNext(out long dueSecond))
+            next = Math.Min(next, checked((uint)(dueSecond - Calendar.ElapsedSeconds)));
         if (_tradeOrders.NeedsNextTickCheck)
             next = 1;
         foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
         {
             if (space.Building == BuildingKind.Farm)
             {
-                next = Math.Min(next, _farming.GetNextEventSeconds(space.AnchorIndex));
                 if (!_farming.Get(space.AnchorIndex).HasWater && _weather.GetFarmWeather(space) == WeatherKind.Rain)
                     next = 1;
             }
-            else if (space.Building == BuildingKind.Processor)
-                next = Math.Min(next, _processing.GetNextEventSeconds(space.AnchorIndex, _inventory));
+            else if (space.Building == BuildingKind.Processor && _processing.CanStart(space.AnchorIndex, _inventory))
+                next = 1;
         }
         return next;
     }
@@ -1197,18 +1232,15 @@ public sealed class FarmGame : IDisposable
         observation?.EnterPhase(SimulationLogPhase.QuietAdvance);
         ClearPresentationResults();
         uint previousDay = Calendar.ElapsedDays;
-        foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
-        {
-            if (space.Building == BuildingKind.Farm)
-                _farming.AdvanceQuietSeconds(space.AnchorIndex, seconds, _weather.GetFarmWeather(space));
-            else if (space.Building == BuildingKind.Processor)
-                _processing.AdvanceQuietSeconds(space.AnchorIndex, seconds);
-        }
+        long nextSecond = (long)Calendar.ElapsedSeconds + seconds;
+        _productionDue.AdvanceTo(nextSecond);
+        _farming.AdvanceTo(nextSecond);
+        _processing.AdvanceTo(nextSecond);
         _workerScheduler.AdvanceQuietSeconds(seconds, _calendar.Snapshot.ElapsedSeconds);
         observation?.EnterPhase(SimulationLogPhase.Calendar);
         if (!_calendar.TryAdvanceSeconds(seconds))
             throw new InvalidOperationException("模拟时间已达到上限");
-        _weather.AdvanceTo(Calendar.ElapsedSeconds);
+        AdvanceWeather();
         if (Calendar.ElapsedDays == previousDay)
             return false;
         _market.Advance(Calendar, _log?.Market);
@@ -1219,36 +1251,42 @@ public sealed class FarmGame : IDisposable
     {
         observation?.EnterPhase(SimulationLogPhase.TickPreparation);
         var timing = _log?.Performance?.BeginEventTick(Calendar.ElapsedSeconds);
-        ClearPresentationResults();
-        ApplyRain();
-        int harvested = 0;
-        int produced = 0;
-        long nextTimeUnits = ((long)_calendar.Snapshot.ElapsedSeconds + 1) * GameTimeUnits.PerSecond;
-        foreach (BuildingSpaceSnapshot space in _occupancy.Instances)
+        long nextSecond = (long)Calendar.ElapsedSeconds + 1;
+        long nextTimeUnits = nextSecond * GameTimeUnits.PerSecond;
+        if (!_productionPhaseInProgress)
         {
-            int i = space.AnchorIndex;
-            BuildingKind building = space.Building;
-            if (building == BuildingKind.Farm)
+            ClearPresentationResults();
+            ApplyRain();
+            _productionDue.AdvanceTo(nextSecond);
+            _farming.AdvanceTo(nextSecond);
+            _processing.AdvanceTo(nextSecond);
+            _pendingHarvested = 0;
+            _pendingProduced = 0;
+            _productionPhaseInProgress = true;
+        }
+        while (_productionDue.TryPeekDue(out _, out int i))
+        {
+            if (_occupancy.Get(i) == BuildingKind.Farm)
             {
                 observation?.EnterPhase(SimulationLogPhase.Harvest);
                 timing?.BeginStage();
                 var before = _log?.ProductionDiagnostics.BeginFarm(i, _farming);
-                if (_farming.AdvanceGrowth(i, out CropHarvestResult harvest, _weather.GetFarmWeather(space)))
-                    harvested += CollectHarvest(i, harvest, nextTimeUnits, before);
+                if (_farming.CompleteGrowth(i, _inventory, out CropHarvestResult harvest))
+                    _pendingHarvested += CollectHarvest(i, harvest, nextTimeUnits, before);
                 timing?.EndStage("Harvest");
             }
-            else if (building == BuildingKind.Processor)
+            else
             {
                 observation?.EnterPhase(SimulationLogPhase.Processing);
                 timing?.BeginStage();
                 var before = _log?.ProductionDiagnostics.BeginProcessor(i, _processing, _inventory);
-                if (_processing.Advance(i, _inventory, out CropKind productCrop, out int quantity))
+                if (_processing.Complete(i, _inventory, out CropKind productCrop, out int quantity))
                 {
                     _inventory.AddProduct(productCrop, quantity);
                     _log?.Production?.Produced(productCrop, quantity);
                     _log?.ProductionDiagnostics.Processed(i, before, _processing, _inventory, quantity);
                     RecordPresentationResult(i, productCrop, ProductionResultKind.Product, quantity);
-                    produced += quantity;
+                    _pendingProduced += quantity;
                 }
                 timing?.EndStage("Processing");
             }
@@ -1261,11 +1299,14 @@ public sealed class FarmGame : IDisposable
             foreach (int index in _farming.Indices)
             {
                 var before = _log?.ProductionDiagnostics.BeginFarm(index, _farming);
-                if (_farming.TryMatureBeforeDisallowedSeason(index, nextSeason, out CropHarvestResult rescue))
-                    harvested += CollectHarvest(index, rescue, nextTimeUnits, before);
+                if (_farming.TryMatureBeforeDisallowedSeason(index, nextSeason, _inventory, out CropHarvestResult rescue))
+                    _pendingHarvested += CollectHarvest(index, rescue, nextTimeUnits, before);
             }
             timing?.EndStage("Harvest");
         }
+        int harvested = _pendingHarvested;
+        int produced = _pendingProduced;
+        _productionPhaseInProgress = false;
         observation?.EnterPhase(SimulationLogPhase.RawClaim);
         timing?.BeginStage();
         StartIdleProcessors();
@@ -1400,6 +1441,7 @@ public sealed class FarmGame : IDisposable
         _disposed = true;
         _navigationCancellation.Cancel();
         _log?.Dispose();
+        _productionDue.Clear();
         _terrain.Dispose();
         _navigationCancellation.Dispose();
     }
@@ -1538,7 +1580,7 @@ public sealed class FarmGame : IDisposable
         if (!_calendar.TryAdvanceSeconds(1))
             throw new InvalidOperationException("模拟时间已达到上限");
         CalendarSnapshot calendar = _calendar.Snapshot;
-        _weather.AdvanceTo(calendar.ElapsedSeconds);
+        AdvanceWeather();
         if (calendar.Season != previousCalendar.Season)
         {
             CropClearResult cleared = _farming.ClearDisallowedCrops(calendar.Season);
@@ -1567,6 +1609,20 @@ public sealed class FarmGame : IDisposable
             throw;
         }
         observation?.Complete(IsPaused);
+    }
+
+    private void AdvanceWeather()
+    {
+        IReadOnlyList<WeatherRegionSnapshot> previous = _weather.ActiveRegions;
+        _weather.AdvanceTo(Calendar.ElapsedSeconds);
+        if (!ReferenceEquals(previous, _weather.ActiveRegions))
+            SynchronizeFarmWeather();
+    }
+
+    private void SynchronizeFarmWeather()
+    {
+        foreach (int index in _farming.Indices)
+            _farming.SetWeather(index, _weather.GetFarmWeather(_occupancy.GetSpace(index)!));
     }
 
     private void ApplyRain()
@@ -1601,8 +1657,8 @@ public sealed class FarmGame : IDisposable
 
     private void PlaceFarm(int index, CropKind crop, BuildingOrientation orientation)
     {
-        _farming.Place(index, crop);
         _occupancy.Place(index, BuildingKind.Farm, orientation);
+        _farming.Place(index, crop, _weather.GetFarmWeather(_occupancy.GetSpace(index)!));
     }
 
     private void PlaceProcessor(int index, CropKind crop, BuildingOrientation orientation)

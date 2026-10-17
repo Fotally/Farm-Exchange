@@ -39,6 +39,8 @@
 - [委托窗口接口](architecture/ui/trade-orders-window/interface-trade-orders-window.md)：条件分组、订单管理与真实冻结/成交展示，刷新保留编辑草稿。
 - [历史市场曲线接口](architecture/market/market-price-curve/interface-market-price-curve.md)及[曲线实现](architecture/market/market-price-curve/implementation-bounded-curve.md)：保留独立曲线测试，正式经营改走报价模块。
 - [GameCalendar 接口](architecture/time/game-calendar/interface-game-calendar.md)和[GameTimeUnits 接口](architecture/time/game-time-units/interface-game-time-units.md)：经营日历、暂停与生产共用的精确时间比例。
+- [经营到期索引接口](architecture/time/simulation-due-index/interface-simulation-due-index.md)：一年窗口内的固定秒桶、阶段内 FIFO、取消句柄和成功后移除；首批承载成熟与加工完工。
+- [生产到期结算实现](architecture/game-state/farm-game/implementation-production-due.md)：农田与加工精确目标、天气分段积分、产出 FIFO、容量异常与原经营相位的衔接，以及真实 FarmGame 溢出续推回归。
 - [日志专项验收](architecture/logging/implementation-validation.md)：真实provider故障、1080P满图1×/16×负载与分配矩阵、进程退出与实际Release程序集门禁；运行命令见测试说明。
 - [SimulationDriver 接口](architecture/time/simulation-driver/interface-simulation-driver.md)：唯一倍率与未完成tick进度、导航等待门禁、完整秒异常提交凭据、稳定检查点、预算限额和玩家/流程改速来源。
 - [参数化流程接口](architecture/development/interface-parameterized-scenario.md)与[固定流程实现](architecture/development/implementation-buy-process-sell.md)：严格配置、两种运行对象、日期及等待预算、同步结算和证据检查、只输出JSON报告。
@@ -75,6 +77,7 @@
 - [键鼠操作登记](project/input-bindings.md)：现有及计划键位、生效上下文、输入冲突与维护入口。
 - [大小地图规划](project/map-navigation-proposal.md)：已确认的全屏方向、小地图导航、图层、输入隔离、独立缩放与同局记忆；正式开发与验收进度。
 - [大小地图 1080P 原型](architecture/ui/main/prototype-maps.md)：独立浏览器演示，比较居中图册、全屏地图、侧边展开与导航缩放。
+- [固定时间桶评估](research/time-wheel-design-evaluation.md)：日桶、秒桶与索引堆的 FIFO 对照、内存口径与测量限制，保留旧排序原型历史。
 - [设施朝向实施范围](project/facility-orientation-proposal.md)：仅建前旋转、每座q0起始、四向资源与随机装饰；道路连接规则由 [#143](https://github.com/Fotally/Farm-Exchange/issues/143) 跟踪。
 - [水域实现与验收](project/water-terrain-proposal.md)：Godot 原生导航、保守简化与道路优先，保留素材核验与历史原型证据。
 - 后续素材与玩法规划：[采收搬运](project/worker-harvest-transport-proposal.md)、[工人加工](project/worker-processing-proposal.md)。

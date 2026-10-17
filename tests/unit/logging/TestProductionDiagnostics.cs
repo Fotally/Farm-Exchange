@@ -132,7 +132,8 @@ public static class TestProductionDiagnostics
             game.Log!.Diagnostics.Start(new(new[] { "RuleChecked" }, new[] { Farm }));
             game.AdvanceTick();
             int index = Farm.Y * FarmGame.MapSize + Farm.X;
-            var farming = new FarmingSystem(FarmGame.MapSize * FarmGame.MapSize) { Diagnostics = game.Log.ProductionDiagnostics };
+            var farming = ProductionTestClock.CreateFarms(FarmGame.MapSize * FarmGame.MapSize);
+            farming.Diagnostics = game.Log.ProductionDiagnostics;
             farming.Place(index, CropKind.Radish);
             var workers = new WorkerScheduler(TerrainTestFixtures.AllLandTerrain, new Vector2I(190, 190));
             CalendarSnapshot spring = new GameCalendar(4319).Snapshot;
@@ -189,11 +190,11 @@ public static class TestProductionDiagnostics
         using var log = RuntimeLog.Capture(text);
         using var game = Empty(log);
         // 不合法索引仅用于验证没有采集时门禁先于任何状态查询，正常业务不提交该索引。
-        Require(game.Log!.ProductionDiagnostics.BeginFarm(int.MaxValue, new FarmingSystem(1)) == null && log.Health.FailureCount == 0,
+        Require(game.Log!.ProductionDiagnostics.BeginFarm(int.MaxValue, ProductionTestClock.CreateFarms(1)) == null && log.Health.FailureCount == 0,
             "关闭采集仍读取明细状态");
         game.TryPlace(Farm, BuildingKind.Farm, CropKind.Radish);
         game.Log.Diagnostics.Start(new(new[] { "ProductionStateChanged" }, new[] { Farm }, EventLimit: 1));
-        Require(game.Log.ProductionDiagnostics.BeginFarm(int.MaxValue, new FarmingSystem(1)) == null && log.Health.FailureCount == 0,
+        Require(game.Log.ProductionDiagnostics.BeginFarm(int.MaxValue, ProductionTestClock.CreateFarms(1)) == null && log.Health.FailureCount == 0,
             "未选中实例仍读取明细状态");
         WeatherTestInput.AdvanceTick(game, true);
         Require(Events(text, "ProductionStateChanged").Length == 1 && !game.Log.Diagnostics.IsActive &&
@@ -223,8 +224,8 @@ public static class TestProductionDiagnostics
         using var log = RuntimeLog.Capture(text);
         using var game = Empty(log);
         game.TryPlace(Farm, BuildingKind.Farm, CropKind.Radish);
-        var farming = new FarmingSystem(1);
-        var processing = new ProcessingSystem(1);
+        var farming = ProductionTestClock.CreateFarms(1);
+        var processing = ProductionTestClock.CreateProcessors(1);
         var inventory = new FarmExchange.Inventory.Inventory();
         ProductionDiagnostics production = game.Log!.ProductionDiagnostics;
         WorkerDiagnostics workers = game.Log.WorkerDiagnostics;

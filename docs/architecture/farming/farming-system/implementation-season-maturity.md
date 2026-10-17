@@ -2,18 +2,20 @@
 
 履行 [FarmingSystem 接口](interface-farming-system.md)，实现位于 `scripts/farming/FarmingSystem.cs`；经营入库顺序见 [FarmGame 推进相位](../../game-state/farm-game/implementation-tick-order.md)。内部阈值只记录在设计文档与测试中，界面不展示阈值或专门收益提示。
 
-每轮生长开始时，以 `CropCatalog` 的完整天数乘 `GameTimeUnits.PerDay` 保存精确周期；每个经营秒最多减 `GameTimeUnits.PerSecond`，末秒仅减实际剩余量并累计同样长度的天气积分。`FarmSnapshot.RemainingTimeUnits` 保留精确值，`RemainingSeconds` 仅供显示。
+每轮生长开始时，以当前绝对秒乘 7 加 `CropCatalog` 的完整周期保存 long 精确目标；显示剩余量只读计算为 `max(0, 目标−当前生产秒×7)`。天气段结清只计算到精确目标，末秒最多计实际剩余量。`FarmSnapshot.RemainingTimeUnits` 保留精确值，`RemainingSeconds` 仅供显示。
 
-正常到期先通过 `AdvanceGrowth` 收获。换季相位传入即将进入的新季节：只有 `Growing` 且该作物在新季节禁生时，比较 `RemainingTimeUnits * 10 < GrowthDays * PerDay`。乘法使用宽整数，等于十分之一不促成成熟；待水、空田和适季跨季不触发。调用方仅在实际换季时调用，查询不会触发此规则。
+正常到期先通过 `CompleteGrowth` 收获。换季相位传入即将进入的新季节：只有 `Growing` 且该作物在新季节禁生时，比较 `RemainingTimeUnits * 10 < GrowthDays * PerDay`。乘法使用宽整数，等于十分之一不促成成熟；待水、空田和适季跨季不触发。调用方仅在实际换季时调用，查询不会触发此规则。
 
-正常成熟与换季补救共用 `FinishHarvest`，一次清空阶段、精确剩余时间和水分，使旧工人凭据失效并返回作物及已结算的实际数量。农田模块不拥有库存；`FarmGame` 沿原成熟入库路径使用收获结果的 `Quantity` 加入公共库存，再按既有相位领取加工原料。终结后再调用补救或生长推进不会报告第二次收成。
+正常成熟与换季补救共用 `FinishHarvest`，先局部计算实际产量并检查原料容量，再一次清空阶段、目标和水分、撤销成熟预约，使旧工人凭据失效并返回作物及已结算的实际数量。农田模块不拥有库存；`FarmGame` 沿原成熟入库路径使用收获结果的 `Quantity` 加入公共库存，再按既有相位领取加工原料。终结后再调用补救或生长推进不会报告第二次收成。
 
 其余禁生待水或生长中作物由 `ClearDisallowedCrops` 清理。计划模块随后更新日期安排，已过条不追补。阈值不缩短编辑器作物条，也不改变预计越季风险预算。
 
-`GetExpectedRoundEndTimeUnits(index, now)` 只读预测已开始生长的一轮结束：正常成熟时刻为 `now + ceil(RemainingTimeUnits / PerSecond) × PerSecond`，保持正常按秒收获的实际 tick；再与 [PlantingRules](../planting-rules/interface-planting-rules.md) 提供的共同首个禁生季起点取早，农田不再独立遍历季节。共同计算只解释连续适季时间，不包含本模块的状态、促熟阈值或收获。相邻适季边界不截短，所以甘蔗夏秋继续生长，秋冬才可能提前结束。边界结束可以是促熟入库，也可以是无收成清理，两者对后续年度安排均意味着旧轮结束；预测只给结束时刻，不复制或公开促熟阈值，不触发成熟或清理。空田与待水返回空，不推测未来工人或雨水。实际成熟仍优先于换季补救，预计时刻不改变任何生产相位。
+`GetExpectedRoundEndTimeUnits(index, now)` 只读预测已开始生长的一轮结束：正常成熟时刻为 `ceil(DueTimeUnits / PerSecond) × PerSecond`，保持正常按秒收获的实际 tick；再与 [PlantingRules](../planting-rules/interface-planting-rules.md) 提供的共同首个禁生季起点取早，农田不再独立遍历季节。共同计算只解释连续适季时间，不包含本模块的状态、促熟阈值或收获。相邻适季边界不截短，所以甘蔗夏秋继续生长，秋冬才可能提前结束。边界结束可以是促熟入库，也可以是无收成清理，两者对后续年度安排均意味着旧轮结束；预测只给结束时刻，不复制或公开促熟阈值，不触发成熟或清理。空田与待水返回空，不推测未来工人或雨水。实际成熟仍优先于换季补救，预计时刻不改变任何生产相位。
 
 计划空白及同种相邻条只关闭新播种，让已经开始的一轮按正常供水、生长及上述禁生规则结束；不能在条尾清零进度，也不能用缓冲跨越禁生季。实际生长与清理始终由本模块执行。计划接续按实际结束日期重验，不将无收成清理记为成熟。
 
 `TestProductionState` 通过真实播种、供水和逐秒推进建立马铃薯 511、504、497 精确单位的剩余时间，覆盖大于、等于、小于完整 5040 单位周期的十分之一，另覆盖适季跨季、待水、空田、重复报告及正常到期优先。`CheckExpectedRoundEnd` 验证未知供水无预测、实际 tick 对齐、正常推进时结束时刻稳定、甘蔗适季跨季与禁生结局、查询零修改、正常成熟与禁生边界重合时仅收一次。经营入口的测试负责验证实际入库与加工相位。
 
 促熟终结以已经历的精确单位作为天气平均分母；不累计剩余生长期，也不读取边界之后天气。正常与促熟结果都在 FarmingSystem 一次取整，库存、日志与表现共用实际 Quantity。完整产量实现见[农田接口](interface-farming-system.md)。
+
+容量异常时正常成熟与促熟都保留原轮、天气积分、随机基础量和预约；释放库存容量后在同一生产时钟再次显式调用完成，不能重复累计旧天气段。完整相位的续读语义见[生产到期接入](../../game-state/farm-game/implementation-production-due.md)。
