@@ -24,7 +24,7 @@
 
 ## 已确认素材接入分期与清亮 v2 基准
 
-2026-10-06，素材基准切换为 `FarmExchange-Bright-Complete-v2.zip` 内部版本2.0.0，采用完整清亮静态、人物及已有局部动效；v1只保留历史，不混用默认资产。实际覆盖、清单入口和校验见[素材分析](../../research/bright-complete-v2.md)，目录沿用[素材管理规则](../../project/asset-organization.md)。
+2026-10-06，素材基准切换为 `FarmExchange-Bright-Complete-v2.zip` 内部版本2.0.0，采用完整清亮静态、人物及已有局部动效；v1只保留历史，不混用默认资产。实际覆盖、清单入口和校验见[素材分析](../research/bright-complete-v2.md)，目录沿用[素材管理规则](../../project/asset-organization.md)。
 
 总入口为 [#105](https://github.com/Fotally/Farm-Exchange/issues/105)：首批 #106～#109 接入现有地表/七作物/七加工设施、真实工人动作、已有生产动效和纯环境装饰。生长按实际进度等分三档；装饰不参与占地或通行，成功建造后清除对应完整占地的装饰。接受不同设施动效丰富程度不同，现有动效仍仅覆盖q0两建筑与三作物。Module状态唯一归属、完整简洁Interface和真实结果驱动的表现规范写入各子议题。
 

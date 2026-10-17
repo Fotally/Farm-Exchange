@@ -217,7 +217,7 @@ W 表达物理安全范围；实际导航区域由脚底半径加 `1/256` 格余
 
 ## 素材切片和地图坐标
 
-来源相对于 ZIP 根 `FarmExchange-Bright-Complete-v2/`，基准见[清亮 v2 分析](../research/bright-complete-v2.md)。2026-10-12 已再次读取包内 terrain manifest，以下为素材事实，不是新增玩法参数：
+来源相对于 ZIP 根 `FarmExchange-Bright-Complete-v2/`，基准见[清亮 v2 历史分析](../archive/research/bright-complete-v2.md)。2026-10-12 已再次读取包内 terrain manifest，以下为素材事实，不是新增玩法参数：
 
 - `default/static/terrain/manifest.json`：草=2、土=1、水=0；角序 top、right、bottom、left；`code = top + 3×right + 9×bottom + 27×left`，范围 0～80。
 - 图集序号 `index = code + 81×variant`，variant 为 0～2；三变体是纹理差异，不是 q0～q3 朝向，索引依据为包内 `previews/world/scripts/scene_view.gd`。

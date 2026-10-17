@@ -26,7 +26,7 @@
 
 ## 素材方向与层级
 
-来源为[清亮v2](../research/bright-complete-v2.md)包根下 `default/static/manifest.json`。七建筑、24农田层项和32类装饰均提供四向PNG；灯光固定屏幕左上，必须选对应PNG，不能平面旋转整图。人物 `down/left/up/right` 是屏幕运动方向，与世界q序号没有等价关系。
+来源为[清亮v2](../archive/research/bright-complete-v2.md)包根下 `default/static/manifest.json`。七建筑、24农田层项和32类装饰均提供四向PNG；灯光固定屏幕左上，必须选对应PNG，不能平面旋转整图。人物 `down/left/up/right` 是屏幕运动方向，与世界q序号没有等价关系。
 
 | q | 包内世界坐标变换 | 选图 |
 | --- | --- | --- |
@@ -43,7 +43,7 @@
 
 ## 道路分期
 
-[#143](https://github.com/Fotally/Farm-Exchange/issues/143) 跟踪按实际道路布局判断两种斜向与独立交汇素材的规则。清亮v2的草/土/水81组合图集不包含道路PNG，当前游戏道路由灰色多边形绘制；道路素材配套与复杂连接处理均留在 #143，本单不接入或记为已完成。连接细节由该issue确认，不扩展本次设施旋转命令。
+道路的现行连接、铺设与移除规则见[道路玩法](../gameplay/land/roads.md)，正式图集、区域映射及来源见[道路来源说明](../../assets/gameplay/terrain/roads/source_notes.md)。道路没有手动旋转入口；本页仅规定设施朝向，不另维护道路接入阶段。
 
 ## 验收单元与分工
 
